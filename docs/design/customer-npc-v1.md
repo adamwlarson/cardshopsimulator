@@ -1,6 +1,6 @@
 # Customer NPC v1 — 3D floor presence SoT
 
-**Status:** Draft for PM / Eng / Art / QA — sync before cloud agent  
+**Status:** Adopted — shipped main @ d069216e (PR #20); soft Art icon notes parked  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Adam priority:** Amp 3D presence + customer characters  
