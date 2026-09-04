@@ -100,6 +100,7 @@ func _initialize() -> void:
 	_test_day_ten_beat_serialization()
 	_test_showcase_slab_and_singles_preconditions()
 	_test_shop_camera_framing()
+	_test_shop_camera_look_clamps()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1519,23 +1520,56 @@ func _test_shop_camera_framing() -> void:
 	if packed == null:
 		return
 	var shop: Node = packed.instantiate()
-	var camera := shop.get_node_or_null("Camera") as Camera3D
+	var camera := shop.get_node_or_null("Camera") as ShopCamera
 	_expect_equal(camera != null, true, "Camera present")
 	if camera == null:
 		shop.free()
 		return
 	_expect_equal(camera.current, true, "Camera is current")
 	_expect_equal(
-		camera.position.is_equal_approx(Vector3(4.5, 1.65, -1.8)),
+		camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
 		true,
-		"Art Lead camera position"
+		"Day1 start is Art behind-desk home"
 	)
 	_expect_equal(
-		camera.rotation_degrees.is_equal_approx(Vector3(-28, 0, 0)),
+		camera.rotation_degrees.is_equal_approx(ShopCamera.BEHIND_COUNTER_ROTATION_DEGREES),
 		true,
-		"Art Lead camera pitch"
+		"Day1 start is Art behind-desk pitch"
 	)
-	_expect_equal(is_equal_approx(camera.fov, 70.0), true, "Art Lead camera FOV")
+	_expect_equal(is_equal_approx(camera.fov, ShopCamera.HOME_FOV), true, "Art Lead camera FOV")
+	_expect_equal(
+		camera.aisle_position.is_equal_approx(ShopCamera.AISLE_POSITION),
+		true,
+		"Aisle home position is locked Art SoT"
+	)
+	_expect_equal(
+		camera.aisle_rotation_degrees.is_equal_approx(ShopCamera.AISLE_ROTATION_DEGREES),
+		true,
+		"Aisle home rotation is locked Art SoT"
+	)
+	_expect_equal(
+		camera.behind_counter_position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
+		true,
+		"Behind-desk export matches Art SoT"
+	)
+	camera.apply_home_pose(ShopCamera.POSE_AISLE)
+	_expect_equal(
+		camera.position.is_equal_approx(ShopCamera.AISLE_POSITION),
+		true,
+		"Aisle pose applies Art reset position"
+	)
+	_expect_equal(
+		camera.rotation_degrees.is_equal_approx(ShopCamera.AISLE_ROTATION_DEGREES),
+		true,
+		"Aisle pose applies Art reset pitch"
+	)
+	_expect_equal(is_equal_approx(camera.fov, 70.0), true, "Aisle pose keeps FOV 70")
+	camera.apply_home_pose(ShopCamera.POSE_BEHIND_COUNTER)
+	_expect_equal(
+		camera.position.is_equal_approx(Vector3(7.2, 1.6, -0.65)),
+		true,
+		"Behind-desk pose restores Art home"
+	)
 	var world := shop.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	_expect_equal(world != null, true, "WorldEnvironment present")
 	if world != null and world.environment != null:
@@ -1560,6 +1594,64 @@ func _test_shop_camera_framing() -> void:
 			"Art SoT CounterStool off entrance lane"
 		)
 	shop.free()
+
+
+func _test_shop_camera_look_clamps() -> void:
+	var camera := ShopCamera.new()
+	camera.fov = 90.0
+	camera.apply_home_pose(ShopCamera.POSE_BEHIND_COUNTER)
+	_expect_equal(camera.get_home_pose(), ShopCamera.POSE_BEHIND_COUNTER, "default named home")
+	_expect_equal(is_equal_approx(camera.fov, 70.0), true, "home pose locks FOV to 70")
+	camera.apply_look_delta(Vector2(0.0, -10000.0))
+	_expect_equal(
+		is_equal_approx(camera.rotation_degrees.x, ShopCamera.PITCH_MAX_DEGREES),
+		true,
+		"pitch clamp max is Art +5"
+	)
+	_expect_equal(
+		camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
+		true,
+		"look does not leave behind-desk stand point"
+	)
+	_expect_equal(
+		camera.rotation_degrees.x <= ShopCamera.PITCH_MAX_DEGREES,
+		true,
+		"camera is not ceiling-stuck"
+	)
+	camera.apply_look_delta(Vector2(0.0, 20000.0))
+	_expect_equal(
+		is_equal_approx(camera.rotation_degrees.x, ShopCamera.PITCH_MIN_DEGREES),
+		true,
+		"pitch clamp min is Art -40"
+	)
+	camera.apply_home_pose(ShopCamera.POSE_BEHIND_COUNTER)
+	camera.apply_look_delta(Vector2(10000.0, 0.0))
+	_expect_equal(
+		is_equal_approx(camera.rotation_degrees.y, ShopCamera.YAW_MIN_DEGREES),
+		true,
+		"yaw clamp min is Art -70"
+	)
+	camera.apply_look_delta(Vector2(-20000.0, 0.0))
+	_expect_equal(
+		is_equal_approx(camera.rotation_degrees.y, ShopCamera.YAW_MAX_DEGREES),
+		true,
+		"yaw clamp max is Art +70"
+	)
+	_expect_equal(is_equal_approx(camera.fov, 70.0), true, "RMB look does not zoom FOV")
+	camera.reset_to_aisle_home()
+	_expect_equal(camera.get_home_pose(), ShopCamera.POSE_AISLE, "reset named pose is aisle")
+	_expect_equal(
+		camera.position.is_equal_approx(ShopCamera.AISLE_POSITION),
+		true,
+		"reset returns to Art aisle home"
+	)
+	_expect_equal(
+		camera.rotation_degrees.is_equal_approx(ShopCamera.AISLE_ROTATION_DEGREES),
+		true,
+		"reset clears look offset to aisle pitch"
+	)
+	_expect_equal(camera.is_looking(), false, "reset releases RMB look")
+	camera.free()
 
 
 func _test_day_ten_beat_serialization() -> void:
