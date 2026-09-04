@@ -545,7 +545,7 @@ func _start_expand_medium() -> bool:
 	):
 		return false
 	var config := GameState.balance_config
-	var can_sign := GameState.shop.can_expand_medium(
+	var can_sign := GameState.shop.can_sign_medium_lease(
 		Economy.balance_cents,
 		GameState.current_reputation
 	)
@@ -564,6 +564,8 @@ func _start_expand_medium() -> bool:
 				GameState.current_reputation,
 			]
 		)
+	if GameState.shop.preview_expand_medium() == &"blocked_path":
+		gate_lines.append("Medium floor would leave the counter unreachable.")
 	var summary := "Landlord offered a Medium unit."
 	if not gate_lines.is_empty():
 		summary += " Missing gate: " + " ".join(gate_lines)
@@ -737,6 +739,7 @@ func _choose_expand_medium(choice: StringName) -> bool:
 				ShopState.MEDIUM_CASE_SLOT_BONUS,
 				ShopState.MEDIUM_BACKSTOCK_BONUS
 			)
+			EventBus.shop_layout_changed.emit()
 		&"wait_for_rep":
 			if GameState.shop.rep_meets_medium(GameState.current_reputation):
 				return false

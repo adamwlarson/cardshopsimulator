@@ -12,10 +12,13 @@ const CASHIER_RELIABILITY := 0.85
 const CHEAP_CASHIER_RELIABILITY := 0.50
 const SMALL_GRID_WIDTH := 10
 const SMALL_GRID_HEIGHT := 8
-const MEDIUM_GRID_WIDTH := 12
-const MEDIUM_GRID_HEIGHT := 11
+## Option B lock: 14×10 = 140 tiles @ 0.9 m → ~1,221 sq ft usable
+## (systems-design Medium markets 1,200; SoT ~1,020 was a tile-area miscalc).
+const MEDIUM_GRID_WIDTH := 14
+const MEDIUM_GRID_HEIGHT := 10
 const MEDIUM_CASE_SLOT_BONUS := 12
 const MEDIUM_BACKSTOCK_BONUS := 20
+const SQ_FT_PER_TILE := 8.71875
 
 var tier: Tier = Tier.SMALL
 var staff: Array[StaffMember] = []
@@ -24,6 +27,7 @@ var grid_height: int = SMALL_GRID_HEIGHT
 var medium_lease_signed_day: int = -1
 var specialist_on_duty: bool = false
 var layout := ShopLayout.new()
+var floor_grid: ShopGrid = ShopGrid.small_default()
 var _config: BalanceConfig
 
 
@@ -36,6 +40,7 @@ func reset(config: BalanceConfig) -> void:
 	medium_lease_signed_day = -1
 	specialist_on_duty = false
 	layout.reset_small()
+	floor_grid = ShopGrid.small_default()
 	if config != null and config.start_with_trainee_cashier:
 		var trainee := _make_cashier(false)
 		trainee.display_name = "Trainee cashier"
@@ -137,14 +142,80 @@ func can_expand_medium(cash_cents: int, reputation: int) -> bool:
 	)
 
 
+func preview_expand_medium() -> StringName:
+	return layout.preview_expand(MEDIUM_GRID_WIDTH, MEDIUM_GRID_HEIGHT)
+
+
+func can_sign_medium_lease(cash_cents: int, reputation: int) -> bool:
+	return (
+		can_expand_medium(cash_cents, reputation)
+		and preview_expand_medium() == &"ok"
+	)
+
+
 func expand_to_medium(signed_day: int, cash_cents: int, reputation: int) -> bool:
-	if not can_expand_medium(cash_cents, reputation):
+	if not can_sign_medium_lease(cash_cents, reputation):
+		return false
+	if layout.expand(MEDIUM_GRID_WIDTH, MEDIUM_GRID_HEIGHT) != &"ok":
 		return false
 	tier = Tier.MEDIUM
 	medium_lease_signed_day = signed_day
 	grid_width = MEDIUM_GRID_WIDTH
 	grid_height = MEDIUM_GRID_HEIGHT
+	floor_grid.expand(MEDIUM_GRID_WIDTH, MEDIUM_GRID_HEIGHT)
 	return true
+
+
+func tile_count() -> int:
+	return grid_width * grid_height
+
+
+func walkable_tile_count() -> int:
+	return layout.walkable_tile_count()
+
+
+func usable_sq_ft() -> float:
+	return float(tile_count()) * SQ_FT_PER_TILE
+
+
+func to_save() -> Dictionary:
+	var staff_rows: Array[Dictionary] = []
+	for member: StaffMember in staff:
+		staff_rows.append(member.to_save())
+	return {
+		"tier": int(tier),
+		"grid_width": grid_width,
+		"grid_height": grid_height,
+		"medium_lease_signed_day": medium_lease_signed_day,
+		"specialist_on_duty": specialist_on_duty,
+		"layout": layout.to_save(),
+		"staff": staff_rows,
+	}
+
+
+func apply_save(data: Dictionary, config: BalanceConfig) -> void:
+	_config = config
+	var saved_tier := int(data.get("tier", Tier.SMALL))
+	if saved_tier == int(Tier.MEDIUM):
+		tier = Tier.MEDIUM
+	else:
+		tier = Tier.SMALL
+	grid_width = int(data.get("grid_width", SMALL_GRID_WIDTH))
+	grid_height = int(data.get("grid_height", SMALL_GRID_HEIGHT))
+	medium_lease_signed_day = int(data.get("medium_lease_signed_day", -1))
+	specialist_on_duty = bool(data.get("specialist_on_duty", false))
+	var layout_data: Variant = data.get("layout", {})
+	if layout_data is Dictionary:
+		layout.apply_save(layout_data as Dictionary)
+	else:
+		layout.reset_small()
+	floor_grid = ShopGrid.small_default()
+	floor_grid.expand(grid_width, grid_height)
+	staff.clear()
+	var staff_rows: Array = data.get("staff", [])
+	for row: Variant in staff_rows:
+		if row is Dictionary:
+			staff.append(StaffMember.from_save(row as Dictionary))
 
 
 func weekly_rent_cents(day: int) -> int:

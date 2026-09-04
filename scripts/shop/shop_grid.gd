@@ -113,3 +113,20 @@ func contains_desk(world: Vector3) -> bool:
 		and world.z >= min_corner.z
 		and world.z <= max_corner.z
 	)
+
+
+func expand(new_width: int, new_height: int) -> bool:
+	if new_width < width or new_height < height:
+		return false
+	width = new_width
+	height = new_height
+	return true
+
+
+func walkable_count() -> int:
+	var count := 0
+	for x: int in width:
+		for y: int in height:
+			if is_walkable(Vector2i(x, y)):
+				count += 1
+	return count

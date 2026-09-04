@@ -643,7 +643,7 @@ func _on_beat_decision_resolved(
 		&"keep_solo":
 			beat_toast.text = "Staying solo today"
 		&"sign_lease":
-			beat_toast.text = "Medium lease signed — rent changes next week"
+			beat_toast.text = "Medium lease signed — floor unlocked, rent changes next week"
 		&"wait_for_rep":
 			beat_toast.text = "Waiting on reputation — still Small"
 		&"stay_small":
