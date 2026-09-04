@@ -1,6 +1,6 @@
 # Next Eng SoT Pick D v1 — post C1 (hire pressure vs §10 beats)
 
-**Status:** Adopted — **C2 hire-vs-owner GO** (C3 + D parked); Eng spike in flight  
+**Status:** Adopted — **C2 hire-vs-owner shipped #28** @ `f3388f0b` (QA PASS @ `df7701e9`); C3 + D parked  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** `next-eng-sot-pick-c-v1.md` (C1 shipped #26; densify #27 shipped); systems §6 / §10; ui-wireflows §5.1 #3/#5/#10  
