@@ -1,5 +1,9 @@
 # Shop fixture assets
 
-Production fixture GLBs land here after Art/Engineering validation.
+Art P0 + A13 + light P1 Godot-ready GLBs live here (Principled materials, 1u=1m, tile 0.9m).
 
-`prop_display_case_01` currently exists in the project art pipeline and may be delivered by a later art PR as `prop_display_case_01.glb`. The Godot scaffold uses primitive geometry until the GLB passes meter scale, transforms, materials/glass, collision, performance, and provenance checks.
+Each `prop_*` folder contains:
+- `<folder>.glb` — import-ready mesh
+- `IMPORT_NOTES.md` — provenance / import notes for Engineering
+
+These assets are staged for a later placement PR; do not treat this branch as gameplay wiring.
