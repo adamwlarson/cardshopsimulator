@@ -224,7 +224,7 @@ shadow_enabled = false
 
 [node name="MidCenter" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
 visible = false
-position = Vector3(6.3, 2.79, -4.95)
+position = Vector3(5.4, 2.79, -4.95)
 
 [node name="FarFront" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
 visible = false
@@ -248,7 +248,7 @@ position = Vector3(10.35, 2.79, -7.2)
 
 [node name="MidCenterFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
 visible = false
-position = Vector3(6.3, 2.55, -4.95)
+position = Vector3(5.4, 2.55, -4.95)
 light_color = Color(1, 0.83, 0.66, 1)
 light_energy = 1.65
 omni_range = 7.0
