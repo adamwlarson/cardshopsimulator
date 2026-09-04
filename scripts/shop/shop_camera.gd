@@ -10,6 +10,7 @@ const AISLE_POSITION := Vector3(4.5, 1.65, -1.8)
 const AISLE_ROTATION_DEGREES := Vector3(-28.0, 0.0, 0.0)
 
 ## Art Lead SoT — behind-desk Day1 start. Clerk side of checkout ~(7.2, 0, -1.35), look −Z.
+## Alt if register occludes (not shipped): Vector3(7.55, 1.6, -0.55), same rot/fov.
 const BEHIND_COUNTER_POSITION := Vector3(7.2, 1.6, -0.65)
 const BEHIND_COUNTER_ROTATION_DEGREES := Vector3(-18.0, 0.0, 0.0)
 
