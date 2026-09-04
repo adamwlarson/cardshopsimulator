@@ -76,7 +76,7 @@ rotation_degrees = Vector3(0, 0, 0)
 position = Vector3(4.5, 0, -6.75)
 
 [node name="BackOfficeGlimpse" parent="Fixtures" instance=ExtResource("31_back_office")]
-position = Vector3(4.5, 0, -7.65)
+position = Vector3(4.5, 0, -7.05)
 
 [node name="CheckoutCounter" parent="Fixtures" instance=ExtResource("8_counter")]
 position = Vector3(7.2, 0, -1.35)

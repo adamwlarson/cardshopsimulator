@@ -2194,14 +2194,24 @@ func _test_heavier_decor_placement() -> void:
 		)
 	if glimpse != null:
 		_expect_equal(
-			glimpse.position.is_equal_approx(Vector3(4.5, 0, -7.65)),
+			glimpse.position.is_equal_approx(Vector3(4.5, 0, -7.05)),
 			true,
-			"B07 glimpse sits one tile behind A13"
+			"B07 glimpse sits at A13 alcove rear on interior floor"
+		)
+		_expect_equal(
+			glimpse.position.z >= -7.15 and glimpse.position.z <= -6.95,
+			true,
+			"B07 Z stays in Art alcove-rear band −7.15…−6.95"
 		)
 		_expect_equal(
 			glimpse.scale.is_equal_approx(Vector3.ONE),
 			true,
 			"B07 authored scale"
+		)
+		_expect_equal(
+			glimpse.rotation_degrees.is_equal_approx(Vector3.ZERO),
+			true,
+			"B07 identity rotation"
 		)
 	if backstock != null and glimpse != null:
 		_expect_equal(
@@ -2210,9 +2220,9 @@ func _test_heavier_decor_placement() -> void:
 			"B07 shares A13 X"
 		)
 		_expect_equal(
-			is_equal_approx(glimpse.position.z, backstock.position.z - 0.9),
+			is_equal_approx(glimpse.position.z, backstock.position.z - 0.3),
 			true,
-			"B07 is one tile behind A13 door"
+			"B07 is at alcove rear, 0.3 m behind A13 center"
 		)
 	if camera != null:
 		_expect_equal(is_equal_approx(camera.fov, ShopCamera.HOME_FOV), true, "placement does not change FOV")
