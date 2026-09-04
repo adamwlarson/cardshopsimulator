@@ -1,6 +1,6 @@
 # Next Eng SoT Pick C v1 — post A+B decision pressure
 
-**Status:** Adopted — **C1 Market events pack shipped** (#26 @ dd713c26); Specialist #24; Medium shell #25; densify #27 Eng APPROVE / Art dual-clear pending; C2/C3 parked  
+**Status:** Adopted — **C1 Market events pack shipped** (#26 @ dd713c26); Specialist #24; Medium shell #25; Medium lights densify shipped #27 @ `d183bfa8`; C2/C3 parked  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** systems §6 / §8 / §10, ui-wireflows §5.1, customer-npc-v1, next-eng-sot-pick-v1 (A+B shipped)  
