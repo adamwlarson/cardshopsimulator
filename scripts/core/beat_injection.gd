@@ -69,6 +69,16 @@ func choose_showcase(choice: StringName) -> bool:
 	var hold_location := InventoryLocation.new(InventoryLocation.Type.ONLINE_HOLD)
 	match choice:
 		&"slab":
+			var slab_space := InventoryService.case_free_slot_weight()
+			if titan.location.type == InventoryLocation.Type.CASE:
+				slab_space += InventoryModel.CASE_CARD_WEIGHT
+			if paragon.location.type == InventoryLocation.Type.CASE:
+				slab_space += InventoryModel.CASE_CARD_WEIGHT
+			if slab_space < InventoryModel.CASE_SLAB_WEIGHT:
+				EventBus.showcase_choice_failed.emit(
+					"The case needs 2 free slot-weights for the slab."
+				)
+				return false
 			if titan.location.type == InventoryLocation.Type.CASE:
 				InventoryService.move_card_to(titan, binder_location)
 			if paragon.location.type == InventoryLocation.Type.CASE:
@@ -76,6 +86,19 @@ func choose_showcase(choice: StringName) -> bool:
 			if not InventoryService.move_slab_to(slab, case_location):
 				return false
 		&"singles":
+			var singles_space := InventoryService.case_free_slot_weight()
+			if slab.location.type == InventoryLocation.Type.CASE:
+				singles_space += InventoryModel.CASE_SLAB_WEIGHT
+			var singles_needed := 0
+			if titan.location.type != InventoryLocation.Type.CASE:
+				singles_needed += InventoryModel.CASE_CARD_WEIGHT
+			if paragon.location.type != InventoryLocation.Type.CASE:
+				singles_needed += InventoryModel.CASE_CARD_WEIGHT
+			if singles_space < singles_needed:
+				EventBus.showcase_choice_failed.emit(
+					"The case needs 2 free slot-weights for both singles."
+				)
+				return false
 			if slab.location.type == InventoryLocation.Type.CASE:
 				InventoryService.move_slab_to(slab, hold_location)
 			if (
@@ -91,6 +114,12 @@ func choose_showcase(choice: StringName) -> bool:
 
 func _on_day_started(day: int) -> void:
 	if not _is_normal_game():
+		return
+	call_deferred("_start_day_beats", day)
+
+
+func _start_day_beats(day: int) -> void:
+	if not _is_normal_game() or day != GameState.current_day:
 		return
 	if day >= 8 and day <= 10 and not _started.has(TITAN_HYPE_BEAT):
 		_start_titan_hype()
@@ -112,7 +141,7 @@ func _on_day_phase_changed(phase: int) -> void:
 
 func _start_spike_staple() -> bool:
 	var sku_id := _choose_staple()
-	if InventoryService.card_count(sku_id) == 0:
+	if InventoryService.displayable_card_count(sku_id) == 0:
 		var sku := InventoryService.model.get_sku(sku_id)
 		if sku == null:
 			return false
@@ -123,6 +152,20 @@ func _start_spike_staple() -> bool:
 			sku.base_market_cents
 		) == null:
 			return false
+	var kept_displayable := false
+	for card: CardInstance in InventoryService.get_cards(sku_id):
+		if card.location.type not in [
+			InventoryLocation.Type.CASE,
+			InventoryLocation.Type.BINDER,
+		]:
+			continue
+		if not kept_displayable:
+			kept_displayable = true
+			continue
+		InventoryService.move_card_to(
+			card,
+			InventoryLocation.new(InventoryLocation.Type.ONLINE_HOLD)
+		)
 	var listed_price := InventoryService.listed_price_for(sku_id)
 	var customer := CustomerProfile.new()
 	customer.archetype_id = &"spike"
@@ -213,10 +256,10 @@ func _ensure_showcase_inventory() -> bool:
 
 func _choose_staple() -> StringName:
 	for sku_id: StringName in [BASTION_SKU, ARCBOLT_SKU]:
-		if InventoryService.card_count(sku_id) == 1:
+		if InventoryService.displayable_card_count(sku_id) == 1:
 			return sku_id
 	for sku_id: StringName in [BASTION_SKU, ARCBOLT_SKU]:
-		if InventoryService.card_count(sku_id) > 0:
+		if InventoryService.displayable_card_count(sku_id) > 0:
 			return sku_id
 	return BASTION_SKU
 

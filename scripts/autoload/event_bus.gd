@@ -17,6 +17,7 @@ signal price_focus_requested(sku_id: StringName, beat_id: StringName, message: S
 signal showcase_choice_requested(payload: Dictionary)
 signal showcase_choice_selected(choice: StringName)
 signal showcase_choice_resolved(beat_id: StringName, choice: StringName)
+signal showcase_choice_failed(message: String)
 signal beat_ui_resolved(beat_id: StringName, outcome: StringName)
 
 func publish_cash_changed(balance_cents: int) -> void:

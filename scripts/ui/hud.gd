@@ -49,6 +49,7 @@ func _ready() -> void:
 	EventBus.price_focus_requested.connect(_on_price_focus_requested)
 	EventBus.showcase_choice_requested.connect(_on_showcase_choice_requested)
 	EventBus.showcase_choice_resolved.connect(_on_showcase_choice_resolved)
+	EventBus.showcase_choice_failed.connect(_on_showcase_choice_failed)
 	phase_button.pressed.connect(_on_phase_pressed)
 	%OpenBuyButton.pressed.connect(_open_buy_list)
 	%BuyListCancelButton.pressed.connect(_close_buy)
@@ -93,7 +94,8 @@ func _update_phase(phase: int) -> void:
 			phase_button.text = "Next day"
 	_close_buy()
 	_close_price()
-	showcase_panel.hide()
+	if phase == GameState.DayPhase.SETTLE:
+		showcase_panel.hide()
 
 
 func _update_attention(remaining: int) -> void:
@@ -303,6 +305,10 @@ func _on_showcase_choice_resolved(
 		"Displaying %s. You can switch this choice until the day ends."
 		% ("the Empress slab" if choice == &"slab" else "both chase singles")
 	)
+
+
+func _on_showcase_choice_failed(message: String) -> void:
+	showcase_summary.text = "Cannot change display: %s" % message
 
 
 func _on_customer_head_changed(customer: CustomerProfile) -> void:

@@ -3,12 +3,21 @@ extends SceneTree
 const EASY_CONFIG: BalanceConfig = preload("res://data/balance/easy.tres")
 const NORMAL_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
 const HARD_CONFIG: BalanceConfig = preload("res://data/balance/hard.tres")
+const SPIKE_STAPLE_BEAT := &"sec10_4_spike_staple"
+const TITAN_HYPE_BEAT := &"sec10_7_titan_hype"
+const SHOWCASE_BEAT := &"sec10_8_slab_vs_singles"
 
 var _failures: int = 0
 var _qa := QaInstrumentationService.new()
 var _captured_scripted_customer: CustomerProfile
 var _captured_price_sku: StringName = &""
 var _captured_price_beat: StringName = &""
+var _event_bus: Node
+var _game_state: Node
+var _inventory_service: Node
+var _demand_signals: Node
+var _beat_director: Node
+var _qa_autoload: Node
 
 class FakeCustomerInventory:
 	extends Node
@@ -44,8 +53,17 @@ class FakeCustomerInventory:
 
 
 func _initialize() -> void:
-	EventBus.scripted_customer_requested.connect(_capture_scripted_customer)
-	EventBus.price_focus_requested.connect(_capture_price_focus)
+	_event_bus = root.get_node("EventBus")
+	_game_state = root.get_node("GameState")
+	_inventory_service = root.get_node("InventoryService")
+	_demand_signals = root.get_node("DemandSignals")
+	_beat_director = root.get_node("BeatDirector")
+	_qa_autoload = root.get_node("QaInstrumentation")
+	_event_bus.connect(
+		"scripted_customer_requested",
+		_capture_scripted_customer
+	)
+	_event_bus.connect("price_focus_requested", _capture_price_focus)
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
 	_test_inventory_mutations_and_capacity()
@@ -640,21 +658,25 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 
 
 func _test_spike_staple_beat() -> void:
-	GameState.start_new_game()
-	for card: CardInstance in InventoryService.model.cards.duplicate():
+	_game_state.call("start_new_game")
+	var inventory := _inventory_service.get("model") as InventoryModel
+	for card: CardInstance in inventory.cards.duplicate():
 		if card.sku_id in [&"AA-BASE-088", &"AA-BASE-078"]:
-			InventoryService.model.remove_card(card)
-	GameState.current_day = 3
-	GameState.current_phase = GameState.DayPhase.FLOOR
+			inventory.remove_card(card)
+	_game_state.set("current_day", 3)
+	_game_state.set("current_phase", DayPhasePolicy.FLOOR)
 	_captured_scripted_customer = null
-	QaInstrumentation.set_force_enabled(true)
+	_qa_autoload.call("set_force_enabled", true)
 	_expect_equal(
-		BeatDirector.trigger_qa_beat(BeatInjectionService.SPIKE_STAPLE_BEAT),
+		_beat_director.call(
+			"trigger_qa_beat",
+			SPIKE_STAPLE_BEAT
+		),
 		true,
 		"Spike staple QA trigger"
 	)
 	_expect_equal(
-		InventoryService.card_count(&"AA-BASE-088"),
+		_inventory_service.call("card_count", &"AA-BASE-088"),
 		1,
 		"Spike beat seeds exactly one missing NM staple"
 	)
@@ -674,34 +696,39 @@ func _test_spike_staple_beat() -> void:
 			[&"AA-BASE-088"],
 			"Spike targets seeded staple"
 		)
-	QaInstrumentation.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
 
 
 func _test_titan_hype_price_focus() -> void:
-	BeatDirector.reset()
-	for card: CardInstance in InventoryService.model.cards.duplicate():
+	_beat_director.call("reset")
+	var inventory := _inventory_service.get("model") as InventoryModel
+	for card: CardInstance in inventory.cards.duplicate():
 		if card.sku_id == &"AA-SKIE-047":
-			InventoryService.model.remove_card(card)
-	GameState.current_day = 8
-	GameState.current_phase = GameState.DayPhase.PREP
+			inventory.remove_card(card)
+	_game_state.set("current_day", 8)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
 	_captured_price_sku = &""
 	_captured_price_beat = &""
-	QaInstrumentation.set_force_enabled(true)
+	_qa_autoload.call("set_force_enabled", true)
 	_expect_equal(
-		BeatDirector.trigger_qa_beat(BeatInjectionService.TITAN_HYPE_BEAT),
+		_beat_director.call(
+			"trigger_qa_beat",
+			TITAN_HYPE_BEAT
+		),
 		true,
 		"Titan hype QA trigger"
 	)
 	_expect_equal(
-		InventoryService.card_count(&"AA-SKIE-047") >= 1,
+		int(_inventory_service.call("card_count", &"AA-SKIE-047")) >= 1,
 		true,
 		"Titan hype ensures NM inventory"
 	)
-	var titan_signal := DemandSignals.price_signal(
+	var titan_signal := _demand_signals.call(
+		"price_signal",
 		&"AA-SKIE-047",
 		2200,
-		InventoryService.location_for(&"AA-SKIE-047")
-	)
+		_inventory_service.call("location_for", &"AA-SKIE-047")
+	) as PriceConfirmSignal
 	_expect_equal(
 		titan_signal.shown_demand_band,
 		&"hot",
@@ -715,54 +742,76 @@ func _test_titan_hype_price_focus() -> void:
 	_expect_equal(_captured_price_sku, &"AA-SKIE-047", "Titan price focus SKU")
 	_expect_equal(
 		_captured_price_beat,
-		BeatInjectionService.TITAN_HYPE_BEAT,
+		TITAN_HYPE_BEAT,
 		"Titan price focus beat tag"
 	)
-	EventBus.beat_ui_resolved.emit(
-		BeatInjectionService.TITAN_HYPE_BEAT,
+	_beat_director.call(
+		"_on_beat_ui_resolved",
+		TITAN_HYPE_BEAT,
 		&"cancelled"
 	)
 	_expect_equal(
-		BeatDirector.is_completed(BeatInjectionService.TITAN_HYPE_BEAT),
+		_beat_director.call(
+			"is_completed",
+			TITAN_HYPE_BEAT
+		),
 		true,
 		"Titan cancel resolves beat"
 	)
-	QaInstrumentation.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
 
 
 func _test_showcase_slab_and_singles_preconditions() -> void:
-	BeatDirector.reset()
-	for card: CardInstance in InventoryService.model.cards.duplicate():
+	_beat_director.call("reset")
+	var inventory := _inventory_service.get("model") as InventoryModel
+	for card: CardInstance in inventory.cards.duplicate():
 		if card.sku_id in [&"AA-SKIE-047", &"AA-SKIE-058"]:
-			InventoryService.model.remove_card(card)
-	for slab: SlabInstance in InventoryService.model.slabs.duplicate():
-		InventoryService.model.remove_slab(slab)
-	GameState.current_day = 10
-	GameState.current_phase = GameState.DayPhase.PREP
-	QaInstrumentation.set_force_enabled(true)
+			inventory.remove_card(card)
+	for slab: SlabInstance in inventory.slabs.duplicate():
+		inventory.remove_slab(slab)
+	_game_state.set("current_day", 10)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_qa_autoload.call("set_force_enabled", true)
 	_expect_equal(
-		BeatDirector.trigger_qa_beat(BeatInjectionService.SHOWCASE_BEAT),
+		_beat_director.call(
+			"trigger_qa_beat",
+			SHOWCASE_BEAT
+		),
 		true,
 		"showcase QA trigger"
 	)
-	var empress_slab := InventoryService.get_slab(&"AA-SKIE-052")
-	var titan := InventoryService.get_card(&"AA-SKIE-047")
-	var paragon := InventoryService.get_card(&"AA-SKIE-058")
+	var empress_slab := (
+		_inventory_service.call("get_slab", &"AA-SKIE-052") as SlabInstance
+	)
+	var titan := (
+		_inventory_service.call("get_card", &"AA-SKIE-047") as CardInstance
+	)
+	var paragon := (
+		_inventory_service.call("get_card", &"AA-SKIE-058") as CardInstance
+	)
 	_expect_equal(empress_slab != null, true, "showcase ensures Empress slab")
 	_expect_equal(titan != null, true, "showcase ensures Titan single")
 	_expect_equal(paragon != null, true, "showcase ensures Paragon single")
 	_expect_equal(
-		InventoryService.case_free_slot_weight() >= 2,
+		int(_inventory_service.call("case_free_slot_weight")) >= 2,
 		true,
 		"showcase starts with two free slot-weights"
 	)
-	_expect_equal(BeatDirector.choose_showcase(&"slab"), true, "choose slab")
+	_expect_equal(
+		_beat_director.call("choose_showcase", &"slab"),
+		true,
+		"choose slab"
+	)
 	_expect_equal(
 		empress_slab.location.type,
 		InventoryLocation.Type.CASE,
 		"slab moves through case API"
 	)
-	_expect_equal(BeatDirector.choose_showcase(&"singles"), true, "switch to singles")
+	_expect_equal(
+		_beat_director.call("choose_showcase", &"singles"),
+		true,
+		"switch to singles"
+	)
 	_expect_equal(
 		empress_slab.location.type,
 		InventoryLocation.Type.ONLINE_HOLD,
@@ -770,7 +819,7 @@ func _test_showcase_slab_and_singles_preconditions() -> void:
 	)
 	_expect_equal(titan.location.type, InventoryLocation.Type.CASE, "Titan in case")
 	_expect_equal(paragon.location.type, InventoryLocation.Type.CASE, "Paragon in case")
-	QaInstrumentation.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
 
 
 func _capture_scripted_customer(customer: CustomerProfile) -> void:

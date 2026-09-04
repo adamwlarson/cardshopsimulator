@@ -138,6 +138,28 @@ func get_card(
 	return null
 
 
+func get_cards(
+	sku_id: StringName,
+	condition: CardInstance.Condition = CardInstance.Condition.NM
+) -> Array[CardInstance]:
+	var result: Array[CardInstance] = []
+	for card: CardInstance in model.cards:
+		if card.sku_id == sku_id and card.condition == condition:
+			result.append(card)
+	return result
+
+
+func displayable_card_count(sku_id: StringName) -> int:
+	var count := 0
+	for card: CardInstance in get_cards(sku_id):
+		if card.location.type in [
+			InventoryLocation.Type.CASE,
+			InventoryLocation.Type.BINDER,
+		]:
+			count += 1
+	return count
+
+
 func get_slab(sku_id: StringName) -> SlabInstance:
 	for slab: SlabInstance in model.slabs:
 		if slab.card_ref != null and slab.card_ref.sku_id == sku_id:
@@ -232,6 +254,10 @@ func find_listed_sku_offer(sku_id: StringName, budget_cents: int) -> Dictionary:
 			card.sku_id == sku_id
 			and card.listed_price_cents > 0
 			and card.listed_price_cents <= budget_cents
+			and card.location.type in [
+				InventoryLocation.Type.CASE,
+				InventoryLocation.Type.BINDER,
+			]
 		):
 			return _offer_for(
 				model.get_sku(card.sku_id),
