@@ -90,6 +90,9 @@ func _initialize() -> void:
 	_test_customer_service_actions()
 	_test_ui_price_labels()
 	_test_ui_helpers_do_not_read_hidden_values()
+	_test_wants_label_format()
+	_test_prep_hud_seed_before_bind()
+	_test_undercut_fill_boundary()
 	_test_rent_firesale_beat()
 	_test_spike_staple_beat()
 	_test_titan_hype_price_focus()
@@ -666,6 +669,255 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 	)
 
 
+func _test_wants_label_format() -> void:
+	_expect_equal(
+		DemandSignalPresenter.wants_label(
+			"Bastion Captain",
+			&"AA-BASE-088",
+			"NM"
+		),
+		"Bastion Captain · NM",
+		"Wants uses bible name and condition"
+	)
+	_expect_equal(
+		DemandSignalPresenter.wants_label(
+			"Arcbolt Adept",
+			&"AA-BASE-078",
+			"NM"
+		),
+		"Arcbolt Adept · NM",
+		"Wants Arcbolt staple format"
+	)
+	_expect_equal(
+		DemandSignalPresenter.wants_label(
+			"Empress of Updrafts",
+			&"AA-SKIE-052",
+			"",
+			"Prism",
+			10.0
+		),
+		"Empress of Updrafts · Prism 10",
+		"Wants graded format omits .0"
+	)
+	_expect_equal(
+		DemandSignalPresenter.wants_label(
+			"Bastion Captain",
+			&"AA-BASE-088",
+			"NM",
+			"",
+			-1.0,
+			2
+		),
+		"Bastion Captain · NM ×2",
+		"Wants appends quantity when above one"
+	)
+	var fallback := DemandSignalPresenter.wants_label(
+		"",
+		&"AA-BASE-088",
+		"NM"
+	)
+	_expect_equal(fallback, "Base 088 · NM", "missing name humanizes SKU")
+	_expect_equal(
+		fallback.contains("AA-") or fallback.contains("AA-BASE-"),
+		false,
+		"humanized fallback has no raw AA SKU"
+	)
+	var raw_passthrough := DemandSignalPresenter.wants_label(
+		"AA-BASE-088",
+		&"AA-BASE-088",
+		"NM"
+	)
+	_expect_equal(
+		raw_passthrough.contains("AA-BASE-") or raw_passthrough.contains("AA-"),
+		false,
+		"raw SKU display name is humanized away"
+	)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var hud := (
+		load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
+	).instantiate() as Control
+	root.add_child(hud)
+	var spike := CustomerProfile.new()
+	spike.display_name = "Spike"
+	spike.target_sku = &"AA-BASE-088"
+	spike.listed_price_cents = int(
+		_inventory_service.call("listed_price_for", &"AA-BASE-088")
+	)
+	hud.call("_on_customer_head_changed", spike)
+	var wants_summary := String(hud.get_node("%CustomerSummary").text)
+	_expect_equal(
+		wants_summary.begins_with("Wants: Bastion Captain · NM\n"),
+		true,
+		"CustomerServe Wants uses Bastion Captain · NM"
+	)
+	_expect_equal(
+		wants_summary.contains("AA-BASE-"),
+		false,
+		"CustomerServe Wants hides raw SKU ids"
+	)
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var empress := inventory.get_sku(&"AA-SKIE-052")
+	_inventory_service.call(
+		"receive_slab",
+		&"AA-SKIE-052",
+		&"Prism",
+		10.0,
+		empress.base_market_cents,
+		InventoryLocation.new(InventoryLocation.Type.CASE)
+	)
+	var graded := CustomerProfile.new()
+	graded.display_name = "Collector"
+	graded.target_sku = &"AA-SKIE-052"
+	graded.listed_price_cents = empress.base_market_cents
+	hud.call("_on_customer_head_changed", graded)
+	var graded_summary := String(hud.get_node("%CustomerSummary").text)
+	_expect_equal(
+		graded_summary.begins_with("Wants: Empress of Updrafts · Prism 10\n"),
+		true,
+		"CustomerServe Wants uses grader and grade"
+	)
+	root.remove_child(hud)
+	hud.free()
+	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_source.contains("String(_current_customer.target_sku)"),
+		false,
+		"HUD Wants line does not interpolate raw SKU"
+	)
+
+
+func _test_prep_hud_seed_before_bind() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.set("is_game_active", false)
+	_economy.set("balance_cents", 0)
+	_game_state.set("attention_remaining", 0)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		800_000,
+		"Prep seed cash from Normal BalanceConfig"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		100,
+		"Prep seed attention from Normal BalanceConfig"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.start_cash_cents,
+		800_000,
+		"Normal start_cash_cents unchanged"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.attention_pool,
+		100,
+		"Normal attention_pool unchanged"
+	)
+	_game_state.set("is_game_active", false)
+	_economy.set("balance_cents", 0)
+	_game_state.set("attention_remaining", 0)
+	var hud := (
+		load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
+	).instantiate() as Control
+	root.add_child(hud)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		800_000,
+		"HUD _ready seeds Economy before bind"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		100,
+		"HUD _ready seeds attention before bind"
+	)
+	_expect_equal(
+		String(hud.get_node("%CashLabel").text),
+		"Cash  $8000.00",
+		"Prep HUD binds seeded cash"
+	)
+	_expect_equal(
+		String(hud.get_node("%AttentionLabel").text),
+		"Attention  100",
+		"Prep HUD binds seeded attention"
+	)
+	_expect_equal(
+		String(hud.get_node("%PhaseLabel").text),
+		"Phase  Prep",
+		"Prep HUD binds PREP phase after seed"
+	)
+	root.remove_child(hud)
+	hud.free()
+
+
+func _test_undercut_fill_boundary() -> void:
+	_expect_equal(
+		DemandSignalPresenter.UNDERCUT_FILL_FACTOR,
+		0.90,
+		"Undercut fill factor is strict 0.90"
+	)
+	_expect_equal(
+		DemandSignalPresenter.undercut_fill_cents(1000),
+		900,
+		"Undercut fill floors suggested * 0.90"
+	)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var preview := _demand_signals.call(
+		"price_signal",
+		&"AA-DUST-ETB",
+		_inventory_service.call("listed_price_for", &"AA-DUST-ETB"),
+		_inventory_service.call("location_for", &"AA-DUST-ETB")
+	) as PriceConfirmSignal
+	var undercut_cents := DemandSignalPresenter.undercut_fill_cents(
+		preview.suggested_price_cents
+	)
+	_expect_equal(
+		undercut_cents,
+		maxi(1, floori(preview.suggested_price_cents * 0.90)),
+		"Undercut helper matches floori(suggested * 0.90)"
+	)
+	var undercut_preview := _demand_signals.call(
+		"refresh_price_signal",
+		preview,
+		undercut_cents
+	) as PriceConfirmSignal
+	_expect_equal(
+		undercut_preview.position,
+		&"undercut",
+		"×0.90 fill maps to Undercut"
+	)
+	var competitive_cents := ceili(preview.suggested_price_cents * 0.92)
+	var competitive_preview := _demand_signals.call(
+		"refresh_price_signal",
+		preview,
+		competitive_cents
+	) as PriceConfirmSignal
+	_expect_equal(
+		competitive_preview.position,
+		&"competitive",
+		"exact −8% (suggest × 0.92) maps to Competitive"
+	)
+	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_source.contains("* 0.92") or hud_source.contains("*0.92"),
+		false,
+		"HUD has no leftover ×0.92 Undercut fill"
+	)
+	_expect_equal(
+		hud_source.contains("undercut_fill_cents"),
+		true,
+		"HUD Undercut fill uses shared 0.90 helper"
+	)
+	var presenter_source := FileAccess.get_file_as_string(
+		"res://scripts/ui/demand_signal_presenter.gd"
+	)
+	_expect_equal(
+		presenter_source.contains("* 0.92") or presenter_source.contains("*0.92"),
+		false,
+		"presenter has no leftover ×0.92 Undercut fill"
+	)
+
+
 func _test_spike_staple_beat() -> void:
 	_game_state.call("start_new_game")
 	var inventory := _inventory_service.get("model") as InventoryModel
@@ -779,8 +1031,8 @@ func _test_rent_firesale_beat() -> void:
 		_inventory_service.call("listed_price_for", _captured_price_sku),
 		_inventory_service.call("location_for", _captured_price_sku)
 	) as PriceConfirmSignal
-	var undercut_cents := floori(
-		fire_sale_preview.suggested_price_cents * 0.90
+	var undercut_cents := DemandSignalPresenter.undercut_fill_cents(
+		fire_sale_preview.suggested_price_cents
 	)
 	fire_sale_preview = _demand_signals.call(
 		"refresh_price_signal",

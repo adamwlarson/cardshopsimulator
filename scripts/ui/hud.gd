@@ -90,11 +90,17 @@ func _ready() -> void:
 	)
 	showcase_slab_button.pressed.connect(_select_showcase_choice.bind(&"slab"))
 	showcase_singles_button.pressed.connect(_select_showcase_choice.bind(&"singles"))
+	_bind_seeded_status()
+	_update_queue(0)
+
+
+func _bind_seeded_status() -> void:
+	if not GameState.is_game_active:
+		GameState.start_new_game()
 	_update_cash(Economy.balance_cents)
 	_update_day(GameState.current_day)
 	_update_phase(GameState.current_phase)
 	_update_attention(GameState.attention_remaining)
-	_update_queue(0)
 
 
 func _update_cash(balance_cents: int) -> void:
@@ -299,7 +305,9 @@ func _on_price_focus_requested(
 		_select_price_stock(dto)
 		if suggestion_mode == &"undercut":
 			price_input.text = DemandSignalPresenter.format_cents(
-				maxi(1, floori(_price_signal.suggested_price_cents * 0.90))
+				DemandSignalPresenter.undercut_fill_cents(
+					_price_signal.suggested_price_cents
+				)
 			)
 			_update_price_preview(price_input.text)
 			assert(
@@ -446,7 +454,7 @@ func _on_customer_head_changed(customer: CustomerProfile) -> void:
 	customer_summary.text = (
 		"Wants: %s\n%s: %s\n%s"
 		% [
-			String(_current_customer.target_sku),
+			_customer_wants_label(_current_customer),
 			DemandSignalPresenter.price_label(
 				DemandSignalPresenter.PriceContext.CUSTOMER_BUYING_FROM_SHOP
 			),
@@ -483,3 +491,33 @@ func _spend_for_floor(cost: int) -> bool:
 	if GameState.current_phase != GameState.DayPhase.FLOOR:
 		return true
 	return GameState.spend_attention(cost)
+
+
+func _customer_wants_label(customer: CustomerProfile) -> String:
+	var sku_id := customer.target_sku
+	var sku := InventoryService.model.get_sku(sku_id)
+	var display_name := sku.display_name if sku != null else ""
+	var slab := InventoryService.get_slab(sku_id)
+	if slab != null:
+		return DemandSignalPresenter.wants_label(
+			display_name,
+			sku_id,
+			"",
+			String(slab.grader),
+			slab.grade,
+			1
+		)
+	var card := InventoryService.get_card(sku_id)
+	var condition := ""
+	if card != null:
+		condition = CardInstance.Condition.keys()[card.condition]
+	elif (
+		sku != null
+		and sku.product_class == ProductSKU.ProductClass.SINGLE
+	):
+		condition = CardInstance.Condition.keys()[CardInstance.Condition.NM]
+	return DemandSignalPresenter.wants_label(
+		display_name,
+		sku_id,
+		condition
+	)
