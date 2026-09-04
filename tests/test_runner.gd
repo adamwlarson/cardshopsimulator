@@ -111,6 +111,7 @@ func _initialize() -> void:
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
+	_test_specialist_staff_path()
 	_test_expand_medium_beat()
 	_test_medium_floor_growth()
 	_test_shady_trunk_beat()
@@ -1133,6 +1134,9 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(HARD_CONFIG.research_attention, 18, "hard research attention")
 	_expect_equal(NORMAL_CONFIG.research_cost_cents, 5_000, "normal research cash")
 	_expect_equal(NORMAL_CONFIG.research_attention_specialist, 10, "normal research specialist")
+	_expect_equal(NORMAL_CONFIG.specialist_wage_cents, 14_000, "normal specialist wage")
+	_expect_equal(EASY_CONFIG.specialist_wage_cents, 14_000, "easy specialist wage default")
+	_expect_equal(HARD_CONFIG.specialist_wage_cents, 14_000, "hard specialist wage default")
 	_expect_equal(NORMAL_CONFIG.rearrange_attention, 10, "normal rearrange attention")
 	_expect_equal(EASY_CONFIG.rearrange_attention, 10, "easy rearrange inherits")
 	_expect_equal(HARD_CONFIG.rearrange_attention, 10, "hard rearrange inherits")
@@ -1363,6 +1367,9 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 	for path: String in [
 		"res://scripts/ui/demand_signal_presenter.gd",
 		"res://scripts/ui/hud.gd",
+		"res://scripts/shop/staff_presenter.gd",
+		"res://scripts/shop/staff_member.gd",
+		"res://scripts/shop/shop_state.gd",
 	]:
 		var source := FileAccess.get_file_as_string(path)
 		_expect_equal(source.contains("true_market"), false, "%s market truth access" % path)
@@ -1626,9 +1633,11 @@ func _test_gameplay_hud_visual_smoke() -> void:
 	var inspect_button := hud.get_node_or_null("%InspectButton") as Button
 	_expect_equal(inspect_button != null, true, "Inspect★ button present")
 	_expect_equal(
-		inspect_button != null and inspect_button.text == "Inspect★",
+		inspect_button != null
+		and inspect_button.text.contains("Inspect★")
+		and inspect_button.text.contains("Att 5"),
 		true,
-		"Inspect★ label"
+		"Inspect★ label shows owner Att cost"
 	)
 	_expect_equal(
 		inspect_button != null and inspect_button.custom_minimum_size.y >= 40.0,
@@ -2333,6 +2342,7 @@ func _test_hire_cashier_beat() -> void:
 	_expect_equal(&"hire_cashier" in hire_ids, true, "hire offers Cashier")
 	_expect_equal(&"keep_solo" in hire_ids, true, "hire offers Keep solo")
 	_expect_equal(&"hire_cheap" in hire_ids, true, "hire offers cheap path")
+	_expect_equal(&"hire_specialist" in hire_ids, true, "hire offers Specialist")
 	var confirms: Dictionary = _captured_beat_decision.get("confirms", {})
 	var cheap_confirm: Dictionary = confirms.get("hire_cheap", {})
 	_expect_equal(
@@ -2429,6 +2439,185 @@ func _test_hire_cashier_beat() -> void:
 	)
 	_qa_autoload.call("set_force_enabled", false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_specialist_staff_path() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.inspect_attention_cost(), 5, "no Specialist → Inspect Att 5")
+	_expect_equal(shop.research_attention_cost(), 15, "no Specialist → Research Att 15")
+	_expect_equal(shop.has_specialist_on_duty(), false, "owner-only has no Specialist")
+	_expect_equal(
+		NORMAL_CONFIG.specialist_wage_cents,
+		14_000,
+		"BalanceConfig specialist wage is $140/day"
+	)
+	_expect_equal(shop.specialist_wage_cents(), 14_000, "ShopState reads specialist wage")
+
+	_expect_equal(shop.hire_specialist() != null, true, "hire Specialist under Small cap")
+	_expect_equal(shop.specialist_count(), 1, "roster has one Specialist")
+	_expect_equal(shop.staff[0].role, &"specialist", "hired role is specialist")
+	_expect_equal(shop.staff[0].is_specialist(), true, "StaffMember.is_specialist")
+	_expect_equal(shop.staff[0].wage_cents, 14_000, "Specialist wage from BalanceConfig")
+	_expect_equal(shop.staff[0].visual_scene_path(), "", "Specialist is domain-only (no mesh)")
+	_expect_equal(shop.has_specialist_on_duty(), true, "hired Specialist is on duty")
+	_expect_equal(shop.inspect_attention_cost(), 2, "Specialist on duty → Inspect Att 2")
+	_expect_equal(shop.research_attention_cost(), 10, "Specialist on duty → Research Att 10")
+	_expect_equal(shop.hire_specialist() == null, true, "Small cap blocks second Specialist")
+	_expect_equal(shop.hire_cashier(false) == null, true, "Small cap blocks cashier after Specialist")
+
+	var cash_before := int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 14_000,
+		"Specialist wage posts at SETTLE"
+	)
+
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "specialist save payload")
+	var saved_staff: Array = (saved.get("shop", {}) as Dictionary).get("staff", [])
+	_expect_equal(saved_staff.size(), 1, "save writes Specialist roster")
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.specialist_count(), 0, "new game clears Specialist")
+	_expect_equal(shop.inspect_attention_cost(), 5, "new game owner Inspect 5")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"restore_save accepts Specialist snapshot"
+	)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.specialist_count(), 1, "save/load restores Specialist")
+	_expect_equal(shop.staff[0].role, &"specialist", "restored role is specialist")
+	_expect_equal(shop.staff[0].wage_cents, 14_000, "restored Specialist wage")
+	_expect_equal(shop.has_specialist_on_duty(), true, "restored Specialist is on duty")
+	_expect_equal(shop.inspect_attention_cost(), 2, "restored Specialist Inspect Att 2")
+	_expect_equal(shop.research_attention_cost(), 10, "restored Specialist Research Att 10")
+
+	_expect_equal(shop.fire_staff(0) != null, true, "fire removes Specialist")
+	_expect_equal(shop.specialist_count(), 0, "fired Specialist leaves roster")
+	_expect_equal(shop.has_specialist_on_duty(), false, "fire clears on-duty Specialist")
+	_expect_equal(shop.inspect_attention_cost(), 5, "after fire Inspect returns to 5")
+	_expect_equal(shop.research_attention_cost(), 15, "after fire Research returns to 15")
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_game_state.set("current_day", 5)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 5)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"hire_specialist"),
+		true,
+		"day-5 hire beat can pick Specialist"
+	)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.specialist_count(), 1, "beat hire adds Specialist")
+	_expect_equal(shop.cashier_count(), 0, "Specialist hire leaves cashiers unchanged")
+	_assert_payload_has_no_truth(_captured_beat_decision, "specialist hire decision")
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_economy.set("balance_cents", 1_600_000)
+	_game_state.set("current_reputation", 55)
+	_expect_equal(shop.expand_to_medium(18, 1_600_000, 55), true, "Medium unlocks staff cap 3")
+	_expect_equal(shop.hire_cashier(false) != null, true, "Medium can still hire cashier")
+	_expect_equal(shop.hire_specialist() != null, true, "Medium can hire Specialist after cashier")
+	_expect_equal(shop.cashier_count(), 1, "cashier still on roster")
+	_expect_equal(shop.specialist_count(), 1, "Specialist shares Medium cap")
+	_expect_equal(shop.inspect_attention_cost(), 2, "mixed roster Inspect uses Specialist cost")
+	_expect_equal(shop.research_attention_cost(), 10, "mixed roster Research uses Specialist cost")
+	_expect_equal(shop.hire_cashier(false) != null, true, "Medium hire #3 still allowed")
+	_expect_equal(shop.hire_specialist() == null, true, "Medium cap blocks fourth hire")
+	_expect_equal(shop.hire_cashier(false) == null, true, "Medium cap still blocks extra cashier")
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "gameplay HUD loads for Specialist")
+	if hud == null:
+		return
+	var open_staff := hud.get_node_or_null("%OpenStaffButton") as Button
+	var hire_specialist := hud.get_node_or_null("%HireSpecialistButton") as Button
+	var open_research := hud.get_node_or_null("%OpenResearchButton") as Button
+	var inspect_button := hud.get_node_or_null("%InspectButton") as Button
+	_expect_equal(open_staff != null, true, "Staff hire button present")
+	_expect_equal(
+		open_research != null and open_research.text.contains("Att 15"),
+		true,
+		"HUD Research shows owner Att 15 before hire"
+	)
+	_expect_equal(
+		inspect_button != null
+		and inspect_button.text.contains("Inspect★")
+		and inspect_button.text.contains("Att 5"),
+		true,
+		"HUD Inspect★ shows owner Att 5 before hire"
+	)
+	open_staff.pressed.emit()
+	_expect_equal(
+		hire_specialist != null and not hire_specialist.disabled,
+		true,
+		"Staff panel can hire Specialist under cap"
+	)
+	_expect_equal(
+		hire_specialist != null and hire_specialist.text.contains("$140.00"),
+		true,
+		"Staff panel wage comes from BalanceConfig"
+	)
+	hire_specialist.pressed.emit()
+	_expect_equal(shop.specialist_count(), 1, "HUD hire adds Specialist")
+	_expect_equal(
+		open_research.text.contains("Att 10"),
+		true,
+		"HUD Research shows Specialist Att 10 before confirm"
+	)
+	_expect_equal(
+		inspect_button.text.contains("Att 2"),
+		true,
+		"HUD Inspect★ shows Specialist Att 2 before confirm"
+	)
+	_expect_equal(hire_specialist.disabled, true, "HUD hire disables at Small cap")
+	var hire_cashier := hud.get_node_or_null("%HireCashierButton") as Button
+	_expect_equal(
+		hire_cashier != null and hire_cashier.disabled,
+		true,
+		"HUD cashier hire also blocked at cap"
+	)
+
+	var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+	open_buy.pressed.emit()
+	_expect_equal(
+		_click_buy_row_for_channel(hud, &"marketplace"),
+		true,
+		"marketplace lot for Specialist inspect"
+	)
+	_expect_equal(
+		inspect_button.visible and not inspect_button.disabled,
+		true,
+		"Inspect★ enabled at Specialist cost"
+	)
+	_expect_equal(
+		inspect_button.text.contains("Att 2"),
+		true,
+		"detail Inspect★ still shows Att 2"
+	)
+	inspect_button.pressed.emit()
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		98,
+		"Inspect★ spends Specialist Att 2"
+	)
+	_assert_text_has_no_truth(inspect_button.text, "Inspect★ label")
+	_assert_text_has_no_truth(open_research.text, "Research label")
+	_assert_text_has_no_truth(hire_specialist.text, "hire Specialist label")
+	_assert_payload_has_no_truth(_game_state.call("capture_save"), "post-hire save")
+	root.remove_child(hud)
+	hud.free()
 	_game_state.call("start_new_game")
 
 

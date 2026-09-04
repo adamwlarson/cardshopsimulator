@@ -20,6 +20,10 @@ func is_cashier() -> bool:
 	return role == &"cashier"
 
 
+func is_specialist() -> bool:
+	return role == &"specialist"
+
+
 func visual_scene_path() -> String:
 	if is_cashier():
 		return SCENE_CASHIER

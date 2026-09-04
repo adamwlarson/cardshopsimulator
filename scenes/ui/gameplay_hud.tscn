@@ -138,6 +138,14 @@ size_flags_vertical = 4
 mouse_filter = 0
 text = "Rearrange · Att 10"
 
+[node name="OpenStaffButton" type="Button" parent="TopBar/Stats"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(88, 40)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 0
+text = "Staff"
+
 [node name="RotationWatchLabel" type="Label" parent="."]
 unique_name_in_owner = true
 visible = false
@@ -251,7 +259,7 @@ visible = false
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Inspect★"
+text = "Inspect★ · Att 5"
 
 [node name="BuyCancelButton" type="Button" parent="BuyOpportunityDetail/Content/Actions"]
 unique_name_in_owner = true
@@ -616,6 +624,63 @@ size_flags_horizontal = 3
 theme_type_variation = &"PrimaryButton"
 text = "Rearrange · Att 10"
 
+[node name="StaffPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 460.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="StaffPanel"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="StaffPanel/Content"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "STAFF"
+
+[node name="StaffHint" type="Label" parent="StaffPanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "Roster 0 / 1. Wages post at SETTLE. Specialist lowers Inspect and Research Attention."
+autowrap_mode = 3
+
+[node name="StaffRows" type="VBoxContainer" parent="StaffPanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="HireRow" type="HBoxContainer" parent="StaffPanel/Content"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="HireCashierButton" type="Button" parent="StaffPanel/Content/HireRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Hire Cashier · $80.00/day"
+
+[node name="HireSpecialistButton" type="Button" parent="StaffPanel/Content/HireRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "Hire Specialist · $140.00/day"
+
+[node name="StaffListCancelButton" type="Button" parent="StaffPanel/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Close"
+
 [node name="CustomerServe" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
@@ -837,7 +902,7 @@ layout_mode = 0
 offset_left = 48.0
 offset_top = 80.0
 offset_right = 640.0
-offset_bottom = 460.0
+offset_bottom = 540.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="BeatDecision"]
@@ -882,6 +947,14 @@ custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 theme_type_variation = &"ListRowButton"
 text = "Option C"
+
+[node name="BeatChoiceDButton" type="Button" parent="BeatDecision/Content/BeatChoices"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_type_variation = &"ListRowButton"
+text = "Option D"
 
 [node name="BeatConfirm" type="VBoxContainer" parent="BeatDecision/Content"]
 unique_name_in_owner = true

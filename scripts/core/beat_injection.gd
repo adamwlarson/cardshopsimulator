@@ -523,6 +523,16 @@ func _start_hire_cashier() -> bool:
 				),
 				"enabled": true,
 			},
+			{
+				"id": &"hire_specialist",
+				"label": (
+					"Hire Specialist\n%s/day · Inspect/Research cheaper"
+					% DemandSignalPresenter.format_cents(
+						GameState.shop.specialist_wage_cents()
+					)
+				),
+				"enabled": true,
+			},
 		],
 		"confirms": {
 			"hire_cheap": {
@@ -717,6 +727,9 @@ func _choose_hire_cashier(choice: StringName) -> bool:
 				return false
 		&"hire_cheap":
 			if GameState.shop.hire_cashier(true) == null:
+				return false
+		&"hire_specialist":
+			if GameState.shop.hire_specialist() == null:
 				return false
 		&"keep_solo":
 			pass
