@@ -1,6 +1,6 @@
 # Next Eng SoT Pick C v1 — post A+B decision pressure
 
-**Status:** Adopted — **C1 Market events pack** locked (synced main @ 735a9f53); C2/C3 parked; Specialist Att-discount out of pick  
+**Status:** Adopted — **C1 Market events pack** in flight (Eng spike launched); Specialist Att-discount shipped #24; Medium shell #25; C2/C3 parked  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** systems §6 / §8 / §10, ui-wireflows §5.1, customer-npc-v1, next-eng-sot-pick-v1 (A+B shipped)  
@@ -16,7 +16,7 @@
 | B — Medium floor growth | Shipped #21 — Sign→**14×10** + stub shell |
 | NPC / anim / cashier | Shipped #20/#22/#23 — floor presence + hire-gated cashier mesh |
 
-**In flight (do not re-spec):** Specialist Att-discount spike — closes Option A Inspect★ stub: `research_attention_specialist = 10`, `inspect_attention_specialist = 2` (BalanceConfig / on-duty Specialist). Treat as done when it merges; Pick C must not redefine those knobs.
+**Shipped (do not re-spec):** Specialist Att-discount #24 — closes Option A Inspect★ stub: `research_attention_specialist = 10`, `inspect_attention_specialist = 2`. Medium hero shell #25 (hide stub, 14×10, fog nack).
 
 **Gap:** Shop feels alive and expandable, but **day-to-day decision pressure** (events, hire vs solo bandwidth, optional §10 beats) is still thin vs systems bible.
 
@@ -114,10 +114,11 @@ Specialist Att-discount stays **out of pick** (already in flight).
 
 | Pick | Result |
 |------|--------|
-| C1 Market events | **Locked** — next eng spike after Specialist Att-discount tip (or parallel if Eng clear) |
+| C1 Market events | **In flight** — Eng spike launched (hype / soft rotation / fog per Option C1) |
 | C2 Hire vs owner | Parked |
 | C3 Optional #3/#10 | Parked |
-| Specialist Att-discount | Out of pick — already in flight (`research_attention_specialist` 10 / `inspect_attention_specialist` 2) |
+| Specialist Att-discount | **Shipped** #24 (`research_attention_specialist` 10 / `inspect_attention_specialist` 2) |
+| Medium shell swap | **Shipped** #25 |
 
 ---
 
@@ -126,6 +127,9 @@ Specialist Att-discount stays **out of pick** (already in flight).
 - [x] Choose **C1** / **C2** / **C3** → **C1**
 - [x] Sync this file to main (@ 735a9f53)
 - [x] Losers park (C2/C3)
-- [ ] Sync this Adopted status bump to main
-- [ ] Eng C1 tip after Specialist Att-discount freezes (or parallel if Eng clear)
+- [x] Sync Adopted status bump to main
+- [x] Specialist Att-discount shipped (#24)
+- [x] Eng C1 spike launched
+- [ ] Sync this in-flight status bump to main
+- [ ] C1 tip-freeze → Eng → QA → merge
 
