@@ -225,23 +225,41 @@ func _start_day_beats(day: int) -> void:
 		return
 	if not _is_normal_game():
 		return
-	if day == 3 and not _started.has(MARKETPLACE_OUTING_BEAT):
-		_start_marketplace_outing()
+	if (
+		day == 3
+		and not _started.has(MARKETPLACE_OUTING_BEAT)
+		and _start_marketplace_outing()
+	):
 		return
-	if day == 5 and not _started.has(HIRE_CASHIER_BEAT):
-		_start_hire_cashier()
+	if (
+		day == 5
+		and not _started.has(HIRE_CASHIER_BEAT)
+		and _start_hire_cashier()
+	):
 		return
-	if day >= 8 and day <= 10 and not _started.has(TITAN_HYPE_BEAT):
-		_start_titan_hype()
+	if (
+		day >= 8
+		and day <= 10
+		and not _started.has(TITAN_HYPE_BEAT)
+		and _start_titan_hype()
+	):
 		return
 	if _is_titan_pending():
 		_refocus_pending_titan()
 		return
-	if day >= 10 and day <= 12 and not _started.has(SHOWCASE_BEAT):
-		_start_showcase_choice()
+	if (
+		day >= 10
+		and day <= 12
+		and not _started.has(SHOWCASE_BEAT)
+		and _start_showcase_choice()
+	):
 		return
-	if day >= 18 and day <= 25 and not _started.has(EXPAND_MEDIUM_BEAT):
-		_start_expand_medium()
+	if (
+		day >= 18
+		and day <= 25
+		and not _started.has(EXPAND_MEDIUM_BEAT)
+		and _start_expand_medium()
+	):
 		return
 	if _start_shady_trunk_if_due(day):
 		return
@@ -433,7 +451,11 @@ func _start_marketplace_outing() -> bool:
 	if opportunity == null:
 		return false
 	var dto := DemandSignals.buy_signal_for_id(opportunity.id)
-	if dto == null or dto.confidence != &"low":
+	if (
+		dto == null
+		or dto.channel != &"marketplace"
+		or dto.confidence != &"low"
+	):
 		return false
 	_outing_opportunity_id = opportunity.id
 	var config := GameState.balance_config
@@ -646,7 +668,7 @@ func _start_shady_trunk_if_due(day: int) -> bool:
 
 func _start_shady_trunk() -> bool:
 	if (
-		GameState.current_phase != GameState.DayPhase.PREP
+		not GameState.is_night_prep()
 		or _started.has(SHADY_TRUNK_BEAT)
 	):
 		return false
@@ -654,7 +676,7 @@ func _start_shady_trunk() -> bool:
 	if opportunity == null:
 		return false
 	var dto := DemandSignals.buy_signal_for_id(opportunity.id)
-	if dto == null or dto.confidence != &"low":
+	if dto == null or dto.channel != &"shady" or dto.confidence != &"low":
 		return false
 	_shady_opportunity_id = opportunity.id
 	_mark_started(SHADY_TRUNK_BEAT)
@@ -665,6 +687,7 @@ func _start_shady_trunk() -> bool:
 			"Deep-discount shady lot. Low confidence. %s"
 			% dto.condition_cue
 		),
+		"night_prep": true,
 		"choices": [
 			{
 				"id": &"buy",
