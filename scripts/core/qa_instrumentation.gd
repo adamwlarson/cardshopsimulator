@@ -112,6 +112,12 @@ func record_research_applied(payload: Dictionary) -> void:
 	_emit(&"research_applied", payload)
 
 
+func record_market_event_rolled(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"market_event_rolled", payload)
+
+
 func record_rearrange_attempted(payload: Dictionary) -> void:
 	if not is_enabled():
 		return

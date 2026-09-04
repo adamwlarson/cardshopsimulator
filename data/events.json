@@ -2,10 +2,35 @@
   "schema_version": 1,
   "events": [
     {
-      "id": "demo-set-rumor",
-      "type": "market",
-      "title": "Reprint Rumor",
-      "description": "Placeholder for a future event that changes demand and market prices."
+      "id": "hype_spike",
+      "type": "hype_spike",
+      "title": "Hype spike",
+      "description": "One SKU runs HOT for a few days.",
+      "weight": 1.0,
+      "negative": false,
+      "duration_days_min": 1,
+      "duration_days_max": 3
+    },
+    {
+      "id": "soft_rotation_leak",
+      "type": "soft_rotation_leak",
+      "title": "Soft rotation leak",
+      "description": "Research or a Specialist can foreshadow a rotation.",
+      "weight": 1.0,
+      "negative": true,
+      "duration_days_min": 1,
+      "duration_days_max": 3
+    },
+    {
+      "id": "fog_day",
+      "type": "fog_day",
+      "title": "Fog day",
+      "description": "Demand-band noise widens.",
+      "weight": 1.0,
+      "negative": true,
+      "fog_flag": true,
+      "duration_days_min": 1,
+      "duration_days_max": 1
     }
   ]
 }

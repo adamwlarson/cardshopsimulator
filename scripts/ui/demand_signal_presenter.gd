@@ -104,6 +104,10 @@ static func rearrange_action_label(attention_cost: int) -> String:
 	return "Rearrange · Att %d" % attention_cost
 
 
+static func event_banner(text: String) -> String:
+	return text.strip_edges()
+
+
 static func parse_cents(text: String) -> int:
 	var cleaned := text.strip_edges().trim_prefix("$").replace(",", "")
 	if cleaned.is_empty():

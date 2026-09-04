@@ -86,6 +86,7 @@ func settle_day(day: int) -> void:
 			String(wage.get("memo", "Staff wage"))
 		)
 	settle_payday_loan()
+	DemandSignals.roll_settle_events()
 
 
 func _record(kind: LedgerEntry.Kind, amount_cents: int, category: StringName, memo: String) -> bool:

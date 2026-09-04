@@ -146,14 +146,26 @@ size_flags_vertical = 4
 mouse_filter = 0
 text = "Staff"
 
-[node name="RotationWatchLabel" type="Label" parent="."]
+[node name="EventBannerLabel" type="Label" parent="."]
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
 offset_left = 24.0
 offset_top = 68.0
-offset_right = 520.0
+offset_right = 640.0
 offset_bottom = 92.0
+theme_type_variation = &"HintLabel"
+text = "Market event"
+autowrap_mode = 3
+
+[node name="RotationWatchLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 24.0
+offset_top = 92.0
+offset_right = 520.0
+offset_bottom = 116.0
 theme_type_variation = &"HintLabel"
 text = "Rotation watch"
 autowrap_mode = 3

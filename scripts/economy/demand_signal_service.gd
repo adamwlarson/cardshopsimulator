@@ -31,6 +31,8 @@ var _forced_band_by_sku: Dictionary = {}
 var _true_grade_by_key: Dictionary = {}
 var _inspect_cue_by_key: Dictionary = {}
 var _research_by_set: Dictionary = {}
+var _fog_flag: bool = false
+var _fog_sigma_mult: float = 1.0
 var _instrumentation: QaInstrumentationService
 
 
@@ -50,6 +52,28 @@ func _init(
 			_instrumentation = (main_loop as SceneTree).root.get_node_or_null(
 				"QaInstrumentation"
 			) as QaInstrumentationService
+
+
+func set_fog_event(active: bool, sigma_mult: float = 1.5) -> void:
+	_fog_flag = active
+	_fog_sigma_mult = sigma_mult if active else 1.0
+	_demand_cache.clear()
+
+
+func has_fog_flag() -> bool:
+	return _fog_flag
+
+
+func active_demand_band_sigma(informed: bool = false) -> float:
+	var sigma := _informed_sigma() if informed else _base_sigma()
+	return sigma * _fog_sigma_mult
+
+
+func clear_forced_demand_band(sku_id: StringName) -> void:
+	_forced_band_by_sku.erase(sku_id)
+	for key: Variant in _demand_cache.keys():
+		if String(key).contains(":%s:" % sku_id):
+			_demand_cache.erase(key)
 
 
 func force_demand_band(
@@ -224,6 +248,12 @@ func _informed_sigma() -> float:
 	return 0.07
 
 
+func _base_sigma() -> float:
+	if _config != null:
+		return _config.demand_band_sigma
+	return 0.12
+
+
 func inspect_condition(dto: BuyConfirmSignal) -> bool:
 	if not can_inspect(dto):
 		return false
@@ -331,20 +361,26 @@ func _shown_demand_band(
 	var forced: Dictionary = _forced_band_by_sku.get(sku_id, {})
 	if day <= int(forced.get("through_day", -1)):
 		return StringName(forced.get("band", &""))
-	var key := "%d:%s:%s" % [day, sku_id, informed]
+	var key := "%d:%s:%s:%s" % [day, sku_id, informed, _fog_flag]
 	if _demand_cache.has(key):
 		return _demand_cache[key] as StringName
-	var sigma := _informed_sigma() if informed else _config.demand_band_sigma
+	var sigma := active_demand_band_sigma(informed)
 	var shown_score := clampf(true_demand + _rng.randfn(0.0, sigma), 0.0, 1.0)
 	var shown_band := _true_demand_band(shown_score)
 	var true_band := _true_demand_band(true_demand)
-	if _config.fair_forbid_hot_cold_invert:
+	if _should_forbid_hot_cold_invert():
 		if true_band == &"hot" and shown_band == &"cold":
 			shown_band = &"steady"
 		elif true_band == &"cold" and shown_band == &"hot":
 			shown_band = &"warm"
 	_demand_cache[key] = shown_band
 	return shown_band
+
+
+func _should_forbid_hot_cold_invert() -> bool:
+	if _config == null:
+		return not _fog_flag
+	return _config.fair_forbid_hot_cold_invert and not _fog_flag
 
 
 func _true_demand_band(score: float) -> StringName:
