@@ -7,19 +7,24 @@ enum Intent {
 	SELL,
 }
 
-const COLOR_BROWSE := Color(0.74, 0.76, 0.78)
-const COLOR_BUY := Color(0.30, 0.64, 0.62)
-const COLOR_SELL := Color(0.84, 0.58, 0.26)
+const COLOR_BROWSE := Color(0.82, 0.84, 0.86)
+const COLOR_BUY := Color(0.22, 0.72, 0.68)
+const COLOR_SELL := Color(0.92, 0.62, 0.22)
+const SIZE_PX := 64
 
 var intent: Intent = Intent.BROWSE
 
 
 func _ready() -> void:
 	billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	pixel_size = 0.012
+	shaded = false
+	double_sided = true
+	pixel_size = 0.022
 	centered = true
-	position = Vector3(0.0, 2.05, 0.0)
-	apply_intent(Intent.BROWSE)
+	alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	render_priority = 8
+	apply_intent(intent)
 
 
 func apply_intent(next: Intent) -> void:
@@ -57,44 +62,52 @@ func has_truth_fields() -> bool:
 
 
 func _make_texture(next: Intent) -> Texture2D:
-	var image := Image.create(48, 48, false, Image.FORMAT_RGBA8)
+	var image := Image.create(SIZE_PX, SIZE_PX, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
 	var color := COLOR_BROWSE
 	match next:
 		Intent.BUY:
 			color = COLOR_BUY
-			_draw_bag(image, color)
 		Intent.SELL:
 			color = COLOR_SELL
-			_draw_tag(image, color)
+	_fill_circle(image, 32, 32, 30, Color(0.08, 0.08, 0.09, 0.92))
+	_fill_circle(image, 32, 32, 26, color)
+	match next:
+		Intent.BUY:
+			_draw_bag(image)
+		Intent.SELL:
+			_draw_tag(image)
 		_:
-			_draw_magnifier(image, color)
+			_draw_magnifier(image)
 	return ImageTexture.create_from_image(image)
 
 
-func _draw_magnifier(image: Image, color: Color) -> void:
-	_fill_circle(image, 20, 20, 11, color)
-	_fill_circle(image, 20, 20, 6, Color(0.12, 0.13, 0.15, 0.92))
-	_fill_rect(image, 28, 28, 8, 4, color)
+func _draw_magnifier(image: Image) -> void:
+	var ink := Color(0.10, 0.11, 0.12, 1.0)
+	_fill_circle(image, 28, 26, 12, ink)
+	_fill_circle(image, 28, 26, 7, COLOR_BROWSE)
+	_fill_rect(image, 36, 36, 12, 5, ink)
 
 
-func _draw_bag(image: Image, color: Color) -> void:
-	_fill_rect(image, 12, 18, 24, 22, color)
-	_fill_rect(image, 16, 10, 4, 10, color)
-	_fill_rect(image, 28, 10, 4, 10, color)
+func _draw_bag(image: Image) -> void:
+	var ink := Color(0.08, 0.14, 0.14, 1.0)
+	_fill_rect(image, 20, 28, 24, 20, ink)
+	_fill_rect(image, 24, 18, 5, 12, ink)
+	_fill_rect(image, 35, 18, 5, 12, ink)
 
 
-func _draw_tag(image: Image, color: Color) -> void:
-	_fill_rect(image, 14, 12, 20, 24, color)
-	_fill_circle(image, 24, 18, 3, Color(0.12, 0.13, 0.15, 0.92))
-	_fill_rect(image, 20, 26, 8, 3, Color(0.12, 0.13, 0.15, 0.55))
+func _draw_tag(image: Image) -> void:
+	var ink := Color(0.18, 0.10, 0.04, 1.0)
+	_fill_rect(image, 22, 18, 20, 28, ink)
+	_fill_circle(image, 32, 26, 4, COLOR_SELL)
+	_fill_rect(image, 28, 34, 8, 4, COLOR_SELL)
 
 
 func _fill_circle(image: Image, cx: int, cy: int, radius: int, color: Color) -> void:
 	var r2 := radius * radius
 	for y: int in range(cy - radius, cy + radius + 1):
 		for x: int in range(cx - radius, cx + radius + 1):
-			if x < 0 or y < 0 or x >= 48 or y >= 48:
+			if x < 0 or y < 0 or x >= SIZE_PX or y >= SIZE_PX:
 				continue
 			var dx := x - cx
 			var dy := y - cy
@@ -112,6 +125,6 @@ func _fill_rect(
 ) -> void:
 	for y: int in range(top, top + height):
 		for x: int in range(left, left + width):
-			if x < 0 or y < 0 or x >= 48 or y >= 48:
+			if x < 0 or y < 0 or x >= SIZE_PX or y >= SIZE_PX:
 				continue
 			image.set_pixel(x, y, color)

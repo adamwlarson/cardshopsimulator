@@ -40,7 +40,7 @@ func _build_visual(radius: float) -> void:
 	_body.position = Vector3(0.0, body_height * 0.5, 0.0)
 	add_child(_body)
 	icon = CustomerIntentIcon.new()
-	icon.position = Vector3(0.0, body_height + 0.28, 0.0)
+	icon.position = Vector3(0.0, body_height + 0.42, 0.0)
 	add_child(icon)
 
 
