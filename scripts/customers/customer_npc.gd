@@ -2,7 +2,10 @@ class_name CustomerNpc
 extends Node3D
 
 const WALK_SPEED := 1.35
-const ICON_HANG := 0.45
+# Art disc is 0.32 m. Holder is scaled so the bobber still reads under the
+# locked aisle HUD (−28° / FOV 70); authored GLB scale stays 1,1,1.
+const ICON_HANG := -0.18
+const ICON_READ_SCALE := 2.0
 
 var customer: CustomerProfile
 var floor_state: int = 0
@@ -37,6 +40,7 @@ func _build_visual(radius: float) -> void:
 	_collect_highlight_meshes(_body_root)
 	icon = CustomerIntentIcon.new()
 	icon.position = Vector3(0.0, body_height + ICON_HANG, 0.0)
+	icon.scale = Vector3.ONE * ICON_READ_SCALE
 	add_child(icon)
 	icon.ensure_built()
 

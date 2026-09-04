@@ -32,6 +32,20 @@ var _built: bool = false
 func _ready() -> void:
 	ensure_built()
 	apply_intent(intent)
+	set_process(true)
+
+
+func _process(_delta: float) -> void:
+	if not is_inside_tree():
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var target := cam.global_position
+	target.y = global_position.y
+	if target.distance_squared_to(global_position) < 0.0001:
+		return
+	look_at(target, Vector3.UP, true)
 
 
 func ensure_built() -> void:
@@ -97,8 +111,11 @@ func _instance_icon(which: Intent, path: String, fallback_color: Color) -> void:
 	node.visible = false
 	node.scale = Vector3.ONE
 	add_child(node)
+	_add_backing_disc(node)
 	_prepare_icon_materials(node)
 	_meshes[which] = node
+	if is_inside_tree():
+		call_deferred("_prepare_icon_materials", node)
 
 
 func _load_art_icon(path: String) -> Node3D:
@@ -123,28 +140,53 @@ func _make_fallback_disc(color: Color) -> Node3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	body.material_override = mat
 	return body
+
+
+func _add_backing_disc(parent: Node3D) -> void:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.17
+	mesh.bottom_radius = 0.17
+	mesh.height = 0.012
+	mesh.radial_segments = 20
+	var body := MeshInstance3D.new()
+	body.mesh = mesh
+	body.position = Vector3(0.0, 0.16, -0.02)
+	body.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = Color(0.08, 0.08, 0.09, 1.0)
+	body.material_override = mat
+	parent.add_child(body)
 
 
 func _prepare_icon_materials(root: Node) -> void:
 	if root is MeshInstance3D:
 		var inst := root as MeshInstance3D
 		inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		inst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 		if inst.mesh != null:
 			for i: int in range(inst.mesh.get_surface_count()):
-				var surface := inst.get_active_material(i)
+				var surface: Material = inst.get_surface_override_material(i)
+				if surface == null:
+					surface = inst.get_active_material(i)
+				if surface == null:
+					surface = inst.mesh.surface_get_material(i)
 				if not (surface is StandardMaterial3D):
 					continue
 				var copy := (surface as StandardMaterial3D).duplicate() as StandardMaterial3D
 				copy.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-				copy.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
-				copy.billboard_keep_scale = true
+				copy.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
+				copy.cull_mode = BaseMaterial3D.CULL_DISABLED
+				copy.metallic = 0.0
 				inst.set_surface_override_material(i, copy)
 	elif root is GeometryInstance3D:
-		(root as GeometryInstance3D).cast_shadow = (
-			GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		)
+		var geom := root as GeometryInstance3D
+		geom.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		geom.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	for child: Node in root.get_children():
 		_prepare_icon_materials(child)
