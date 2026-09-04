@@ -204,7 +204,16 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 	)
 	dto.quantity = opportunity.quantity
 	dto.beat_id = opportunity.beat_id
+	_service.apply_inspect_state(dto)
 	return dto
+
+
+func can_inspect(dto: BuyConfirmSignal) -> bool:
+	return _service != null and _service.can_inspect(dto)
+
+
+func inspect_buy(dto: BuyConfirmSignal) -> bool:
+	return _service != null and _service.inspect_condition(dto)
 
 
 func price_signal(

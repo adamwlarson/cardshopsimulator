@@ -88,6 +88,7 @@ func _initialize() -> void:
 	_test_price_editor_inventory_picker()
 	_test_demand_signal_dto_does_not_leak_truth()
 	_test_demand_fairness_contract()
+	_test_inspect_buy_opportunity()
 	_test_qa_instrumentation_payloads()
 	_test_difficulty_balance_ordering()
 	_test_normal_shop_capacity()
@@ -403,6 +404,291 @@ func _test_demand_fairness_contract() -> void:
 			_expect_equal(cruel_inversion, false, "forbid hot-cold inversion")
 
 
+func _test_inspect_buy_opportunity() -> void:
+	_qa.set_force_enabled(false)
+	_expect_equal(
+		DemandSignalService.recommends_inspect(
+			DemandSignalService.Channel.MARKETPLACE
+		),
+		true,
+		"marketplace recommends inspect"
+	)
+	_expect_equal(
+		DemandSignalService.recommends_inspect(&"shady"),
+		true,
+		"shady recommends inspect"
+	)
+	_expect_equal(
+		DemandSignalService.recommends_inspect(&"buylist"),
+		true,
+		"buylist inspect is optional"
+	)
+	_expect_equal(
+		DemandSignalService.recommends_inspect(
+			DemandSignalService.Channel.DISTRIBUTOR
+		),
+		false,
+		"distributor does not recommend inspect"
+	)
+
+	var market_state := MarketState.new()
+	market_state.update_sku(&"AA-SKIE-047", 2200, 0.75)
+	var seeded_a := DemandSignalService.new(NORMAL_CONFIG, market_state, 42, _qa)
+	var seeded_b := DemandSignalService.new(NORMAL_CONFIG, market_state, 42, _qa)
+	var dto_a := seeded_a.buy_confirm(
+		1, &"AA-SKIE-047", DemandSignalService.Channel.MARKETPLACE,
+		1200, 2, 800_000, 1, 3
+	)
+	var dto_b := seeded_b.buy_confirm(
+		1, &"AA-SKIE-047", DemandSignalService.Channel.MARKETPLACE,
+		1200, 2, 800_000, 1, 3
+	)
+	var fog_cue := dto_a.condition_cue
+	var comp_low := dto_a.shown_comp_low_cents
+	var comp_high := dto_a.shown_comp_high_cents
+	var demand_band := dto_a.shown_demand_band
+	var confidence := dto_a.confidence
+	_expect_equal(
+		fog_cue.to_lower().contains("photo"),
+		true,
+		"marketplace starts with photo-only fog"
+	)
+	_expect_equal(seeded_a.can_inspect(dto_a), true, "fogged marketplace can inspect")
+	_expect_equal(seeded_a.inspect_condition(dto_a), true, "seeded inspect succeeds")
+	_expect_equal(seeded_b.inspect_condition(dto_b), true, "duplicate seed inspect")
+	_expect_equal(
+		dto_a.condition_cue,
+		dto_b.condition_cue,
+		"inspect cue is deterministic under seeded RNG"
+	)
+	_expect_equal(dto_a.inspected, true, "inspect marks opportunity inspected")
+	_expect_equal(
+		dto_a.shown_comp_low_cents,
+		comp_low,
+		"inspect does not change comp low"
+	)
+	_expect_equal(
+		dto_a.shown_comp_high_cents,
+		comp_high,
+		"inspect does not change comp high"
+	)
+	_expect_equal(
+		dto_a.shown_demand_band,
+		demand_band,
+		"inspect does not change demand band"
+	)
+	_expect_equal(dto_a.confidence, confidence, "inspect does not change confidence")
+	_assert_text_has_no_truth(dto_a.condition_cue, "inspect cue")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.buy_summary(dto_a),
+		"inspect buy summary"
+	)
+	_expect_dto_has_no_truth_fields(dto_a, "inspected buy signal")
+	_expect_equal(
+		seeded_a.inspect_condition(dto_a),
+		false,
+		"second inspect is blocked"
+	)
+	_expect_equal(
+		dto_a.condition_cue,
+		dto_b.condition_cue,
+		"blocked inspect leaves cue unchanged"
+	)
+
+	var accurate_config := BalanceConfig.new()
+	accurate_config.inspect_accuracy = 1.0
+	accurate_config.inspect_attention = 5
+	var miss_config := BalanceConfig.new()
+	miss_config.inspect_accuracy = 0.0
+	miss_config.inspect_attention = 5
+	var accurate := DemandSignalService.new(accurate_config, market_state, 7, _qa)
+	var miss := DemandSignalService.new(miss_config, market_state, 7, _qa)
+	var accurate_dto := accurate.buy_confirm(
+		1, &"AA-SKIE-047", DemandSignalService.Channel.SHADY,
+		900, 1, 800_000, 1, 3
+	)
+	var miss_dto := miss.buy_confirm(
+		1, &"AA-SKIE-047", DemandSignalService.Channel.SHADY,
+		900, 1, 800_000, 1, 3
+	)
+	var shady_fog := accurate_dto.condition_cue
+	_expect_equal(
+		shady_fog.to_lower().contains("strongly recommended"),
+		true,
+		"shady starts with strongly recommended fog"
+	)
+	_expect_equal(accurate.inspect_condition(accurate_dto), true, "accuracy 1.0 inspect")
+	_expect_equal(miss.inspect_condition(miss_dto), true, "accuracy 0.0 inspect")
+	_expect_equal(
+		accurate_dto.condition_cue != shady_fog,
+		true,
+		"successful inspect clears photo fog"
+	)
+	_expect_equal(
+		accurate_dto.condition_cue != miss_dto.condition_cue,
+		true,
+		"accuracy miss yields a different soft cue"
+	)
+	_assert_text_has_no_truth(accurate_dto.condition_cue, "accurate inspect cue")
+	_assert_text_has_no_truth(miss_dto.condition_cue, "miss inspect cue")
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.inspect_attention_cost(), 5, "Owner inspect costs 5 Att")
+	_expect_equal(
+		int(_game_state.get("current_phase")),
+		DayPhasePolicy.PREP,
+		"inspect attention test starts in PREP"
+	)
+	_expect_equal(
+		bool(_game_state.call("spend_attention", 5)),
+		false,
+		"FLOOR-only spend_attention still rejects PREP"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		100,
+		"rejected FLOOR spend does not debit PREP Att"
+	)
+	_expect_equal(
+		bool(_game_state.call("consume_attention", 5)),
+		true,
+		"PREP consume_attention debits inspect cost"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		95,
+		"inspect debit leaves 95 Att"
+	)
+	_expect_equal(
+		bool(_game_state.call("consume_attention", 96)),
+		false,
+		"insufficient Attention blocks inspect spend"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		95,
+		"blocked inspect spend does not debit"
+	)
+
+	_game_state.call("start_new_game")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "gameplay HUD loads for inspect")
+	if hud == null:
+		return
+	var inspect_button := hud.get_node_or_null("%InspectButton") as Button
+	var attention := hud.get_node_or_null("%AttentionLabel") as Label
+	var summary_label := hud.get_node_or_null("%BuySummary") as Label
+	var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+	_expect_equal(open_buy != null, true, "OpenBuyButton present")
+	open_buy.pressed.emit()
+	var marketplace_row_clicked := _click_buy_row_for_channel(hud, &"marketplace")
+	_expect_equal(marketplace_row_clicked, true, "day 1 marketplace lot exists")
+	var selected := hud.get("_buy_signal") as BuyConfirmSignal
+	_expect_equal(
+		selected != null and selected.channel == &"marketplace",
+		true,
+		"detail opened for marketplace lot"
+	)
+	_expect_equal(
+		inspect_button != null and inspect_button.visible,
+		true,
+		"Inspect★ visible on marketplace detail"
+	)
+	_expect_equal(
+		inspect_button != null and not inspect_button.disabled,
+		true,
+		"Inspect★ enabled with full Attention"
+	)
+	var fog_summary := summary_label.text if summary_label != null else ""
+	var marketplace_fog := selected.condition_cue if selected != null else ""
+	inspect_button.pressed.emit()
+	selected = hud.get("_buy_signal") as BuyConfirmSignal
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		95,
+		"Inspect★ spends 5 Attention from PREP"
+	)
+	_expect_equal(
+		attention != null and attention.text == "Att 95/100",
+		true,
+		"HUD Att label reflects inspect spend"
+	)
+	_expect_equal(
+		selected != null and selected.inspected,
+		true,
+		"HUD inspect updates the lot"
+	)
+	_expect_equal(
+		selected != null
+		and selected.condition_cue != ""
+		and selected.condition_cue != marketplace_fog,
+		true,
+		"HUD inspect updates condition cue"
+	)
+	_assert_text_has_no_truth(
+		selected.condition_cue if selected != null else "",
+		"HUD inspect cue"
+	)
+	_assert_text_has_no_truth(summary_label.text, "HUD inspect summary")
+	_expect_equal(
+		summary_label.text != fog_summary,
+		true,
+		"BuyOpportunityDetail summary refreshes after inspect"
+	)
+	_expect_equal(
+		inspect_button.disabled,
+		true,
+		"Inspect★ disables after a successful inspect"
+	)
+
+	_game_state.set("attention_remaining", 4)
+	Callable(hud, "_update_attention").call(4)
+	var shady := _demand_signals.call(
+		"buy_signal",
+		&"AA-SKIE-047",
+		DemandSignalService.Channel.SHADY,
+		900,
+		1
+	) as BuyConfirmSignal
+	shady.opportunity_id = &"test-shady-inspect"
+	_select_buy_on_hud(hud, shady)
+	_expect_equal(
+		inspect_button.visible,
+		true,
+		"Inspect★ visible on shady detail"
+	)
+	_expect_equal(
+		inspect_button.disabled,
+		true,
+		"Inspect★ disabled when Attention is below cost"
+	)
+	var shady_fog_cue := shady.condition_cue
+	Callable(hud, "_inspect_buy").call()
+	_expect_equal(shady.inspected, false, "blocked inspect does not resolve")
+	_expect_equal(shady.condition_cue, shady_fog_cue, "blocked inspect keeps fog")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		4,
+		"blocked Inspect★ does not debit Attention"
+	)
+
+	open_buy.pressed.emit()
+	_expect_equal(
+		_click_buy_row_for_channel(hud, &"distributor"),
+		true,
+		"day 1 distributor lot exists"
+	)
+	_expect_equal(
+		inspect_button.visible,
+		false,
+		"Inspect★ hidden on distributor NM-assumed lots"
+	)
+	root.remove_child(hud)
+	hud.free()
+
+
 func _test_qa_instrumentation_payloads() -> void:
 	_qa.set_force_enabled(true)
 	_qa.clear()
@@ -486,6 +772,12 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(EASY_CONFIG.seed_bulk_cards, 80, "easy seed bulk cards")
 	_expect_equal(NORMAL_CONFIG.seed_bulk_cards, 80, "normal seed bulk cards")
 	_expect_equal(HARD_CONFIG.seed_bulk_cards, 80, "hard seed bulk cards")
+	_expect_equal(NORMAL_CONFIG.inspect_attention, 5, "normal inspect attention")
+	_expect_equal(EASY_CONFIG.inspect_attention, 5, "easy inspect attention default")
+	_expect_equal(HARD_CONFIG.inspect_attention, 5, "hard inspect attention default")
+	_expect_equal(NORMAL_CONFIG.inspect_accuracy, 0.85, "normal inspect accuracy")
+	_expect_equal(EASY_CONFIG.inspect_accuracy, 0.92, "easy inspect accuracy unchanged")
+	_expect_equal(HARD_CONFIG.inspect_accuracy, 0.75, "hard inspect accuracy unchanged")
 
 
 func _test_normal_shop_capacity() -> void:
@@ -967,6 +1259,18 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		buy_button != null and buy_button.custom_minimum_size.y >= 40.0,
 		true,
 		"Buy opportunity hit target height"
+	)
+	var inspect_button := hud.get_node_or_null("%InspectButton") as Button
+	_expect_equal(inspect_button != null, true, "Inspect★ button present")
+	_expect_equal(
+		inspect_button != null and inspect_button.text == "Inspect★",
+		true,
+		"Inspect★ label"
+	)
+	_expect_equal(
+		inspect_button != null and inspect_button.custom_minimum_size.y >= 40.0,
+		true,
+		"Inspect★ hit target height"
 	)
 	_expect_equal(
 		price_button != null and price_button.custom_minimum_size.y >= 40.0,
@@ -2257,6 +2561,49 @@ func _choice_enabled(payload: Dictionary, choice_id: StringName) -> bool:
 			continue
 		return bool(choice.get("enabled", false))
 	return false
+
+
+func _instantiate_gameplay_hud() -> Node:
+	var packed: PackedScene = load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
+	if packed == null:
+		return null
+	var hud: Node = packed.instantiate()
+	root.add_child(hud)
+	if not hud.is_node_ready():
+		hud.notification(Node.NOTIFICATION_READY)
+	return hud
+
+
+func _click_buy_row_for_channel(hud: Node, channel: StringName) -> bool:
+	var rows := hud.get_node_or_null("%BuyOpportunityRows") as VBoxContainer
+	if rows == null:
+		return false
+	var prefix := "%s ·" % String(channel).capitalize()
+	for child: Node in rows.get_children():
+		var row := child as Button
+		if row != null and row.text.begins_with(prefix):
+			row.pressed.emit()
+			return true
+	return false
+
+
+func _select_buy_on_hud(hud: Node, dto: BuyConfirmSignal) -> void:
+	Callable(hud, "_select_buy_opportunity").call(dto)
+
+
+func _assert_text_has_no_truth(text: String, label: String) -> void:
+	var lower := text.to_lower()
+	_expect_equal(
+		lower.contains("true_market"),
+		false,
+		"%s does not leak true_market" % label
+	)
+	_expect_equal(lower.contains("p_buy"), false, "%s does not leak p_buy" % label)
+	_expect_equal(
+		lower.contains("cert_valid"),
+		false,
+		"%s does not leak cert_valid" % label
+	)
 
 
 func _assert_payload_has_no_truth(payload: Dictionary, label: String) -> void:

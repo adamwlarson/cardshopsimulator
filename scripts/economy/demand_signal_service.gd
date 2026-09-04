@@ -10,12 +10,21 @@ enum Channel {
 }
 
 const RESEARCH_NARROW_FACTOR := 0.55
+const CONDITION_GRADE_CUES: PackedStringArray = [
+	"Looks NM",
+	"Light wear",
+	"Moderate wear",
+	"Heavy wear",
+	"Damaged",
+]
 
 var _config: BalanceConfig
 var _market_state: MarketState
 var _rng := RandomNumberGenerator.new()
 var _demand_cache: Dictionary = {}
 var _forced_band_by_sku: Dictionary = {}
+var _true_grade_by_key: Dictionary = {}
+var _inspect_cue_by_key: Dictionary = {}
 var _instrumentation: QaInstrumentationService
 
 
@@ -73,7 +82,9 @@ func buy_confirm(
 	dto.shown_comp_high_cents = comp.y
 	dto.shown_demand_band = _shown_demand_band(day, sku_id, true_demand, informed)
 	dto.confidence = _confidence(channel)
+	dto.channel = StringName(Channel.keys()[channel].to_lower())
 	dto.condition_cue = _condition_cue(channel)
+	dto.inspected = false
 	dto.remaining_cash_cents = current_cash_cents - dto.lot_total_cents
 	dto.space_required = space_required
 	dto.space_free = space_free
@@ -89,7 +100,68 @@ func buy_confirm(
 			true_market_cents,
 			_true_demand_band(true_demand)
 		)
+	apply_inspect_state(dto)
 	return dto
+
+
+static func recommends_inspect(channel: Variant) -> bool:
+	var resolved := channel_from(channel)
+	return resolved in [Channel.MARKETPLACE, Channel.SHADY, Channel.BUYLIST]
+
+
+static func channel_from(channel: Variant) -> Channel:
+	if typeof(channel) == TYPE_INT:
+		return channel as Channel
+	match String(channel).to_lower():
+		"distributor":
+			return Channel.DISTRIBUTOR
+		"buylist":
+			return Channel.BUYLIST
+		"auction":
+			return Channel.AUCTION
+		"shady":
+			return Channel.SHADY
+	return Channel.MARKETPLACE
+
+
+func can_inspect(dto: BuyConfirmSignal) -> bool:
+	return (
+		dto != null
+		and not dto.inspected
+		and recommends_inspect(dto.channel)
+	)
+
+
+func apply_inspect_state(dto: BuyConfirmSignal) -> void:
+	if dto == null:
+		return
+	var key := _inspect_key(dto)
+	if not _inspect_cue_by_key.has(key):
+		return
+	dto.condition_cue = String(_inspect_cue_by_key[key])
+	dto.inspected = true
+
+
+func inspect_condition(dto: BuyConfirmSignal) -> bool:
+	if not can_inspect(dto):
+		return false
+	var key := _inspect_key(dto)
+	if _inspect_cue_by_key.has(key):
+		apply_inspect_state(dto)
+		return true
+	var true_index := _true_grade_index(dto)
+	var accuracy := 0.85
+	if _config != null:
+		accuracy = _config.inspect_accuracy
+	var success := _rng.randf() < accuracy
+	var shown_index := true_index
+	if not success:
+		shown_index = _misleading_grade_index(true_index)
+	var cue := CONDITION_GRADE_CUES[shown_index]
+	dto.condition_cue = cue
+	dto.inspected = true
+	_inspect_cue_by_key[key] = cue
+	return true
 
 
 func price_confirm(
@@ -234,6 +306,54 @@ func _condition_cue(channel: Channel) -> String:
 	if channel == Channel.MARKETPLACE:
 		return "Photo only — inspect recommended"
 	return "Mixed lot"
+
+
+func _inspect_key(dto: BuyConfirmSignal) -> String:
+	if not String(dto.opportunity_id).is_empty():
+		return "id:%s" % String(dto.opportunity_id)
+	return "sku:%s:%s" % [String(dto.sku_id), String(dto.channel)]
+
+
+func _true_grade_index(dto: BuyConfirmSignal) -> int:
+	var key := _inspect_key(dto)
+	if _true_grade_by_key.has(key):
+		return int(_true_grade_by_key[key])
+	var roll := _rng.randf()
+	var index := 1
+	match channel_from(dto.channel):
+		Channel.SHADY:
+			if roll < 0.15:
+				index = 0
+			elif roll < 0.40:
+				index = 1
+			elif roll < 0.70:
+				index = 2
+			elif roll < 0.90:
+				index = 3
+			else:
+				index = 4
+		_:
+			if roll < 0.20:
+				index = 0
+			elif roll < 0.50:
+				index = 1
+			elif roll < 0.80:
+				index = 2
+			elif roll < 0.93:
+				index = 3
+			else:
+				index = 4
+	_true_grade_by_key[key] = index
+	return index
+
+
+func _misleading_grade_index(true_index: int) -> int:
+	var last_index := CONDITION_GRADE_CUES.size() - 1
+	var delta := 1 if _rng.randf() < 0.5 else -1
+	var shown := clampi(true_index + delta, 0, last_index)
+	if shown == true_index:
+		shown = clampi(true_index + (1 if true_index == 0 else -1), 0, last_index)
+	return shown
 
 
 func _position(delta_percent: float) -> StringName:
