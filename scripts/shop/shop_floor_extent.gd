@@ -41,11 +41,13 @@ func sync_from_shop() -> void:
 	var shop := _shop()
 	var want_medium := shop != null and shop.tier == ShopState.Tier.MEDIUM
 	if want_medium == _medium_active and (not want_medium or has_node("MediumFloorX")):
+		_sync_camera()
 		return
 	_clear_extension()
 	_medium_active = want_medium
 	if want_medium:
 		_build_medium_extension()
+	_sync_camera()
 
 
 func _bind_bus() -> void:
@@ -64,6 +66,14 @@ func _on_shop_layout_changed() -> void:
 
 func _on_day_started(_day: int) -> void:
 	sync_from_shop()
+
+
+func _sync_camera() -> void:
+	if get_parent() == null:
+		return
+	var camera := get_parent().get_node_or_null("Camera") as ShopCamera
+	if camera != null:
+		camera.set_medium_extent(_medium_active)
 
 
 func _clear_extension() -> void:

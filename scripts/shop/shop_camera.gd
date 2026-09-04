@@ -77,6 +77,12 @@ func apply_home_pose(pose: StringName) -> void:
 	_apply_clamped_look()
 
 
+func set_medium_extent(enabled: bool) -> void:
+	_extent_offset = MEDIUM_AISLE_OFFSET if enabled else Vector3.ZERO
+	if _home_pose == POSE_AISLE:
+		apply_home_pose(POSE_AISLE)
+
+
 func reset_to_aisle_home() -> void:
 	_set_looking(false)
 	apply_home_pose(POSE_AISLE)
