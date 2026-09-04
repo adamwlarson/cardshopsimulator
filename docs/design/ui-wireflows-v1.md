@@ -1,6 +1,6 @@
 # UI Wireflows v1 — Card Shop Simulator
 
-**Status:** Adopted + picker/labels + §10 #4/#7/#8 beat-injection notes  
+**Status:** Adopted + picker/labels + §10 #4/#6/#7/#8 beat-injection notes  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** `systems-design-v1.md` §4.5, `fictional-set-bible-v1.md`  
@@ -251,6 +251,18 @@ Inject via day script / `BeatDirector` (name flexible). Tag `beat_id` for QA. **
 | Pass | Player can complete or refuse; inventory/cash/Rep update; beat completes once resolved |
 | Fail | Soft-lock if Spike never spawns or wants a different SKU |
 
+
+#### #6 First rent due + soft shelf (day ~7 Normal)
+
+| Field | Value |
+|-------|-------|
+| `beat_id` | `sec10_6_rent_firesale` |
+| Preconditions | Day index = first rent due (Normal **7**, Easy **10** per difficulty-curves). Cash after projected rent < comfortable buffer **or** force soft-shelf flag: at least one Dustway sealed lot (`AA-DUST-ETB` / `AA-DUST-BLST`) in inventory with Steady/Cold demand. |
+| Trigger | PREP on rent-due day — modal “Rent due today — shelf is soft” with three clear options (systems §10): **Fire-sale sealed** (open PriceEditor focused on Dustway sealed, suggest Undercut) / **Cut accessories** (PriceEditor or bulk markdown on `ACC-*`) / **Payday loan** (if Easy/Normal loan shark available — confirm modal; Hard: option hidden/disabled) |
+| UI | Decision modal → routes into existing PriceEditor (§2) or loan confirm; §4.5 chips on any price path; never show `true_market` |
+| Pass | Player picks one path and resolves it before FLOOR *or* explicitly dismisses with warning (“Rent still due at SETTLE”); rent still collects at SETTLE |
+| Fail | Soft-lock with no actionable path; or auto-pays rent with no decision |
+
 #### #7 Hype spike — Skiefall Titan (day ~8–10 Normal)
 
 | Field | Value |
@@ -276,6 +288,7 @@ Inject via day script / `BeatDirector` (name flexible). Tag `beat_id` for QA. **
 #### Shared rules
 
 - Beats are **reachable on Normal** without cheats once day index hits window (difficulty-curves §6 day shifts OK).
+- MVP required set with hooks: **#1/#2** (picker), **#4/#6/#7/#8** (this §5.1).
 - Instrumentation: emit `beat_started` / `beat_completed` with `beat_id` behind `qa_instrumentation`.
 - Do not hardcode unrelated SKUs into buy HUD; use existing `BuyOpportunity` / customer / price flows.
 
