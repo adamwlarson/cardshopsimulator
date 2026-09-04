@@ -1,9 +1,8 @@
-[gd_scene load_steps=30 format=3]
+[gd_scene load_steps=29 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
 [ext_resource type="PackedScene" path="res://scenes/ui/gameplay_hud.tscn" id="3_hud"]
-[ext_resource type="Script" path="res://scripts/shop/shop_camera.gd" id="28_camera"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_shop_shell_01/prop_shop_shell_01.glb" id="4_shell"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_light_overhead_01/prop_light_overhead_01.glb" id="5_light"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_door_01/prop_door_01.glb" id="6_door"]
@@ -48,12 +47,11 @@ light_color = Color(1, 0.91, 0.78, 1)
 light_energy = 1.2
 shadow_enabled = true
 
-[node name="ShopCamera" type="Camera3D" parent="."]
-script = ExtResource("28_camera")
-position = Vector3(4.5, 1.62, -0.8)
-rotation_degrees = Vector3(-15, 0, 0)
+[node name="Camera" type="Camera3D" parent="."]
+position = Vector3(4.5, 1.65, -1.8)
+rotation_degrees = Vector3(-28, 0, 0)
 current = true
-fov = 68.0
+fov = 70.0
 
 [node name="Architecture" type="Node3D" parent="."]
 

@@ -1017,18 +1017,23 @@ func _test_shop_camera_framing() -> void:
 	if packed == null:
 		return
 	var shop: Node = packed.instantiate()
-	var camera := shop.get_node_or_null("ShopCamera") as Camera3D
-	_expect_equal(camera != null, true, "ShopCamera present")
+	var camera := shop.get_node_or_null("Camera") as Camera3D
+	_expect_equal(camera != null, true, "Camera present")
 	if camera == null:
 		shop.free()
 		return
-	_expect_equal(camera.current, true, "ShopCamera is current")
-	_expect_equal(camera.position.y >= 1.4, true, "camera above waist height")
-	_expect_equal(camera.position.y <= 2.0, true, "camera below ceiling")
-	var look := -camera.transform.basis.z
-	_expect_equal(look.y < 0.0, true, "camera looks down at the floor")
-	_expect_equal(look.z < 0.0, true, "camera looks into the shop (-Z)")
-	_expect_equal(camera.fov <= 75.0, true, "FOV is not an ultra-wide ceiling bias")
+	_expect_equal(camera.current, true, "Camera is current")
+	_expect_equal(
+		camera.position.is_equal_approx(Vector3(4.5, 1.65, -1.8)),
+		true,
+		"Art Lead camera position"
+	)
+	_expect_equal(
+		camera.rotation_degrees.is_equal_approx(Vector3(-28, 0, 0)),
+		true,
+		"Art Lead camera pitch"
+	)
+	_expect_equal(is_equal_approx(camera.fov, 70.0), true, "Art Lead camera FOV")
 	var world := shop.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	_expect_equal(world != null, true, "WorldEnvironment present")
 	if world != null and world.environment != null:
