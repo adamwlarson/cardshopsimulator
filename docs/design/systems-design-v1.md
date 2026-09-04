@@ -1,236 +1,456 @@
 # Card Shop Simulator — Systems Design v1
 
-Status: Adopted (PM lock 2026-09-04)
+**Status:** Draft for PM / Eng / QA — v1.1 demand-signal addendum  
+**Author:** CSS Designer  
+**Date:** 2026-09-04  
+**Stack target:** Godot 4.x, modules `economy` / `inventory` / `customers` / `shop` / `ui` / `core`  
+**Expands:** Design spine v1 (source → stock/price/display → serve → settle day)
 
-## 1. Product intent
+---
 
-Card Shop Simulator is a cozy-but-serious 3D management game about keeping a neighborhood trading-card shop alive. The fantasy is not infinite growth; it is making informed decisions with incomplete information while building a place customers value. Every major system must reinforce at least one tension:
+## 0. Design goals (falsifiable)
 
-- liquidity versus an attractive buying opportunity;
-- margin versus sales volume and trust;
-- speculative upside versus hype and reprint risk;
-- customer service versus finite staff Attention;
-- broad assortment versus finite case and backstock space.
+1. Every in-game day forces at least one **irreversible cash or space** tradeoff.
+2. Perfect information is never free — market price, condition, and demand are **noisy**.
+3. Early game pain is **liquidity + bandwidth**, mid game is **space + reputation**, late game is **rent + event risk**.
+4. A skilled player can survive a bad week; a careless player goes bankrupt within **30–45 in-game days** on Normal.
 
-The MVP proves a readable day loop and a small set of consequential decisions. It does not simulate every real-world card-market detail.
+---
 
-## 2. Day loop and phases
+## 1. Core loop (day timeline)
 
-Each day has three explicit phases. A phase transition is a save/checkpoint boundary and emits an event through `EventBus`.
+| Phase | Clock | Player actions | Systems |
+|-------|-------|----------------|---------|
+| **Open prep** | 08:00–10:00 | Buy from channels, price tags, rearrange layout, assign staff | inventory, economy, shop, staff |
+| **Open floor** | 10:00–18:00 | Serve / negotiate / refuse customers; optional mid-day buys | customers, inventory, economy |
+| **Close settle** | 18:00–19:00 | Auto: rent share, wages, utilities, shrink, reputation tick, event roll | economy, shop |
 
-### 2.1 Prep
+**Time model (v1):** Discrete day with phases; floor phase uses a **customer queue timer** (not full real-time sim). Owner actions during floor cost **Attention** (see Staff).
 
-The player reviews cash, bills, market signals, deliveries, and overnight events. They may buy inventory, accept or reject offers, move stock, set prices, schedule staff, and prepare fixtures. Time is paused while required decisions are unresolved.
+**Starting state (Normal):**
+- Cash: `$8,000`
+- Rent due weekly: `$1,200` (small unit, **~700 sq ft usable** — 10×8 tiles @ 0.9 m ≈ 698 sq ft; lease copy: “cozy 700”)
+- Case capacity: `24` display slots + `40` backstock bins
+- Staff: owner only
+- Reputation: `40/100` (unknown shop)
+- Seed inventory: mixed low-value sealed + commons (see §2.6)
 
-### 2.2 Floor
+---
 
-The shop opens. Customers spawn, browse, request help, compare prices, queue, buy, sell, or leave. Time and staff Attention advance. The player can reprice or restock, but doing so consumes time/Attention and may leave other work uncovered.
+## 2. Inventory
 
-### 2.3 Settle
+### 2.1 Product classes
 
-Doors close. Sales, cost of goods, shrink, payroll accruals, and event effects settle into the ledger. Every seventh day is a weekly settle and charges rent. The player reviews results, addresses insolvency warnings, and chooses whether to continue.
+| Class | Unit | Space | Risk profile | Sell channels (v1) |
+|-------|------|-------|--------------|--------------------|
+| **Sealed** | SKU × qty (box, ETB, blaster, tin) | Floor pallet or shelf units | Hype spikes + set rotation dump | Counter, online list |
+| **Singles** | CardInstance (set, #, finish, condition) | Binder pages / case slots | Condition fraud, liquidity | Case, binder pull, online |
+| **Graded** | SlabInstance (card + grade + cert#) | Case slots (2× singles weight) | Capital lock, cert authenticity | Showcase case, online |
+| **Accessories** | SKU × qty (sleeves, toploaders, binders, dice) | Shelf units | Low risk, low margin, high velocity | Impulse shelf |
 
-Canonical loop: **buy → stock → sell → pay bills → upgrade → next day**.
+**Data model (implementable):**
 
-## 3. Inventory domain
+```
+ProductSKU { id, class, name, set_id?, msrp, base_market, tags[] }
+CardInstance { sku_id, finish, condition: NM|LP|MP|HP|DMG, acquired_cost, listed_price?, location }
+SlabInstance { card_ref, grader, grade, cert_id, acquired_cost, listed_price?, location }
+StockLot { sku_id, qty, acquired_cost_avg, location }  # sealed + accessories
+Location { type: CASE|BINDER|SHELF|BACKSTOCK|ONLINE_HOLD, slot_id? }
+```
 
-### 3.1 Inventory classes
+### 2.2 Condition & authenticity
 
-- **Sealed:** boxes, packs, launch chests, and preconstructed products. Condition is normally sealed/damaged; provenance and allocation matter.
-- **Singles:** fungible catalog cards until a copy needs instance-level condition or provenance.
-- **Graded:** individually serialized slabs with grader, grade, certification, and authenticity state.
-- **Accessories:** sleeves, binders, deck boxes, storage, and play supplies. Lower volatility and dependable basket-building utility.
+- Singles default to **NM** on distributor buys; marketplace buys roll condition with bias toward LP/MP.
+- **Inspection action** (costs Attention): reveals true condition with 85% accuracy; uninspecteds sell at listed grade — mismatch → reputation hit + refund risk.
+- Graded: `cert_valid` bool; shady channel has 8% fake-slab chance; fail on sale → big reputation + cash loss.
 
-### 3.2 Canonical data model
+### 2.3 Space accounting
 
-- `ProductSKU`: immutable catalog identity, class, set, name, dimensions, and baseline handling rules.
-- `CardInstance`: one physical single when condition, acquisition cost, or provenance must be tracked separately.
-- `SlabInstance`: one graded card with grader, grade, certification identifier, and verification state.
-- `StockLot`: quantity acquired together with landed cost basis, condition, source, and acquisition day.
-- `Location`: a case slot, shelf facing, counter tray, backstock bin, intake area, or transit state.
+| Location | Capacity unit | Holds |
+|----------|---------------|-------|
+| Showcase case | slots | Singles (1), Graded (2) |
+| Binder rack | pages × 9–18 pockets | Singles only |
+| Floor shelf | shelf_units | Sealed + accessories |
+| Backstock | bins | Any, **not visible** to walk-ins (online/pull only) |
+| Online hold | soft cap (reputation-gated) | Listed items awaiting ship |
 
-SKU identity is not location. A SKU may occupy multiple lots and locations. Cost basis is retained by lot; selling policy chooses which lot is relieved. Currency uses integer cents.
+**Rule:** You cannot list what you cannot store. Overflow buys are rejected or force immediate fire-sale.
 
-### 3.3 Capacity and movement
+### 2.4 Shrink & damage
 
-Normal starts with 24 case slots and 40 backstock bins. A case slot is a merchandising unit, not an arbitrary item count. Backstock capacity uses bins. Intake inventory is unavailable for sale until checked and located. Moving, checking, and pricing stock consumes Attention during Floor.
+Daily settle roll:
+- Base shrink `0.2%` of inventory COGS value
+- +`0.5%` if no staff on floor during open
+- Sealed pallets on open floor: +theft risk vs backstock
 
-### 3.4 Acquisition channels
+### 2.5 Seed inventory (day 0)
 
-- **Distributor:** predictable cost and authenticity, constrained allocations, payment terms, release timing.
-- **Buylist:** customer offers with condition uncertainty; strong margin potential and Attention cost.
-- **Marketplace:** broad availability with shipping delay, fees, seller risk, and noisy comps.
-- **Auction:** time-boxed opportunities, winner's-curse risk, and uncertain landed cost.
-- **Trades:** conserve cash but exchange valuable stock and consume appraisal Attention.
-- **Shady source:** unusually favorable offers with elevated counterfeit, reputation, and event risk. This is a fictional gameplay category, never instruction for evading law or platform policy.
+- 4× current-set blasters (low margin)
+- 2× previous-set ETBs (stale risk)
+- Binder: ~80 commons/uncommons + 8 playable rares (staples)
+- Accessories: sleeves ×200, toploaders ×50
+- No graded stock
 
-Purchasing is atomic across cash reservation, expected fees, incoming lot, and source record. Failed transactions must not partially mutate state.
+---
 
-## 4. Economy and pricing
+## 3. Buying channels
 
-### 4.1 Ledger and cash
+Each channel is a **BuyOpportunity** offered during prep (and rare mid-day). Player accepts/rejects/haggles.
 
-The ledger is append-only for the active save. Entries have day, phase, category, amount, source reference, and memo. Income and expenses update available cash only through ledger commands. Inventory purchases capitalize into lot cost basis; cost of goods is recognized on sale.
+| Channel | Cadence | Price vs market | Info quality | Tradeoff |
+|---------|---------|-----------------|--------------|----------|
+| **Distributor** | Weekly restock menu | MSRP − 30–40% | Perfect SKUs, sealed/accessories only | MOQ, cash lock, boring mix |
+| **Local buylist walk-ins** | Random during floor | You set offer | Partial (player inspects) | Bandwidth; bad offers anger sellers |
+| **Marketplace lot** (FB/CL style) | 1–3/day | 40–70% of market | Noisy photos; condition hidden | Travel time (skip 1–2 floor hours) or fee courier |
+| **Auction snipes** | Event-tied | Can be steal or trap | Timer + incomplete comps | Attention + cash race |
+| **Player trades** | Unlocks at Rep 50 | In-kind | Full | Opportunity cost of stock given |
+| **Shady trunk** | Rare, night flag | Deep discount | High fake/condition risk | Reputation bomb if caught |
 
-### 4.2 Bills and solvency
+**Haggle (v1):** One counter-offer. Seller accept chance = f(offer/ask, reputation, channel). Fail → opportunity gone.
 
-Normal difficulty starts at **$8,000** and charges **$1,200 weekly rent** at day 7, 14, and so on during Settle. Payroll, utilities, fees, debt, and event costs are later ledger categories. Forecasts may reserve cash but do not silently remove it.
+**Asymmetric info knobs (must ship):**
+- `listed_comp` vs `true_market` (hidden ±15% noise)
+- Condition fog on marketplace
+- Set rotation timer visible only via **Research** action ($50 + Attention) or staff Specialist
 
-### 4.3 Prices and spreads
+---
 
-A buy offer and shelf price are separate decisions. Suggested buy price considers visible comps, expected fees, condition risk, target margin, and time-to-sell. Suggested sell price considers cost basis, visible comps, demand, reputation, and desired velocity. The UI explains inputs without exposing hidden truth.
+## 4. Pricing
 
-### 4.4 Market state
+### 4.1 Price sources
 
-Each SKU may have hidden `true_market_cents`, demand velocity, volatility, supply pressure, and trend. These drive simulated transactions and event effects. Hidden state is deterministic under a seeded run for QA.
+- `true_market[sku]` drifts daily (see Market Events)
+- Player sets `listed_price` per instance/lot
+- **Suggested price** UI = noisy comp (`true_market × U(0.9, 1.1)`), never exact truth — full buy/price UI contract in **§4.5**
 
-### 4.5 MVP demand-signal contract
+### 4.2 Sell-through model
 
-The player never sees `true_market_cents` in UI, tooltips, exports intended for players, or customer dialogue. They receive noisy evidence:
+For each browsing customer interested in SKU:
 
-- recent comparable sales with age, source quality, and condition;
-- ranges rather than a magic exact price;
-- partial trend arrows and demand language;
-- customer requests and sell offers;
-- release, reprint, tournament, and social-hype events.
+```
+p_buy = base_interest
+      × price_fit(listed / true_market)   # sweet spot ~0.95–1.05
+      × display_bonus                     # case > binder > backstock
+      × reputation_mod
+      × staff_knowledge_mod
+```
 
-`comp_noise_width_mult`, `demand_band_sigma`, and class-specific comp MAE caps control observation uncertainty by difficulty. Comps may be stale or sparse but may not lie in ways the simulation cannot explain. Debug tooling can expose true market only behind a QA/developer flag and must visually label it.
+`price_fit`: too high → walk; too low → instant buy but margin death + trains bargain hunters.
+
+### 4.3 Buylist pricing (buying from customers)
+
+Player sets **buylist % of market** per category (sealed / singles NM / graded).
+- High % → more sellers, thinner margins, cash drain
+- Low % → angry regulars, fewer lots, reputation drip
+
+### 4.4 Online listings (unlock Rep 35)
+
+- Fee `8%` + ship time 1–3 days
+- Items in `ONLINE_HOLD` cannot sell in-store
+- Cancels cost reputation if frequent
+
+
+---
+
+## 4.5 MVP demand-signal — imperfect but fair
+
+**Design call (locked for QA):** The player never sees `true_market` or exact `p_buy`. They always see **biased-but-correlated** signals so skilled reads beat luck, and bad luck still feels explainable.
+
+### Fairness contract (falsifiable)
+
+| Rule | Pass bar |
+|------|----------|
+| Comp midpoint tracks truth | Mean abs error ≤ **12%** of `true_market` over a 30-day sim |
+| Demand band accuracy | Shown band within **±1** of true band on ≥ **80%** of SKU-days |
+| No cruel inversion | Without an active fog event, never show **Cold** when true is **Hot** (or reverse) |
+| Skill channel | Specialist on duty or Research action **narrows** noise (comp ±15%→±8%, band accuracy ↑) |
+| Channel honesty | Distributor signals tighter than marketplace; UI labels confidence |
+
+Bands (true demand score 0–1 → label): `Cold` <0.25, `Steady` 0.25–0.55, `Warm` 0.55–0.80, `Hot` >0.80.  
+Shown band = bucket(`clamp(true_demand + N(0, σ), 0, 1)`) with σ = 0.12 base, 0.07 with Specialist/Research.
+
+### Research & condition fog (gates)
+
+| Signal | Default (no Research / no Specialist) | After Research ($50 + Attention) or Specialist on duty |
+|--------|----------------------------------------|--------------------------------------------------------|
+| Comp width `w` | Channel table in A | ×0.55 (narrower range) |
+| Demand band σ | 0.12 | 0.07 |
+| Rotation / ban risk | Hidden | Soft telegraph: "Rotation watch: {set}" for 24–72h |
+| Condition (marketplace/shady) | "Photo only — inspect recommended"; true grade hidden | Still hidden until **Inspect**; Research does **not** reveal grade |
+| Graded `cert_valid` | Never shown pre-buy | Never shown; only fails on sale / deep inspect unlock (post-MVP) |
+
+**Condition fog rule:** Distributor = NM assumed (High confidence). Buylist = inspect optional. Marketplace/Shady = inspect strongly recommended; selling uninspected as NM risks refund + Rep hit (§2.2).
+
+### A. Before **buy confirm** (accepting a BuyOpportunity)
+
+Player **always** sees:
+
+1. **Exact ask** — unit cost / lot total (what you pay is never fogged).
+2. **Comp range** — `[$low, $high]` = noisy estimate of resale value (`true_market × U(1−w, 1+w)`, w by channel).
+3. **Demand band** — Cold / Steady / Warm / Hot for that SKU or class (today).
+4. **Confidence tag** — High (distributor) / Medium (buylist walk-in, auction) / Low (marketplace lot, shady trunk).
+5. **Condition cue** — "NM assumed" | "Photo only — inspect recommended" | "Mixed lot".
+6. **Cash & space check** — remaining cash after buy; slots/bins required vs free (hard blockers if over).
+
+Player **never** sees on this screen: raw `true_market`, exact margin after fees, future event outcomes, `cert_valid`, true condition roll.
+
+**Channel widths (w):** Distributor 0.06 · Buylist 0.10 · Auction 0.12 · Marketplace 0.15 · Shady 0.22.
+
+**Optional line (if history exists):** "Last sold similar in-shop: $X, N days ago" — factual, no forecast.
+
+### B. Before **price confirm** (setting / changing `listed_price`)
+
+Player **always** sees:
+
+1. **Noisy suggested price** — single number from §4.1 (not truth).
+2. **Your price vs sug.** — delta $ and % (informational).
+3. **Position chip** vs noisy comp midpoint: `Undercut` (<−8%) / `Competitive` (−8%..+8%) / `Premium` (>+8%).
+4. **Demand band** — same SKU/class band as buy side (shared signal that day).
+5. **Move feel** — qualitative only, derived from noisy `price_fit`:
+   - `Likely sits` | `Should move` | `Walk risk`
+   - Mapping uses **noisy** market, never exact `p_buy`. Show **one** of three chips — no percentages.
+6. **Display context** — current location bonus plain-language: "Case boost" / "Binder" / "Backstock (pull only)" / "Online hold".
+
+Player **never** sees: exact `p_buy`, true_market, per-archetype willingness, guaranteed sell timer.
+
+**Confirm CTA copy rule:** button stays enabled even on `Walk risk` / `Likely sits` — the signal warns, it does not soft-lock (player agency).
+
+### C. Instrumentation (for QA / Eng)
+
+Emit behind `qa_instrumentation` (aligns with Eng contract):
+
+```
+demand_signal_shown {
+  screen: buy_confirm | price_confirm,
+  sku_id,
+  shown_comp_low_cents, shown_comp_high_cents,
+  true_market_cents,           # debug only, not UI
+  shown_demand_band, true_demand_band,
+  confidence: high|medium|low,
+  listed_price_cents?,         # price_confirm only
+  move_feel?,                  # price_confirm only
+}
+```
+
+QA playtest probe: after 10 buy + 10 price confirms, players can rank which deals were worse **above chance** using only on-screen signals.
+
+### D. Out of MVP
+
+- Exact % sell-through meters
+- Live "customers arriving who want this" counts
+- Perfect historical charts (sparklines OK post-MVP if still noisy)
+
+---
 
 ## 5. Customers
 
-Six MVP archetypes define goals and behavior weights rather than rigid scripts:
+### 5.1 Archetypes (v1 — ship these 6)
 
-1. **Collector:** seeks condition, scarcity, and specific singles/slabs; sensitive to trust.
-2. **Competitive player:** seeks format-relevant cards and supplies; values availability and speed.
-3. **Casual player:** browses sealed and accessories within a firm budget.
-4. **Parent/Gift buyer:** needs guidance and readable choices; high service need, low catalog knowledge.
-5. **Speculator:** follows trends, buys volume when momentum appears, and reacts sharply to price.
-6. **Seller/Trader:** brings collections or trade offers; requires appraisal Attention and sufficient cash.
+| Archetype | Wants | Behavior | Pressure |
+|-----------|-------|----------|----------|
+| **Kid / parent** | Accessories, cheap sealed | Low haggling | Volume, impulse |
+| **Spike** | Staples, exact list | Knows comps; rejects overprice | Forces accurate pricing |
+| **Collector** | Graded, chase sealed | Will pay premium if displayed well | Capital + case space |
+| **Flipper** | Mispriced anything | Scans for mistakes | Punishes pricing errors |
+| **Regular** | Relationship stock | Returns if treated well | Reputation engine |
+| **Whale** | Rare high-ticket | Rare spawn; needs trust + inventory | One wrong refusal hurts |
 
-Each visit has a budget, patience, interests, price tolerance, service need, and trust response. Desire matching scores catalog fit, availability, asking price versus perceived value, condition, and substitutions. A failed match can become a request signal, not automatically a lost customer.
+### 5.2 Queue & service
 
-Customers must not know hidden market truth. Their willingness to pay is another noisy signal. Queues, ignored requests, rejected low offers, and counterfeit incidents can affect reputation.
+- Floor spawns N customers/hour from archetype weights (modded by events + inventory mix)
+- Each needs **Service** from owner or Cashiers
+- Actions: Sell listed, Negotiate (±10%), Pull from backstock (Attention), Refuse, Buy-from-them (buylist)
 
-## 6. Staff and Attention
+**Frustration:** Wait > threshold → leave (−soft reputation). Understaffed shops hemorrhage walkouts.
 
-**Attention** is the MVP labor currency. Normal begins each day with a pool of 100. Staff add or specialize Attention; tasks reserve or consume it.
+### 5.3 Reputation (0–100)
 
-Tasks include intake, condition checks, appraisals, restocking, checkout, customer guidance, cleaning, fraud review, and event response. Uncovered tasks become delay, lower confidence, abandonment, or shrink risk. Attention does not replace clock time; both can constrain a task.
+| Band | Effects |
+|------|---------|
+| 0–24 | Sparse traffic, whales never spawn, distributor MOQ worse |
+| 25–49 | Baseline |
+| 50–74 | Regulars + player trades unlock |
+| 75–100 | Whale bias, better marketplace leads, lower fees |
 
-Staff have role, wage, shift, skill tags, morale, and active assignment. MVP may begin with the owner only, but interfaces must accept multiple workers. Automation upgrades reduce Attention costs rather than creating free revenue.
+**Ticks:** fair deals +, overprice/fake/slow service −, event outcomes ±
 
-## 7. Shop and layout
+---
 
-The authoritative grid uses `tile_size_m = 0.9`. The small shop is **10 × 8 tiles**, physically **9 × 7.2 m**, approximately **698 sq ft**. Simulation placement snaps to this grid while decorative art may overhang without occupying another tile.
+## 6. Staff
 
-Layout affects walkability, visibility, service distance, queue capacity, theft exposure, and merchandise capacity. Navigation must retain an entrance-to-counter path and accessible browsing paths.
+### 6.1 Roles
 
-### 7.1 MVP readable props
+| Role | Wage/day | Does | Cannot |
+|------|----------|------|--------|
+| **Owner** (you) | — | Everything; Attention pool `100/day` | Be two places |
+| **Cashier** | $80 | Ring sales, basic pulls | Price, buy lots, haggle well |
+| **Specialist** | $140 | Accurate pricing assist, inspect, research | Run register alone efficiently |
+| **Stocker** | $70 | Restock floor from backstock, layout moves | Sales |
 
-P0a readability gate requires these props to be identifiable without labels at gameplay camera distance:
+### 6.2 Attention economy
 
-- service counter;
-- locked glass display cases;
-- point-of-sale register;
-- buylist/appraisal intake tray;
-- wall or gondola shelving;
-- backstock bins;
-- entrance/exit and an obvious customer path.
+Owner actions cost Attention (examples):
+- Inspect card: 5
+- Haggle / negotiate: 8
+- Marketplace outing: 25 + miss floor hours
+- Research set: 15
+- Rearrange layout: 10
 
-The counter anchors service. Cases expose Singles/Graded stock. Shelves carry Sealed/Accessories. The intake tray separates unprocessed offers from sellable inventory.
+Staff reduce costs in their domain (Specialist: inspect 5→2). At 0 Attention, owner can only watch — cashiers handle routine sales only.
 
-## 8. Events
+### 6.3 Hire rules
 
-Events modify constraints and signals rather than grant arbitrary rewards. Categories include:
+- Max staff = f(sq ft): small 1, medium 3, large 5 (excluding owner)
+- Bad hire: `Reliability` 0–1; low → no-shows, theft bias
+- Fire: immediate wage stop; −5 reputation if popular
 
-- releases, allocations, reprints, rotations, and tournament results;
-- local conventions, school holidays, weather, and foot-traffic shifts;
-- landlord, utility, equipment, staffing, and security incidents;
-- hype spikes, corrections, rumors, and counterfeit waves;
-- relationship opportunities with distributors and community groups.
+---
 
-Each event has eligibility, telegraph, choice window, options, immediate effects, delayed effects, and audit text. Normal per-check event chance is 0.18. Event RNG is seeded and logged for QA. Choices must state what the player could reasonably know while preserving uncertain outcomes.
+## 7. Shop layout constraints
 
-## 9. Win, loss, and recovery
+### 7.1 Grid (v1)
 
-MVP success is surviving the scenario horizon with positive operating momentum and an open shop; later scenarios may add reputation or collection goals. There is no single exponential wealth target.
+- Usable floor: grid of **tiles** (small shop 10×8 = 80 tiles; **1 tile = 0.9 m**, ≈ **698 sq ft** usable ≈ marketing “cozy 700”)
+- Furniture footprints:
 
-Bankruptcy is a process, not one surprise screen:
+| Prop | Tiles | Function |
+|------|-------|----------|
+| Counter | 2×1 | Required checkout |
+| Showcase case | 2×1 | High-value display |
+| Binder rack | 1×1 | Singles browse |
+| Shelf | 1×2 | Sealed / accessories |
+| Play table | 2×2 | Event nights (unlock); blocks browse path |
+| Backstock door | 1×1 | Access bins |
 
-1. cash forecast warns of an upcoming obligation;
-2. missed payment creates a default state and recovery window;
-3. the player may liquidate stock, cut orders, negotiate eligible financing, or reduce costs;
-4. failure to cure required obligations closes the shop and ends the run.
+### 7.2 Circulation rules
 
-Loan-shark recovery is available on Easy and Normal only. It is disabled on Hard. It must carry explicit cost and risk and cannot be the optimal routine strategy. A run also loses if mandatory scenario obligations remain uncured after their grace periods.
+- Pathfinding: customers need clear path from entrance → displays → counter
+- Blocking path → −traffic and frustration
+- **Sightlines:** Graded in case within 3 tiles of entrance gets `display_bonus`
 
-## 10. Ten tough decisions and early playtest beats
+### 7.3 Expansion
 
-These beats define the first systems playtest. Each must present legible alternatives and a measurable consequence:
+| Tier | Sq ft | Weekly rent | Staff cap | Unlock |
+|------|-------|-------------|-----------|--------|
+| Small | ~700 (698 calc) | $1,200 | 1 | Start |
+| Medium | 1,200 | $2,400 | 3 | Cash ≥ $15k + Rep 55 |
+| Large | 2,000 | $4,000 | 5 | Cash ≥ $40k + Rep 70 |
 
-1. Buy a limited distributor allocation or preserve cash for the first rent.
-2. Put a hot sealed product in scarce case space or use that space for several reliable singles.
-3. Price near the top comp for margin or undercut for faster turnover.
-4. Accept a large buylist collection that consumes cash and appraisal Attention or decline it.
-5. Trust a noisy hype signal and reorder or wait and risk missing demand.
-6. Staff checkout during a rush or divert Attention to a high-value appraisal.
-7. Stock broad low-margin accessories or deeper speculative sealed inventory.
-8. Take an auction lot with uncertain condition and fees or buy predictable distributor stock.
-9. Sell a rising card now to cover weekly rent or hold for possible upside.
-10. Cure a cash crisis by liquidation/financing or risk bankruptcy while protecting premium stock.
+Expansion is a **lease decision** (tough decision #9): higher rent is fixed; traffic capacity scales sublinearly.
 
-Instrument offer viewed, decision selected, cash before/after, inventory exposure, customer outcomes, task coverage, phase duration, rent forecast visibility, and reason for run end. Early sessions should reach one weekly rent settle and at least four of these beats.
+---
 
-## 11. BalanceConfig
+## 8. Market events
 
-All tunable difficulty values live in typed `BalanceConfig` resources. Runtime systems read the selected resource; they do not define competing literals.
+Rolled at settle (or injected mid-week). Each has duration, signals, and counterplay.
 
-| Field | Easy | Normal | Hard |
-| --- | ---: | ---: | ---: |
-| `start_cash_cents` | $10,000 | $8,000 | $6,500 |
-| `start_reputation` | 50 | 40 | 30 |
-| `rent_small_weekly_cents` | $900 | $1,200 | $1,500 |
-| `first_rent_due_day` | 7 | 7 | 7 |
-| `tile_size_m` | 0.9 m | 0.9 m | 0.9 m |
-| `case_slots` | 28 | 24 | 20 |
-| `backstock_bins` | 48 | 40 | 32 |
-| `attention_pool` | 120 | 100 | 85 |
-| `event_chance_settle` | 0.12 | 0.18 | 0.24 |
-| `loan_shark_enabled` | enabled | enabled | disabled |
-| `customer_spawn_mult` | 1.15 | 1.00 | 0.85 |
-| `whale_spawn_mult` | 0.85 | 1.00 | 1.20 |
-| `flipper_spawn_mult` | 0.75 | 1.00 | 1.35 |
-| `shrink_mult` | 0.60 | 1.00 | 1.50 |
-| `comp_noise_width_mult` | 0.70 | 1.00 | 1.50 |
-| `demand_band_sigma` | 0.75 | 1.00 | 1.25 |
+| Event | Signal | Effect | Player lever |
+|-------|--------|--------|--------------|
+| **Set release hype** | Calendar (known) | New sealed demand ↑; old set ↓ | Pre-order vs wait |
+| **Pro tour / influencer spike** | 1-day telegraph | Specific archetype cards ↑ 30–80% | Stock depth vs FOMO buy |
+| **Rotation / ban** | Surprise or soft leak | Staples crash | Research / Specialist |
+| **Supply glut** | Distributor email | Sealed wholesale ↓, retail race | Margin vs volume |
+| **Theft ring** | Optional rumor | Shrink ×3 for 3 days | Staff / cameras (unlock) |
+| **Convention weekend** | Calendar | Traffic ×2, whale chance ↑ | Staff up, price up carefully |
+| **Recession week** | Macro ticker | All demand ↓, buylist sellers ↑ | Liquidity over glory |
+| **Counterfeit scare** | News flash | Graded trust ↓; inspect mandatory | Avoid shady channel |
 
-The curve values are initial locks, not claims of final balance. Changes require playtest evidence and an update to `difficulty-curves-v1.md`.
+**Implement:** `MarketEvent` resource with `id`, `weight`, `duration_days`, `modifiers{}`, `telegraph_hours`.
 
-## 12. Module map and ownership
+Daily drift without events: each SKU `true_market *= U(0.98, 1.02)` clamped by class volatility (graded > singles > sealed > accessories).
 
-| Module | Owns | Emits/consumes |
-| --- | --- | --- |
-| `core` | phase clock, run state, BalanceConfig selection | phase/day transitions |
-| `economy` | cash, ledger, bills, pricing observations | transaction, solvency, rent |
-| `inventory` | catalog identities, instances, lots, locations | stock and movement |
-| `customers` | archetypes, desires, visits, queues | arrival, request, sale intent |
-| `shop` | grid, fixtures, capacity, navigation constraints | placement/capacity |
-| `staff` | workers, shifts, tasks, Attention | assignment/task outcomes |
-| `events` | eligibility, choices, seeded effects | event offered/resolved |
-| `ui` | player presentation and commands | never owns simulation truth |
-| `autoload` | narrow service entry points and EventBus | cross-domain coordination |
+---
 
-No module reads another module's private collections. Commands go to the owning service; outcomes cross boundaries as typed values/signals. Save schemas version domain records independently.
+## 9. Win / lose conditions
 
-## 13. Engineering spike order
+### 9.1 Lose (bankruptcy) — any of
 
-Implement vertical contracts in this order:
+1. **Cash < 0** after settle (cannot pay rent/wages)
+2. **Missed rent** 2 weeks in a row
+3. **Reputation ≤ 0**
+4. **Optional ironman:** cash < $500 and inventory COGS < $500
 
-1. **Inventory:** SKU/instance/lot/location integrity and atomic movement.
-2. **Economy:** ledger, acquisition, sale, weekly obligations, and solvency.
-3. **Customers:** six archetypes, desire matching, queues, and transaction intent.
-4. **Shop:** 10 × 8 grid, P0a props, capacity, and navigation.
-5. **Staff:** tasks, shifts, and Attention allocation.
-6. **Events:** seeded eligibility, choices, delayed effects, and audit trail.
+### 9.2 Win / prestige goals (pick campaign mode)
 
-Each spike must include deterministic tests and QA-observable events before the next system depends on it.
+| Mode | Victory |
+|------|---------|
+| **Survive Year 1** | Reach day 365 with cash > 0 and Rep ≥ 40 |
+| **Flagship** | Own Large shop + Rep ≥ 80 + cash ≥ $50k |
+| **Liquidity king** | End any month with cash ≥ $100k (inventory optional) |
+| **Sandbox** | No win; personal bests (net worth, days survived) |
+
+**Net worth** = cash + inventory at `true_market` × liquidity haircut (sealed 0.85, singles 0.7, graded 0.6, accessories 0.9).
+
+### 9.3 Soft fail (recovery)
+
+First bankruptcy on Easy/Normal offers **loan shark**: +$5,000 cash, −$200/day for 40 days, Rep −10. Hard: instant game over.
+
+---
+
+## 10. First 10 tough decisions (tutorial arc → early midgame)
+
+These are **scripted decision beats** QA can test; each must surface clear tradeoffs in UI.
+
+| # | Day window | Decision | Options (examples) | What it teaches |
+|---|------------|----------|--------------------|-----------------|
+| 1 | Day 1 | **Price the seed ETBs** | Match noisy comp / undercut 10% / hold for hype | Margin vs sell-through |
+| 2 | Day 2 | **Distributor MOQ** | Buy deep sealed (cash lock) / light mix / skip | Liquidity vs stockout |
+| 3 | Day 3 | **Marketplace “steal” lot** | Drive out (miss peak hours) / courier fee / skip | Asymmetric info + bandwidth |
+| 4 | Day 4 | **Spike wants last playable rare** | Sell at list / haggle / refuse to keep binder depth | Short cash vs long assortment |
+| 5 | Day 5 | **Hire first cashier?** | Hire ($80/day) / keep solo / hire unreliable cheap | Owner bandwidth vs wage burn |
+| 6 | Day 7 | **First rent due + soft shelf** | Fire-sale sealed / cut accessories / take payday loan | Fixed cost pressure |
+| 7 | Day 8–10 | **Hype spike on one card** | Chase-buy at peak / sell into strength / ignore | FOMO vs staples |
+| 8 | Day 12 | **Case slot: graded slab vs 2 chase singles** | Display slab / singles / rotate daily | Space as a resource |
+| 9 | Day 18–25 | **Expand to Medium?** | Sign lease / wait for Rep / stay small | Rent risk vs capacity |
+| 10 | Day 20–30 | **Shady trunk deal** | Buy cheap risky / report (Rep+) / ignore | Risk, authenticity, ethics |
+
+**Success criteria for design:** Playtesters name the tradeoff without prompting in ≥7/10 beats.
+
+---
+
+## 11. Module mapping (for Engineer)
+
+| Module | Owns |
+|--------|------|
+| `core` | Day clock, save, RNG seeds, event bus |
+| `economy` | Cash, rent, wages, fees, net worth, loans |
+| `inventory` | SKUs, instances, locations, capacity, shrink |
+| `customers` | Archetypes, spawn, queue, buy/sell utilities |
+| `shop` | Grid layout, furniture, expansion tiers, pathing |
+| `ui` | Pricing panels, buy opportunities, decision modals |
+
+**Staff** lives in `shop` (roster) with hooks into `customers` (service) and `economy` (wages).  
+**Market events** live in `economy` with modifiers applied to `inventory.true_market` and `customers` weights.
+
+---
+
+## 12. v1 out of scope (explicit)
+
+- Multiplayer / trading between players
+- Full real TCG rules / deckbuilding sim
+- Manufacturer licensing / real card IP (use fictional sets + stats)
+- Franchise multi-store (post-1.0)
+- Deep tax/accounting sim
+
+---
+
+## 13. Balance targets (initial tunables)
+
+| Tunable | Normal start |
+|---------|--------------|
+| Days to first rent crisis if passive | 7–10 |
+| Target gross margin blend | 25–35% |
+| Customers / open hour (small, Rep 40) | 4–7 |
+| Attention / day | 100 |
+| Event chance / settle | 18% |
+| Whale spawn / week at Rep 75 | ~1 |
+
+Engineer: expose these as `BalanceConfig` resource — Designer owns values, code owns formulas.
+
+---
+
+## 14. Handoff
+
+**PM:** Schedule Eng spike on inventory+economy data models; Art needs furniture prop list from §7.1; QA builds playtest script from §10.
+
+**Next design docs:** (a)–(c) delivered — set bible, UI wireflows, difficulty curves (`difficulty-curves-v1.md`). Further: §10 beat tuning after playable slice.
