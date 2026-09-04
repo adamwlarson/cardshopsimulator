@@ -228,10 +228,6 @@ func _start_titan_hype() -> bool:
 func _refocus_pending_titan() -> void:
 	if not _is_titan_pending():
 		return
-	DemandSignals.apply_hype_event(
-		TITAN_SKU,
-		GameState.current_day + 1
-	)
 	EventBus.price_focus_requested.emit(
 		TITAN_SKU,
 		TITAN_HYPE_BEAT,

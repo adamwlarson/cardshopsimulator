@@ -749,12 +749,27 @@ func _test_titan_hype_price_focus() -> void:
 		"Titan price focus beat tag"
 	)
 	_expect_equal(_captured_price_focus_count, 1, "Titan initial PREP focus")
+	var market_state := _demand_signals.get("_market_state") as MarketState
+	var market_before_refocus := market_state.market_cents_for(&"AA-SKIE-047")
+	var listed_before_refocus := int(
+		_inventory_service.call("listed_price_for", &"AA-SKIE-047")
+	)
 	_game_state.set("current_phase", DayPhasePolicy.FLOOR)
 	_beat_director.call("_refocus_titan_after_phase_change", 8)
 	_expect_equal(
 		_captured_price_focus_count,
 		2,
 		"Titan refocuses after PREP to FLOOR UI settles"
+	)
+	_expect_equal(
+		market_state.market_cents_for(&"AA-SKIE-047"),
+		market_before_refocus,
+		"Titan refocus does not multiply market cents"
+	)
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", &"AA-SKIE-047")),
+		listed_before_refocus,
+		"Titan refocus does not mutate listed cents"
 	)
 	_expect_equal(
 		_beat_director.call("is_completed", TITAN_HYPE_BEAT),
