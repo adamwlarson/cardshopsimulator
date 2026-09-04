@@ -1,6 +1,6 @@
 # Next Eng SoT Pick v1 — Attention deepen vs Medium floor growth
 
-**Status:** Adopted — Option A shipped (#19 @ 2d3569f4); Option B in flight (eng `bc-f33c888e`)  
+**Status:** Adopted — Option A shipped (#19 @ 2d3569f4); Option B shipped (#21 @ 913e77b6)  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Updated:** 2026-09-04 — track spike outcomes (no new design)  
@@ -42,9 +42,9 @@
 
 ---
 
-## Option B — Medium expand = actual floor growth — **IN FLIGHT**
+## Option B — Medium expand = actual floor growth — **SHIPPED**
 
-**Outcome:** Eng cloud agent `bc-f33c888e` in flight. Medium dims stay **14×10** (140 tiles ≈ ~1,020 sq ft @ 0.9 m) unless Art/Eng flags a tighter lock.
+**Outcome:** Merged PR #21 → main @ `913e77b6` (Sign→**14×10** real growth + stub shell; Eng APPROVE-with-notes + ART APPROVE). Soft `usable_sq_ft` parked. Hero Medium shell GLB later.
 
 **Player fantasy:** Signing Medium isn’t just a rent buff — the shop **gets bigger** and pathing/staff capacity matter.
 
@@ -54,7 +54,7 @@
 | Rent | Apply `rent_medium_weekly_cents` next SETTLE week (already on BalanceConfig Normal) |
 | Placement | Existing fixtures stay; new empty tiles unlock; rearrange uses Option A Att 10 (now shipped) |
 | Pathing | Recompute customer paths; fail expand preview if counter unreachable |
-| Camera/shell | Art: extend floor/walls OR fog unused — Art Lead one-liner before/during eng |
+| Camera/shell | Extend floor/walls to full footprint; fog-unused = interim only (do not ship as Medium) — Art SoT locked |
 
 **Acceptance (falsifiable):**
 
@@ -74,7 +74,7 @@
 | Pick | Result |
 |------|--------|
 | A first | Shipped — PR #19 @ `2d3569f4` |
-| B next | In flight — eng `bc-f33c888e`; Medium **14×10** locked for this spike |
+| B next | Shipped — PR #21 @ `913e77b6`; Medium **14×10** + stub shell |
 
 ---
 
@@ -82,7 +82,7 @@
 
 - [x] Choose **A** or **B** → A first, then B
 - [x] Sync this file to main before cloud agent (A)
-- [ ] If B: Art confirms Medium footprint + shell approach (14×10 working lock)
-- [ ] Sync this status update to main
-- [ ] B tip-freeze → Eng → QA → merge
+- [x] If B: Art confirms Medium footprint + shell approach (14×10 extend; fog interim nack)
+- [x] B tip-freeze → Eng → QA → merge (#21 @ `913e77b6`)
+- [ ] Sync this B-shipped status update to main
 
