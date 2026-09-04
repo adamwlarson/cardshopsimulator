@@ -1,82 +1,138 @@
-# Card Shop Simulator — Difficulty Curves v1
+# Difficulty Curves v1 — Easy / Normal / Hard
 
-Status: Adopted (PM lock 2026-09-04)
+**Status:** Ready for PM adoption — Normal = systems-design bible defaults  
+**Author:** CSS Designer  
+**Date:** 2026-09-04  
+**Depends on:** `systems-design-v1.md` (Normal = baseline), `fictional-set-bible-v1.md`, `ui-wireflows-v1.md`  
+**Rule:** Same systems, formulas, and §4.5 UI on all difficulties. Only `BalanceConfig` scalars + starting kit + fail recovery change. No “god mode” perfect comps on Easy.
 
-## 1. Contract
+---
 
-Difficulty changes pressure and information quality, not basic rules. All runtime values originate in typed `BalanceConfig` resources under `data/balance/`. Systems may derive values from these scalars but must not shadow them with difficulty literals.
+## 0. Design intent
 
-## 2. Locked starting values
+| Diff | Player fantasy | Fail feel |
+|------|----------------|-----------|
+| **Easy** | Learn the shop; mistakes teach | Soft landings; loan shark OK |
+| **Normal** | Fair-but-hard retail | Careless bankrupt ~30–45 days |
+| **Hard** | Brutal liquidity & fog | Instant game over on bankrupt; thinner signals |
 
-| Field | Easy | Normal | Hard |
-| --- | ---: | ---: | ---: |
-| `start_cash_cents` | 1,000,000 ($10,000) | 800,000 ($8,000) | 650,000 ($6,500) |
-| `start_reputation` | 50 | 40 | 30 |
-| `case_slots` | 28 | 24 | 20 |
-| `backstock_bins` | 48 | 40 | 32 |
-| `rent_small_weekly_cents` | 90,000 ($900) | 120,000 ($1,200) | 150,000 ($1,500) |
-| `first_rent_due_day` | 7 | 7 | 7 |
-| `attention_pool` | 120 | 100 | 85 |
-| `event_chance_settle` | 0.12 | 0.18 | 0.24 |
-| `loan_shark_enabled` | true | true | false |
-| `tile_size_m` | 0.9 | 0.9 | 0.9 |
-| `customer_spawn_mult` | 1.15 | 1.00 | 0.85 |
-| `whale_spawn_mult` | 0.85 | 1.00 | 1.20 |
-| `flipper_spawn_mult` | 0.75 | 1.00 | 1.35 |
-| `shrink_mult` | 0.60 | 1.00 | 1.50 |
-| `comp_noise_width_mult` | 0.70 | 1.00 | 1.50 |
-| `demand_band_sigma` | 0.75 | 1.00 | 1.25 |
-| `comp_mae_cap_sealed` | 0.08 | 0.12 | 0.18 |
-| `comp_mae_cap_singles` | 0.10 | 0.16 | 0.24 |
-| `comp_mae_cap_graded` | 0.14 | 0.20 | 0.30 |
+**Invariant across all:** §4.5 field list, forbidden UI fields, module boundaries, §10 beat *sequence* (timing/numbers may scale).
 
-Normal is the authored experience and balance reference. Easy gives more liquidity, labor tolerance, reliable information, and recovery capacity. Hard reduces slack and information quality; it must remain learnable and deterministic under a fixed seed.
+---
 
-## 3. Scalar interpretation
+## 1. Starting kit
 
-### Customer spawn rate
+| Knob | Easy | Normal | Hard |
+|------|------|--------|------|
+| Cash | $12,000 | $8,000 | $5,500 |
+| Reputation | 50 | 40 | 30 |
+| Case slots | 28 | 24 | 20 |
+| Backstock bins | 48 | 40 | 32 |
+| Seed sealed | 4 blasters + 2 Dust ETBs + **1 Skie blaster** | 4 blasters + 2 Dust ETBs | 3 blasters + 2 Dust ETBs |
+| Seed staples (named) | 10 playable rares | 8 | 5 |
+| Accessories | sleeves 300 / top 75 | 200 / 50 | 120 / 30 |
+| Staff | Owner + **trainee cashier** (Reliability 0.85, 3 days free then $80) | Owner only | Owner only |
+| First rent due | Day **10** | Day **7** | Day **7** (no grace) |
 
-Multiply the owning customer system's baseline arrival rate by `customer_spawn_mult`. `whale_spawn_mult` and `flipper_spawn_mult` adjust those archetypes' eligible weights after the base arrival roll. These values change opportunity mix, not customers' available money. Queue capacity and service demand can still make more traffic costly.
+---
 
-### Shrink rate
+## 2. Economy & demand scalars (`BalanceConfig`)
 
-Multiply eligible fixture/location shrink risk by `shrink_mult` after security, visibility, crowd, and event modifiers. Never remove inventory without a logged settle event and source context. Initial implementation may be a deterministic stub.
+Multipliers apply to Normal baseline unless noted as absolute.
 
-### Comp noise
+| Knob | Easy | Normal | Hard |
+|------|------|--------|------|
+| Customer spawn / hour | ×1.25 | ×1.0 | ×0.85 |
+| Whale weight (at same Rep) | ×1.4 | ×1.0 | ×0.7 |
+| Flipper weight | ×0.7 | ×1.0 | ×1.35 |
+| Gross margin target blend | 30–40% | 25–35% | 20–30% |
+| Distributor discount vs MSRP | 35–42% | 30–40% | 28–35% |
+| Online fee | 6% | 8% | 10% |
+| Daily shrink base | 0.1% | 0.2% | 0.35% |
+| Unstaffed shrink add | +0.25% | +0.5% | +0.75% |
+| Rent (Small weekly) | $1,000 | $1,200 | $1,350 |
+| Wage mult | ×0.9 | ×1.0 | ×1.1 |
+| Event chance / settle | 12% | 18% | 26% |
+| Negative event weight | ×0.7 | ×1.0 | ×1.4 |
+| Market daily drift σ | narrower | baseline U(0.98,1.02) | wider (±3% class vol) |
+| Comp noise width `w` | ×0.7 | ×1.0 | ×1.25 |
+| Demand band σ | 0.09 | 0.12 | 0.16 |
+| Research cost | $30 + Att 10 | $50 + Att 15 | $70 + Att 18 |
+| Inspect accuracy | 92% | 85% | 75% |
+| Shady fake-slab rate | 4% | 8% | 14% |
 
-`comp_noise_width_mult` scales the width of observation noise while generating visible comparable sales. `demand_band_sigma` controls overlap between customer demand bands. The class-specific MAE caps bound mean absolute error for Sealed, Singles, and Graded comp summaries. None of these fields changes hidden true market. Source quality, sample age, sample size, and condition shape the final distribution.
+**Attention pool:** Easy 120 / Normal 100 / Hard 85. Action costs unchanged (scarcity via pool).
 
-At zero noise, UI still shows observed comps rather than labeling truth. At higher noise, widen ranges and reduce confidence before adding extreme outliers.
+---
 
-## 4. Rent and bankruptcy pacing
+## 3. §4.5 fairness bars by difficulty
 
-Rent is weekly and posts during Settle on days divisible by seven. It is not amortized as a daily cash deduction. Forecast UI may show a daily planning equivalent but must label it as a forecast.
+| Gate | Easy | Normal | Hard |
+|------|------|--------|------|
+| Comp MAE vs true | ≤10% | ≤12% | ≤15% |
+| Band within ±1 | ≥85% | ≥80% | ≥70% |
+| Hot↔Cold inversion ban | Yes (no fog) | Yes | Yes — but fog events more common |
+| Specialist narrow factor | Same | Same | Same (skill still rewarded) |
 
-The first-week playtest target is:
+Hard is **foggiest**, not unfair: signals stay correlated; MAE bar loosens slightly.
 
-- Easy: enough slack to recover from one poor medium purchase.
-- Normal: rent competes credibly with one attractive allocation or buylist.
-- Hard: a poor early concentration creates danger but still offers a skill-based recovery path.
+---
 
-Hard disables the loan-shark event. All difficulties retain liquidation and order cancellation where transaction state permits.
+## 4. Fail / recovery
 
-## 5. Capacity and layout
+| | Easy | Normal | Hard |
+|--|------|--------|------|
+| Bankrupt | Loan shark once | Loan shark once | **Instant game over** |
+| Loan shark | +$6k, −$150/day ×40, Rep −5 | +$5k, −$200/day ×40, Rep −10 | — |
+| Missed rent → lose | 3 weeks | 2 weeks | 2 weeks |
+| Ironman destitution optional | Off by default | Off | **On** by default |
 
-Physical grid dimensions remain 10×8 at 0.9 m across difficulty. Difficulty changes usable merchandising/storage capacity, not the building scale. Case-slot/backstock differences can be represented through fixture availability, locked capacity, or scenario loadout; they may not create invisible space.
+---
 
-## 6. Event pressure
+## 5. Win-mode tweaks
 
-`event_chance_settle` is evaluated once at eligible Settle checks, not every frame. Eligibility and cooldown run before chance. A failed roll has no hidden penalty. Event selection and rolls are seeded and included in QA logs.
+Same modes (Survive Year 1 / Flagship / Liquidity / Sandbox). Threshold deltas:
 
-Higher difficulty may increase event frequency but cannot select events whose counterplay systems are unavailable. Critical obligations must be telegraphed independently of event chance.
+| Mode check | Easy | Normal | Hard |
+|------------|------|--------|------|
+| Survive Y1 Rep floor | 30 | 40 | 50 |
+| Flagship cash | $40k | $50k | $65k |
+| Liquidity king cash | $75k | $100k | $125k |
 
-## 7. Attention
+---
 
-The pool refreshes at the defined day boundary. Scheduled staff and upgrades can modify available Attention after the base config is read. Tasks expose final cost and modifiers before commitment. Difficulty should not secretly alter a task cost if the UI cannot explain it.
+## 6. §10 beat timing (MVP-required set)
 
-## 8. BalanceConfig resource shape
+Beats **keep the same decisions**; days shift slightly on Easy only.
 
-Engineering treats these exported names as the ratified serialization/API contract:
+| Beat | Easy day | Normal day | Hard day | Number tweaks |
+|------|----------|------------|----------|---------------|
+| #1 Price Dust ETBs | 1 | 1 | 1 | Hard: softer shelf already |
+| #2 Distributor MOQ | 2 | 2 | 2 | Hard: worse MOQ / less discount |
+| #4 Spike last staple | 5 | 4 | 3–4 | Same cards (Bastion / Arcbolt) |
+| #6 First rent crunch | 10 | 7 | 7 | Easy delayed rent |
+| #7 Titan hype | 10–12 | 8–10 | 6–8 | Hard: spike sharper, cash tighter |
+| #8 Empress slab vs singles | 14 | 12 | 10 | Same SKUs |
+
+Non-MVP beats (#3/#5/#9/#10) follow same relative spacing.
+
+---
+
+## 7. Falsifiable playtest targets
+
+| Diff | Target |
+|------|--------|
+| Easy | ≥80% of new players survive to day 21; median “tough-but-fair” ≥3.5/5 |
+| Normal | Careless/scripted-passive bankrupt **30–45** days; skilled ≥60% reach day 60 |
+| Hard | Skilled survival to day 30 ≈ **40–60%**; loan shark never offered |
+
+QA: run passive-bot + skilled-bot harness per diff before human playtests.
+
+---
+
+## 8. Eng handoff — `BalanceConfig` resource shape
+
+Godot 4 typed resource (GDScript sketch). **Normal column = systems-design bible defaults** (ship as `res://balance/balance_normal.tres`; Easy/Hard are sibling `.tres` or one resource with enum).
 
 ```gdscript
 class_name BalanceConfig
@@ -85,37 +141,98 @@ extends Resource
 enum Difficulty { EASY, NORMAL, HARD }
 
 @export var difficulty: Difficulty = Difficulty.NORMAL
-@export var start_cash_cents: int = 800_000
-@export var start_reputation: int = 40
+
+# --- Shop metric (locked with Art; not a difficulty scalar, but lives on BalanceConfig for one load path) ---
+@export var tile_size_m: float = 0.9
+# Grid size is NOT on BalanceConfig — shop constants: GRID_WIDTH=10, GRID_HEIGHT=8 (Small). Medium/Large grids = future expand doc.
+
+# --- Starting kit (cents where money) ---
+@export var start_cash_cents: int = 800_000          # $8,000
+@export var start_reputation: int = 40               # 0–100
 @export var case_slots: int = 24
 @export var backstock_bins: int = 40
-@export var rent_small_weekly_cents: int = 120_000
-@export var first_rent_due_day: int = 7
-@export var attention_pool: int = 100
-@export var event_chance_settle: float = 0.18
-@export var loan_shark_enabled: bool = true
-@export var tile_size_m: float = 0.9
+@export var seed_blasters: int = 4
+@export var seed_dust_etbs: int = 2
+@export var seed_skie_blasters: int = 0              # Easy: 1
+@export var seed_named_staples: int = 8
+@export var seed_sleeves: int = 200
+@export var seed_toploaders: int = 50
+@export var start_with_trainee_cashier: bool = false # Easy: true
+@export var trainee_free_days: int = 3               # Easy only; after that wage from staff table ($80/day Cashier)
+@export var first_rent_due_day: int = 7              # Easy: 10
+
+# --- Economy / demand ---
 @export var customer_spawn_mult: float = 1.0
-@export var whale_spawn_mult: float = 1.0
-@export var flipper_spawn_mult: float = 1.0
-@export var shrink_mult: float = 1.0
-@export var comp_noise_width_mult: float = 1.0
-@export var demand_band_sigma: float = 1.0
-@export var comp_mae_cap_sealed: float = 0.12
-@export var comp_mae_cap_singles: float = 0.16
-@export var comp_mae_cap_graded: float = 0.20
+@export var whale_weight_mult: float = 1.0
+@export var flipper_weight_mult: float = 1.0
+@export var distributor_discount_min: float = 0.30   # vs MSRP
+@export var distributor_discount_max: float = 0.40
+@export var online_fee: float = 0.08
+@export var shrink_daily_base: float = 0.002
+@export var shrink_unstaffed_add: float = 0.005
+@export var rent_small_weekly_cents: int = 120_000   # $1,200
+@export var wage_mult: float = 1.0
+@export var event_chance_settle: float = 0.18
+@export var negative_event_weight_mult: float = 1.0
+@export var market_drift_low: float = 0.98
+@export var market_drift_high: float = 1.02
+
+# --- Attention / fog (§4.5) ---
+@export var attention_pool: int = 100
+@export var comp_noise_width_mult: float = 1.0       # scales channel w
+@export var demand_band_sigma: float = 0.12
+@export var research_cost_cents: int = 5_000         # $50
+@export var research_attention: int = 15
+@export var inspect_accuracy: float = 0.85
+@export var shady_fake_slab_rate: float = 0.08
+
+# --- §4.5 fairness bars (QA harness) ---
+@export var fair_comp_mae_max: float = 0.12          # ≤12%
+@export var fair_band_within1_min: float = 0.80      # ≥80%
+@export var fair_forbid_hot_cold_invert: bool = true
+
+# --- Fail / recovery ---
+@export var loan_shark_enabled: bool = true          # Hard: false
+@export var loan_shark_cash_cents: int = 500_000
+@export var loan_shark_daily_cents: int = 20_000
+@export var loan_shark_days: int = 40
+@export var loan_shark_rep_hit: int = 10
+@export var missed_rent_weeks_to_lose: int = 2       # Easy: 3
+@export var ironman_destitution_default: bool = false # Hard: true
+
+# --- Win thresholds ---
+@export var survive_y1_rep_floor: int = 40
+@export var flagship_cash_cents: int = 5_000_000
+@export var liquidity_king_cash_cents: int = 10_000_000
 ```
 
-Canonical assets are `balance_easy.tres`, `balance_normal.tres`, and `balance_hard.tres`. Renaming a serialized field or asset requires an explicit migration.
+**Easy/Hard:** override fields per `difficulty-curves-v1.md` §1–§5 tables (do not fork formulas).
 
-## 9. Balance change process
+**Rules:**
+- Default load **Normal**.
+- Mid-save difficulty change: **disallowed** in MVP.
+- Unit tests: each diff loads; Easy `start_cash_cents` > Normal > Hard; Hard `loan_shark_enabled == false`; Normal values match this sketch exactly.
 
-Every adjustment records:
+---
 
-1. hypothesis and affected tough decision;
-2. before/after values;
-3. deterministic test seed or playtest cohort;
-4. measured effect on cash, stock exposure, service, and run ends;
-5. decision to keep, revert, or test further.
 
-Automated tests enforce starting-cash ordering, Normal locked values, Hard financing lockout, and config-driven capacity. Telemetry must segment by config difficulty and version.
+### §8 clarifications (2026-09-04 Eng ratification)
+
+1. **`tile_size_m = 0.9`** — on BalanceConfig (single load path); value locked with Art; **do not** vary by Easy/Normal/Hard.
+2. **Grid size** — `GRID_WIDTH=10`, `GRID_HEIGHT=8` are **shop constants** (not difficulty scalars). Expansion tiers later may add alternate constants; not exported on BalanceConfig for MVP.
+3. **Expansion rents** — MVP ships **`rent_small_weekly_cents` only**. Medium/Large weekly rents stay in systems-design §7.3 until expand ships; then add `rent_medium_weekly_cents` / `rent_large_weekly_cents`.
+4. **Easy trainee cashier** — `start_with_trainee_cashier` + `trainee_free_days` (default 3) are BalanceConfig. Post-free wage = staff table Cashier **$80/day** (not duplicated on BalanceConfig).
+5. **Gross margin target blend** (§2) — **QA / design playtest target only**; omit from Resource.
+6. **Attention action costs** — correctly **absent** from BalanceConfig (pool-only scarcity); costs stay in systems-design §6.2 constants.
+
+## 9. Out of scope
+
+- Per-archetype AI difficulty  
+- Custom slider sandbox  
+- New UI fields beyond §4.5  
+
+---
+
+## 10. Status of related nits
+
+- Small shop usable **~700 sq ft** (10×8 @ 0.9 m ≈ 698; “cozy 700”) — already in systems-design §1/§7.
