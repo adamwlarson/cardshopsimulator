@@ -57,7 +57,14 @@ enum Difficulty {
 
 @export var research_cost_cents: int = 5_000
 @export var research_attention: int = 15
+@export var research_attention_specialist: int = 10
+@export var research_duration_days_min: int = 1
+@export var research_duration_days_max: int = 3
+@export var research_demand_band_sigma: float = 0.07
+@export var research_comp_narrow_factor: float = 0.55
+@export var rearrange_attention: int = 10
 @export var inspect_attention: int = 5
+@export var inspect_attention_specialist: int = 2
 @export var inspect_accuracy: float = 0.85
 @export var shady_fake_slab_rate: float = 0.08
 

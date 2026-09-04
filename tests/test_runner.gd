@@ -89,6 +89,7 @@ func _initialize() -> void:
 	_test_demand_signal_dto_does_not_leak_truth()
 	_test_demand_fairness_contract()
 	_test_inspect_buy_opportunity()
+	_test_research_and_rearrange_attention()
 	_test_qa_instrumentation_payloads()
 	_test_difficulty_balance_ordering()
 	_test_normal_shop_capacity()
@@ -690,6 +691,345 @@ func _test_inspect_buy_opportunity() -> void:
 	hud.free()
 
 
+func _test_research_and_rearrange_attention() -> void:
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.inspect_attention_cost(), 5, "Owner inspect stays 5 without specialist")
+	_expect_equal(shop.research_attention_cost(), 15, "Owner research costs 15 Att")
+	_expect_equal(shop.rearrange_attention_cost(), 10, "Owner rearrange costs 10 Att")
+	_expect_equal(shop.research_cash_cost_cents(), 5_000, "Owner research costs $50")
+	shop.set_specialist_on_duty(true)
+	_expect_equal(shop.inspect_attention_cost(), 2, "Specialist inspect 5→2")
+	_expect_equal(shop.research_attention_cost(), 10, "Specialist research 15→10")
+	_expect_equal(shop.rearrange_attention_cost(), 10, "Rearrange cost ignores specialist")
+	shop.set_specialist_on_duty(false)
+	_expect_equal(shop.inspect_attention_cost(), 5, "Inspect returns to 5 off duty")
+
+	var market_state := MarketState.new()
+	market_state.update_sku(&"AA-SKIE-047", 10_000, 0.70)
+	market_state.update_sku(&"AA-BASE-088", 500, 0.45)
+	var fogged := DemandSignalService.new(NORMAL_CONFIG, market_state, 12, _qa)
+	var researched := DemandSignalService.new(NORMAL_CONFIG, market_state, 12, _qa)
+	var snapshot := researched.apply_research(&"AA-SKIE", 1, 2)
+	_expect_equal(researched.is_set_informed(&"AA-SKIE", 1), true, "research informs target set")
+	_expect_equal(researched.is_set_informed(&"AA-SKIE", 2), true, "research lasts through day 2")
+	_expect_equal(researched.is_set_informed(&"AA-SKIE", 3), false, "research expires after telegraph")
+	_expect_equal(researched.is_set_informed(&"AA-BASE", 1), false, "research does not inform other sets")
+	_expect_equal(
+		String(snapshot.get("display_name", "")).contains("Skiefall"),
+		true,
+		"research snapshot names the set"
+	)
+	var watches := researched.active_rotation_watches(1)
+	_expect_equal(watches.size() > 0, true, "rotation watch is present")
+	_expect_equal(
+		watches[0].begins_with("Rotation watch:"),
+		true,
+		"soft telegraph uses Rotation watch copy"
+	)
+	_assert_text_has_no_truth(watches[0], "rotation watch")
+	var fog_dto := fogged.buy_confirm(
+		1, &"AA-SKIE-047", DemandSignalService.Channel.MARKETPLACE,
+		5000, 1, 800_000, 1, 10, false
+	)
+	var researched_dto := researched.buy_confirm(
+		1, &"AA-SKIE-047", DemandSignalService.Channel.MARKETPLACE,
+		5000, 1, 800_000, 1, 10, researched.is_set_informed(&"AA-SKIE", 1)
+	)
+	_expect_equal(
+		researched_dto.shown_comp_high_cents - researched_dto.shown_comp_low_cents
+		< fog_dto.shown_comp_high_cents - fog_dto.shown_comp_low_cents,
+		true,
+		"research narrows target-set comp width"
+	)
+	_expect_equal(
+		researched_dto.condition_cue.to_lower().contains("photo"),
+		true,
+		"research keeps photo condition fog"
+	)
+	_expect_equal(researched_dto.inspected, false, "research does not inspect")
+	_expect_dto_has_no_truth_fields(researched_dto, "researched buy signal")
+	_assert_text_has_no_truth(researched_dto.condition_cue, "researched condition cue")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.buy_summary(researched_dto),
+		"researched buy summary"
+	)
+
+	_qa.set_force_enabled(true)
+	_qa.clear()
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("start_new_game")
+	var cash_before := int(_economy.get("balance_cents"))
+	var att_before := int(_game_state.get("attention_remaining"))
+	var live_before := _demand_signals.call(
+		"buy_signal",
+		&"AA-SKIE-047",
+		DemandSignalService.Channel.MARKETPLACE,
+		1200,
+		1
+	) as BuyConfirmSignal
+	var result: Dictionary = _demand_signals.call("research_set", &"AA-SKIE")
+	_expect_equal(bool(result.get("ok", false)), true, "research spends Att and cash")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - NORMAL_CONFIG.research_attention,
+		"research debits Att 15"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - NORMAL_CONFIG.research_cost_cents,
+		"research debits $50"
+	)
+	_expect_equal(
+		int(result.get("sample_comp_width_after", 0))
+		< int(result.get("sample_comp_width_before", 0)),
+		true,
+		"QA research payload shows narrower comps"
+	)
+	_expect_equal(
+		float(result.get("research_demand_band_sigma", 1.0))
+		< float(result.get("demand_band_sigma", 0.0)),
+		true,
+		"QA research payload shows narrower demand-band σ"
+	)
+	_assert_payload_has_no_truth(result, "research payload")
+	_assert_text_has_no_truth(String(result.get("rotation_watch", "")), "research rotation watch")
+	_expect_equal(
+		String(result.get("condition_cue", "")).to_lower().contains("cert_valid"),
+		false,
+		"research payload cue has no cert_valid"
+	)
+	var live_after := _demand_signals.call(
+		"buy_signal",
+		&"AA-SKIE-047",
+		DemandSignalService.Channel.MARKETPLACE,
+		1200,
+		1
+	) as BuyConfirmSignal
+	_expect_equal(
+		live_after.shown_comp_high_cents - live_after.shown_comp_low_cents
+		< live_before.shown_comp_high_cents - live_before.shown_comp_low_cents,
+		true,
+		"live buy signal narrows after researching the set"
+	)
+	_expect_equal(
+		live_after.condition_cue.to_lower().contains("photo")
+		or live_after.condition_cue.to_lower().contains("inspect"),
+		true,
+		"live research does not reveal true condition"
+	)
+	_expect_dto_has_no_truth_fields(live_after, "live researched signal")
+	var events: Array = _qa_autoload.call("get_events")
+	var saw_research := false
+	for event: Dictionary in events:
+		if String(event.get("event", "")) == "research_applied":
+			saw_research = true
+			_assert_payload_has_no_truth(event.get("payload", {}), "research_applied event")
+	_expect_equal(saw_research, true, "QA emits research_applied")
+	var already := _demand_signals.call("research_set", &"AA-SKIE") as Dictionary
+	_expect_equal(bool(already.get("ok", false)), false, "active research cannot be repeated")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - NORMAL_CONFIG.research_attention,
+		"blocked repeat research does not debit Att"
+	)
+
+	_game_state.set("attention_remaining", 14)
+	var low_att := _demand_signals.call("research_set", &"AA-DUST") as Dictionary
+	_expect_equal(bool(low_att.get("ok", false)), false, "research refuses Att < 15")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		14,
+		"failed research does not debit Att"
+	)
+	_game_state.set("attention_remaining", 100)
+	_economy.set("balance_cents", 4_999)
+	_event_bus.call("publish_cash_changed", 4_999)
+	var low_cash := _demand_signals.call("research_set", &"AA-DUST") as Dictionary
+	_expect_equal(bool(low_cash.get("ok", false)), false, "research refuses cash < $50")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		100,
+		"failed cash research does not debit Att"
+	)
+
+	_game_state.call("start_new_game")
+	_expect_equal(shop.layout.has_circulation(), true, "default layout has circulation")
+	var binder := shop.layout.fixture_by_id(&"binder_rack")
+	_expect_equal(binder != null, true, "binder rack exists")
+	var legal := _game_state.call(
+		"rearrange_fixture",
+		&"binder_rack",
+		Vector2i(1, 5)
+	) as Dictionary
+	_expect_equal(bool(legal.get("ok", false)), true, "legal rearrange succeeds")
+	_expect_equal(int(legal.get("attention_spent", 0)), 10, "legal rearrange spends Att 10")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		90,
+		"rearrange debit leaves 90 Att"
+	)
+	_expect_equal(shop.layout.fixture_by_id(&"binder_rack").origin, Vector2i(1, 5), "binder moved")
+	var blocked := _game_state.call(
+		"rearrange_fixture",
+		&"binder_rack",
+		Vector2i(7, 1)
+	) as Dictionary
+	_expect_equal(bool(blocked.get("ok", false)), false, "illegal pathing is rejected")
+	_expect_equal(
+		StringName(blocked.get("reason", &"")),
+		&"blocked_path",
+		"illegal rearrange reason is blocked_path"
+	)
+	_expect_equal(int(blocked.get("attention_spent", -1)), 0, "illegal rearrange spends no Att")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		90,
+		"illegal rearrange does not debit Att"
+	)
+	_expect_equal(
+		shop.layout.fixture_by_id(&"binder_rack").origin,
+		Vector2i(1, 5),
+		"illegal rearrange leaves fixture in place"
+	)
+	_game_state.set("attention_remaining", 0)
+	var free := _game_state.call(
+		"rearrange_fixture",
+		&"binder_rack",
+		Vector2i(1, 4)
+	) as Dictionary
+	_expect_equal(bool(free.get("ok", false)), false, "free rearrange without Att fails")
+	_expect_equal(
+		StringName(free.get("reason", &"")),
+		&"insufficient_attention",
+		"Att 0 rearrange reason"
+	)
+	_expect_equal(
+		shop.layout.fixture_by_id(&"binder_rack").origin,
+		Vector2i(1, 5),
+		"Att 0 rearrange does not move"
+	)
+
+	var inventory := FakeCustomerInventory.new()
+	var queue := CustomerQueue.new()
+	queue.configure(inventory)
+	var buying_customer := CustomerProfile.new()
+	buying_customer.budget_cents = 1000
+	buying_customer.interest_tags = [&"accessory"]
+	_expect_equal(queue.enqueue(buying_customer), true, "Att 0 still enqueues customers")
+	_expect_equal(queue.sell_listed(), true, "cashiers still sell at Att 0")
+	_expect_equal(inventory.sold, true, "Att 0 sale reaches inventory")
+	queue.free()
+	inventory.free()
+	var zero_research := _demand_signals.call("research_set", &"AA-BASE") as Dictionary
+	_expect_equal(bool(zero_research.get("ok", false)), false, "Att 0 research is disabled")
+
+	_game_state.call("start_new_game")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "gameplay HUD loads for research/rearrange")
+	if hud == null:
+		_qa.set_force_enabled(false)
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var open_research := hud.get_node_or_null("%OpenResearchButton") as Button
+	var open_rearrange := hud.get_node_or_null("%OpenRearrangeButton") as Button
+	var research_confirm := hud.get_node_or_null("%ResearchConfirmButton") as Button
+	var rearrange_confirm := hud.get_node_or_null("%RearrangeConfirmButton") as Button
+	_expect_equal(
+		open_research != null and not open_research.disabled,
+		true,
+		"Research enabled with cash and Att"
+	)
+	_expect_equal(
+		open_rearrange != null and not open_rearrange.disabled,
+		true,
+		"Rearrange enabled with Att"
+	)
+	open_research.pressed.emit()
+	var research_rows := hud.get_node_or_null("%ResearchRows") as VBoxContainer
+	var clicked_set := false
+	if research_rows != null:
+		for child: Node in research_rows.get_children():
+			var row := child as Button
+			if row != null and row.text.contains("Skiefall"):
+				row.pressed.emit()
+				clicked_set = true
+				break
+	_expect_equal(clicked_set, true, "Research list includes Skiefall")
+	_expect_equal(
+		research_confirm != null and research_confirm.text.contains("Att 15"),
+		true,
+		"Research confirm shows Att cost"
+	)
+	_expect_equal(
+		research_confirm != null and research_confirm.text.contains("$50.00"),
+		true,
+		"Research confirm shows cash cost"
+	)
+	var confirm_body := hud.get_node_or_null("%ResearchConfirmBody") as Label
+	_assert_text_has_no_truth(
+		confirm_body.text if confirm_body != null else "",
+		"research confirm body"
+	)
+	research_confirm.pressed.emit()
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		85,
+		"HUD Research spends Att 15"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		795_000,
+		"HUD Research spends $50"
+	)
+	var watch := hud.get_node_or_null("%RotationWatchLabel") as Label
+	_expect_equal(
+		watch != null and watch.visible and watch.text.contains("Rotation watch"),
+		true,
+		"HUD shows rotation watch after research"
+	)
+	_assert_text_has_no_truth(watch.text if watch != null else "", "HUD rotation watch")
+
+	open_rearrange.pressed.emit()
+	Callable(hud, "_select_rearrange_fixture").call(&"binder_rack")
+	Callable(hud, "_select_rearrange_tile").call(Vector2i(7, 1))
+	_expect_equal(
+		rearrange_confirm != null and rearrange_confirm.disabled,
+		true,
+		"HUD disables confirm on illegal pathing"
+	)
+	Callable(hud, "_confirm_rearrange").call()
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		85,
+		"HUD illegal rearrange does not spend Att"
+	)
+	Callable(hud, "_select_rearrange_tile").call(Vector2i(1, 5))
+	_expect_equal(
+		rearrange_confirm != null and not rearrange_confirm.disabled,
+		true,
+		"HUD enables confirm on legal rearrange"
+	)
+	rearrange_confirm.pressed.emit()
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		75,
+		"HUD legal rearrange spends Att 10"
+	)
+
+	_game_state.set("attention_remaining", 0)
+	Callable(hud, "_update_attention").call(0)
+	_expect_equal(open_research.disabled, true, "HUD Research disabled at Att 0")
+	_expect_equal(open_rearrange.disabled, true, "HUD Rearrange disabled at Att 0")
+	root.remove_child(hud)
+	hud.free()
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+
+
 func _test_qa_instrumentation_payloads() -> void:
 	_qa.set_force_enabled(true)
 	_qa.clear()
@@ -776,6 +1116,19 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(NORMAL_CONFIG.inspect_attention, 5, "normal inspect attention")
 	_expect_equal(EASY_CONFIG.inspect_attention, 5, "easy inspect attention default")
 	_expect_equal(HARD_CONFIG.inspect_attention, 5, "hard inspect attention default")
+	_expect_equal(NORMAL_CONFIG.inspect_attention_specialist, 2, "normal inspect specialist")
+	_expect_equal(EASY_CONFIG.inspect_attention_specialist, 2, "easy inspect specialist default")
+	_expect_equal(HARD_CONFIG.inspect_attention_specialist, 2, "hard inspect specialist default")
+	_expect_equal(NORMAL_CONFIG.research_attention, 15, "normal research attention")
+	_expect_equal(EASY_CONFIG.research_attention, 10, "easy research attention")
+	_expect_equal(HARD_CONFIG.research_attention, 18, "hard research attention")
+	_expect_equal(NORMAL_CONFIG.research_cost_cents, 5_000, "normal research cash")
+	_expect_equal(NORMAL_CONFIG.research_attention_specialist, 10, "normal research specialist")
+	_expect_equal(NORMAL_CONFIG.rearrange_attention, 10, "normal rearrange attention")
+	_expect_equal(EASY_CONFIG.rearrange_attention, 10, "easy rearrange inherits")
+	_expect_equal(HARD_CONFIG.rearrange_attention, 10, "hard rearrange inherits")
+	_expect_equal(NORMAL_CONFIG.research_demand_band_sigma, 0.07, "normal research sigma")
+	_expect_equal(NORMAL_CONFIG.research_comp_narrow_factor, 0.55, "normal research narrow")
 	_expect_equal(NORMAL_CONFIG.inspect_accuracy, 0.85, "normal inspect accuracy")
 	_expect_equal(EASY_CONFIG.inspect_accuracy, 0.92, "easy inspect accuracy unchanged")
 	_expect_equal(HARD_CONFIG.inspect_accuracy, 0.75, "hard inspect accuracy unchanged")
@@ -1272,6 +1625,32 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		inspect_button != null and inspect_button.custom_minimum_size.y >= 40.0,
 		true,
 		"Inspect★ hit target height"
+	)
+	var research_button := hud.get_node_or_null("%OpenResearchButton") as Button
+	var rearrange_button := hud.get_node_or_null("%OpenRearrangeButton") as Button
+	_expect_equal(research_button != null, true, "Research button present")
+	_expect_equal(
+		research_button != null
+		and research_button.text.contains("Att 15")
+		and research_button.text.contains("$50.00"),
+		true,
+		"Research button shows cash and Att cost"
+	)
+	_expect_equal(
+		research_button != null and research_button.custom_minimum_size.y >= 40.0,
+		true,
+		"Research hit target height"
+	)
+	_expect_equal(rearrange_button != null, true, "Rearrange button present")
+	_expect_equal(
+		rearrange_button != null and rearrange_button.text.contains("Att 10"),
+		true,
+		"Rearrange button shows Att cost"
+	)
+	_expect_equal(
+		rearrange_button != null and rearrange_button.custom_minimum_size.y >= 40.0,
+		true,
+		"Rearrange hit target height"
 	)
 	_expect_equal(
 		price_button != null and price_button.custom_minimum_size.y >= 40.0,
