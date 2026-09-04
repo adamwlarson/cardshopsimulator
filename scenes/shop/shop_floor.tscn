@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
-[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="3_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/gameplay_hud.tscn" id="3_hud"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -112,6 +112,7 @@ mesh = SubResource("Mesh_display")
 script = ExtResource("1_clock")
 
 [node name="CustomerSpawner" type="Node" parent="Systems"]
+groups = ["customer_spawner"]
 script = ExtResource("2_customers")
 
 [node name="HUDLayer" type="CanvasLayer" parent="."]

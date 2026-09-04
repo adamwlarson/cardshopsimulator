@@ -19,6 +19,11 @@ func _initialize() -> void:
 	_test_difficulty_balance_ordering()
 	_test_normal_shop_capacity()
 	_test_weekly_rent_schedule()
+	_test_customer_archetype_weights()
+	_test_customer_spawn_phase_gating()
+	_test_day_phase_transitions()
+	_test_negotiate_clamp()
+	_test_ui_helpers_do_not_read_hidden_values()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -337,12 +342,100 @@ func _test_weekly_rent_schedule() -> void:
 	_expect_equal(NORMAL_CONFIG.rent_small_weekly_cents, 120_000, "weekly rent amount")
 
 
+func _test_customer_archetype_weights() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	_expect_equal(catalog.archetypes.size(), 6, "six customer archetypes")
+	var ids: Array[StringName] = []
+	for archetype: Dictionary in catalog.archetypes:
+		ids.append(StringName(archetype.get("id", "")))
+		_expect_equal(
+			float(archetype.get("weight_normal", 0.0)) > 0.0,
+			true,
+			"positive normal archetype weight"
+		)
+	for expected_id: StringName in [
+		&"kid_parent", &"spike", &"collector",
+		&"flipper", &"regular", &"whale",
+	]:
+		_expect_equal(expected_id in ids, true, "archetype %s" % expected_id)
+	var whale: Dictionary = {}
+	for archetype: Dictionary in catalog.archetypes:
+		if StringName(archetype.get("id", "")) == &"whale":
+			whale = archetype
+			break
+	var low_weight := catalog.weight_for(whale, 10, NORMAL_CONFIG)
+	var high_weight := catalog.weight_for(whale, 80, NORMAL_CONFIG)
+	_expect_equal(low_weight, 0.0, "whales gated at low reputation")
+	_expect_equal(high_weight > low_weight, true, "whale high reputation bias")
+
+
+func _test_customer_spawn_phase_gating() -> void:
+	_expect_equal(
+		CustomerSpawner.can_spawn_for_phase(GameState.DayPhase.PREP),
+		false,
+		"no prep customer spawn"
+	)
+	_expect_equal(
+		CustomerSpawner.can_spawn_for_phase(GameState.DayPhase.FLOOR),
+		true,
+		"floor customer spawn"
+	)
+	_expect_equal(
+		CustomerSpawner.can_spawn_for_phase(GameState.DayPhase.SETTLE),
+		false,
+		"no settle customer spawn"
+	)
+
+
+func _test_day_phase_transitions() -> void:
+	GameState.start_new_game()
+	_expect_equal(GameState.current_phase, GameState.DayPhase.PREP, "new game prep phase")
+	_expect_equal(GameState.advance_day(), false, "prep cannot advance day")
+	_expect_equal(GameState.start_floor(), true, "prep enters floor")
+	_expect_equal(GameState.start_floor(), false, "floor cannot restart floor")
+	_expect_equal(GameState.start_settle(), true, "floor enters settle")
+	var first_day := GameState.current_day
+	_expect_equal(GameState.advance_day(), true, "settle advances day")
+	_expect_equal(GameState.current_day, first_day + 1, "day increment")
+	_expect_equal(GameState.current_phase, GameState.DayPhase.PREP, "next day returns prep")
+	_expect_equal(
+		GameState.attention_remaining,
+		NORMAL_CONFIG.attention_pool,
+		"attention resets each day"
+	)
+
+
+func _test_negotiate_clamp() -> void:
+	_expect_equal(
+		CustomerQueue.negotiated_price_cents(1000, -0.50),
+		900,
+		"negotiation lower clamp"
+	)
+	_expect_equal(
+		CustomerQueue.negotiated_price_cents(1000, 0.50),
+		1100,
+		"negotiation upper clamp"
+	)
+
+
+func _test_ui_helpers_do_not_read_hidden_values() -> void:
+	for path: String in [
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/ui/hud.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(source.contains("true_market"), false, "%s market truth access" % path)
+		_expect_equal(source.contains("p_buy"), false, "%s probability access" % path)
+		_expect_equal(source.contains("cert_valid"), false, "%s certificate access" % path)
+
+
 func _expect_dto_has_no_truth_fields(dto: Resource, label: String) -> void:
 	for property: Dictionary in dto.get_property_list():
 		var property_name := String(property["name"])
 		var leaks_truth := (
 			property_name.contains("true_market")
 			or property_name.contains("p_buy")
+			or property_name.contains("cert_valid")
 		)
 		_expect_equal(leaks_truth, false, "%s field %s" % [label, property_name])
 

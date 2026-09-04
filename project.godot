@@ -16,6 +16,7 @@ QaInstrumentation="*res://scripts/core/qa_instrumentation.gd"
 GameState="*res://scripts/autoload/game_state.gd"
 Economy="*res://scripts/autoload/economy.gd"
 InventoryService="*res://scripts/autoload/inventory_service.gd"
+DemandSignals="*res://scripts/autoload/demand_signals.gd"
 
 [debug]
 

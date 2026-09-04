@@ -1,0 +1,224 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
+
+[node name="GameplayHUD" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_hud")
+
+[node name="TopBar" type="PanelContainer" parent="."]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 1260.0
+offset_bottom = 76.0
+
+[node name="Stats" type="HBoxContainer" parent="TopBar"]
+layout_mode = 2
+theme_override_constants/separation = 22
+
+[node name="DayLabel" type="Label" parent="TopBar/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Day 1"
+
+[node name="PhaseLabel" type="Label" parent="TopBar/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Phase Prep"
+
+[node name="CashLabel" type="Label" parent="TopBar/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cash $0.00"
+
+[node name="AttentionLabel" type="Label" parent="TopBar/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Attention 100"
+
+[node name="QueueLabel" type="Label" parent="TopBar/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Queue 0"
+
+[node name="PhaseButton" type="Button" parent="TopBar/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 0
+text = "Open floor"
+
+[node name="OpenBuyButton" type="Button" parent="TopBar/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 0
+text = "Buy opportunity"
+
+[node name="OpenPriceButton" type="Button" parent="TopBar/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 0
+text = "Price Dust ETB"
+
+[node name="BuyOpportunityDetail" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 90.0
+offset_top = 120.0
+offset_right = 570.0
+offset_bottom = 490.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="BuyOpportunityDetail"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="BuyOpportunityDetail/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "BUY · Marketplace lot\nSkiefall Ascension Explorer Box ×1"
+
+[node name="BuySummary" type="Label" parent="BuyOpportunityDetail/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Demand signal"
+
+[node name="Actions" type="HBoxContainer" parent="BuyOpportunityDetail/Content"]
+layout_mode = 2
+
+[node name="BuyCancelButton" type="Button" parent="BuyOpportunityDetail/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel"
+
+[node name="BuyButton" type="Button" parent="BuyOpportunityDetail/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Buy"
+
+[node name="BuyConfirm" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 180.0
+offset_top = 190.0
+offset_right = 610.0
+offset_bottom = 390.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="BuyConfirm"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="BuyConfirm/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Confirm purchase?"
+
+[node name="BuyConfirmSummary" type="Label" parent="BuyConfirm/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Signal snapshot"
+
+[node name="Actions" type="HBoxContainer" parent="BuyConfirm/Content"]
+layout_mode = 2
+
+[node name="BuyBackButton" type="Button" parent="BuyConfirm/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Back"
+
+[node name="BuyConfirmButton" type="Button" parent="BuyConfirm/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Confirm"
+
+[node name="PriceEditor" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 90.0
+offset_top = 120.0
+offset_right = 570.0
+offset_bottom = 490.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="PriceEditor"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="PriceEditor/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "PRICE · Dustway Explorer Box\nLocation: Shelf"
+
+[node name="PriceInput" type="SpinBox" parent="PriceEditor/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 1000000.0
+step = 1.0
+suffix = " cents"
+
+[node name="PriceSummary" type="Label" parent="PriceEditor/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Demand signal"
+
+[node name="Actions" type="HBoxContainer" parent="PriceEditor/Content"]
+layout_mode = 2
+
+[node name="PriceCancelButton" type="Button" parent="PriceEditor/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cancel"
+
+[node name="PriceApplyButton" type="Button" parent="PriceEditor/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Apply"
+
+[node name="CustomerServe" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 720.0
+offset_top = 120.0
+offset_right = 1240.0
+offset_bottom = 510.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="CustomerServe"]
+layout_mode = 2
+
+[node name="CustomerTitle" type="Label" parent="CustomerServe/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "CUSTOMER"
+
+[node name="CustomerSummary" type="Label" parent="CustomerServe/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Waiting"
+
+[node name="Actions" type="HBoxContainer" parent="CustomerServe/Content"]
+layout_mode = 2
+
+[node name="RefuseButton" type="Button" parent="CustomerServe/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Refuse"
+
+[node name="NegotiateButton" type="Button" parent="CustomerServe/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Negotiate −10%"
+
+[node name="SellButton" type="Button" parent="CustomerServe/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Sell at list"

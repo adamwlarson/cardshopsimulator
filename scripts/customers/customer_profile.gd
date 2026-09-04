@@ -1,24 +1,52 @@
 class_name CustomerProfile
 extends Resource
 
+enum State {
+	ARRIVED,
+	WAITING,
+	SERVING,
+	DONE,
+	LEFT,
+}
+
+@export var archetype_id: StringName = &"regular"
 @export var display_name: String = "Shopper"
 @export var desired_skus: Array[StringName] = []
 @export_range(0, 1_000_000, 1) var budget_cents: int = 5_000
-@export_range(0.0, 1.0, 0.01) var patience: float = 0.5
+@export_range(1.0, 600.0, 1.0) var patience_seconds: float = 60.0
+@export var interest_tags: Array[StringName] = []
+@export var state: State = State.ARRIVED
+@export var target_sku: StringName = &""
+@export_range(0, 100_000_000, 1) var asking_price_cents: int = 0
+
+var waited_seconds: float = 0.0
+var has_negotiated: bool = false
 
 
-func find_desired_stock() -> StockLot:
-	for sku: StringName in desired_skus:
-		var lot := InventoryService.get_lot(sku)
-		if lot != null and lot.qty > 0:
-			return lot
-	return null
-
-
-func matches_offer(sku: StringName, asking_price_cents: int) -> bool:
+func can_afford(sku: StringName, price_cents: int) -> bool:
 	return (
 		sku in desired_skus
-		and asking_price_cents > 0
-		and asking_price_cents <= budget_cents
-		and InventoryService.has_stock(sku)
+		and price_cents > 0
+		and price_cents <= budget_cents
 	)
+
+
+func begin_waiting() -> void:
+	state = State.WAITING
+
+
+func begin_service() -> bool:
+	if state != State.WAITING:
+		return false
+	state = State.SERVING
+	return true
+
+
+func tick_wait(delta: float) -> bool:
+	if state != State.WAITING:
+		return false
+	waited_seconds += delta
+	if waited_seconds < patience_seconds:
+		return false
+	state = State.LEFT
+	return true
