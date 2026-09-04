@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "cards": [
+    {
+      "catalog_id": "AA-BASE-088",
+      "name": "Bastion Captain",
+      "set_code": "AA-BASE",
+      "rarity": "R"
+    },
+    {
+      "catalog_id": "AA-BASE-078",
+      "name": "Arcbolt Adept",
+      "set_code": "AA-BASE",
+      "rarity": "R"
+    },
+    {
+      "catalog_id": "AA-SKIE-047",
+      "name": "Skiefall Titan",
+      "set_code": "AA-SKIE",
+      "rarity": "CR"
+    },
+    {
+      "catalog_id": "AA-SKIE-052",
+      "name": "Empress of Updrafts",
+      "set_code": "AA-SKIE",
+      "rarity": "CR"
+    },
+    {
+      "catalog_id": "AA-DUST-019",
+      "name": "Dustway Cartographer",
+      "set_code": "AA-DUST",
+      "rarity": "R"
+    }
+  ]
+}

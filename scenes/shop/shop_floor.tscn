@@ -1,0 +1,119 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
+[ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="3_hud"]
+
+[sub_resource type="Environment" id="Environment_shop"]
+background_mode = 1
+background_color = Color(0.08, 0.11, 0.14, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.72, 0.78, 0.86, 1)
+ambient_light_energy = 0.55
+tonemap_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="Material_floor"]
+albedo_color = Color(0.19, 0.22, 0.24, 1)
+roughness = 0.86
+
+[sub_resource type="BoxMesh" id="Mesh_floor"]
+material = SubResource("Material_floor")
+size = Vector3(9, 0.2, 7.2)
+
+[sub_resource type="StandardMaterial3D" id="Material_counter"]
+albedo_color = Color(0.16, 0.35, 0.32, 1)
+roughness = 0.65
+
+[sub_resource type="BoxMesh" id="Mesh_counter"]
+material = SubResource("Material_counter")
+size = Vector3(4.2, 1.25, 1.2)
+
+[sub_resource type="StandardMaterial3D" id="Material_shelf"]
+albedo_color = Color(0.42, 0.27, 0.17, 1)
+roughness = 0.76
+
+[sub_resource type="BoxMesh" id="Mesh_shelf"]
+material = SubResource("Material_shelf")
+size = Vector3(2.2, 2.2, 0.55)
+
+[sub_resource type="StandardMaterial3D" id="Material_display"]
+albedo_color = Color(0.8, 0.28, 0.21, 1)
+metallic = 0.1
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="Mesh_display"]
+material = SubResource("Material_display")
+size = Vector3(1.6, 0.9, 1.2)
+
+[node name="ShopFloor" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_shop")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-58, -28, 0)
+light_color = Color(1, 0.91, 0.78, 1)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="Camera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.906308, 0.422618, 0, -0.422618, 0.906308, 0, 6.5, 9)
+rotation_degrees = Vector3(-25, 0, 0)
+current = true
+fov = 58.0
+
+[node name="Architecture" type="Node3D" parent="."]
+
+[node name="Floor" type="MeshInstance3D" parent="Architecture"]
+position = Vector3(0, -0.1, 0)
+mesh = SubResource("Mesh_floor")
+
+[node name="BackWall" type="CSGBox3D" parent="Architecture"]
+position = Vector3(0, 2.25, -3.6)
+size = Vector3(9, 4.5, 0.2)
+material = SubResource("Material_floor")
+
+[node name="LeftWall" type="CSGBox3D" parent="Architecture"]
+position = Vector3(-4.5, 2.25, 0)
+size = Vector3(0.2, 4.5, 7.2)
+material = SubResource("Material_floor")
+
+[node name="Fixtures" type="Node3D" parent="."]
+
+[node name="Counter" type="MeshInstance3D" parent="Fixtures"]
+position = Vector3(0, 0.625, -2.8)
+mesh = SubResource("Mesh_counter")
+
+[node name="ShelfLeft" type="MeshInstance3D" parent="Fixtures"]
+position = Vector3(-3.15, 1.1, -0.9)
+mesh = SubResource("Mesh_shelf")
+
+[node name="ShelfRight" type="MeshInstance3D" parent="Fixtures"]
+position = Vector3(3.15, 1.1, -0.9)
+mesh = SubResource("Mesh_shelf")
+
+[node name="ShelfCenterLeft" type="MeshInstance3D" parent="Fixtures"]
+position = Vector3(-1.4, 1.1, 0.8)
+rotation_degrees = Vector3(0, 90, 0)
+mesh = SubResource("Mesh_shelf")
+
+[node name="ShelfCenterRight" type="MeshInstance3D" parent="Fixtures"]
+position = Vector3(1.4, 1.1, 0.8)
+rotation_degrees = Vector3(0, 90, 0)
+mesh = SubResource("Mesh_shelf")
+
+[node name="FeatureDisplay" type="MeshInstance3D" parent="Fixtures"]
+position = Vector3(0, 0.45, 2.3)
+mesh = SubResource("Mesh_display")
+
+[node name="Systems" type="Node" parent="."]
+
+[node name="DayClock" type="Node" parent="Systems"]
+script = ExtResource("1_clock")
+
+[node name="CustomerSpawner" type="Node" parent="Systems"]
+script = ExtResource("2_customers")
+
+[node name="HUDLayer" type="CanvasLayer" parent="."]
+
+[node name="HUD" parent="HUDLayer" instance=ExtResource("3_hud")]
