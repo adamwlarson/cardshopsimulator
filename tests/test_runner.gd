@@ -1,11 +1,17 @@
 extends SceneTree
 
+const EASY_CONFIG: BalanceConfig = preload("res://data/balance/easy.tres")
+const NORMAL_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
+const HARD_CONFIG: BalanceConfig = preload("res://data/balance/hard.tres")
+
 var _failures: int = 0
 
 
 func _initialize() -> void:
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
+	_test_difficulty_balance_ordering()
+	_test_normal_shop_capacity()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -26,6 +32,25 @@ func _test_stock_lot_unit_cost() -> void:
 	lot.quantity = 4
 	lot.cost_basis_cents = 1000
 	_expect_equal(lot.unit_cost_cents(), 250, "weighted unit cost")
+
+
+func _test_difficulty_balance_ordering() -> void:
+	var cash_is_ordered := (
+		EASY_CONFIG.starting_cash_cents
+		> NORMAL_CONFIG.starting_cash_cents
+		and NORMAL_CONFIG.starting_cash_cents
+		> HARD_CONFIG.starting_cash_cents
+	)
+	_expect_equal(cash_is_ordered, true, "starting cash difficulty ordering")
+	_expect_equal(HARD_CONFIG.loan_shark_enabled, false, "hard loan shark access")
+	_expect_equal(NORMAL_CONFIG.starting_cash_cents, 800_000, "normal starting cash")
+	_expect_equal(NORMAL_CONFIG.weekly_rent_cents, 120_000, "normal weekly rent")
+
+
+func _test_normal_shop_capacity() -> void:
+	var capacity := ShopCapacity.new()
+	_expect_equal(capacity.display_slots, NORMAL_CONFIG.case_slots, "normal case slots")
+	_expect_equal(capacity.storage_units, NORMAL_CONFIG.backstock_bins, "normal backstock bins")
 
 
 func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:

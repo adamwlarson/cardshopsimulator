@@ -2,18 +2,32 @@
   "schema_version": 1,
   "products": [
     {
-      "sku": "starter-booster",
-      "display_name": "Starter Set Booster",
+      "sku": "AA-SKIE-ETB",
+      "display_name": "Skiefall Ascension Launch Chest",
       "product_type": "sealed",
       "default_condition": "sealed",
-      "market_price_cents": 499
+      "market_price_cents": 4499
     },
     {
-      "sku": "soft-sleeves-100",
-      "display_name": "Soft Sleeves (100)",
+      "sku": "AA-DUST-ETB",
+      "display_name": "Dustway Chronicles Launch Chest",
+      "product_type": "sealed",
+      "default_condition": "sealed",
+      "market_price_cents": 4499
+    },
+    {
+      "sku": "AA-BASE-087-NM",
+      "display_name": "Bastion Captain — Near Mint",
+      "product_type": "single",
+      "default_condition": "near_mint",
+      "market_price_cents": 1299
+    },
+    {
+      "sku": "ACC-SLV-60",
+      "display_name": "Arcguard Sleeves (60)",
       "product_type": "accessory",
       "default_condition": "sealed",
-      "market_price_cents": 299
+      "market_price_cents": 599
     }
   ]
 }

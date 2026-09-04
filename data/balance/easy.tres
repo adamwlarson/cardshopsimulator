@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BalanceConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/balance_config.gd" id="1_balance"]
+
+[resource]
+script = ExtResource("1_balance")
+difficulty = 0
+starting_cash_cents = 1000000
+weekly_rent_cents = 90000
+tile_size_m = 0.9
+case_slots = 28
+backstock_bins = 48
+attention_pool = 120
+event_chance = 0.12
+loan_shark_enabled = true
+customer_spawn_rate_scalar = 1.15
+shrink_rate_scalar = 0.6
+comp_noise_scalar = 0.08

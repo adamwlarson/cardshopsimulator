@@ -2,9 +2,21 @@
   "schema_version": 1,
   "cards": [
     {
-      "catalog_id": "demo-001",
-      "name": "Founder's Dragon",
-      "set_code": "DEMO",
+      "catalog_id": "AA-BASE-087",
+      "name": "Bastion Captain",
+      "set_code": "AA-BASE",
+      "rarity": "rare"
+    },
+    {
+      "catalog_id": "AA-SKIE-142",
+      "name": "Stormglass Courier",
+      "set_code": "AA-SKIE",
+      "rarity": "uncommon"
+    },
+    {
+      "catalog_id": "AA-DUST-019",
+      "name": "Dustway Cartographer",
+      "set_code": "AA-DUST",
       "rarity": "rare"
     }
   ]

@@ -1,10 +1,6 @@
 extends Node
 
-const STARTING_CASH_CENTS := 250_000
-const DEFAULT_DAILY_RENT_CENTS := 12_500
-
-var balance_cents: int = STARTING_CASH_CENTS
-var daily_rent_cents: int = DEFAULT_DAILY_RENT_CENTS
+var balance_cents: int = 0
 var _ledger: Array[LedgerEntry] = []
 
 
@@ -13,8 +9,7 @@ func _ready() -> void:
 
 
 func reset() -> void:
-	balance_cents = STARTING_CASH_CENTS
-	daily_rent_cents = DEFAULT_DAILY_RENT_CENTS
+	balance_cents = GameState.balance_config.starting_cash_cents
 	_ledger.clear()
 	EventBus.publish_cash_changed(balance_cents)
 
@@ -52,6 +47,10 @@ func _record(kind: LedgerEntry.Kind, amount_cents: int, category: StringName, me
 
 
 func _on_day_started(day: int) -> void:
-	# TODO: Replace the flat rent charge with lease terms and due dates.
-	if day > GameState.FIRST_DAY:
-		record_expense(daily_rent_cents, &"rent", "Daily rent allocation")
+	# TODO: Move this boundary to an explicit weekly settle phase.
+	if day > GameState.FIRST_DAY and day % 7 == 0:
+		record_expense(
+			GameState.balance_config.weekly_rent_cents,
+			&"rent",
+			"Weekly rent"
+		)

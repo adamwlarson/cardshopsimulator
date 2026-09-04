@@ -44,7 +44,15 @@ godot --headless --path . --script res://tests/test_runner.gd
 
 Autoloads expose stable service APIs. Domain code communicates across module boundaries through `EventBus` rather than scene-tree lookups. Prices and balances use integer cents to avoid floating-point currency errors.
 
-See [DESIGN.md](DESIGN.md) for the proposed game loop and design constraints.
+## Project documentation
+
+- [Foundation design](DESIGN.md)
+- [Systems design v1](docs/design/systems-design-v1.md)
+- [Aether Arc fictional set bible](docs/design/fictional-set-bible-v1.md)
+- [UI wireflows v1](docs/design/ui-wireflows-v1.md)
+- [Difficulty curves v1](docs/design/difficulty-curves-v1.md)
+- [MVP visual direction](docs/art/VISUAL_DIRECTION_MVP.md)
+- [MVP 1.0 QA release criteria](docs/qa/mvp-1.0-release-criteria.md)
 
 ## Contribution conventions
 

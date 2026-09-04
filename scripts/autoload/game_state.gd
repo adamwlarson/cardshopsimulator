@@ -1,9 +1,18 @@
 extends Node
 
 const FIRST_DAY := 1
+const NORMAL_BALANCE_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
 
 var current_day: int = FIRST_DAY
 var is_game_active: bool = false
+var balance_config: BalanceConfig = NORMAL_BALANCE_CONFIG
+
+
+func set_balance_config(config: BalanceConfig) -> void:
+	if config == null:
+		push_error("BalanceConfig cannot be null.")
+		return
+	balance_config = config
 
 
 func start_new_game() -> void:
