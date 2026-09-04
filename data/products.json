@@ -3,24 +3,45 @@
   "products": [
     {
       "sku": "AA-SKIE-ETB",
-      "display_name": "Skiefall Ascension Launch Chest",
+      "display_name": "Skiefall Ascension Elite Trainer Box",
       "product_type": "sealed",
       "default_condition": "sealed",
       "market_price_cents": 4499
     },
     {
       "sku": "AA-DUST-ETB",
-      "display_name": "Dustway Chronicles Launch Chest",
+      "display_name": "Dustway Chronicles Elite Trainer Box",
       "product_type": "sealed",
       "default_condition": "sealed",
       "market_price_cents": 4499
     },
     {
       "sku": "AA-BASE-088-NM",
-      "display_name": "Bastion Captain — Near Mint",
+      "display_name": "Bastion Captain \u2014 Near Mint",
       "product_type": "single",
       "default_condition": "near_mint",
       "market_price_cents": 1299
+    },
+    {
+      "sku": "AA-BASE-078-NM",
+      "display_name": "Arcbolt Adept \u2014 Near Mint",
+      "product_type": "single",
+      "default_condition": "near_mint",
+      "market_price_cents": 999
+    },
+    {
+      "sku": "AA-SKIE-047-NM",
+      "display_name": "Skiefall Titan \u2014 Near Mint",
+      "product_type": "single",
+      "default_condition": "near_mint",
+      "market_price_cents": 4999
+    },
+    {
+      "sku": "AA-SKIE-052-NM",
+      "display_name": "Empress of Updrafts \u2014 Near Mint",
+      "product_type": "single",
+      "default_condition": "near_mint",
+      "market_price_cents": 7999
     },
     {
       "sku": "ACC-SLV-60",
