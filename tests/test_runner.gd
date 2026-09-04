@@ -2765,18 +2765,23 @@ func _test_medium_floor_growth() -> void:
 		_expect_equal(extent != null, true, "FloorExtent present")
 		if extent != null:
 			extent.sync_from_shop()
-			_expect_equal(extent.is_medium_extension_visible(), true, "Medium floor+fog shown")
+			_expect_equal(extent.is_medium_extension_visible(), true, "Medium floor/wall stub shown")
 			_expect_equal(extent.extra_floor_tile_count(), 60, "60 new tiles beyond Small")
+			_expect_equal(extent.has_fog_veil(), false, "Medium stub is floor/walls, not fog")
+			_expect_equal(extent.has_node("MediumWallEast"), true, "Medium east wall stub")
+			_expect_equal(extent.has_node("MediumWallNorth"), true, "Medium north wall stub")
+			var art_shell := floor.get_node_or_null("Architecture/ShopShell") as Node3D
+			if art_shell != null:
+				_expect_equal(art_shell.visible, false, "Small Art GLB hidden on Medium")
 		var camera := floor.get_node_or_null("Camera") as ShopCamera
 		if camera != null:
 			camera.apply_home_pose(ShopCamera.POSE_AISLE)
 			_expect_equal(
-				camera.position.is_equal_approx(
-					ShopCamera.AISLE_POSITION + ShopCamera.MEDIUM_AISLE_OFFSET
-				),
+				camera.position.is_equal_approx(ShopCamera.AISLE_POSITION),
 				true,
-				"Medium aisle camera pulls back"
+				"Medium does not churn aisle camera"
 			)
+			_expect_equal(is_equal_approx(camera.fov, ShopCamera.HOME_FOV), true, "Medium does not churn FOV")
 			camera.apply_home_pose(ShopCamera.POSE_BEHIND_COUNTER)
 			_expect_equal(
 				camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
