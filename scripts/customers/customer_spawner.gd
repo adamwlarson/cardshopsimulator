@@ -78,7 +78,32 @@ func _profile_from_archetype(archetype: Dictionary) -> CustomerProfile:
 	)
 	for tag: Variant in archetype.get("interest_tags", []):
 		customer.interest_tags.append(StringName(tag))
+	if customer.archetype_id == &"flipper":
+		customer.trade_intent = CustomerProfile.TradeIntent.SELLING_TO_SHOP
+		customer.buylist_signal = _create_buylist_signal(customer.interest_tags)
 	return customer
+
+
+func _create_buylist_signal(
+	interest_tags: Array[StringName]
+) -> BuyConfirmSignal:
+	var candidates: Array[ProductSKU] = []
+	for value: Variant in InventoryService.model.catalog.values():
+		var sku := value as ProductSKU
+		if sku == null or sku.product_class not in [
+			ProductSKU.ProductClass.SEALED,
+			ProductSKU.ProductClass.ACCESSORY,
+		]:
+			continue
+		var class_tag := StringName(
+			ProductSKU.ProductClass.keys()[sku.product_class].to_lower()
+		)
+		if class_tag in interest_tags:
+			candidates.append(sku)
+	if candidates.is_empty():
+		return null
+	var selected := candidates[_rng.randi_range(0, candidates.size() - 1)]
+	return DemandSignals.buylist_signal(selected.id)
 
 
 func _on_phase_changed(phase: int) -> void:
@@ -100,6 +125,8 @@ func _on_customer_action_requested(action: StringName) -> void:
 	match action:
 		&"sell_listed":
 			_queue.sell_listed()
+		&"accept_buylist":
+			_queue.accept_buylist_offer()
 		&"negotiate":
 			_queue.negotiate(-0.10)
 			EventBus.customer_head_changed.emit(_queue.queue_head())

@@ -91,6 +91,7 @@ func price_confirm(
 	var comp := _comp_range(true_market_cents, channel, informed)
 	var midpoint: int = (comp.x + comp.y) / 2
 	dto.sku_id = sku_id
+	dto.listed_price_cents = listed_price_cents
 	dto.suggested_price_cents = midpoint
 	dto.price_delta_cents = listed_price_cents - midpoint
 	dto.price_delta_percent = (

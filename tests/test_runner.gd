@@ -11,6 +11,7 @@ class FakeCustomerInventory:
 	extends Node
 
 	var sold: bool = false
+	var bought: bool = false
 
 	func find_listed_offer(
 		_interest_tags: Array[StringName],
@@ -28,6 +29,16 @@ class FakeCustomerInventory:
 		sold = true
 		return true
 
+	func confirm_stock_purchase(
+		_sku_id: StringName,
+		_quantity: int,
+		_unit_cost_cents: int,
+		_expected_margin_cents: int,
+		_location: InventoryLocation
+	) -> bool:
+		bought = true
+		return true
+
 
 func _initialize() -> void:
 	_test_pricing_spread()
@@ -35,6 +46,7 @@ func _initialize() -> void:
 	_test_inventory_mutations_and_capacity()
 	_test_balance_seed_inventory()
 	_test_buy_opportunity_picker_seed()
+	_test_price_editor_inventory_picker()
 	_test_demand_signal_dto_does_not_leak_truth()
 	_test_demand_fairness_contract()
 	_test_qa_instrumentation_payloads()
@@ -194,6 +206,36 @@ func _test_buy_opportunity_picker_seed() -> void:
 		hud_source.contains("DemandSignals.open_buy_signals()"),
 		true,
 		"HUD binds demand signal opportunity list"
+	)
+
+
+func _test_price_editor_inventory_picker() -> void:
+	var priceable_stock := InventoryService.get_priceable_stock()
+	var priceable_skus: Array[StringName] = []
+	for item: Dictionary in priceable_stock:
+		priceable_skus.append(StringName(item["sku_id"]))
+	_expect_equal(
+		priceable_skus.size() > 1,
+		true,
+		"price picker exposes multiple seeded SKUs"
+	)
+	_expect_equal(
+		priceable_skus.any(func(sku: StringName) -> bool:
+			return sku != &"AA-DUST-ETB"
+		),
+		true,
+		"price picker is not Dustway-only"
+	)
+	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_source.contains("DemandSignals.priceable_stock_signals()"),
+		true,
+		"HUD binds priceable inventory signals"
+	)
+	_expect_equal(
+		hud_source.contains("AA-DUST-ETB"),
+		false,
+		"HUD does not hardcode Dustway price target"
 	)
 
 
@@ -502,6 +544,20 @@ func _test_customer_service_actions() -> void:
 	_expect_equal(queue.enqueue(buying_customer), true, "enqueue sale customer")
 	_expect_equal(queue.sell_listed(), true, "sell listed action")
 	_expect_equal(inventory.sold, true, "sell action reaches inventory")
+	var seller := CustomerProfile.new()
+	seller.trade_intent = CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	seller.buylist_signal = BuyConfirmSignal.new()
+	seller.buylist_signal.sku_id = &"AA-DUST-ETB"
+	seller.buylist_signal.display_name = "Dustway Chronicles Explorer Box"
+	seller.buylist_signal.quantity = 1
+	seller.buylist_signal.unit_cost_cents = 2400
+	seller.buylist_signal.lot_total_cents = 2400
+	seller.buylist_signal.shown_comp_low_cents = 4200
+	seller.buylist_signal.shown_comp_high_cents = 4800
+	seller.buylist_signal.can_confirm = true
+	_expect_equal(queue.enqueue(seller), true, "enqueue buylist seller")
+	_expect_equal(queue.accept_buylist_offer(), true, "accept buylist offer")
+	_expect_equal(inventory.bought, true, "buylist offer reaches inventory purchase")
 	queue.free()
 	inventory.free()
 
@@ -527,6 +583,25 @@ func _test_ui_price_labels() -> void:
 		),
 		"Ask",
 		"buy opportunity ask label"
+	)
+	var buylist_dto := BuyConfirmSignal.new()
+	buylist_dto.display_name = "Seller lot"
+	buylist_dto.quantity = 1
+	buylist_dto.unit_cost_cents = 500
+	buylist_dto.lot_total_cents = 500
+	buylist_dto.confidence = &"medium"
+	var seller_summary := DemandSignalPresenter.buylist_seller_summary(
+		buylist_dto
+	)
+	_expect_equal(
+		seller_summary.contains("You offer: $5.00 each"),
+		true,
+		"buylist seller summary uses You offer helper"
+	)
+	_expect_equal(
+		seller_summary.contains("Your list") or seller_summary.contains("Ask"),
+		false,
+		"buylist seller summary excludes other price labels"
 	)
 
 

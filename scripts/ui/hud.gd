@@ -15,7 +15,11 @@ extends Control
 @onready var buy_button: Button = %BuyButton
 @onready var buy_confirm_panel: PanelContainer = %BuyConfirm
 @onready var buy_confirm_summary: Label = %BuyConfirmSummary
+@onready var price_list_panel: PanelContainer = %PriceInventoryList
+@onready var price_rows: VBoxContainer = %PriceInventoryRows
+@onready var price_empty_label: Label = %PriceInventoryEmpty
 @onready var price_panel: PanelContainer = %PriceEditor
+@onready var price_title: Label = %PriceTitle
 @onready var price_input: LineEdit = %PriceInput
 @onready var price_summary: Label = %PriceSummary
 @onready var serve_panel: PanelContainer = %CustomerServe
@@ -41,7 +45,8 @@ func _ready() -> void:
 	buy_button.pressed.connect(_open_buy_confirm)
 	%BuyBackButton.pressed.connect(_back_to_buy_detail)
 	%BuyConfirmButton.pressed.connect(_confirm_buy)
-	%OpenPriceButton.pressed.connect(_open_price_editor)
+	%OpenPriceButton.pressed.connect(_open_price_list)
+	%PriceListCancelButton.pressed.connect(_close_price)
 	%PriceCancelButton.pressed.connect(_close_price)
 	%PriceApplyButton.pressed.connect(_apply_price)
 	price_input.text_changed.connect(_update_price_preview)
@@ -168,39 +173,67 @@ func _close_buy() -> void:
 	_buy_signal = null
 
 
-func _open_price_editor() -> void:
-	var current_price := InventoryService.listed_price_for(&"AA-DUST-ETB")
-	price_input.text = DemandSignalPresenter.format_cents(current_price)
+func _open_price_list() -> void:
+	_close_price()
+	for child: Node in price_rows.get_children():
+		price_rows.remove_child(child)
+		child.queue_free()
+	var signals := DemandSignals.priceable_stock_signals()
+	price_empty_label.visible = signals.is_empty()
+	for dto: PriceConfirmSignal in signals:
+		var row := Button.new()
+		row.text = DemandSignalPresenter.priceable_stock_row(dto)
+		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		row.custom_minimum_size = Vector2(0.0, 64.0)
+		row.pressed.connect(_select_price_stock.bind(dto))
+		price_rows.add_child(row)
+	price_list_panel.show()
+
+
+func _select_price_stock(dto: PriceConfirmSignal) -> void:
+	_price_signal = dto
+	price_title.text = "PRICE · %s\n%s" % [
+		dto.display_name,
+		dto.display_context,
+	]
+	price_input.text = DemandSignalPresenter.format_cents(
+		dto.listed_price_cents
+	)
 	_update_price_preview(price_input.text)
+	price_list_panel.hide()
 	price_panel.show()
 
 
 func _update_price_preview(value: String) -> void:
-	var location := InventoryService.location_for(&"AA-DUST-ETB")
-	if location == null:
+	if _price_signal == null:
 		return
 	var listed_price_cents := DemandSignalPresenter.parse_cents(value)
-	_price_signal = DemandSignals.price_signal(
-		&"AA-DUST-ETB",
-		listed_price_cents,
-		location
+	_price_signal = DemandSignals.refresh_price_signal(
+		_price_signal,
+		listed_price_cents
 	)
+	if _price_signal == null:
+		return
 	price_summary.text = DemandSignalPresenter.price_summary(_price_signal)
 	%PriceApplyButton.disabled = listed_price_cents <= 0
 
 
 func _apply_price() -> void:
+	if _price_signal == null:
+		return
 	if not _spend_for_floor(5):
 		return
 	InventoryService.set_listed_price(
-		&"AA-DUST-ETB",
+		_price_signal.sku_id,
 		DemandSignalPresenter.parse_cents(price_input.text)
 	)
 	_close_price()
 
 
 func _close_price() -> void:
+	price_list_panel.hide()
 	price_panel.hide()
+	_price_signal = null
 
 
 func _on_customer_head_changed(customer: CustomerProfile) -> void:
@@ -209,6 +242,18 @@ func _on_customer_head_changed(customer: CustomerProfile) -> void:
 		serve_panel.hide()
 		return
 	serve_panel.show()
+	if (
+		_current_customer.trade_intent
+		== CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	):
+		customer_title.text = "SELLER · %s" % _current_customer.display_name
+		customer_summary.text = DemandSignalPresenter.buylist_seller_summary(
+			_current_customer.buylist_signal
+		)
+		%NegotiateButton.hide()
+		%SellButton.text = "Buy at offer"
+		%SellButton.disabled = not _current_customer.buylist_signal.can_confirm
+		return
 	customer_title.text = "CUSTOMER · %s" % _current_customer.display_name
 	var signal_dto := DemandSignals.price_signal(
 		_current_customer.target_sku,
@@ -226,10 +271,20 @@ func _on_customer_head_changed(customer: CustomerProfile) -> void:
 			DemandSignalPresenter.price_summary(signal_dto),
 		]
 	)
+	%NegotiateButton.show()
 	%NegotiateButton.disabled = _current_customer.has_negotiated
+	%SellButton.text = "Sell at list"
+	%SellButton.disabled = false
 
 
 func _sell_customer() -> void:
+	if (
+		_current_customer != null
+		and _current_customer.trade_intent
+		== CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	):
+		EventBus.customer_action_requested.emit(&"accept_buylist")
+		return
 	EventBus.customer_action_requested.emit(&"sell_listed")
 
 

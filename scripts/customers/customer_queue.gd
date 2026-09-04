@@ -26,6 +26,17 @@ func configure(
 func enqueue(customer: CustomerProfile) -> bool:
 	if customer == null or _inventory_service == null:
 		return false
+	if customer.trade_intent == CustomerProfile.TradeIntent.SELLING_TO_SHOP:
+		if customer.buylist_signal == null:
+			customer.state = CustomerProfile.State.LEFT
+			customer_finished.emit(customer, &"no_buylist_offer")
+			return false
+		customer.target_sku = customer.buylist_signal.sku_id
+		customer.begin_waiting()
+		_customers.append(customer)
+		queue_changed.emit(_customers.size())
+		customer_ready.emit(customer)
+		return true
 	var offer: Dictionary = _inventory_service.call(
 		"find_listed_offer",
 		customer.interest_tags,
@@ -89,6 +100,32 @@ func sell_listed() -> bool:
 	return true
 
 
+func accept_buylist_offer() -> bool:
+	var customer := begin_serving_head()
+	if (
+		customer == null
+		or customer.trade_intent != CustomerProfile.TradeIntent.SELLING_TO_SHOP
+		or customer.buylist_signal == null
+		or not customer.buylist_signal.can_confirm
+	):
+		return false
+	var dto := customer.buylist_signal
+	var shown_midpoint := (
+		dto.shown_comp_low_cents + dto.shown_comp_high_cents
+	) / 2
+	if not bool(_inventory_service.call(
+		"confirm_stock_purchase",
+		dto.sku_id,
+		dto.quantity,
+		dto.unit_cost_cents,
+		shown_midpoint - dto.unit_cost_cents,
+		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+	)):
+		return false
+	_complete(customer, &"bought")
+	return true
+
+
 func negotiate(percent_from_list: float = -0.10) -> bool:
 	var customer := begin_serving_head()
 	if customer == null or customer.has_negotiated:
@@ -139,7 +176,7 @@ static func negotiated_price_cents(
 func _complete(customer: CustomerProfile, outcome: StringName) -> void:
 	customer.state = (
 		CustomerProfile.State.DONE
-		if outcome == &"sold"
+		if outcome in [&"sold", &"bought"]
 		else CustomerProfile.State.LEFT
 	)
 	_customers.erase(customer)
