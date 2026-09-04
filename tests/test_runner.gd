@@ -117,6 +117,12 @@ func _initialize() -> void:
 	_test_shop_camera_framing()
 	_test_shop_camera_look_clamps()
 	_test_heavier_decor_placement()
+	_test_customer_npc_spawn_browse_approach_path()
+	_test_customer_npc_intent_icons_have_no_truth()
+	_test_customer_npc_desk_volume_gates_hud()
+	_test_customer_npc_does_not_change_camera()
+	_test_customer_npc_visible_when_queued()
+	_test_customer_npc_mvp_cast()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -2797,7 +2803,38 @@ func _test_shop_camera_framing() -> void:
 		for child: Node in lights_root.get_children():
 			if child is OmniLight3D:
 				omni_count += 1
-	_expect_equal(omni_count, 4, "overhead omni fills")
+	_expect_equal(omni_count, 5, "four overheads plus back-left aisle lighting amp")
+	var aisle_amp: Node3D = null
+	if lights_root != null:
+		aisle_amp = lights_root.get_node_or_null("BackLeftAisle") as Node3D
+		var front_left := lights_root.get_node_or_null("FrontLeft") as Node3D
+		if front_left != null:
+			_expect_equal(
+				front_left.position.is_equal_approx(Vector3(2.25, 2.79, -2.25)),
+				true,
+				"existing FrontLeft overhead did not move"
+			)
+	_expect_equal(aisle_amp != null, true, "optional 5th overhead instance present")
+	if aisle_amp != null:
+		_expect_equal(
+			aisle_amp.position.is_equal_approx(Vector3(2.8, 2.78, -5.4)),
+			true,
+			"Light5 covers binder-rack / back-left aisle"
+		)
+	if lights_root != null:
+		for child: Node in lights_root.get_children():
+			if child is OmniLight3D:
+				var omni := child as OmniLight3D
+				_expect_equal(
+					omni.light_energy >= 1.5,
+					true,
+					"overhead fill is lighting-amp energy"
+				)
+				_expect_equal(
+					is_equal_approx(omni.omni_range, 7.0),
+					true,
+					"overhead fill range 7m"
+				)
 	var stool := shop.get_node_or_null("Fixtures/CounterStool") as Node3D
 	_expect_equal(stool != null, true, "CounterStool present")
 	if stool != null:
@@ -2973,6 +3010,437 @@ func _test_shop_camera_look_clamps() -> void:
 	)
 	_expect_equal(camera.is_looking(), false, "reset releases RMB look")
 	camera.free()
+
+
+func _test_customer_npc_spawn_browse_approach_path() -> void:
+	var grid := ShopGrid.small_default()
+	_expect_equal(grid.is_walkable(grid.entrance_tile), true, "entrance tile walkable")
+	_expect_equal(grid.is_walkable(grid.desk_tile), true, "desk stand tile walkable")
+	_expect_equal(grid.is_walkable(Vector2i(7, 1)), false, "counter blocks pathing")
+	_expect_equal(grid.is_walkable(Vector2i(8, 1)), false, "counter far tile blocked")
+	for browse: Vector2i in grid.browse_tiles:
+		_expect_equal(grid.is_walkable(browse), true, "browse tile walkable")
+		_assert_grid_path(grid, grid.entrance_tile, browse, "entrance→browse")
+		_assert_grid_path(grid, browse, grid.desk_tile, "browse→desk")
+	_assert_grid_path(grid, grid.entrance_tile, grid.desk_tile, "entrance→desk")
+	_assert_grid_path(grid, grid.desk_tile, grid.entrance_tile, "desk→exit")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.call("start_floor")
+	var presenter := _make_floor_presenter()
+	var customer := _make_floor_customer(&"regular")
+	var npc := presenter.spawn_for(customer)
+	_expect_equal(npc != null, true, "NPC spawns at entrance")
+	_expect_equal(
+		npc.floor_state,
+		CustomerPresenter.FloorState.SPAWN,
+		"NPC starts in SPAWN"
+	)
+	_expect_equal(
+		grid.world_to_tile(npc.position),
+		grid.entrance_tile,
+		"SPAWN is on the entrance tile"
+	)
+	_expect_equal(
+		presenter.advance_until(customer, CustomerPresenter.FloorState.BROWSE),
+		true,
+		"SPAWN advances to BROWSE"
+	)
+	_expect_equal(
+		npc.floor_state,
+		CustomerPresenter.FloorState.BROWSE,
+		"NPC is browsing displays"
+	)
+	_expect_equal(
+		presenter.advance_until(customer, CustomerPresenter.FloorState.APPROACH),
+		true,
+		"BROWSE advances to APPROACH"
+	)
+	_expect_equal(
+		presenter.advance_until(customer, CustomerPresenter.FloorState.RESOLVE),
+		true,
+		"APPROACH reaches desk RESOLVE"
+	)
+	_expect_equal(
+		grid.contains_desk(npc.position),
+		true,
+		"RESOLVE stands in the desk interact volume"
+	)
+	_expect_equal(
+		presenter.is_desk_ready(customer),
+		true,
+		"desk volume is ready at RESOLVE"
+	)
+	_event_bus.emit_signal("customer_resolved", customer, &"sold")
+	_expect_equal(
+		presenter.advance_until(customer, CustomerPresenter.FloorState.EXIT),
+		true,
+		"resolve begins EXIT"
+	)
+	presenter.simulate(1.0)
+	_expect_equal(
+		presenter.get_npc(customer) == null,
+		true,
+		"EXIT despawns at the entrance"
+	)
+	presenter.free()
+
+
+func _test_customer_npc_intent_icons_have_no_truth() -> void:
+	_game_state.call("start_new_game")
+	_game_state.call("start_floor")
+	var presenter := _make_floor_presenter()
+	var buyer := _make_floor_customer(&"regular")
+	var buyer_npc := presenter.spawn_for(buyer)
+	_expect_equal(
+		buyer_npc.icon.intent_name(),
+		&"browse",
+		"spawn overhead icon is browse"
+	)
+	var browse_payload := buyer_npc.icon_presentation()
+	_expect_equal(browse_payload.size(), 1, "bobber payload is intent-only")
+	_expect_equal(
+		browse_payload.has("intent"),
+		true,
+		"bobber payload has intent"
+	)
+	_expect_equal(
+		buyer_npc.icon.has_truth_fields(),
+		false,
+		"browse bobber has no truth fields"
+	)
+	_assert_payload_has_no_truth(browse_payload, "browse icon")
+	presenter.advance_until(buyer, CustomerPresenter.FloorState.APPROACH)
+	_expect_equal(
+		buyer_npc.icon.intent_name(),
+		&"buy",
+		"leaving browse flips to buy"
+	)
+	_expect_equal(
+		buyer_npc.icon_presentation().size(),
+		1,
+		"buy bobber stays intent-only"
+	)
+	_assert_payload_has_no_truth(
+		buyer_npc.icon_presentation(),
+		"buy icon"
+	)
+	var seller := _make_floor_customer(&"flipper")
+	seller.trade_intent = CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	var seller_npc := presenter.spawn_for(seller)
+	presenter.advance_until(seller, CustomerPresenter.FloorState.APPROACH)
+	_expect_equal(
+		seller_npc.icon.intent_name(),
+		&"sell",
+		"buylist seller flips to sell"
+	)
+	_expect_equal(
+		seller_npc.icon.intent_name() in [&"browse", &"buy", &"sell"],
+		true,
+		"intent is browse/buy/sell only"
+	)
+	_assert_payload_has_no_truth(
+		seller_npc.icon_presentation(),
+		"sell icon"
+	)
+	for path: String in [
+		"res://scripts/customers/customer_npc.gd",
+		"res://scripts/customers/customer_presenter.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_assert_text_has_no_truth(source, path.get_file())
+	presenter.free()
+
+
+func _test_customer_npc_desk_volume_gates_hud() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.call("start_floor")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "HUD loads for desk gate")
+	if hud == null:
+		return
+	var serve := hud.get_node_or_null("%CustomerServe") as PanelContainer
+	var presenter := _make_floor_presenter()
+	var customer := _make_floor_customer(&"regular")
+	var npc := presenter.spawn_for(customer)
+	_event_bus.emit_signal("customer_head_changed", customer)
+	_expect_equal(
+		serve != null and serve.visible == false,
+		true,
+		"CustomerServe stays closed off the desk volume"
+	)
+	presenter.advance_until(customer, CustomerPresenter.FloorState.RESOLVE)
+	_expect_equal(
+		presenter.is_desk_ready(customer),
+		true,
+		"presenter marks desk ready in volume"
+	)
+	_expect_equal(
+		serve.visible,
+		true,
+		"CustomerServe opens only in the desk volume"
+	)
+	Callable(hud, "dismiss_customer_serve").call()
+	_expect_equal(serve.visible, false, "Esc/close hides thin counter HUD")
+	_expect_equal(
+		presenter.get_npc(customer) != null,
+		true,
+		"closing HUD does not despawn the NPC"
+	)
+	_expect_equal(
+		npc.floor_state,
+		CustomerPresenter.FloorState.RESOLVE,
+		"NPC stays in RESOLVE after HUD close"
+	)
+	_event_bus.emit_signal("customer_desk_ready_changed", customer, true)
+	_expect_equal(
+		serve.visible,
+		true,
+		"re-entering desk volume can reopen HUD"
+	)
+	presenter.free()
+	root.remove_child(hud)
+	hud.free()
+
+
+func _test_customer_npc_does_not_change_camera() -> void:
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "shop_floor loads for NPC camera check")
+	if packed == null:
+		return
+	_game_state.call("start_new_game")
+	var shop: Node = packed.instantiate()
+	root.add_child(shop)
+	var camera := shop.get_node_or_null("Camera") as ShopCamera
+	_expect_equal(camera != null, true, "Camera present during NPC spawn")
+	if camera == null:
+		shop.free()
+		return
+	var home_pos := camera.position
+	var home_rot := camera.rotation_degrees
+	var home_fov := camera.fov
+	var presenter := shop.get_node_or_null(
+		"Systems/CustomerPresenter"
+	) as CustomerPresenter
+	_expect_equal(presenter != null, true, "CustomerPresenter is on the shop")
+	if presenter != null:
+		presenter.instant_travel = true
+		presenter.dwell_override = 0.0
+		var customer := _make_floor_customer(&"regular")
+		presenter.spawn_for(customer)
+		presenter.advance_until(customer, CustomerPresenter.FloorState.APPROACH)
+	_expect_equal(
+		is_equal_approx(camera.fov, ShopCamera.HOME_FOV),
+		true,
+		"NPC floor presence does not change FOV"
+	)
+	_expect_equal(
+		is_equal_approx(home_fov, ShopCamera.HOME_FOV),
+		true,
+		"camera FOV stays locked at 70"
+	)
+	_expect_equal(
+		camera.position.is_equal_approx(home_pos),
+		true,
+		"NPC spawn does not move the shop camera"
+	)
+	_expect_equal(
+		camera.rotation_degrees.is_equal_approx(home_rot),
+		true,
+		"NPC spawn does not rotate the shop camera"
+	)
+	var presenter_source := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_presenter.gd"
+	)
+	var npc_source := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_npc.gd"
+	)
+	_expect_equal(
+		presenter_source.contains("fov") or npc_source.contains("fov"),
+		false,
+		"NPC scripts do not mutate FOV"
+	)
+	shop.free()
+
+
+func _test_customer_npc_visible_when_queued() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.call("start_floor")
+	var presenter := _make_floor_presenter()
+	var customer := _make_floor_customer(&"regular")
+	_event_bus.emit_signal("customer_arrived", customer)
+	_expect_equal(
+		presenter.visible_npc_count() >= 1,
+		true,
+		"non-empty floor presence shows ≥1 NPC"
+	)
+	var npc := presenter.get_npc(customer)
+	_expect_equal(npc != null and npc.visible, true, "queued NPC is visible")
+	_expect_equal(
+		npc.floor_state == CustomerPresenter.FloorState.SPAWN
+		or npc.floor_state == CustomerPresenter.FloorState.BROWSE
+		or npc.floor_state == CustomerPresenter.FloorState.APPROACH,
+		true,
+		"visible NPC is walking or browsing"
+	)
+	presenter.free()
+
+
+func _test_customer_npc_mvp_cast() -> void:
+	_game_state.call("start_new_game")
+	var presenter := _make_floor_presenter()
+	var c1 := presenter.spawn_for(_make_floor_customer(&"regular"))
+	var c2 := presenter.spawn_for(_make_floor_customer(&"flipper"))
+	var c3 := presenter.spawn_for(_make_floor_customer(&"kid_parent"))
+	_expect_equal(c1.cast_slot, &"C1", "regular maps to C1")
+	_expect_equal(c2.cast_slot, &"C2", "flipper maps to C2")
+	_expect_equal(c3.cast_slot, &"C3", "kid/parent maps to C3")
+	_expect_equal(
+		not is_equal_approx(c1.body_height, c2.body_height),
+		true,
+		"C1/C2 heights differ"
+	)
+	_expect_equal(
+		c3.body_height < c1.body_height,
+		true,
+		"C3 is shorter than C1"
+	)
+	_expect_equal(
+		c1.body_color != c2.body_color and c2.body_color != c3.body_color,
+		true,
+		"C1–C3 capsules use distinct tints"
+	)
+	_expect_equal(is_equal_approx(c1.body_height, 1.74), true, "C1 Art hero 1.74m")
+	_expect_equal(is_equal_approx(c2.body_height, 1.70), true, "C2 Art hero 1.70m")
+	_expect_equal(is_equal_approx(c3.body_height, 1.66), true, "C3 Art hero 1.66m")
+	_expect_equal(
+		c1.body_scene_path.contains("char_customer_casual_a_01"),
+		true,
+		"C1 uses casual A GLB"
+	)
+	_expect_equal(
+		c2.body_scene_path.contains("char_customer_casual_b_01"),
+		true,
+		"C2 uses casual B GLB"
+	)
+	_expect_equal(
+		c3.body_scene_path.contains("char_customer_casual_c_01"),
+		true,
+		"C3 uses casual C GLB"
+	)
+	_expect_equal(
+		FileAccess.file_exists(CustomerCast.SCENE_C1),
+		true,
+		"C1 GLB is on disk"
+	)
+	_expect_equal(
+		FileAccess.file_exists(CustomerIntentIcon.SCENE_BROWSE),
+		true,
+		"browse icon GLB is on disk"
+	)
+	_expect_equal(
+		FileAccess.file_exists(CustomerIntentIcon.SCENE_BUY),
+		true,
+		"buy icon GLB is on disk"
+	)
+	_expect_equal(
+		FileAccess.file_exists(CustomerIntentIcon.SCENE_SELL),
+		true,
+		"sell icon GLB is on disk"
+	)
+	_expect_equal(
+		CustomerIntentIcon.scene_path_for(CustomerIntentIcon.Intent.BROWSE).contains(
+			"prop_icon_browse_01"
+		),
+		true,
+		"browse Art icon path"
+	)
+	_expect_equal(
+		CustomerIntentIcon.scene_path_for(CustomerIntentIcon.Intent.BUY).contains(
+			"prop_icon_buy_01"
+		),
+		true,
+		"buy Art icon path"
+	)
+	_expect_equal(
+		CustomerIntentIcon.scene_path_for(CustomerIntentIcon.Intent.SELL).contains(
+			"prop_icon_sell_01"
+		),
+		true,
+		"sell Art icon path"
+	)
+	_expect_equal(
+		CustomerIntentIcon.COLOR_SELL.r > 0.8 and CustomerIntentIcon.COLOR_SELL.g > 0.45,
+		true,
+		"sell stays warm amber Accent_Amber"
+	)
+	_expect_equal(
+		CustomerIntentIcon.COLOR_SELL.b < 0.35,
+		true,
+		"sell is not burgundy"
+	)
+	_expect_equal(
+		CustomerIntentIcon.COLOR_BUY.b > CustomerIntentIcon.COLOR_BUY.r,
+		true,
+		"buy stays teal"
+	)
+	var sell_notes := FileAccess.get_file_as_string(
+		"res://assets/props/shop/fixtures/prop_icon_sell_01/IMPORT_NOTES.md"
+	)
+	_expect_equal(
+		sell_notes.contains("Accent_Amber"),
+		true,
+		"sell icon notes lock Accent_Amber"
+	)
+	c1.icon.ensure_built()
+	_expect_equal(
+		c1.icon.get_child_count() >= 3,
+		true,
+		"browse/buy/sell Art icons are instanced"
+	)
+	presenter.free()
+
+
+func _make_floor_presenter() -> CustomerPresenter:
+	var presenter := CustomerPresenter.new()
+	presenter.instant_travel = true
+	presenter.dwell_override = 0.0
+	root.add_child(presenter)
+	if not presenter.is_node_ready():
+		presenter.notification(Node.NOTIFICATION_READY)
+	return presenter
+
+
+func _make_floor_customer(archetype_id: StringName) -> CustomerProfile:
+	var customer := CustomerProfile.new()
+	customer.archetype_id = archetype_id
+	customer.display_name = String(archetype_id)
+	customer.budget_cents = 10_000
+	customer.interest_tags = [&"accessory"]
+	customer.target_sku = &"ACC-SLV-60"
+	customer.listed_price_cents = 599
+	customer.desired_skus = [&"ACC-SLV-60"]
+	customer.begin_waiting()
+	return customer
+
+
+func _assert_grid_path(
+	grid: ShopGrid,
+	from: Vector2i,
+	to: Vector2i,
+	label: String
+) -> void:
+	var path := ShopPathfinder.find_path(grid, from, to)
+	_expect_equal(path.is_empty(), false, "%s path exists" % label)
+	_expect_equal(
+		path.has(Vector2i(7, 1)) or path.has(Vector2i(8, 1)),
+		false,
+		"%s does not clip the counter" % label
+	)
+	for tile: Vector2i in path:
+		_expect_equal(grid.is_walkable(tile), true, "%s stays walkable" % label)
 
 
 func _test_day_ten_beat_serialization() -> void:

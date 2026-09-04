@@ -189,6 +189,10 @@ func size() -> int:
 	return _customers.size()
 
 
+func all_customers() -> Array[CustomerProfile]:
+	return _customers.duplicate()
+
+
 static func negotiated_price_cents(
 	listed_price_cents: int,
 	percent_from_list: float

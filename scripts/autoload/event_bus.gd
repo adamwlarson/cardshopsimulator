@@ -13,6 +13,9 @@ signal customer_head_changed(customer: CustomerProfile)
 signal customer_action_requested(action: StringName)
 signal scripted_customer_requested(customer: CustomerProfile)
 signal customer_resolved(customer: CustomerProfile, outcome: StringName)
+signal customer_floor_state_changed(customer: CustomerProfile, state: StringName)
+signal customer_desk_ready_changed(customer: CustomerProfile, ready: bool)
+signal customer_intent_changed(customer: CustomerProfile, intent: StringName)
 signal price_focus_requested(
 	sku_id: StringName,
 	beat_id: StringName,

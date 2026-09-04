@@ -29,6 +29,7 @@ enum TradeIntent {
 
 var waited_seconds: float = 0.0
 var has_negotiated: bool = false
+var patience_tick_scale: float = 1.0
 
 
 func can_afford(sku: StringName, price_cents: int) -> bool:
@@ -53,7 +54,7 @@ func begin_service() -> bool:
 func tick_wait(delta: float) -> bool:
 	if state != State.WAITING:
 		return false
-	waited_seconds += delta
+	waited_seconds += delta * maxf(0.0, patience_tick_scale)
 	if waited_seconds < patience_seconds:
 		return false
 	state = State.LEFT

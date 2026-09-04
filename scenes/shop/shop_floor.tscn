@@ -1,4 +1,4 @@
-[gd_scene load_steps=34 format=3]
+[gd_scene load_steps=35 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
@@ -32,6 +32,7 @@
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_window_01/prop_window_01.glb" id="30_window"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_back_office_glimpse_01/prop_back_office_glimpse_01.glb" id="31_back_office"]
 [ext_resource type="Script" path="res://scripts/shop/shop_camera.gd" id="32_camera"]
+[ext_resource type="Script" path="res://scripts/customers/customer_presenter.gd" id="33_presenter"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -40,6 +41,9 @@ ambient_light_source = 2
 ambient_light_color = Color(0.72, 0.78, 0.86, 1)
 ambient_light_energy = 0.7
 tonemap_mode = 2
+
+[sub_resource type="BoxShape3D" id="BoxShape_desk"]
+size = Vector3(1.5, 2.2, 1.4)
 
 [node name="ShopFloor" type="Node3D"]
 
@@ -168,30 +172,45 @@ position = Vector3(6.75, 2.79, -4.95)
 
 [node name="FrontLeftFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
 position = Vector3(2.25, 2.55, -2.25)
-light_color = Color(1, 0.91, 0.78, 1)
-light_energy = 1.15
-omni_range = 5.0
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
 shadow_enabled = false
 
 [node name="FrontRightFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
 position = Vector3(6.75, 2.55, -2.25)
-light_color = Color(1, 0.91, 0.78, 1)
-light_energy = 1.15
-omni_range = 5.0
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
 shadow_enabled = false
 
 [node name="BackLeftFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
 position = Vector3(2.25, 2.55, -4.95)
-light_color = Color(1, 0.91, 0.78, 1)
-light_energy = 1.15
-omni_range = 5.0
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
 shadow_enabled = false
 
 [node name="BackRightFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
 position = Vector3(6.75, 2.55, -4.95)
-light_color = Color(1, 0.91, 0.78, 1)
-light_energy = 1.15
-omni_range = 5.0
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
+shadow_enabled = false
+
+[node name="BackLeftAisle" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+position = Vector3(2.8, 2.78, -5.4)
+
+[node name="BackLeftAisleFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+position = Vector3(2.8, 2.55, -5.4)
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
 shadow_enabled = false
 
 [node name="Systems" type="Node" parent="."]
@@ -202,6 +221,50 @@ script = ExtResource("1_clock")
 [node name="CustomerSpawner" type="Node" parent="Systems"]
 groups = ["customer_spawner"]
 script = ExtResource("2_customers")
+
+[node name="CustomerPresenter" type="Node3D" parent="Systems"]
+groups = ["customer_presenter"]
+script = ExtResource("33_presenter")
+
+[node name="CustomerFloor" type="Node3D" parent="."]
+
+[node name="Entrance" type="Marker3D" parent="CustomerFloor"]
+position = Vector3(4.05, 0, -0.45)
+
+[node name="BrowsePoints" type="Node3D" parent="CustomerFloor"]
+
+[node name="DisplayCase" type="Marker3D" parent="CustomerFloor/BrowsePoints"]
+position = Vector3(5.85, 0, -3.15)
+
+[node name="BinderRack" type="Marker3D" parent="CustomerFloor/BrowsePoints"]
+position = Vector3(1.35, 0, -3.15)
+
+[node name="SealedWall" type="Marker3D" parent="CustomerFloor/BrowsePoints"]
+position = Vector3(2.25, 0, -5.85)
+
+[node name="PlayTable" type="Marker3D" parent="CustomerFloor/BrowsePoints"]
+position = Vector3(4.05, 0, -4.95)
+
+[node name="QueueSlots" type="Node3D" parent="CustomerFloor"]
+
+[node name="Desk" type="Marker3D" parent="CustomerFloor/QueueSlots"]
+position = Vector3(5.85, 0, -1.35)
+
+[node name="WaitOne" type="Marker3D" parent="CustomerFloor/QueueSlots"]
+position = Vector3(4.95, 0, -1.35)
+
+[node name="WaitTwo" type="Marker3D" parent="CustomerFloor/QueueSlots"]
+position = Vector3(4.95, 0, -2.25)
+
+[node name="DeskVolume" type="Area3D" parent="CustomerFloor"]
+position = Vector3(5.85, 1.1, -1.35)
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CustomerFloor/DeskVolume"]
+shape = SubResource("BoxShape_desk")
+
+[node name="Npcs" type="Node3D" parent="CustomerFloor"]
 
 [node name="HUDLayer" type="CanvasLayer" parent="."]
 

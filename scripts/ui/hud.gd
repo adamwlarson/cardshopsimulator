@@ -75,6 +75,8 @@ extends Control
 var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
 var _current_customer: CustomerProfile
+var _desk_customer_ready: bool = false
+var _serve_dismissed: bool = false
 var _active_price_beat_id: StringName = &""
 var _rent_beat_id: StringName = &""
 var _showcase_beat_id: StringName = &""
@@ -95,6 +97,7 @@ func _ready() -> void:
 	EventBus.attention_changed.connect(_update_attention)
 	EventBus.customer_queue_changed.connect(_update_queue)
 	EventBus.customer_head_changed.connect(_on_customer_head_changed)
+	EventBus.customer_desk_ready_changed.connect(_on_customer_desk_ready)
 	EventBus.price_focus_requested.connect(_on_price_focus_requested)
 	EventBus.rent_decision_requested.connect(_on_rent_decision_requested)
 	EventBus.rent_decision_resolved.connect(_on_rent_decision_resolved)
@@ -674,6 +677,46 @@ func _on_buy_focus_requested(
 func _on_customer_head_changed(customer: CustomerProfile) -> void:
 	_current_customer = customer
 	if _current_customer == null:
+		_desk_customer_ready = false
+		_serve_dismissed = false
+	_sync_customer_serve()
+
+
+func _on_customer_desk_ready(customer: CustomerProfile, ready: bool) -> void:
+	if customer != null and customer != _current_customer:
+		return
+	_desk_customer_ready = ready
+	if ready:
+		_serve_dismissed = false
+	_sync_customer_serve()
+
+
+func dismiss_customer_serve() -> void:
+	if not serve_panel.visible:
+		return
+	_serve_dismissed = true
+	serve_panel.hide()
+	set_process(false)
+	_sync_modal_veil()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not event is InputEventKey:
+		return
+	var key := event as InputEventKey
+	if not key.pressed or key.echo or key.keycode != KEY_ESCAPE:
+		return
+	if serve_panel.visible:
+		dismiss_customer_serve()
+		get_viewport().set_input_as_handled()
+
+
+func _sync_customer_serve() -> void:
+	if (
+		_current_customer == null
+		or not _desk_customer_ready
+		or _serve_dismissed
+	):
 		serve_panel.hide()
 		set_process(false)
 		_sync_modal_veil()
@@ -692,7 +735,10 @@ func _on_customer_head_changed(customer: CustomerProfile) -> void:
 		)
 		%NegotiateButton.hide()
 		%SellButton.text = "Buy at offer"
-		%SellButton.disabled = not _current_customer.buylist_signal.can_confirm
+		%SellButton.disabled = (
+			_current_customer.buylist_signal == null
+			or not _current_customer.buylist_signal.can_confirm
+		)
 		return
 	customer_title.text = "CUSTOMER · %s" % _current_customer.display_name
 	var signal_dto := DemandSignals.price_signal(
