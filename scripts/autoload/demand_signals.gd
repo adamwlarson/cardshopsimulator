@@ -36,14 +36,14 @@ func open_buy_signals() -> Array[BuyConfirmSignal]:
 	return result
 
 
-func confirm_buy(signal: BuyConfirmSignal) -> bool:
-	if signal == null or not signal.can_confirm:
+func confirm_buy(dto: BuyConfirmSignal) -> bool:
+	if dto == null or not dto.can_confirm:
 		return false
 	for opportunity: BuyOpportunity in _open_opportunities():
-		if opportunity.id != signal.opportunity_id:
+		if opportunity.id != dto.opportunity_id:
 			continue
 		var shown_midpoint := (
-			signal.shown_comp_low_cents + signal.shown_comp_high_cents
+			dto.shown_comp_low_cents + dto.shown_comp_high_cents
 		) / 2
 		var purchased := InventoryService.confirm_stock_purchase(
 			opportunity.sku_id,
@@ -90,21 +90,21 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 
 
 func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
-	var signal := buy_signal(
+	var dto := buy_signal(
 		opportunity.sku_id,
 		opportunity.channel,
 		opportunity.unit_cost_cents,
 		opportunity.quantity,
 		opportunity.space_required
 	)
-	signal.opportunity_id = opportunity.id
-	signal.display_name = opportunity.display_name
-	signal.offer_label = opportunity.offer_label
-	signal.channel = StringName(
+	dto.opportunity_id = opportunity.id
+	dto.display_name = opportunity.display_name
+	dto.offer_label = opportunity.offer_label
+	dto.channel = StringName(
 		DemandSignalService.Channel.keys()[opportunity.channel].to_lower()
 	)
-	signal.quantity = opportunity.quantity
-	return signal
+	dto.quantity = opportunity.quantity
+	return dto
 
 
 func price_signal(

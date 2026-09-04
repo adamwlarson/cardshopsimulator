@@ -102,18 +102,18 @@ func _open_buy_list() -> void:
 		child.queue_free()
 	var signals := DemandSignals.open_buy_signals()
 	buy_empty_label.visible = signals.is_empty()
-	for signal: BuyConfirmSignal in signals:
+	for dto: BuyConfirmSignal in signals:
 		var row := Button.new()
-		row.text = DemandSignalPresenter.opportunity_row(signal)
+		row.text = DemandSignalPresenter.opportunity_row(dto)
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		row.custom_minimum_size = Vector2(0.0, 64.0)
-		row.pressed.connect(_select_buy_opportunity.bind(signal))
+		row.pressed.connect(_select_buy_opportunity.bind(dto))
 		buy_rows.add_child(row)
 	buy_list_panel.show()
 
 
-func _select_buy_opportunity(signal: BuyConfirmSignal) -> void:
-	_buy_signal = signal
+func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
+	_buy_signal = dto
 	buy_title.text = "BUY · %s · %s\n%s ×%d" % [
 		String(_buy_signal.channel).capitalize(),
 		_buy_signal.offer_label,
