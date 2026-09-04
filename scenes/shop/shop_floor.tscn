@@ -1,8 +1,28 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
 [ext_resource type="PackedScene" path="res://scenes/ui/gameplay_hud.tscn" id="3_hud"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_shop_shell_01/prop_shop_shell_01.glb" id="4_shell"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_light_overhead_01/prop_light_overhead_01.glb" id="5_light"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_door_01/prop_door_01.glb" id="6_door"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_sign_open_closed_01/prop_sign_open_closed_01.glb" id="7_sign"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_counter_01/prop_counter_01.glb" id="8_counter"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_display_case_01/prop_display_case_01.glb" id="9_case"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_register_01/prop_register_01.glb" id="10_register"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_shelf_01/prop_shelf_01.glb" id="11_shelf"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_sealed_wall_01/prop_sealed_wall_01.glb" id="12_sealed"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_binder_rack_01/prop_binder_rack_01.glb" id="13_binders"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_proxy_booster_01/prop_proxy_booster_01.glb" id="14_booster"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_proxy_box_01/prop_proxy_box_01.glb" id="15_box"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_proxy_etb_01/prop_proxy_etb_01.glb" id="16_explorer"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_backstock_door_01/prop_backstock_door_01.glb" id="17_backstock"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_poster_frame_sm_01/prop_poster_frame_sm_01.glb" id="18_poster_sm"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_poster_frame_md_01/prop_poster_frame_md_01.glb" id="19_poster_md"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_poster_frame_lg_01/prop_poster_frame_lg_01.glb" id="20_poster_lg"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_price_tag_01/prop_price_tag_01.glb" id="21_price_tag"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_price_standee_01/prop_price_standee_01.glb" id="22_standee"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_shelf_talker_01/prop_shelf_talker_01.glb" id="23_talker"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -11,39 +31,6 @@ ambient_light_source = 3
 ambient_light_color = Color(0.72, 0.78, 0.86, 1)
 ambient_light_energy = 0.55
 tonemap_mode = 2
-
-[sub_resource type="StandardMaterial3D" id="Material_floor"]
-albedo_color = Color(0.19, 0.22, 0.24, 1)
-roughness = 0.86
-
-[sub_resource type="BoxMesh" id="Mesh_floor"]
-material = SubResource("Material_floor")
-size = Vector3(9, 0.2, 7.2)
-
-[sub_resource type="StandardMaterial3D" id="Material_counter"]
-albedo_color = Color(0.16, 0.35, 0.32, 1)
-roughness = 0.65
-
-[sub_resource type="BoxMesh" id="Mesh_counter"]
-material = SubResource("Material_counter")
-size = Vector3(4.2, 1.25, 1.2)
-
-[sub_resource type="StandardMaterial3D" id="Material_shelf"]
-albedo_color = Color(0.42, 0.27, 0.17, 1)
-roughness = 0.76
-
-[sub_resource type="BoxMesh" id="Mesh_shelf"]
-material = SubResource("Material_shelf")
-size = Vector3(2.2, 2.2, 0.55)
-
-[sub_resource type="StandardMaterial3D" id="Material_display"]
-albedo_color = Color(0.8, 0.28, 0.21, 1)
-metallic = 0.1
-roughness = 0.4
-
-[sub_resource type="BoxMesh" id="Mesh_display"]
-material = SubResource("Material_display")
-size = Vector3(1.6, 0.9, 1.2)
 
 [node name="ShopFloor" type="Node3D"]
 
@@ -57,54 +44,93 @@ light_energy = 1.2
 shadow_enabled = true
 
 [node name="Camera" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.906308, 0.422618, 0, -0.422618, 0.906308, 0, 6.5, 9)
-rotation_degrees = Vector3(-25, 0, 0)
+position = Vector3(4.5, 2.25, -0.45)
+rotation_degrees = Vector3(-17, 0, 0)
 current = true
-fov = 58.0
+fov = 74.0
 
 [node name="Architecture" type="Node3D" parent="."]
 
-[node name="Floor" type="MeshInstance3D" parent="Architecture"]
-position = Vector3(0, -0.1, 0)
-mesh = SubResource("Mesh_floor")
-
-[node name="BackWall" type="CSGBox3D" parent="Architecture"]
-position = Vector3(0, 2.25, -3.6)
-size = Vector3(9, 4.5, 0.2)
-material = SubResource("Material_floor")
-
-[node name="LeftWall" type="CSGBox3D" parent="Architecture"]
-position = Vector3(-4.5, 2.25, 0)
-size = Vector3(0.2, 4.5, 7.2)
-material = SubResource("Material_floor")
+[node name="ShopShell" parent="Architecture" instance=ExtResource("4_shell")]
 
 [node name="Fixtures" type="Node3D" parent="."]
 
-[node name="Counter" type="MeshInstance3D" parent="Fixtures"]
-position = Vector3(0, 0.625, -2.8)
-mesh = SubResource("Mesh_counter")
+[node name="EntranceDoor" parent="Fixtures" instance=ExtResource("6_door")]
+position = Vector3(4.05, 0, 0)
 
-[node name="ShelfLeft" type="MeshInstance3D" parent="Fixtures"]
-position = Vector3(-3.15, 1.1, -0.9)
-mesh = SubResource("Mesh_shelf")
+[node name="OpenClosedSign" parent="Fixtures" instance=ExtResource("7_sign")]
+position = Vector3(4.5, 1.62, 0)
+rotation_degrees = Vector3(0, 180, 0)
 
-[node name="ShelfRight" type="MeshInstance3D" parent="Fixtures"]
-position = Vector3(3.15, 1.1, -0.9)
-mesh = SubResource("Mesh_shelf")
+[node name="BackstockDoor" parent="Fixtures" instance=ExtResource("17_backstock")]
+position = Vector3(4.5, 0, -6.75)
 
-[node name="ShelfCenterLeft" type="MeshInstance3D" parent="Fixtures"]
-position = Vector3(-1.4, 1.1, 0.8)
+[node name="CheckoutCounter" parent="Fixtures" instance=ExtResource("8_counter")]
+position = Vector3(7.2, 0, -1.35)
+
+[node name="Register" parent="Fixtures" instance=ExtResource("10_register")]
+position = Vector3(7.2, 1, -1.35)
+
+[node name="HighValueDisplayCase" parent="Fixtures" instance=ExtResource("9_case")]
+position = Vector3(7.2, 0, -3.15)
+
+[node name="PriceStandee" parent="Fixtures" instance=ExtResource("22_standee")]
+position = Vector3(7.2, 1.05, -3.15)
+
+[node name="BoosterProxy" parent="Fixtures" instance=ExtResource("14_booster")]
+position = Vector3(6.75, 1.05, -3.15)
+
+[node name="BinderRack" parent="Fixtures" instance=ExtResource("13_binders")]
+position = Vector3(1.35, 0, -3.6)
+
+[node name="SealedWall" parent="Fixtures" instance=ExtResource("12_sealed")]
+position = Vector3(1.8, 0, -6.75)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="BoosterBoxProxy" parent="Fixtures" instance=ExtResource("15_box")]
+position = Vector3(1.8, 0.45, -6.3)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="WallShelf" parent="Fixtures" instance=ExtResource("11_shelf")]
+position = Vector3(8.55, 0, -5.4)
+
+[node name="ExplorerBoxProxy" parent="Fixtures" instance=ExtResource("16_explorer")]
+position = Vector3(8.1, 0.45, -5.4)
 rotation_degrees = Vector3(0, 90, 0)
-mesh = SubResource("Mesh_shelf")
 
-[node name="ShelfCenterRight" type="MeshInstance3D" parent="Fixtures"]
-position = Vector3(1.4, 1.1, 0.8)
+[node name="PriceTag" parent="Fixtures" instance=ExtResource("21_price_tag")]
+position = Vector3(1.8, 1.35, -6.3)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="ShelfTalker" parent="Fixtures" instance=ExtResource("23_talker")]
+position = Vector3(8.1, 1.35, -5.4)
 rotation_degrees = Vector3(0, 90, 0)
-mesh = SubResource("Mesh_shelf")
 
-[node name="FeatureDisplay" type="MeshInstance3D" parent="Fixtures"]
-position = Vector3(0, 0.45, 2.3)
-mesh = SubResource("Mesh_display")
+[node name="PosterLarge" parent="Fixtures" instance=ExtResource("20_poster_lg")]
+position = Vector3(6.3, 1.62, -7.2)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="PosterMedium" parent="Fixtures" instance=ExtResource("19_poster_md")]
+position = Vector3(7.2, 1.62, -7.2)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="PosterSmall" parent="Fixtures" instance=ExtResource("18_poster_sm")]
+position = Vector3(8.1, 1.62, -7.2)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="OverheadLights" type="Node3D" parent="Fixtures"]
+
+[node name="FrontLeft" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+position = Vector3(2.25, 2.79, -2.25)
+
+[node name="FrontRight" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+position = Vector3(6.75, 2.79, -2.25)
+
+[node name="BackLeft" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+position = Vector3(2.25, 2.79, -4.95)
+
+[node name="BackRight" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+position = Vector3(6.75, 2.79, -4.95)
 
 [node name="Systems" type="Node" parent="."]
 
