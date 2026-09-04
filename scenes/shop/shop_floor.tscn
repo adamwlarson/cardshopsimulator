@@ -1,4 +1,4 @@
-[gd_scene load_steps=29 format=3]
+[gd_scene load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
@@ -27,6 +27,7 @@
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_shipper_stack_01/prop_shipper_stack_01.glb" id="25_shipper"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_plant_01/prop_plant_01.glb" id="26_plant"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_trash_bin_01/prop_trash_bin_01.glb" id="27_trash"]
+[ext_resource type="Script" path="res://scripts/shop/shop_camera.gd" id="28_camera"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -48,10 +49,11 @@ light_energy = 1.2
 shadow_enabled = true
 
 [node name="Camera" type="Camera3D" parent="."]
-position = Vector3(4.5, 1.65, -1.8)
-rotation_degrees = Vector3(-28, 0, 0)
+position = Vector3(7.2, 1.6, -0.65)
+rotation_degrees = Vector3(-18, 0, 0)
 current = true
 fov = 70.0
+script = ExtResource("28_camera")
 
 [node name="Architecture" type="Node3D" parent="."]
 
