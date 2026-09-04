@@ -1,6 +1,6 @@
 # HOLD Soft Polish Sweep v1 — Eng checklist
 
-**Status:** Adopted — Eng spike in flight (H1–H4 + code H6/H7); H5 Art parallel / Won’t-Fix OK  
+**Status:** Adopted — Eng spike in flight (H1–H4 + H6; H7 Eng assert); **H5 Won’t-Fix** (Art)  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** pick-e HOLD option; C1–C3 / apron / MidCenter shipped  
@@ -24,11 +24,20 @@
 | H2 | Easy/Hard inherit `staff_noshow_mult` | Eng | Easy/Hard `.tres` either set explicit values **or** inherit Normal via documented BalanceConfig default; QA can read effective mult on each difficulty | S3 |
 | H3 | Easy/Hard inherit `pull_attention` | Eng | Same as H2 for `pull_attention` (or equivalent Pull Att cost export) | S3 |
 | H4 | StaffPanel Easy/Hard `.tres` omissions | Eng | StaffPanel / staff UI does not crash or show blank costs on Easy/Hard; missing overrides fall back to Normal without error | S2 |
-| H5 | Soft teal polo (cashier vs C1) | Art | Cashier polo reads distinct from C1 at approach + interact (or Won’t-Fix: “intentional near-match”) | S3 |
-| H6 | Intent icon 2× read scale | Eng/Art | Billboard icons readable behind-desk without clipping; scale documented; no price/SKU on bobber | S3 |
-| H7 | Sell icon fallback tint vs `Accent_Amber` | Art/Eng | Sell bobber / fallback tint matches warm amber lock (customer-npc-v1); no burgundy regress | S3 |
+| H5 | Soft teal polo (cashier vs C1) | Art | **Won’t-Fix** — intentional near-match; apron carries cast distinction | — |
+| H6 | Intent icon 2× read scale | Eng | Billboard icons readable behind-desk without clipping; scale documented; no price/SKU on bobber | S3 |
+| H7 | Sell icon fallback tint vs `Accent_Amber` | Eng | Sell GLB already `Accent_Amber` — **Eng assert fallback** (no burgundy regress); Art mesh closed | S3 |
 
 **Already closed (do not reopen):** MidCenter AABB (#31 @ `53009c84`); apron FOV (#30).
+
+## 1.1 Resolution log
+
+| ID | Result | Notes |
+|----|--------|-------|
+| H5 | **Won’t-Fix** | Art — intentional near-match; apron carries cast |
+| H7 | Eng assert | Sell GLB already Accent_Amber; Eng verifies fallback path |
+| H6 | Open (Eng) | Code-side scale/read |
+| H1–H4 | Open (Eng) | In-flight spike |
 
 ---
 
@@ -53,6 +62,6 @@
 ## 4. Handoff
 
 **Eng:** H1–H4 (+ H6/H7 if code-side). Tip-freeze → Eng → QA.  
-**Art:** H5 (+ H7 tint if mesh/material). Parallel OK.  
-**PM:** Sync this file; launch HOLD spike; D stays parked until Adam overrides.
+**Art:** H5 closed Won’t-Fix.  
+**PM:** Sync this log bump; D stays parked until Adam overrides.
 
