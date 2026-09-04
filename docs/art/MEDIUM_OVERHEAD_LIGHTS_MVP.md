@@ -41,7 +41,7 @@ Extra instances of the **same** `prop_light_overhead_01` GLB + matching Omni fil
 
 | Node | Position (shell / Godot, m) |
 |------|-----------------------------|
-| MidCenter | (6.30, 2.79, -4.95) |
+| MidCenter | (5.40, 2.79, -4.95) |
 | FarFront | (10.35, 2.79, -2.25) |
 | FarBack | (10.35, 2.79, -4.95) |
 | DeepLeft | (2.25, 2.79, -7.20) |
@@ -57,8 +57,16 @@ Same recipe as Small: Omni at `(x, 2.55, z)`, color `(1, 0.83, 0.66)`, energy **
 Rough **3×3-ish** practical coverage over the Medium **12.6 × 9.0** floor:
 
 - Rows (depth −Z): front ≈ −2.25 · mid ≈ −4.95 · deep ≈ −7.20  
-- Columns (X): left ≈ 2.25 · center ≈ 6.30 · right/far ≈ 10.35  
+- Columns (X): left ≈ 2.25 · mid-aisle MidCenter ≈ 5.40 · deep-center ≈ 6.30 · right/far ≈ 10.35  
 - Small’s **2×2 + aisle** remains the Small-tier set; Medium only lights the wider/deeper volume.
+
+
+### Soft MidCenter AABB polish (post #27)
+- **Was:** MidCenter `(6.30, 2.79, -4.95)` — only **0.45 m** from Small `BackRight` `(6.75, 2.79, -4.95)`.
+- Overhead mesh AABB length ≈ **0.90 m** → instances overlapped in X when coplanar.
+- **Now:** MidCenter **`(5.40, 2.79, -4.95)`** — **1.35 m** from BackRight (clear AABB); still fills the mid-depth aisle between left (2.25) and Small right (6.75).
+- OmniFill follows at `(5.40, 2.55, -4.95)`. Same GLB / fog nack / tier gate.
+- DeepCenter stays at X=6.30 on the deep row (no Small neighbor on that Z).
 
 **Medium total meshes when tier=MEDIUM:** Small 5 + Medium 6 = **11** overhead instances (plus 11 Omni fills).
 
