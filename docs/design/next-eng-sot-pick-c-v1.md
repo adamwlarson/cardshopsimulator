@@ -1,6 +1,6 @@
 # Next Eng SoT Pick C v1 — post A+B decision pressure
 
-**Status:** Adopted — **C1 Market events pack shipped** (#26 @ dd713c26); Specialist #24; Medium shell #25; Medium lights densify shipped #27 @ `d183bfa8`; **C2 hire-vs-owner shipped #28**; **C3 §10 #3+#10 in flight** (pick-e)  
+**Status:** Adopted — **C1 Market events pack shipped** (#26 @ dd713c26); Specialist #24; Medium shell #25; Medium lights densify shipped #27 @ `d183bfa8`; **C2 hire-vs-owner shipped #28**; **C3 §10 #3+#10 shipped #29**  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** systems §6 / §8 / §10, ui-wireflows §5.1, customer-npc-v1, next-eng-sot-pick-v1 (A+B shipped)  
@@ -20,7 +20,7 @@
 
 **Shipped (do not re-spec):** C1 Market events #26 — hype / soft rotation leak / fog day; Titan #7 from pack; EventBanner; save/load.
 
-**Gap:** Option D event→Price bridge + HOLD soft polish still parked; C3 in flight.
+**Gap:** Option D event→Price bridge + HOLD soft polish still parked; C1–C3 pack complete.
 
 ---
 
