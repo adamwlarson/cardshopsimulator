@@ -92,6 +92,7 @@ func _initialize() -> void:
 	_test_ui_helpers_do_not_read_hidden_values()
 	_test_wants_label_format()
 	_test_prep_hud_seed_before_bind()
+	_test_gameplay_hud_visual_smoke()
 	_test_undercut_fill_boundary()
 	_test_rent_firesale_beat()
 	_test_spike_staple_beat()
@@ -839,20 +840,114 @@ func _test_prep_hud_seed_before_bind() -> void:
 		"res://scenes/ui/gameplay_hud.tscn"
 	)
 	_expect_equal(
-		hud_scene.contains("Cash  $8000.00"),
+		hud_scene.contains("$8000.00"),
 		true,
 		"Prep HUD scene default is seeded cash"
 	)
 	_expect_equal(
-		hud_scene.contains("Cash $0.00") or hud_scene.contains("Cash  $0.00"),
+		hud_scene.contains("$0.00"),
 		false,
 		"Prep HUD scene default is not $0"
 	)
 	_expect_equal(
-		hud_scene.contains("Attention  100"),
+		hud_scene.contains("text = \"100\""),
 		true,
 		"Prep HUD scene default is seeded attention"
 	)
+	_expect_equal(
+		hud_scene.contains("res://themes/shop_hud.tres"),
+		true,
+		"Prep HUD scene uses shop HUD theme"
+	)
+
+
+func _test_gameplay_hud_visual_smoke() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.set("is_game_active", false)
+	_economy.set("balance_cents", 0)
+	_game_state.set("attention_remaining", 0)
+	var packed: PackedScene = load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
+	_expect_equal(packed != null, true, "gameplay HUD scene loads")
+	if packed == null:
+		return
+	var hud: Node = packed.instantiate()
+	root.add_child(hud)
+	var cash := hud.get_node_or_null("%CashLabel") as Label
+	var attention := hud.get_node_or_null("%AttentionLabel") as Label
+	var day := hud.get_node_or_null("%DayLabel") as Label
+	var phase := hud.get_node_or_null("%PhaseLabel") as Label
+	var queue := hud.get_node_or_null("%QueueLabel") as Label
+	var phase_chip := hud.get_node_or_null("%PhaseChip") as PanelContainer
+	var open_floor := hud.get_node_or_null("%PhaseButton") as Button
+	var buy_button := hud.get_node_or_null("%OpenBuyButton") as Button
+	var price_button := hud.get_node_or_null("%OpenPriceButton") as Button
+	var serve := hud.get_node_or_null("%CustomerServe") as PanelContainer
+	_expect_equal(cash != null and cash.text == "$8000.00", true, "HUD binds Prep $8000.00")
+	_expect_equal(
+		attention != null and attention.text == "100",
+		true,
+		"HUD binds Prep attention 100"
+	)
+	_expect_equal(day != null and day.text == "Day 1", true, "HUD binds Day 1")
+	_expect_equal(
+		phase != null and phase.text == "PREP",
+		true,
+		"HUD binds PREP phase chip"
+	)
+	_expect_equal(queue != null and queue.text == "0", true, "HUD binds empty queue")
+	_expect_equal(
+		hud.get("theme") != null,
+		true,
+		"HUD theme resource assigned"
+	)
+	_expect_equal(
+		phase_chip != null and phase_chip.theme_type_variation == &"PhaseChipPrep",
+		true,
+		"PREP uses phase chip variation"
+	)
+	_expect_equal(
+		open_floor != null and open_floor.custom_minimum_size.y >= 40.0,
+		true,
+		"Open floor hit target height"
+	)
+	_expect_equal(
+		buy_button != null and buy_button.custom_minimum_size.y >= 40.0,
+		true,
+		"Buy opportunity hit target height"
+	)
+	_expect_equal(
+		price_button != null and price_button.custom_minimum_size.y >= 40.0,
+		true,
+		"Price inventory hit target height"
+	)
+	_expect_equal(
+		open_floor != null and open_floor.theme_type_variation == &"PrimaryButton",
+		true,
+		"Open floor uses primary button variation"
+	)
+	_expect_equal(serve != null, true, "CustomerServe panel present")
+	var hud_script: Script = hud.get_script()
+	_expect_equal(hud_script != null, true, "HUD script attached")
+	var wants := DemandSignalPresenter.wants_label(
+		"Bastion Captain",
+		&"AA-BASE-088",
+		"NM"
+	)
+	_expect_equal(wants, "Bastion Captain · NM", "Wants keeps bible · condition")
+	_expect_equal(wants.contains("AA-"), false, "Wants smoke stays non-SKU")
+	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_source.contains("_customer_wants_label"),
+		true,
+		"CustomerServe still uses Wants helper"
+	)
+	_expect_equal(
+		hud_source.contains("String(_current_customer.target_sku)"),
+		false,
+		"CustomerServe still hides raw SKU ids"
+	)
+	root.remove_child(hud)
+	hud.free()
 
 
 func _test_undercut_fill_boundary() -> void:

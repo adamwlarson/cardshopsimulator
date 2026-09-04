@@ -2,6 +2,7 @@ extends Control
 
 @onready var cash_label: Label = %CashLabel
 @onready var day_label: Label = %DayLabel
+@onready var phase_chip: PanelContainer = %PhaseChip
 @onready var phase_label: Label = %PhaseLabel
 @onready var attention_label: Label = %AttentionLabel
 @onready var queue_label: Label = %QueueLabel
@@ -104,7 +105,7 @@ func _bind_seeded_status() -> void:
 
 
 func _update_cash(balance_cents: int) -> void:
-	cash_label.text = "Cash  %s" % DemandSignalPresenter.format_cents(balance_cents)
+	cash_label.text = DemandSignalPresenter.format_cents(balance_cents)
 
 
 func _update_day(day: int) -> void:
@@ -112,14 +113,17 @@ func _update_day(day: int) -> void:
 
 
 func _update_phase(phase: int) -> void:
-	var phase_name: String = String(GameState.DayPhase.keys()[phase]).capitalize()
-	phase_label.text = "Phase  %s" % phase_name
+	var phase_name: String = String(GameState.DayPhase.keys()[phase])
+	phase_label.text = phase_name
 	match phase:
 		GameState.DayPhase.PREP:
+			phase_chip.theme_type_variation = &"PhaseChipPrep"
 			phase_button.text = "Open floor"
 		GameState.DayPhase.FLOOR:
+			phase_chip.theme_type_variation = &"PhaseChipFloor"
 			phase_button.text = "Close & settle"
 		GameState.DayPhase.SETTLE:
+			phase_chip.theme_type_variation = &"PhaseChipSettle"
 			phase_button.text = "Next day"
 	_close_buy()
 	_close_price()
@@ -128,11 +132,11 @@ func _update_phase(phase: int) -> void:
 
 
 func _update_attention(remaining: int) -> void:
-	attention_label.text = "Attention  %d" % remaining
+	attention_label.text = str(remaining)
 
 
 func _update_queue(length: int) -> void:
-	queue_label.text = "Queue  %d" % length
+	queue_label.text = str(length)
 
 
 func _on_phase_pressed() -> void:
@@ -157,6 +161,7 @@ func _open_buy_list() -> void:
 		row.text = DemandSignalPresenter.opportunity_row(dto)
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		row.custom_minimum_size = Vector2(0.0, 64.0)
+		row.theme_type_variation = &"ListRowButton"
 		row.pressed.connect(_select_buy_opportunity.bind(dto))
 		buy_rows.add_child(row)
 	buy_list_panel.show()
@@ -230,6 +235,7 @@ func _open_price_list() -> void:
 		row.text = DemandSignalPresenter.priceable_stock_row(dto)
 		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		row.custom_minimum_size = Vector2(0.0, 64.0)
+		row.theme_type_variation = &"ListRowButton"
 		row.pressed.connect(_select_price_stock.bind(dto))
 		price_rows.add_child(row)
 	price_list_panel.show()
