@@ -7,6 +7,10 @@ const SPIKE_STAPLE_BEAT := &"sec10_4_spike_staple"
 const RENT_FIRESALE_BEAT := &"sec10_6_rent_firesale"
 const TITAN_HYPE_BEAT := &"sec10_7_titan_hype"
 const SHOWCASE_BEAT := &"sec10_8_slab_vs_singles"
+const MARKETPLACE_OUTING_BEAT := &"sec10_3_marketplace_outing"
+const HIRE_CASHIER_BEAT := &"sec10_5_hire_cashier"
+const EXPAND_MEDIUM_BEAT := &"sec10_9_expand_medium"
+const SHADY_TRUNK_BEAT := &"sec10_10_shady_trunk"
 
 var _failures: int = 0
 var _qa := QaInstrumentationService.new()
@@ -16,6 +20,9 @@ var _captured_price_beat: StringName = &""
 var _captured_price_mode: StringName = &""
 var _captured_price_focus_count: int = 0
 var _captured_rent_decision: Dictionary = {}
+var _captured_beat_decision: Dictionary = {}
+var _captured_buy_focus_id: StringName = &""
+var _captured_buy_focus_beat: StringName = &""
 var _event_bus: Node
 var _game_state: Node
 var _economy: Node
@@ -71,6 +78,8 @@ func _initialize() -> void:
 	)
 	_event_bus.connect("price_focus_requested", _capture_price_focus)
 	_event_bus.connect("rent_decision_requested", _capture_rent_decision)
+	_event_bus.connect("beat_decision_requested", _capture_beat_decision)
+	_event_bus.connect("buy_focus_requested", _capture_buy_focus)
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
 	_test_inventory_mutations_and_capacity()
@@ -98,6 +107,10 @@ func _initialize() -> void:
 	_test_spike_staple_beat()
 	_test_titan_hype_price_focus()
 	_test_day_ten_beat_serialization()
+	_test_marketplace_outing_beat()
+	_test_hire_cashier_beat()
+	_test_expand_medium_beat()
+	_test_shady_trunk_beat()
 	_test_showcase_slab_and_singles_preconditions()
 	_test_shop_camera_framing()
 
@@ -1452,6 +1465,522 @@ func _test_titan_hype_price_focus() -> void:
 	_qa_autoload.call("set_force_enabled", false)
 
 
+func _test_marketplace_outing_beat() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 3)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_captured_buy_focus_id = &""
+	_beat_director.call("_start_day_beats", 3)
+	_expect_equal(
+		_beat_director.call("is_started", MARKETPLACE_OUTING_BEAT),
+		true,
+		"marketplace outing starts on Normal day three PREP"
+	)
+	_expect_equal(
+		StringName(_captured_beat_decision.get("beat_id", &"")),
+		MARKETPLACE_OUTING_BEAT,
+		"outing decision carries beat tag"
+	)
+	_expect_equal(
+		String(_captured_beat_decision.get("title", "")),
+		"Off-site lot — leave the floor?",
+		"outing modal title"
+	)
+	var outing_ids := _choice_ids(_captured_beat_decision)
+	_expect_equal(&"drive_out" in outing_ids, true, "outing offers Drive out")
+	_expect_equal(&"courier" in outing_ids, true, "outing offers Courier fee")
+	_expect_equal(&"skip" in outing_ids, true, "outing offers Skip")
+	_assert_payload_has_no_truth(_captured_beat_decision, "outing decision")
+	var outing_dto := _demand_signals.call(
+		"buy_signal_for_id",
+		&"marketplace-outing-steal"
+	) as BuyConfirmSignal
+	_expect_equal(outing_dto != null, true, "outing injects marketplace lot")
+	if outing_dto != null:
+		_expect_dto_has_no_truth_fields(outing_dto, "outing buy signal")
+		_expect_equal(outing_dto.channel, &"marketplace", "outing channel")
+		_expect_equal(outing_dto.confidence, &"low", "outing Low confidence")
+		_expect_equal(
+			outing_dto.condition_cue.to_lower().contains("photo"),
+			true,
+			"outing Photo only condition cue"
+		)
+		var midpoint := (
+			outing_dto.shown_comp_low_cents + outing_dto.shown_comp_high_cents
+		) / 2
+		_expect_equal(
+			outing_dto.unit_cost_cents < midpoint,
+			true,
+			"outing lot looks underpriced vs noisy comp"
+		)
+		_expect_equal(
+			outing_dto.beat_id,
+			MARKETPLACE_OUTING_BEAT,
+			"outing opportunity tagged for QA"
+		)
+	var attention_before := int(_game_state.get("attention_remaining"))
+	_captured_buy_focus_id = &""
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"drive_out"),
+		true,
+		"outing Drive out path"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		attention_before - NORMAL_CONFIG.marketplace_outing_attention,
+		"Drive out spends outing Attention"
+	)
+	_expect_equal(
+		float(_game_state.get("pending_floor_skip_seconds")) > 0.0,
+		true,
+		"Drive out shortens FLOOR window"
+	)
+	_expect_equal(
+		_captured_buy_focus_id,
+		&"marketplace-outing-steal",
+		"Drive out opens BuyOpportunityDetail"
+	)
+	_expect_equal(
+		_beat_director.call("is_completed", MARKETPLACE_OUTING_BEAT),
+		true,
+		"Drive out completes outing beat"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 3)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 3)
+	var cash_before_courier := int(_economy.get("balance_cents"))
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"courier"),
+		true,
+		"outing Courier path"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before_courier - NORMAL_CONFIG.marketplace_courier_fee_cents,
+		"Courier pays fee and keeps FLOOR"
+	)
+	_expect_equal(
+		float(_game_state.get("pending_floor_skip_seconds")),
+		0.0,
+		"Courier does not skip FLOOR hours"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 3)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 3)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"skip"),
+		true,
+		"outing Skip path"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"marketplace-outing-steal") == null,
+		true,
+		"Skip dismisses the opportunity"
+	)
+
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 3)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 3)
+	_expect_equal(
+		_beat_director.call("is_started", MARKETPLACE_OUTING_BEAT),
+		false,
+		"Hard does not auto-start marketplace outing"
+	)
+	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_source.contains("AA-SKIE-ETB"),
+		false,
+		"HUD does not hardcode outing SKU"
+	)
+	_expect_equal(
+		hud_source.contains("beat_decision_requested"),
+		true,
+		"HUD wires optional beat decision modal"
+	)
+	var hud_scene := FileAccess.get_file_as_string(
+		"res://scenes/ui/gameplay_hud.tscn"
+	)
+	_expect_equal(
+		hud_scene.contains("BeatDecision"),
+		true,
+		"gameplay HUD has the optional beat decision panel"
+	)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_hire_cashier_beat() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 5)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 5)
+	_expect_equal(
+		_beat_director.call("is_started", HIRE_CASHIER_BEAT),
+		true,
+		"hire cashier starts on Normal day five PREP"
+	)
+	_expect_equal(
+		String(_captured_beat_decision.get("title", "")),
+		"Counter’s getting slammed — hire help?",
+		"hire modal title"
+	)
+	var hire_ids := _choice_ids(_captured_beat_decision)
+	_expect_equal(&"hire_cashier" in hire_ids, true, "hire offers Cashier")
+	_expect_equal(&"keep_solo" in hire_ids, true, "hire offers Keep solo")
+	_expect_equal(&"hire_cheap" in hire_ids, true, "hire offers cheap path")
+	var confirms: Dictionary = _captured_beat_decision.get("confirms", {})
+	var cheap_confirm: Dictionary = confirms.get("hire_cheap", {})
+	_expect_equal(
+		String(cheap_confirm.get("body", "")).contains("Reliability"),
+		true,
+		"cheap hire confirm warns Reliability"
+	)
+	_assert_payload_has_no_truth(_captured_beat_decision, "hire decision")
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"hire_cashier"),
+		true,
+		"hire Cashier path"
+	)
+	var shop: ShopState = _game_state.get("shop")
+	_expect_equal(shop.hired_count(), 1, "hire adds one staff")
+	_expect_equal(shop.staff[0].wage_cents > 0, true, "hire stores a wage")
+	_expect_equal(
+		is_equal_approx(shop.staff[0].reliability, ShopState.CASHIER_RELIABILITY),
+		true,
+		"standard cashier reliability"
+	)
+	_expect_equal(shop.hire_cashier(false) == null, true, "Small staff cap blocks second hire")
+	var cash_before_wage := int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before_wage - ShopState.CASHIER_WAGE_CENTS,
+		"cashier wage posts at SETTLE"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 5)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 5)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"hire_cheap"),
+		true,
+		"hire cheap path"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.staff[0].theft_bias, true, "cheap hire has theft/no-show bias")
+	_expect_equal(
+		shop.staff[0].reliability <= ShopState.CHEAP_CASHIER_RELIABILITY,
+		true,
+		"cheap hire Reliability at or below 0.55"
+	)
+	cash_before_wage = int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before_wage - ShopState.CHEAP_CASHIER_WAGE_CENTS,
+		"cheap wage posts at SETTLE"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 5)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 5)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"keep_solo"),
+		true,
+		"Keep solo closes hire beat"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.hired_count(), 0, "Keep solo adds no staff")
+	cash_before_wage = int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before_wage,
+		"Keep solo posts no wage"
+	)
+
+	_game_state.call("set_balance_config", EASY_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 5)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 5)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.is_owner_only(), false, "Easy seeds a trainee cashier")
+	_expect_equal(
+		_beat_director.call("is_started", HIRE_CASHIER_BEAT),
+		false,
+		"Easy/trainee does not auto-start hire beat"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_expect_equal(
+		_beat_director.call("trigger_qa_beat", HIRE_CASHIER_BEAT),
+		false,
+		"hire QA refuses when staff cap is already filled"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_expand_medium_beat() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 18)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 18)
+	_expect_equal(
+		_beat_director.call("is_started", EXPAND_MEDIUM_BEAT),
+		true,
+		"expand starts on Normal day 18 PREP even if gates fail"
+	)
+	_expect_equal(
+		_choice_enabled(_captured_beat_decision, &"sign_lease"),
+		false,
+		"Sign stays gated without cash and Rep"
+	)
+	_expect_equal(
+		_choice_enabled(_captured_beat_decision, &"wait_for_rep"),
+		true,
+		"Wait for Rep shows when Rep is low"
+	)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"sign_lease"),
+		false,
+		"Sign cannot upgrade without gates"
+	)
+	_assert_payload_has_no_truth(_captured_beat_decision, "expand soft-fail")
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"stay_small"),
+		true,
+		"Stay Small leaves the shop Small"
+	)
+	var shop: ShopState = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.SMALL, "Stay Small keeps Small tier")
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 18)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_economy.set("balance_cents", 1_600_000)
+	_game_state.set("current_reputation", 55)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 18)
+	_expect_equal(
+		_choice_enabled(_captured_beat_decision, &"sign_lease"),
+		true,
+		"Sign enabled when cash and Rep gates pass"
+	)
+	_expect_equal(
+		_choice_enabled(_captured_beat_decision, &"wait_for_rep"),
+		false,
+		"Wait for Rep hidden when Rep already meets gate"
+	)
+	var confirms: Dictionary = _captured_beat_decision.get("confirms", {})
+	var lease_confirm: Dictionary = confirms.get("sign_lease", {})
+	var lease_body := String(lease_confirm.get("body", ""))
+	_expect_equal(
+		lease_body.contains(
+			DemandSignalPresenter.format_cents(NORMAL_CONFIG.rent_small_weekly_cents)
+		)
+		and lease_body.contains(
+			DemandSignalPresenter.format_cents(NORMAL_CONFIG.rent_medium_weekly_cents)
+		),
+		true,
+		"lease confirm shows old vs new rent"
+	)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"sign_lease"),
+		true,
+		"Sign lease path"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.MEDIUM, "Sign upgrades to Medium")
+	_expect_equal(shop.staff_cap(), 3, "Medium staff cap unlocks")
+	_expect_equal(
+		shop.grid_width > ShopState.SMALL_GRID_WIDTH
+		or shop.grid_height > ShopState.SMALL_GRID_HEIGHT,
+		true,
+		"Medium grid upgrade on confirm"
+	)
+	_expect_equal(
+		(_inventory_service.get("model") as InventoryModel).case_slot_limit(),
+		NORMAL_CONFIG.case_slots + ShopState.MEDIUM_CASE_SLOT_BONUS,
+		"Medium case capacity unlocks"
+	)
+	_expect_equal(
+		shop.weekly_rent_cents(18),
+		NORMAL_CONFIG.rent_small_weekly_cents,
+		"signed-day rent stays Small"
+	)
+	_expect_equal(
+		shop.weekly_rent_cents(21),
+		NORMAL_CONFIG.rent_medium_weekly_cents,
+		"Medium rent applies next week"
+	)
+
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 18)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 18)
+	_expect_equal(
+		_beat_director.call("is_started", EXPAND_MEDIUM_BEAT),
+		false,
+		"Hard does not auto-start Medium expand"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_expect_equal(
+		_beat_director.call("trigger_qa_beat", EXPAND_MEDIUM_BEAT),
+		true,
+		"Hard can still open the expand modal via QA"
+	)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"sign_lease"),
+		false,
+		"Hard start cash/Rep cannot Sign"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_shady_trunk_beat() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 18)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 18)
+	_beat_director.call("choose_beat_path", &"stay_small")
+	_game_state.set("current_day", 20)
+	_captured_beat_decision = {}
+	_captured_buy_focus_id = &""
+	_beat_director.call("_start_day_beats", 20)
+	_expect_equal(
+		_beat_director.call("is_started", SHADY_TRUNK_BEAT),
+		true,
+		"shady trunk starts on Normal day 20 PREP after expand resolves"
+	)
+	_expect_equal(
+		String(_captured_beat_decision.get("title", "")),
+		"Trunk sale — too good?",
+		"shady modal title"
+	)
+	var shady_ids := _choice_ids(_captured_beat_decision)
+	_expect_equal(&"buy" in shady_ids, true, "shady offers Buy")
+	_expect_equal(&"report" in shady_ids, true, "shady offers Report")
+	_expect_equal(&"ignore" in shady_ids, true, "shady offers Ignore")
+	_assert_payload_has_no_truth(_captured_beat_decision, "shady decision")
+	var shady_dto := _demand_signals.call(
+		"buy_signal_for_id",
+		&"shady-trunk-lot"
+	) as BuyConfirmSignal
+	_expect_equal(shady_dto != null, true, "shady injects trunk lot")
+	if shady_dto != null:
+		_expect_dto_has_no_truth_fields(shady_dto, "shady buy signal")
+		_expect_equal(shady_dto.channel, &"shady", "shady channel")
+		_expect_equal(shady_dto.confidence, &"low", "shady Low confidence")
+		_expect_equal(
+			shady_dto.condition_cue.to_lower().contains("inspect"),
+			true,
+			"shady strong inspect cue"
+		)
+		_expect_equal(
+			shady_dto.beat_id,
+			SHADY_TRUNK_BEAT,
+			"shady opportunity tagged for QA"
+		)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"buy"),
+		true,
+		"shady Buy path"
+	)
+	_expect_equal(
+		_captured_buy_focus_beat,
+		SHADY_TRUNK_BEAT,
+		"Buy opens BuyOpportunityDetail"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"shady-trunk-lot") != null,
+		true,
+		"Buy keeps the lot available with fog intact"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 20)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_qa_autoload.call("set_force_enabled", true)
+	_expect_equal(
+		_beat_director.call("trigger_qa_beat", SHADY_TRUNK_BEAT),
+		true,
+		"shady QA trigger"
+	)
+	var rep_before := int(_game_state.get("current_reputation"))
+	var stock_before: int = _inventory_service.call("total_owned", &"AA-SKIE-ETB")
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"report"),
+		true,
+		"shady Report path"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before + NORMAL_CONFIG.shady_report_rep_gain,
+		"Report grants Rep"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-SKIE-ETB")),
+		stock_before,
+		"Report grants no inventory"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"shady-trunk-lot") == null,
+		true,
+		"Report dismisses the opportunity"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 22)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_expect_equal(
+		_beat_director.call("trigger_qa_beat", SHADY_TRUNK_BEAT),
+		true,
+		"shady Ignore setup"
+	)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"ignore"),
+		true,
+		"shady Ignore path"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 20)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 20)
+	_expect_equal(
+		_beat_director.call("is_started", SHADY_TRUNK_BEAT),
+		false,
+		"Hard does not auto-start shady trunk"
+	)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
 func _test_showcase_slab_and_singles_preconditions() -> void:
 	_beat_director.call("reset")
 	var inventory := _inventory_service.get("model") as InventoryModel
@@ -1604,6 +2133,57 @@ func _capture_price_focus(
 
 func _capture_rent_decision(payload: Dictionary) -> void:
 	_captured_rent_decision = payload
+
+
+func _capture_beat_decision(payload: Dictionary) -> void:
+	_captured_beat_decision = payload
+
+
+func _capture_buy_focus(
+	opportunity_id: StringName,
+	beat_id: StringName,
+	_message: String
+) -> void:
+	_captured_buy_focus_id = opportunity_id
+	_captured_buy_focus_beat = beat_id
+
+
+func _choice_ids(payload: Dictionary) -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for value: Variant in payload.get("choices", []):
+		if value is Dictionary:
+			ids.append(StringName((value as Dictionary).get("id", &"")))
+	return ids
+
+
+func _choice_enabled(payload: Dictionary, choice_id: StringName) -> bool:
+	for value: Variant in payload.get("choices", []):
+		if not value is Dictionary:
+			continue
+		var choice := value as Dictionary
+		if StringName(choice.get("id", &"")) != choice_id:
+			continue
+		return bool(choice.get("enabled", false))
+	return false
+
+
+func _assert_payload_has_no_truth(payload: Dictionary, label: String) -> void:
+	for key: Variant in payload.keys():
+		var field := String(key)
+		_expect_equal(
+			field.contains("true_market")
+			or field.contains("p_buy")
+			or field.contains("cert_valid"),
+			false,
+			"%s field %s does not leak truth" % [label, field]
+		)
+		var nested: Variant = payload[key]
+		if nested is Dictionary:
+			_assert_payload_has_no_truth(nested as Dictionary, label)
+		elif nested is Array:
+			for item: Variant in nested:
+				if item is Dictionary:
+					_assert_payload_has_no_truth(item as Dictionary, label)
 
 
 func _expect_dto_has_no_truth_fields(dto: Resource, label: String) -> void:

@@ -38,7 +38,7 @@ func settle_weekly_obligations(day: int) -> bool:
 	if not GameState.balance_config.is_rent_due_day(day):
 		return false
 	return record_expense(
-		GameState.balance_config.rent_small_weekly_cents,
+		GameState.shop.weekly_rent_cents(day),
 		&"rent",
 		"Weekly rent"
 	)
@@ -79,6 +79,7 @@ func settle_payday_loan() -> bool:
 func settle_day(day: int) -> void:
 	# Wage and utility services can attach here without changing phase ownership.
 	settle_weekly_obligations(day)
+	GameState.shop.settle_wages()
 	settle_payday_loan()
 
 

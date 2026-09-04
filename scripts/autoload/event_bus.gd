@@ -27,6 +27,14 @@ signal showcase_choice_selected(choice: StringName)
 signal showcase_choice_resolved(beat_id: StringName, choice: StringName)
 signal showcase_choice_failed(message: String)
 signal beat_ui_resolved(beat_id: StringName, outcome: StringName)
+signal beat_decision_requested(payload: Dictionary)
+signal beat_decision_selected(choice: StringName)
+signal beat_decision_resolved(beat_id: StringName, outcome: StringName)
+signal buy_focus_requested(
+	opportunity_id: StringName,
+	beat_id: StringName,
+	message: String
+)
 
 func publish_cash_changed(balance_cents: int) -> void:
 	cash_changed.emit(balance_cents)

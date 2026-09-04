@@ -229,7 +229,9 @@ func _confidence(channel: Channel) -> StringName:
 func _condition_cue(channel: Channel) -> String:
 	if channel == Channel.DISTRIBUTOR:
 		return "NM assumed"
-	if channel in [Channel.MARKETPLACE, Channel.SHADY]:
+	if channel == Channel.SHADY:
+		return "Photo only — inspect strongly recommended"
+	if channel == Channel.MARKETPLACE:
 		return "Photo only — inspect recommended"
 	return "Mixed lot"
 

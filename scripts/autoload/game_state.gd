@@ -15,6 +15,8 @@ var is_game_active: bool = false
 var balance_config: BalanceConfig = NORMAL_BALANCE_CONFIG
 var current_phase: DayPhase = DayPhase.PREP
 var attention_remaining: int = NORMAL_BALANCE_CONFIG.attention_pool
+var shop := ShopState.new()
+var pending_floor_skip_seconds: float = 0.0
 
 
 func set_balance_config(config: BalanceConfig) -> void:
@@ -29,7 +31,9 @@ func start_new_game() -> void:
 	current_reputation = balance_config.start_reputation
 	current_phase = DayPhase.PREP
 	attention_remaining = balance_config.attention_pool
+	pending_floor_skip_seconds = 0.0
 	is_game_active = true
+	shop.reset(balance_config)
 	Economy.reset()
 	InventoryService.reset()
 	DemandSignals.reset()
@@ -73,15 +77,29 @@ func advance_day() -> bool:
 
 
 func spend_attention(amount: int) -> bool:
-	if (
-		current_phase != DayPhase.FLOOR
-		or amount <= 0
-		or amount > attention_remaining
-	):
+	if current_phase != DayPhase.FLOOR:
+		return false
+	return consume_attention(amount)
+
+
+func consume_attention(amount: int) -> bool:
+	if not is_game_active or amount <= 0 or amount > attention_remaining:
 		return false
 	attention_remaining -= amount
 	EventBus.attention_changed.emit(attention_remaining)
 	return true
+
+
+func queue_floor_skip(seconds: float) -> void:
+	if seconds <= 0.0:
+		return
+	pending_floor_skip_seconds += seconds
+
+
+func consume_floor_skip() -> float:
+	var skip := pending_floor_skip_seconds
+	pending_floor_skip_seconds = 0.0
+	return skip
 
 
 func adjust_reputation(delta: int) -> void:

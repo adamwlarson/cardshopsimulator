@@ -19,6 +19,11 @@ func apply_balance_config(config: BalanceConfig) -> void:
 	storage_units = config.backstock_bins
 
 
+func apply_medium_upgrade() -> void:
+	display_slots += ShopState.MEDIUM_CASE_SLOT_BONUS
+	storage_units += ShopState.MEDIUM_BACKSTOCK_BONUS
+
+
 func can_allocate_display(used_slots: int, requested_slots: int) -> bool:
 	return used_slots >= 0 and requested_slots > 0 and used_slots + requested_slots <= display_slots
 

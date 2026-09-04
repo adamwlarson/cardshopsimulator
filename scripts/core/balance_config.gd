@@ -35,7 +35,16 @@ enum Difficulty {
 @export var shrink_daily_base: float = 0.002
 @export var shrink_unstaffed_add: float = 0.005
 @export var rent_small_weekly_cents: int = 120_000
+@export var rent_medium_weekly_cents: int = 240_000
 @export var wage_mult: float = 1.0
+@export var staff_cap_small: int = 1
+@export var staff_cap_medium: int = 3
+@export var expand_medium_cash_cents: int = 1_500_000
+@export var expand_medium_rep: int = 55
+@export var marketplace_outing_attention: int = 25
+@export var marketplace_outing_floor_skip_seconds: float = 34.0
+@export var marketplace_courier_fee_cents: int = 3_500
+@export var shady_report_rep_gain: int = 5
 
 @export var event_chance_settle: float = 0.18
 @export var negative_event_weight_mult: float = 1.0

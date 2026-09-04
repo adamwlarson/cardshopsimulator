@@ -4,11 +4,13 @@ var _market_state := MarketState.new()
 var _service: DemandSignalService
 var _opportunity_catalog := BuyOpportunityCatalog.new()
 var _closed_opportunity_ids: Dictionary = {}
+var _scripted_opportunities: Array[BuyOpportunity] = []
 
 
 func reset() -> void:
 	_market_state = MarketState.new()
 	_closed_opportunity_ids.clear()
+	_scripted_opportunities.clear()
 	for value: Variant in InventoryService.model.catalog.values():
 		var sku := value as ProductSKU
 		if sku == null:
@@ -83,6 +85,30 @@ func confirm_buy(dto: BuyConfirmSignal) -> bool:
 	return false
 
 
+func inject_buy_opportunity(opportunity: BuyOpportunity) -> bool:
+	if opportunity == null or not opportunity.is_valid():
+		return false
+	for existing: BuyOpportunity in _scripted_opportunities:
+		if existing.id == opportunity.id:
+			return false
+	_scripted_opportunities.append(opportunity)
+	return true
+
+
+func dismiss_buy_opportunity(opportunity_id: StringName) -> bool:
+	if opportunity_id.is_empty():
+		return false
+	_closed_opportunity_ids[opportunity_id] = true
+	return true
+
+
+func buy_signal_for_id(opportunity_id: StringName) -> BuyConfirmSignal:
+	for opportunity: BuyOpportunity in _open_opportunities():
+		if opportunity.id == opportunity_id:
+			return _signal_for_opportunity(opportunity)
+	return null
+
+
 func buy_signal(
 	sku_id: StringName,
 	channel: DemandSignalService.Channel,
@@ -98,7 +124,7 @@ func buy_signal(
 		quantity,
 		Economy.balance_cents,
 		space_required,
-		GameState.balance_config.backstock_bins - InventoryService.model.backstock_bins_used()
+		InventoryService.backstock_free_bins()
 	)
 
 
@@ -155,6 +181,7 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 		GameState.current_day,
 		InventoryService.model.catalog
 	)
+	opportunities.append_array(_scripted_opportunities)
 	for opportunity: BuyOpportunity in opportunities:
 		if not _closed_opportunity_ids.has(opportunity.id):
 			result.append(opportunity)
@@ -176,6 +203,7 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 		DemandSignalService.Channel.keys()[opportunity.channel].to_lower()
 	)
 	dto.quantity = opportunity.quantity
+	dto.beat_id = opportunity.beat_id
 	return dto
 
 
