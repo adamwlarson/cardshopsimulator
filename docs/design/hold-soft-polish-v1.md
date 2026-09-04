@@ -1,6 +1,6 @@
 # HOLD Soft Polish Sweep v1 — Eng checklist
 
-**Status:** Adopted — Eng spike in flight (H1–H4 + H6; H7 Eng assert); **H5 Won’t-Fix** (Art)  
+**Status:** Shipped — **HOLD #32** @ `306c7c30` (QA PASS @ `74834ebf`); H5 Won’t-Fix; Option D still parked
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** pick-e HOLD option; C1–C3 / apron / MidCenter shipped  
