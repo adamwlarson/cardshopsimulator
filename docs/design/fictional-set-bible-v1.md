@@ -1,120 +1,202 @@
-# Aether Arc TCG — Fictional Set Bible v1
+# Fictional Set Bible v1 — Card Shop Simulator
 
-Status: Adopted (PM lock 2026-09-04)
+**Status:** Draft for PM / Eng / Art / QA  
+**Author:** CSS Designer  
+**Date:** 2026-09-04  
+**Depends on:** `systems-design-v1.md`  
+**IP rule:** All names, mechanics labels, and art briefs are **original fiction**. No real TCG names, logos, or card text.
 
-## Purpose and IP boundary
+---
 
-**Aether Arc TCG** is the wholly fictional card game used by Card Shop Simulator. Game data, packaging, dialogue, props, and screenshots must use this universe or generic retail language. Do not use real TCG names, set codes, logos, card frames, rarity symbols, product silhouettes, grading brands, or recognizable character analogues.
+## 0. Purpose
 
-This bible establishes enough internal consistency for Engineering, Art, Writing, and QA. It is not a complete playable card-game rules document.
+Give Eng/Art concrete SKUs, rarities, and demand tags so inventory, pricing, and events can ship without real-world licensing. Balance hooks map to systems design demand bands and market events.
 
-## World premise
+---
 
-Aether is a navigable current connecting floating bastions, storm belts, and buried roads. Arcwrights bind routes into temporary sigils to move people, memories, and machines. The fiction emphasizes explorers, civic crews, weather, trade, and recovered history rather than grim warfare.
+## 1. Game world brand
 
-Visual motifs include route lines, brass instruments, glass prisms, canvas travel gear, layered maps, and luminous cyan/amber aether. Names should be readable at a glance and avoid direct genre-franchise echoes.
+| Field | Value |
+|-------|-------|
+| TCG name | **Aether Arc** |
+| Publisher (in-world) | Northspire Games |
+| Format | Constructed + casual collect; shop cares about **sealed, singles, graded slabs, accessories** |
+| Player-facing short | "Arc" |
 
-## Canonical sets
+**Tone:** Bright speculative adventure (explorers, sky-cities, relics) — readable icons, not grimdark. Aligns with Art’s cozy-serious retail: product pops on warm wood/glass.
 
-### AA-BASE — Foundations
+---
 
-The evergreen introductory set. It presents the five major routes, city bastions, and core Arcwright tools. Palette: warm limestone, deep teal, parchment, and brass. Product packaging should feel dependable and established. In the MVP market it is the stable back-catalog set: always recognizable, broadly supplied, and less volatile than the current release.
+## 2. Card anatomy (data)
 
-Representative cards:
+```
+CardDef {
+  id,                # e.g. AA-BASE-087
+  set_id,
+  collector_number,  # int
+  name,
+  rarity: C|U|R|SR|CR,   # Common..Chase Rare
+  finish_default: NORMAL|FOIL,
+  tags[],            # staple, chase, bulk, archetype:aggro|control|mid, legendary
+  base_market_cents, # Normal NM seed
+  foil_mult,         # default 1.8
+  art_brief          # one-line for proxy texture
+}
+```
 
-| ID | Name | Rarity | Role |
-| --- | --- | --- | --- |
-| `AA-BASE-001` | First Route Survey | C | iconic introductory action |
-| `AA-BASE-034` | Lanternline Mechanic | U | utility character |
-| `AA-BASE-087` | Bastion Captain | R | dependable competitive single; “Bastion” in playtest shorthand |
-| `AA-BASE-144` | Aetherbound Empress | CR | premium card used for the graded Empress slab beat |
+**Finishes in MVP:** `NORMAL`, `FOIL` only. (Alt-art / textured = post-MVP.)
 
-Canonical sealed IDs include `AA-BASE-BST` (booster), `AA-BASE-DSP` (booster display), and `AA-BASE-STR` (starter).
+**Condition** is instance-level (systems §2), not on CardDef.
 
-### AA-SKIE — Skiefall Ascension
+---
 
-A high-altitude expedition set about broken sky routes, storm couriers, and falling islands. Palette: cobalt, cloud white, electric cyan, and silver. **Skiefall Ascension is the current release** in the MVP timeline: launch demand is high, distributor allocation is constrained, and tournament/hype events produce the strongest short-term movement.
+## 3. Rarity & pull fantasy (shop-facing)
 
-Representative cards:
+| Rarity | Code | Sealed density (flavor) | Shop role |
+|--------|------|-------------------------|-----------|
+| Common | C | High | Bulk binder filler; low $ |
+| Uncommon | U | Medium | Binder depth |
+| Rare | R | Low | Playables / light chase |
+| Super Rare | SR | Very low | Staples & mid chase |
+| Chase Rare | CR | Tiny | Whale bait; case / grade targets |
 
-| ID | Name | Rarity | Role |
-| --- | --- | --- | --- |
-| `AA-SKIE-011` | Updraft Apprentice | C | accessible character |
-| `AA-SKIE-063` | Prismwing Surveyor | U | collector-friendly creature |
-| `AA-SKIE-142` | Arcbolt Courier | R | tournament utility; “Arcbolt” in playtest shorthand |
-| `AA-SKIE-201` | Skiefall Titan | CR | volatile chase card and focus of the Titan hype beat |
+**Grading targets (MVP):** SR foil + any CR. Commons almost never worth grading.
 
-Canonical sealed IDs include `AA-SKIE-BST`, `AA-SKIE-DSP`, and `AA-SKIE-ETB`. In-world customer-facing copy calls `AA-SKIE-ETB` the **Skiefall Ascension Launch Chest**; `ETB` remains an internal SKU suffix only.
+---
 
-### AA-DUST — Dustway Chronicles
+## 4. Set roster (MVP ship 3 sets)
 
-A frontier-history set following caravans that rediscover buried ground routes beneath the floating world. Palette: rust, ochre, midnight violet, canvas, and weathered steel. **Dustway Chronicles is cooling** at MVP start: release traffic has moved to Skiefall, sealed velocity is declining, and isolated collector signals can still produce a risky rebound.
+### 4.1 Calendar (in-game)
 
-Representative cards:
+| Set ID | Name | Code | Status at day 0 | Weekly rent-era role |
+|--------|------|------|-----------------|----------------------|
+| `AA-BASE` | **Aether Arc: Foundations** | ARC | Evergreen core | Staples live here |
+| `AA-SKIE` | **Skiefall Ascension** | SKI | **Current** (hype) | Sealed movers |
+| `AA-DUST` | **Dustway Chronicles** | DUS | **Previous** (cooling) | Stale sealed risk |
 
-| ID | Name | Rarity | Role |
-| --- | --- | --- | --- |
-| `AA-DUST-019` | Dustway Cartographer | R | story and collector card |
-| `AA-DUST-072` | Milemarker Automaton | U | utility artifact |
-| `AA-DUST-118` | Caravan at Last Light | SR | display-friendly landscape |
-| `AA-DUST-199` | The Road Beneath | CR | long-tail chase card |
+**Rotation hook:** Every ~90 in-game days, oldest non-BASE constructed set enters **Extended** (demand ↓ on tournament staples; casual/collect tags milder). Telegraph via Research / Specialist (systems §4.5).
 
-Canonical sealed IDs include `AA-DUST-BST`, `AA-DUST-DSP`, and `AA-DUST-ETB`. Customer-facing copy calls `AA-DUST-ETB` the **Dustway Chronicles Launch Chest**.
+### 4.2 Sealed SKUs (per set)
 
-## ID and SKU rules
+| SKU suffix | Product | Contents (flavor) | Shelf units | Typical margin trap |
+|------------|---------|-------------------|-------------|---------------------|
+| `-PKT` | Booster pack | 10 cards | 0.25 | Impulse, thin margin |
+| `-BLST` | Blaster | 6 packs | 1 | Volume |
+| `-ETB` | Explorer Box | 8 packs + accessories promo | 2 | Hype → dump |
+| `-BOX` | Booster box | 24 packs | 4 | Cash lock |
+| `-TIN` | Collector tin | 3 packs + 1 foil promo | 1 | Seasonal |
 
-- Set code: `AA-BASE`, `AA-SKIE`, or `AA-DUST`.
-- Card catalog ID: `<SET>-<three-digit collector number>`, for example `AA-BASE-087`.
-- Conditioned single SKU: `<card-id>-<condition>`, such as `AA-BASE-087-NM`.
-- Sealed product: `<SET>-<product suffix>`.
-- Accessories use `ACC-*`; the MVP sleeve SKU is `ACC-SLV-60`, **Arcguard Sleeves (60)**.
-- Slab instances and individual cards append save-local instance IDs; those IDs are not catalog SKUs.
+Full SKU id = `{set_id}{suffix}` e.g. `AA-SKIE-ETB`.
 
-Allowed condition suffixes are `M`, `NM`, `PL`, and `DMG`. Localized display names do not change IDs.
+### 4.3 Accessories (set-agnostic SKUs)
 
-## Product and packaging rules
+| SKU | Name | Role |
+|-----|------|------|
+| `ACC-SLV-60` | Soft sleeves 60ct | Impulse |
+| `ACC-TOP-25` | Toploaders 25ct | Singles protect |
+| `ACC-BND-3x3` | 3×3 binder | Storage upsell |
+| `ACC-DICE-SET` | Arc dice set | Low $ flavor |
 
-Packaging must carry the Aether Arc wordmark placeholder, set title, fictional age/rating marks, product count, and a unique set motif. It must not mimic a real product's exact proportions, trade dress, color blocking, or icon placement.
+---
 
-The P0 art pass may use abstract box art and generated typographic labels. AI-generated imagery is filler only and cannot define canon, ship as key art, or bypass legal/art review.
+## 5. Foundations (`AA-BASE`) — staple spine
 
-## Rarity and treatment language
+Ship **40 sellable named cards** for MVP (rest can be generic bulk rows). Named list:
 
-The canonical rarity ladder is **C–CR**:
+| # | Name | R | Tags | Seed market NM | Art brief |
+|---|------|---|------|----------------|-----------|
+| 012 | Skyward Recruit | C | bulk | $0.15 | Young explorer |
+| 027 | Relay Drone | C | bulk | $0.20 | Small bot |
+| 041 | Cobble Barrier | U | staple, archetype:control | $1.50 | Stone shield |
+| 055 | Windstep Courier | U | staple, archetype:aggro | $2.00 | Messenger mid-leap |
+| 063 | Market Mediator | U | staple | $1.25 | Trader NPC wink |
+| 078 | Arcbolt Adept | R | staple, archetype:aggro | $4.50 | Mage casting |
+| 088 | Bastion Captain | R | staple, archetype:mid | $5.00 | Officer portrait |
+| 094 | Ledger Sphinx | R | staple, archetype:control | $6.50 | Sphinx + books |
+| 101 | Northspire Charter | SR | staple | $12.00 | Glowing contract |
+| 108 | Aetherheart Engine | SR | staple, chase | $18.00 | Core reactor |
+| 112 | Crown of Thermals | CR | chase, legendary | $45.00 | Floating crown |
+| 115 | The First Cartographer | CR | chase, legendary | $60.00 | Mapmaker legend |
 
-| Code | Name | Use |
-| --- | --- | --- |
-| `C` | Common | baseline play pieces and set texture |
-| `U` | Uncommon | narrower utility and recognizable supporting cards |
-| `R` | Rare | desired singles and competitive/collector anchors |
-| `SR` | Signature Rare | low-frequency showcase cards |
-| `CR` | Crown Rare | set-defining premium chase cards |
+*Foil seed = NM × `foil_mult` 1.8 (CR foil 2.2).*  
+Remaining numbers 001–120: generate as `Bulk Common/Uncommon {n}` with $0.10–$0.80; Eng may data-drive.
 
-Data stores the code (`C`, `U`, `R`, `SR`, or `CR`) rather than free-form rarity names. Optional treatments are Foil, Route-Etched, and Panorama. Avoid proprietary rarity or treatment names associated with real games. Price/demand data treats a treatment as a distinct catalog identity even when the base card number is shared.
+**Shop teaching use:** Day-4 Spike wants last **Bastion Captain** or **Arcbolt Adept** (decision #4).
 
-## Locked playtest products and cards
+---
 
-These names are the canonical shorthand used in systems tests, telemetry fixtures, and scripted playtest beats:
+## 6. Skiefall Ascension (`AA-SKIE`) — current hype
 
-| Shorthand | Canonical identity | Beat |
-| --- | --- | --- |
-| Dust ETB | `AA-DUST-ETB`, Dustway Chronicles Launch Chest | buy/hold/liquidate a cooling sealed product |
-| Bastion | `AA-BASE-087`, Bastion Captain | stable known single and price anchor |
-| Arcbolt | `AA-SKIE-142`, Arcbolt Courier | current competitive demand versus margin |
-| Titan | `AA-SKIE-201`, Skiefall Titan | noisy hype signal and risky reorder |
-| Empress slab | graded instance of `AA-BASE-144`, Aetherbound Empress | high-value appraisal, cash, case-space, and Attention tradeoff |
+| # | Name | R | Tags | Seed market NM | Notes |
+|---|------|---|------|----------------|-------|
+| 003 | Zephyr Cadet | C | bulk | $0.25 | |
+| 019 | Cloudpiercer | U | mid | $1.75 | |
+| 034 | Storm Auctioneer | R | chase-lite | $7.00 | Flipper magnet if mispriced |
+| 047 | Skiefall Titan | SR | chase, staple | $22.00 | Hype spike event target |
+| 052 | Empress of Updrafts | CR | chase, legendary | $75.00 | Whale / grade bait |
+| 058 | Paragon Glider | SR | chase | $16.00 | |
+| 061 | Ticket to Skie | R | staple | $5.50 | |
 
-“ETB” is an internal sealed-SKU suffix retained for data consistency; player-facing copy always uses **Launch Chest**. The Empress slab is an instance (`SlabInstance`) with grader/grade/certification fields, not a separate base card SKU.
+Sealed: `AA-SKIE-*` carries **Warm/Hot** demand at day 0. Influencer/pro-tour events bias tags `chase` on 047/052.
 
-## Gameplay-facing market profile
+---
 
-- `AA-BASE` / Foundations: stable supply, moderate evergreen demand, lower volatility.
-- `AA-SKIE` / Skiefall Ascension: current release, strong launch demand, constrained allocation, high event sensitivity.
-- `AA-DUST` / Dustway Chronicles: cooling sealed demand with occasional collector spikes.
-- `ACC-*`: low volatility, dependable replenishment, modest margin.
+## 7. Dustway Chronicles (`AA-DUST`) — cooling set
 
-These are simulation priors, not values shown directly to players. UI follows the noisy-comps contract in systems design §4.5.
+| # | Name | R | Tags | Seed market NM | Notes |
+|---|------|---|------|----------------|-------|
+| 011 | Sandwaker | C | bulk | $0.10 | |
+| 022 | Ruin Broker | U | — | $0.80 | |
+| 039 | Dustway Colossus | SR | chase-faded | $9.00 | Was $28 at release |
+| 044 | Glass Mirage | R | — | $2.50 | |
+| 050 | Relic of the Dry Sea | CR | chase-faded | $20.00 | Still grade-able |
 
-## Writing guardrails
+Sealed ETBs/blasters start **Steady→Cold**; decision #1–2 teach dump vs hold. Rotation event can push staples further down.
 
-Use sincere retail and community language. Avoid parodying real players, stores, grading services, publishers, or scandals. Shady-source and counterfeit stories concern invented Aether Arc goods and should frame due diligence as responsible shopkeeping.
+---
+
+## 8. Demand tags → systems
+
+| Tag | Demand bias | Events that amplify |
+|-----|-------------|---------------------|
+| `staple` | Steady baseline | Rotation **hurts**; convention mild ↑ |
+| `chase` | Volatile | Influencer spike, set release |
+| `chase-faded` | Cold drift | Glut, recession |
+| `bulk` | Cold always | — |
+| `legendary` | Whale weight | Rep ≥75 spawn bias |
+
+`true_demand` seed = f(tags, set_status, events). UI only shows bands (§4.5).
+
+---
+
+## 9. Graded slabs (MVP)
+
+- Eligible: SR/CR with `finish FOIL` or any CR.
+- Graders (fiction): **Prism Grade**, **Vaultmark**.
+- Label string: `{grader} {grade}` e.g. `Prism 10`, `Vaultmark 9.5`.
+- Case weight 2× singles; seed markets = raw foil × grade_mult (9.5→1.6, 10→2.4) — Eng owns table in BalanceConfig.
+
+---
+
+## 10. Art / Eng handoff
+
+**Art:** Proxy textures per named card (table art_brief); shared meshes for pack/ETB/box/tin/slab per VISUAL_DIRECTION. Set symbols: ARC circle, SKI wing, DUS mesa icon (simple decals).
+
+**Eng:** `CardDef` + `SetDef` resources; generate bulk rows; SKU table for sealed/accessories; wire tags into customers + events.
+
+**QA:** Use named staples/chases in §10 beats (#1 Dust ETB, #4 Bastion/Arcbolt, #7 Skiefall Titan hype, #8 Empress slab vs two chase singles).
+
+---
+
+## 11. Out of scope (v1)
+
+- Full 300-card spoiler per set
+- Real rules text / deck legality engine
+- Cross-set mashup products
+- Autographs / serials
+
+---
+
+## 12. Next
+
+UI wireflows: buy opportunity → demand-signal panel → confirm; price tag → §4.5 chips → confirm; serve customer negotiate.
