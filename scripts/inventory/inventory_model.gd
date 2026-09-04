@@ -53,7 +53,6 @@ func seed_from_balance() -> void:
 		&"AA-BASE-088",
 		&"AA-BASE-078",
 		&"AA-SKIE-047",
-		&"AA-SKIE-052",
 	]
 	for index: int in balance_config.seed_named_staples:
 		var sku_id := staple_skus[index % staple_skus.size()]
@@ -64,6 +63,12 @@ func seed_from_balance() -> void:
 			InventoryLocation.new(InventoryLocation.Type.BINDER)
 		)
 		add_card(card)
+	for index: int in balance_config.seed_bulk_cards:
+		add_card(CardInstance.new(
+			&"AA-BASE-BULK",
+			25,
+			InventoryLocation.new(InventoryLocation.Type.BINDER, index)
+		))
 
 
 func get_sku(sku_id: StringName) -> ProductSKU:
@@ -71,8 +76,11 @@ func get_sku(sku_id: StringName) -> ProductSKU:
 
 
 func get_stock_quantity(sku_id: StringName) -> int:
-	var lot := _find_stock_lot(sku_id)
-	return lot.qty if lot != null else 0
+	var quantity := 0
+	for lot: StockLot in stock_lots:
+		if lot.sku.id == sku_id:
+			quantity += lot.qty
+	return quantity
 
 
 func add_stock(
@@ -87,11 +95,11 @@ func add_stock(
 		or quantity <= 0
 		or unit_cost_cents < 0
 		or location == null
-		or not StockLot.new().accepts_product(product)
+		or not StockLot.accepts_product(product)
 	):
 		return false
 
-	var lot := _find_stock_lot(sku_id)
+	var lot := _find_stock_lot(sku_id, location)
 	if lot == null:
 		if not can_place(product.product_class, location):
 			return false
@@ -102,8 +110,6 @@ func add_stock(
 		lot.acquired_cost_avg_cents = unit_cost_cents
 		stock_lots.append(lot)
 	else:
-		if lot.location.type != location.type or lot.location.slot_id != location.slot_id:
-			return false
 		var new_qty := lot.qty + quantity
 		lot.acquired_cost_avg_cents = (
 			(lot.total_cost_cents() + quantity * unit_cost_cents) / new_qty
@@ -113,8 +119,41 @@ func add_stock(
 
 
 func remove_stock(sku_id: StringName, quantity: int) -> bool:
-	var lot := _find_stock_lot(sku_id)
-	if lot == null or quantity <= 0 or lot.qty < quantity:
+	if quantity <= 0 or get_stock_quantity(sku_id) < quantity:
+		return false
+	var remaining := quantity
+	for lot: StockLot in stock_lots.duplicate():
+		if lot.sku.id != sku_id:
+			continue
+		var removed := mini(lot.qty, remaining)
+		lot.qty -= removed
+		remaining -= removed
+		if lot.qty == 0:
+			stock_lots.erase(lot)
+		if remaining == 0:
+			break
+	return true
+
+
+func move_stock(
+	sku_id: StringName,
+	source: InventoryLocation,
+	destination: InventoryLocation,
+	quantity: int
+) -> bool:
+	var lot := _find_stock_lot(sku_id, source)
+	if (
+		lot == null
+		or quantity <= 0
+		or lot.qty < quantity
+	):
+		return false
+	var destination_lot := _find_stock_lot(sku_id, destination)
+	if destination_lot == null:
+		var excluding: Resource = lot if quantity == lot.qty else null
+		if not can_place(lot.sku.product_class, destination, excluding):
+			return false
+	if not add_stock(sku_id, quantity, lot.acquired_cost_avg_cents, destination):
 		return false
 	lot.qty -= quantity
 	if lot.qty == 0:
@@ -135,9 +174,24 @@ func add_card(card: CardInstance) -> bool:
 	return true
 
 
-func add_slab(slab: SlabInstance) -> bool:
-	if slab == null or slab.card_ref == null:
+func remove_card(card: CardInstance) -> bool:
+	if card == null or not cards.has(card):
 		return false
+	cards.erase(card)
+	return true
+
+
+func add_slab(slab: SlabInstance) -> bool:
+	if (
+		slab == null
+		or slab.card_ref == null
+		or cards.has(slab.card_ref)
+		or slabs.has(slab)
+	):
+		return false
+	for existing_slab: SlabInstance in slabs:
+		if existing_slab.card_ref == slab.card_ref:
+			return false
 	var product := get_sku(slab.card_ref.sku_id)
 	if (
 		product == null
@@ -146,6 +200,13 @@ func add_slab(slab: SlabInstance) -> bool:
 	):
 		return false
 	slabs.append(slab)
+	return true
+
+
+func remove_slab(slab: SlabInstance) -> bool:
+	if slab == null or not slabs.has(slab):
+		return false
+	slabs.erase(slab)
 	return true
 
 
@@ -222,9 +283,21 @@ func backstock_bins_used(excluding: Resource = null) -> int:
 	return used
 
 
-func _find_stock_lot(sku_id: StringName) -> StockLot:
+func _find_stock_lot(
+	sku_id: StringName,
+	location: InventoryLocation = null
+) -> StockLot:
 	for lot: StockLot in stock_lots:
-		if lot.sku.id == sku_id:
+		if (
+			lot.sku.id == sku_id
+			and (
+				location == null
+				or (
+					lot.location.type == location.type
+					and lot.location.slot_id == location.slot_id
+				)
+			)
+		):
 			return lot
 	return null
 
@@ -248,12 +321,33 @@ func _register_sku(
 
 
 func _build_canon_catalog() -> void:
-	_register_sku(&"AA-DUST-ETB", ProductSKU.ProductClass.SEALED, "Dustway Chronicles Explorer Box", 4_499, &"AA-DUST", [&"sealed", &"cooling"])
-	_register_sku(&"AA-SKIE-ETB", ProductSKU.ProductClass.SEALED, "Skiefall Ascension Explorer Box", 4_999, &"AA-SKIE", [&"sealed", &"current"])
-	_register_sku(&"AA-SKIE-BLST", ProductSKU.ProductClass.SEALED, "Skiefall Ascension Blaster", 2_999, &"AA-SKIE", [&"sealed", &"current"])
-	_register_sku(&"AA-BASE-088", ProductSKU.ProductClass.SINGLE, "Bastion Captain", 500, &"AA-BASE", [&"staple", &"archetype:mid"])
-	_register_sku(&"AA-BASE-078", ProductSKU.ProductClass.SINGLE, "Arcbolt Adept", 450, &"AA-BASE", [&"staple", &"archetype:aggro"])
-	_register_sku(&"AA-SKIE-047", ProductSKU.ProductClass.SINGLE, "Skiefall Titan", 2_200, &"AA-SKIE", [&"chase", &"staple"])
-	_register_sku(&"AA-SKIE-052", ProductSKU.ProductClass.SINGLE, "Empress of Updrafts", 7_500, &"AA-SKIE", [&"chase", &"legendary"])
-	_register_sku(&"ACC-SLV-60", ProductSKU.ProductClass.ACCESSORY, "Soft Sleeves 60ct", 599, &"", [&"accessory"])
-	_register_sku(&"ACC-TOP-25", ProductSKU.ProductClass.ACCESSORY, "Toploaders 25ct", 699, &"", [&"accessory"])
+	var parsed: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string("res://data/products.json")
+	)
+	if not parsed is Dictionary:
+		push_error("Could not load product catalog.")
+		return
+	for entry_value: Variant in (parsed as Dictionary).get("products", []):
+		var entry := entry_value as Dictionary
+		var sku_id := StringName(entry.get("sku", ""))
+		var type_name := String(entry.get("product_type", ""))
+		var product_class := ProductSKU.ProductClass.SEALED
+		match type_name:
+			"single":
+				product_class = ProductSKU.ProductClass.SINGLE
+			"accessory":
+				product_class = ProductSKU.ProductClass.ACCESSORY
+			"graded":
+				product_class = ProductSKU.ProductClass.GRADED
+		var set_id := StringName(String(sku_id).substr(0, 7)) if String(sku_id).begins_with("AA-") else &""
+		var tags: Array[StringName] = []
+		for tag: Variant in entry.get("tags", []):
+			tags.append(StringName(tag))
+		_register_sku(
+			sku_id,
+			product_class,
+			String(entry.get("display_name", "")),
+			int(entry.get("market_price_cents", 0)),
+			set_id,
+			tags
+		)

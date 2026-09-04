@@ -1,21 +1,24 @@
+class_name QaInstrumentationService
 extends Node
 
 signal event_emitted(event_name: StringName, payload: Dictionary)
 
-var _force_enabled: bool = false
+var _enabled_override: int = -1
 var _events: Array[Dictionary] = []
 var _cash_start_by_day: Dictionary = {}
 
 
 func is_enabled() -> bool:
-	return _force_enabled or (
+	if _enabled_override >= 0:
+		return _enabled_override == 1
+	return (
 		OS.is_debug_build()
 		and bool(ProjectSettings.get_setting("debug/qa_instrumentation", false))
 	)
 
 
 func set_force_enabled(enabled: bool) -> void:
-	_force_enabled = enabled
+	_enabled_override = 1 if enabled else 0
 
 
 func clear() -> void:

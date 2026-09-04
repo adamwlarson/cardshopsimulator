@@ -36,4 +36,6 @@ func advance_day() -> void:
 
 
 func return_to_menu() -> void:
+	if is_game_active:
+		QaInstrumentation.end_day(current_day, Economy.balance_cents)
 	is_game_active = false

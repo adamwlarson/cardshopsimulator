@@ -34,7 +34,7 @@ func confirm_stock_purchase(
 	location: InventoryLocation
 ) -> bool:
 	var total_cost_cents := quantity * unit_cost_cents
-	if quantity <= 0 or unit_cost_cents < 0 or not Economy.can_afford(total_cost_cents):
+	if quantity <= 0 or unit_cost_cents <= 0 or not Economy.can_afford(total_cost_cents):
 		return false
 	if not receive_stock(sku_id, quantity, unit_cost_cents, location):
 		return false
@@ -66,6 +66,14 @@ func get_lot(sku_id: StringName) -> StockLot:
 		if lot.sku.id == sku_id:
 			return lot
 	return null
+
+
+func get_lots(sku_id: StringName) -> Array[StockLot]:
+	var result: Array[StockLot] = []
+	for lot: StockLot in model.stock_lots:
+		if lot.sku.id == sku_id:
+			result.append(lot)
+	return result
 
 
 func get_all_stock() -> Array[StockLot]:

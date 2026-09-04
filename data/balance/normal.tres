@@ -14,6 +14,7 @@ seed_blasters = 4
 seed_dust_etbs = 2
 seed_skie_blasters = 0
 seed_named_staples = 8
+seed_bulk_cards = 80
 seed_sleeves = 200
 seed_toploaders = 50
 start_with_trainee_cashier = false

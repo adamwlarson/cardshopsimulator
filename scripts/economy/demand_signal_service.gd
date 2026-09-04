@@ -12,20 +12,33 @@ enum Channel {
 const RESEARCH_NARROW_FACTOR := 0.55
 
 var _config: BalanceConfig
+var _market_state: MarketState
 var _rng := RandomNumberGenerator.new()
 var _demand_cache: Dictionary = {}
+var _instrumentation: QaInstrumentationService
 
 
-func _init(config: BalanceConfig, rng_seed: int = 1) -> void:
+func _init(
+	config: BalanceConfig,
+	market_state: MarketState,
+	rng_seed: int = 1,
+	instrumentation: QaInstrumentationService = null
+) -> void:
 	_config = config
+	_market_state = market_state
 	_rng.seed = rng_seed
+	_instrumentation = instrumentation
+	if _instrumentation == null:
+		var main_loop := Engine.get_main_loop()
+		if main_loop is SceneTree:
+			_instrumentation = (main_loop as SceneTree).root.get_node_or_null(
+				"QaInstrumentation"
+			) as QaInstrumentationService
 
 
 func buy_confirm(
 	day: int,
 	sku_id: StringName,
-	true_market_cents: int,
-	true_demand: float,
 	channel: Channel,
 	unit_cost_cents: int,
 	quantity: int,
@@ -34,69 +47,73 @@ func buy_confirm(
 	space_free: int,
 	informed: bool = false
 ) -> BuyConfirmSignal:
-	var signal := BuyConfirmSignal.new()
+	var dto := BuyConfirmSignal.new()
+	var true_market_cents := _market_state.market_cents_for(sku_id)
+	var true_demand := _market_state.demand_score_for(sku_id)
 	var comp := _comp_range(true_market_cents, channel, informed)
-	signal.sku_id = sku_id
-	signal.unit_cost_cents = unit_cost_cents
-	signal.lot_total_cents = unit_cost_cents * quantity
-	signal.shown_comp_low_cents = comp.x
-	signal.shown_comp_high_cents = comp.y
-	signal.shown_demand_band = _shown_demand_band(day, sku_id, true_demand, informed)
-	signal.confidence = _confidence(channel)
-	signal.condition_cue = _condition_cue(channel)
-	signal.remaining_cash_cents = current_cash_cents - signal.lot_total_cents
-	signal.space_required = space_required
-	signal.space_free = space_free
-	signal.can_confirm = (
+	dto.sku_id = sku_id
+	dto.unit_cost_cents = unit_cost_cents
+	dto.lot_total_cents = unit_cost_cents * quantity
+	dto.shown_comp_low_cents = comp.x
+	dto.shown_comp_high_cents = comp.y
+	dto.shown_demand_band = _shown_demand_band(day, sku_id, true_demand, informed)
+	dto.confidence = _confidence(channel)
+	dto.condition_cue = _condition_cue(channel)
+	dto.remaining_cash_cents = current_cash_cents - dto.lot_total_cents
+	dto.space_required = space_required
+	dto.space_free = space_free
+	dto.can_confirm = (
 		quantity > 0
-		and signal.remaining_cash_cents >= 0
+		and dto.remaining_cash_cents >= 0
 		and space_required <= space_free
 	)
-	QaInstrumentation.record_demand_signal_shown(
-		&"buy_confirm",
-		signal,
-		true_market_cents,
-		_true_demand_band(true_demand)
-	)
-	return signal
+	if _instrumentation != null:
+		_instrumentation.record_demand_signal_shown(
+			&"buy_confirm",
+			dto,
+			true_market_cents,
+			_true_demand_band(true_demand)
+		)
+	return dto
 
 
 func price_confirm(
 	day: int,
 	sku_id: StringName,
-	true_market_cents: int,
-	true_demand: float,
 	listed_price_cents: int,
 	location: InventoryLocation,
 	channel: Channel = Channel.BUYLIST,
 	informed: bool = false
 ) -> PriceConfirmSignal:
-	var signal := PriceConfirmSignal.new()
+	var dto := PriceConfirmSignal.new()
+	var true_market_cents := _market_state.market_cents_for(sku_id)
+	var true_demand := _market_state.demand_score_for(sku_id)
 	var comp := _comp_range(true_market_cents, channel, informed)
 	var midpoint: int = (comp.x + comp.y) / 2
-	signal.sku_id = sku_id
-	signal.suggested_price_cents = midpoint
-	signal.price_delta_cents = listed_price_cents - midpoint
-	signal.price_delta_percent = (
-		float(signal.price_delta_cents) / float(midpoint)
+	dto.sku_id = sku_id
+	dto.suggested_price_cents = midpoint
+	dto.price_delta_cents = listed_price_cents - midpoint
+	dto.price_delta_percent = (
+		float(dto.price_delta_cents) / float(midpoint)
 		if midpoint > 0
 		else 0.0
 	)
-	signal.position = _position(signal.price_delta_percent)
-	signal.shown_comp_low_cents = comp.x
-	signal.shown_comp_high_cents = comp.y
-	signal.shown_demand_band = _shown_demand_band(day, sku_id, true_demand, informed)
-	signal.confidence = _confidence(channel)
-	signal.move_feel = _move_feel(signal.price_delta_percent)
-	signal.display_context = _display_context(location)
-	QaInstrumentation.record_demand_signal_shown(
-		&"price_confirm",
-		signal,
-		true_market_cents,
-		_true_demand_band(true_demand),
-		listed_price_cents
-	)
-	return signal
+	dto.position = _position(dto.price_delta_percent)
+	dto.shown_comp_low_cents = comp.x
+	dto.shown_comp_high_cents = comp.y
+	dto.shown_demand_band = _shown_demand_band(day, sku_id, true_demand, informed)
+	dto.confidence = _confidence(channel)
+	dto.move_feel = _move_feel(dto.price_delta_percent)
+	dto.display_context = _display_context(location)
+	if _instrumentation != null:
+		_instrumentation.record_demand_signal_shown(
+			&"price_confirm",
+			dto,
+			true_market_cents,
+			_true_demand_band(true_demand),
+			listed_price_cents
+		)
+	return dto
 
 
 func _comp_range(

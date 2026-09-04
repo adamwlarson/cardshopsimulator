@@ -5,6 +5,7 @@ const NORMAL_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
 const HARD_CONFIG: BalanceConfig = preload("res://data/balance/hard.tres")
 
 var _failures: int = 0
+var _qa := QaInstrumentationService.new()
 
 
 func _initialize() -> void:
@@ -13,6 +14,7 @@ func _initialize() -> void:
 	_test_inventory_mutations_and_capacity()
 	_test_balance_seed_inventory()
 	_test_demand_signal_dto_does_not_leak_truth()
+	_test_demand_fairness_contract()
 	_test_qa_instrumentation_payloads()
 	_test_difficulty_balance_ordering()
 	_test_normal_shop_capacity()
@@ -20,9 +22,11 @@ func _initialize() -> void:
 
 	if _failures == 0:
 		print("All foundation tests passed.")
+		_qa.free()
 		quit(0)
 	else:
 		push_error("%d foundation test(s) failed." % _failures)
+		_qa.free()
 		quit(1)
 
 
@@ -56,6 +60,10 @@ func _test_inventory_mutations_and_capacity() -> void:
 	_expect_equal(inventory.add_stock(&"AA-BASE-088", 1, 100, shelf), false, "single cannot use stock lot")
 	_expect_equal(inventory.add_stock(&"AA-DUST-ETB", 1, 100, backstock), true, "first backstock bin")
 	_expect_equal(inventory.add_stock(&"AA-SKIE-ETB", 1, 100, backstock), false, "backstock capacity")
+	_expect_equal(inventory.move_stock(&"ACC-SLV-60", shelf, backstock, 1), false, "reject move to full backstock")
+	_expect_equal(inventory.remove_stock(&"AA-DUST-ETB", 1), true, "remove complete stock lot")
+	_expect_equal(inventory.move_stock(&"ACC-SLV-60", shelf, backstock, 1), true, "split lot into free backstock")
+	_expect_equal(inventory.get_stock_quantity(&"ACC-SLV-60"), 1, "split move preserves quantity")
 
 	var case_location := InventoryLocation.new(InventoryLocation.Type.CASE)
 	var first_card := CardInstance.new(&"AA-BASE-088", 200, case_location)
@@ -66,6 +74,33 @@ func _test_inventory_mutations_and_capacity() -> void:
 	var slab := SlabInstance.new(slab_card, &"Prism Grade", 10.0, "CERT-1", 500, case_location)
 	_expect_equal(inventory.add_slab(slab), false, "slab needs two free case slots")
 	_expect_equal(inventory.case_slots_used(), 2, "case slot accounting")
+	_expect_equal(inventory.remove_card(first_card), true, "remove first card")
+	_expect_equal(inventory.remove_card(second_card), true, "remove second card")
+	_expect_equal(inventory.add_slab(slab), true, "add slab with two free slots")
+	_expect_equal(inventory.add_slab(slab), false, "reject duplicate slab object")
+	var duplicate_card_slab := SlabInstance.new(
+		slab_card, &"Vaultmark", 9.5, "CERT-2", 500, case_location
+	)
+	_expect_equal(
+		inventory.add_slab(duplicate_card_slab),
+		false,
+		"reject duplicate slab card ownership"
+	)
+	_expect_equal(inventory.remove_slab(slab), true, "remove slab")
+
+	var split_config := BalanceConfig.new()
+	split_config.backstock_bins = 2
+	var split_inventory := InventoryModel.new(split_config)
+	var bin_zero := InventoryLocation.new(InventoryLocation.Type.BACKSTOCK, 0)
+	var bin_one := InventoryLocation.new(InventoryLocation.Type.BACKSTOCK, 1)
+	var bin_two := InventoryLocation.new(InventoryLocation.Type.BACKSTOCK, 2)
+	_expect_equal(split_inventory.add_stock(&"ACC-SLV-60", 2, 100, bin_zero), true, "fill first bin")
+	_expect_equal(split_inventory.add_stock(&"ACC-TOP-25", 1, 100, bin_one), true, "fill second bin")
+	_expect_equal(
+		split_inventory.move_stock(&"ACC-SLV-60", bin_zero, bin_two, 1),
+		false,
+		"partial split cannot overflow bins"
+	)
 
 
 func _test_balance_seed_inventory() -> void:
@@ -92,7 +127,11 @@ func _test_balance_seed_inventory() -> void:
 			config.seed_toploaders,
 			"seed toploaders"
 		)
-		_expect_equal(inventory.cards.size(), config.seed_named_staples, "seed named cards")
+		_expect_equal(
+			inventory.cards.size(),
+			config.seed_named_staples + config.seed_bulk_cards,
+			"seed card count"
+		)
 	_expect_equal(
 		InventoryModel.new(NORMAL_CONFIG).get_sku(&"AA-SKIE-ETB") != null,
 		true,
@@ -101,14 +140,16 @@ func _test_balance_seed_inventory() -> void:
 
 
 func _test_demand_signal_dto_does_not_leak_truth() -> void:
-	QaInstrumentation.set_force_enabled(false)
-	var service := DemandSignalService.new(NORMAL_CONFIG, 42)
+	_qa.set_force_enabled(false)
+	var market_state := MarketState.new()
+	market_state.update_sku(&"AA-SKIE-047", 2200, 0.75)
+	var service := DemandSignalService.new(NORMAL_CONFIG, market_state, 42, _qa)
 	var buy_signal := service.buy_confirm(
-		1, &"AA-SKIE-047", 2200, 0.75, DemandSignalService.Channel.MARKETPLACE,
+		1, &"AA-SKIE-047", DemandSignalService.Channel.MARKETPLACE,
 		1200, 2, 800_000, 1, 3
 	)
 	var price_signal := service.price_confirm(
-		1, &"AA-SKIE-047", 2200, 0.75, 2300,
+		1, &"AA-SKIE-047", 2300,
 		InventoryLocation.new(InventoryLocation.Type.CASE)
 	)
 	_expect_dto_has_no_truth_fields(buy_signal, "buy signal")
@@ -121,25 +162,104 @@ func _test_demand_signal_dto_does_not_leak_truth() -> void:
 	_expect_equal(price_signal.move_feel.is_empty(), false, "qualitative move feel")
 
 
+func _test_demand_fairness_contract() -> void:
+	var market_state := MarketState.new()
+	market_state.update_sku(&"AA-SKIE-047", 10_000, 0.70)
+	var service := DemandSignalService.new(NORMAL_CONFIG, market_state, 99, _qa)
+	var total_midpoint_error := 0.0
+	var within_one_band := 0
+	var sample_count := 0
+	for day: int in range(1, 31):
+		var dto := service.buy_confirm(
+			day, &"AA-SKIE-047", DemandSignalService.Channel.MARKETPLACE,
+			5000, 1, 800_000, 1, 10
+		)
+		var midpoint: int = (dto.shown_comp_low_cents + dto.shown_comp_high_cents) / 2
+		total_midpoint_error += absf(float(midpoint - 10_000)) / 10_000.0
+		var shown_index := _band_index(dto.shown_demand_band)
+		var true_index := _band_index(&"warm")
+		if absi(shown_index - true_index) <= 1:
+			within_one_band += 1
+		sample_count += 1
+	_expect_equal(
+		total_midpoint_error / sample_count <= NORMAL_CONFIG.fair_comp_mae_max,
+		true,
+		"30-day comp MAE fairness"
+	)
+	_expect_equal(
+		float(within_one_band) / sample_count >= NORMAL_CONFIG.fair_band_within1_min,
+		true,
+		"30-day band fairness"
+	)
+
+	var narrow_default := DemandSignalService.new(NORMAL_CONFIG, market_state, 12, _qa)
+	var narrow_research := DemandSignalService.new(NORMAL_CONFIG, market_state, 12, _qa)
+	var default_dto := narrow_default.buy_confirm(
+		1, &"AA-SKIE-047", DemandSignalService.Channel.MARKETPLACE,
+		5000, 1, 800_000, 1, 10
+	)
+	var research_dto := narrow_research.buy_confirm(
+		1, &"AA-SKIE-047", DemandSignalService.Channel.MARKETPLACE,
+		5000, 1, 800_000, 1, 10, true
+	)
+	_expect_equal(
+		research_dto.shown_comp_high_cents - research_dto.shown_comp_low_cents
+		< default_dto.shown_comp_high_cents - default_dto.shown_comp_low_cents,
+		true,
+		"research narrows comp"
+	)
+	var distributor_service := DemandSignalService.new(
+		NORMAL_CONFIG, market_state, 12, _qa
+	)
+	var distributor_dto := distributor_service.buy_confirm(
+		1, &"AA-SKIE-047", DemandSignalService.Channel.DISTRIBUTOR,
+		5000, 1, 800_000, 1, 10
+	)
+	_expect_equal(
+		distributor_dto.shown_comp_high_cents - distributor_dto.shown_comp_low_cents
+		< default_dto.shown_comp_high_cents - default_dto.shown_comp_low_cents,
+		true,
+		"distributor comp tighter than marketplace"
+	)
+
+	for demand_score: float in [0.0, 1.0]:
+		market_state.update_sku(&"AA-SKIE-047", 10_000, demand_score)
+		var inversion_service := DemandSignalService.new(
+			NORMAL_CONFIG, market_state, 123, _qa
+		)
+		for day: int in range(1, 101):
+			var dto := inversion_service.buy_confirm(
+				day, &"AA-SKIE-047", DemandSignalService.Channel.SHADY,
+				5000, 1, 800_000, 1, 10
+			)
+			var cruel_inversion := (
+				demand_score == 0.0 and dto.shown_demand_band == &"hot"
+				or demand_score == 1.0 and dto.shown_demand_band == &"cold"
+			)
+			_expect_equal(cruel_inversion, false, "forbid hot-cold inversion")
+
+
 func _test_qa_instrumentation_payloads() -> void:
-	QaInstrumentation.set_force_enabled(true)
-	QaInstrumentation.clear()
-	QaInstrumentation.begin_day(3, 10_000)
-	QaInstrumentation.end_day(3, 11_500)
-	QaInstrumentation.record_buy_confirm(&"AA-DUST-ETB", 2, 2500, 1500)
-	var service := DemandSignalService.new(NORMAL_CONFIG, 7)
+	_qa.set_force_enabled(true)
+	_qa.clear()
+	_qa.begin_day(3, 10_000)
+	_qa.end_day(3, 11_500)
+	_qa.record_buy_confirm(&"AA-DUST-ETB", 2, 2500, 1500)
+	var market_state := MarketState.new()
+	market_state.update_sku(&"AA-DUST-ETB", 4499, 0.30)
+	var service := DemandSignalService.new(NORMAL_CONFIG, market_state, 7, _qa)
 	service.buy_confirm(
-		3, &"AA-DUST-ETB", 4499, 0.30, DemandSignalService.Channel.DISTRIBUTOR,
+		3, &"AA-DUST-ETB", DemandSignalService.Channel.DISTRIBUTOR,
 		2500, 2, 20_000, 1, 2
 	)
 	service.price_confirm(
-		3, &"AA-DUST-ETB", 4499, 0.30, 4799,
+		3, &"AA-DUST-ETB", 4799,
 		InventoryLocation.new(InventoryLocation.Type.SHELF),
 		DemandSignalService.Channel.DISTRIBUTOR
 	)
-	QaInstrumentation.record_save_pre_write("save-data".to_utf8_buffer())
-	QaInstrumentation.record_save_post_load("save-data".to_utf8_buffer())
-	var events := QaInstrumentation.get_events()
+	_qa.record_save_pre_write("save-data".to_utf8_buffer())
+	_qa.record_save_post_load("save-data".to_utf8_buffer())
+	var events := _qa.get_events()
 	_expect_equal(events.size(), 6, "instrumentation event count")
 	_expect_payload_keys(events[0], [&"day", &"cash_start", &"cash_end", &"delta"], "day cash payload")
 	_expect_payload_keys(events[1], [&"sku", &"qty", &"unit_cost", &"expected_margin"], "buy payload")
@@ -165,7 +285,7 @@ func _test_qa_instrumentation_payloads() -> void:
 		events[5]["payload"]["hash"],
 		"save round-trip hash"
 	)
-	QaInstrumentation.set_force_enabled(false)
+	_qa.set_force_enabled(false)
 
 
 func _test_difficulty_balance_ordering() -> void:
@@ -222,6 +342,10 @@ func _expect_dto_has_no_truth_fields(dto: Resource, label: String) -> void:
 			or property_name.contains("p_buy")
 		)
 		_expect_equal(leaks_truth, false, "%s field %s" % [label, property_name])
+
+
+func _band_index(band: StringName) -> int:
+	return [&"cold", &"steady", &"warm", &"hot"].find(band)
 
 
 func _expect_payload_keys(

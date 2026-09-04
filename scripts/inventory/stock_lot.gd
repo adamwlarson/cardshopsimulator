@@ -15,7 +15,7 @@ func total_cost_cents() -> int:
 	return acquired_cost_avg_cents * qty
 
 
-func accepts_product(product: ProductSKU) -> bool:
+static func accepts_product(product: ProductSKU) -> bool:
 	return (
 		product != null
 		and product.product_class in [
