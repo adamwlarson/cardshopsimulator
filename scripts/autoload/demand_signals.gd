@@ -47,6 +47,13 @@ func apply_hype_event(
 	return true
 
 
+func apply_soft_shelf_signal(sku_id: StringName, through_day: int) -> bool:
+	if InventoryService.model.get_sku(sku_id) == null or _service == null:
+		return false
+	_service.force_demand_band(sku_id, &"steady", through_day)
+	return true
+
+
 func open_buy_signals() -> Array[BuyConfirmSignal]:
 	var result: Array[BuyConfirmSignal] = []
 	for opportunity: BuyOpportunity in _open_opportunities():
