@@ -1,6 +1,6 @@
 # UI Wireflows v1 — Card Shop Simulator
 
-**Status:** Draft for PM / Eng / QA / Art  
+**Status:** Adopted + picker acceptance addendum (post playtest ff88fad)  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** `systems-design-v1.md` §4.5, `fictional-set-bible-v1.md`  
@@ -29,6 +29,22 @@
 | Prep phase “Opportunities” list | Select row |
 | Floor — seller walk-in | Talk → “Review lot” |
 | Rare shady/auction beat | Event modal → “Inspect deal” |
+
+
+### 1.1a `BuyOpportunityList` picker (MVP acceptance — post ff88fad)
+
+**Bug fixed against:** hardcoded single SKU (`AA-SKIE-ETB`) blocked §10 Dustway / distributor beats.
+
+| Rule | Pass |
+|------|------|
+| Data-driven | UI binds a list of `BuyOpportunity` rows — **never** a single hardcoded SKU/channel |
+| Prep list | Shows **all** open opportunities for the day (distributor weekly + marketplace lots + any scripted §10 beats) |
+| Row fields | Channel · SKU/name · ask total · demand band chip · confidence |
+| Select row | Opens `BuyOpportunityDetail` for **that** opportunity only |
+| §10 #1/#2 | Day 1–2 must be able to open **Dustway ETB** (`AA-DUST-ETB`) pricing/buy path **and** a **Distributor** MOQ opportunity without debug cheats |
+| Empty state | “No deals today” — not a fake SKIE row |
+
+Scripted beats inject opportunities into the same list (tagged `beat_id` optional for QA).
 
 ### 1.2 Screen: `BuyOpportunityDetail`
 
@@ -170,6 +186,15 @@ Customer at counter / interacted in queue → `CustomerServe`.
 **Negotiate:** one step ±10% (owner Attention cost); Spike may refuse → walk.  
 **Refuse / walkout:** soft Rep tick per systems.  
 **Buylist sellers:** reuse BuyOpportunityDetail layout with “You offer” instead of Ask.
+
+
+### 3.2a Label rules (sell vs buylist) — fixes “Your list” misuse
+
+| Context | Correct label | Must not say |
+|---------|---------------|--------------|
+| Customer **buying from shop** (Spike/etc.) | **Your list** = shop `listed_price` | Ask / You offer |
+| Customer **selling to shop** (buylist) | **You offer** = our buylist bid | Your list / Ask |
+| Shop **buying a BuyOpportunity** | **Ask** = seller’s exact ask (§4.5 A) | Your list |
 
 ### 3.3 Flow
 
