@@ -276,7 +276,7 @@ script = ExtResource("35_staff")
 
 [node name="CashierSlot" type="Marker3D" parent="StaffFloor"]
 position = Vector3(8.05, 0, -1.5)
-rotation_degrees = Vector3(0, 90, 0)
+rotation_degrees = Vector3(0, -90, 0)
 
 [node name="HUDLayer" type="CanvasLayer" parent="."]
 

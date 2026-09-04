@@ -6,7 +6,7 @@ extends Node3D
 
 const REGISTER_STATIONS := 1
 const DEFAULT_STATION := Vector3(8.05, 0.0, -1.50)
-const DEFAULT_YAW_DEGREES := 90.0
+const DEFAULT_YAW_DEGREES := -90.0
 const CLIP_IDLE := StaffMember.CLIP_IDLE_STAND
 
 var _slot: Node3D

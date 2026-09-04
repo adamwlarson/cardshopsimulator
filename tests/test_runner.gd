@@ -3782,7 +3782,7 @@ func _test_cashier_silhouette_on_floor() -> void:
 			"cashier slot sits on the clerk side of the counter"
 		)
 		_expect_equal(
-			is_equal_approx(slot.rotation_degrees.y, 90.0),
+			is_equal_approx(slot.rotation_degrees.y, -90.0),
 			true,
 			"cashier faces the aisle (−X / queue)"
 		)
