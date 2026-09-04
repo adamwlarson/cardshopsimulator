@@ -957,9 +957,14 @@ func _test_gameplay_hud_visual_smoke() -> void:
 	)
 	var theme_source := FileAccess.get_file_as_string("res://themes/shop_hud.tres")
 	_expect_equal(
-		theme_source.contains("bg_color = Color(0.957, 0.941, 0.91, 0.82)"),
+		theme_source.contains("bg_color = Color(0.145, 0.145, 0.155, 0.78)"),
 		true,
-		"Modal panels use cream fill at ~82% opacity"
+		"Modal panels use charcoal fill at ~78% opacity"
+	)
+	_expect_equal(
+		theme_source.contains("Color(0.957, 0.941, 0.91"),
+		true,
+		"Cream is reserved for HUD type on dark chrome"
 	)
 	_expect_equal(
 		theme_source.contains("corner_radius_top_left = 10"),
