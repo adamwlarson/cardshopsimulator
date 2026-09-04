@@ -1,6 +1,6 @@
 # UI Wireflows v1 — Card Shop Simulator
 
-**Status:** Adopted + picker/labels + §10 #4/#6/#7/#8 beat-injection notes  
+**Status:** Adopted + picker/labels + §10 hooks + Wants display-name polish  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** `systems-design-v1.md` §4.5, `fictional-set-bible-v1.md`  
@@ -195,6 +195,21 @@ Customer at counter / interacted in queue → `CustomerServe`.
 | Customer **buying from shop** (Spike/etc.) | **Your list** = shop `listed_price` | Ask / You offer |
 | Customer **selling to shop** (buylist) | **You offer** = our buylist bid | Your list / Ask |
 | Shop **buying a BuyOpportunity** | **Ask** = seller’s exact ask (§4.5 A) | Your list |
+
+
+### 3.2b Wants display-name polish (Eng thin polish)
+
+**Bug:** CustomerServe “Wants” shows raw SKU id (S3 from formal §10).
+
+| Rule | Spec |
+|------|------|
+| Format | `{bible_display_name} · {condition}` e.g. `Bastion Captain · NM` |
+| Source | CardDef / set bible `name` + instance `condition` — **never** raw `sku_id` / `AA-BASE-088` in player-facing HUD |
+| Graded | `{name} · {grader} {grade}` e.g. `Empress of Updrafts · Prism 10` |
+| Qty | If qty > 1: append ` ×{n}` |
+| Fallback | If name missing: humanize SKU as last resort + log; still no bare `AA-*` preferred |
+| Scope | CustomerServe “Wants” line only for this polish; inventory rows can stay as-is unless same HUD component |
+| QA | Smoke: Spike #4 shows Bastion Captain · NM (or Arcbolt Adept · NM); no `AA-BASE-` substring in Wants label |
 
 ### 3.3 Flow
 
