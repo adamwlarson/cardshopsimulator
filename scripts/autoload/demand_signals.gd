@@ -142,14 +142,11 @@ func refresh_price_signal(
 ) -> PriceConfirmSignal:
 	if dto == null:
 		return null
-	var refreshed := price_signal(
-		dto.sku_id,
+	return _service.refresh_price_confirm(
+		dto,
 		listed_price_cents,
 		InventoryService.location_for(dto.sku_id)
 	)
-	refreshed.display_name = dto.display_name
-	refreshed.quantity = dto.quantity
-	return refreshed
 
 
 func _open_opportunities() -> Array[BuyOpportunity]:

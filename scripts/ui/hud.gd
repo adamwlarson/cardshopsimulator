@@ -299,9 +299,14 @@ func _on_price_focus_requested(
 		_select_price_stock(dto)
 		if suggestion_mode == &"undercut":
 			price_input.text = DemandSignalPresenter.format_cents(
-				maxi(1, roundi(_price_signal.suggested_price_cents * 0.92))
+				maxi(1, floori(_price_signal.suggested_price_cents * 0.90))
 			)
 			_update_price_preview(price_input.text)
+			assert(
+				_price_signal != null
+				and _price_signal.position == &"undercut",
+				"Undercut focus must refresh to an undercut position."
+			)
 		price_input.grab_focus()
 		return
 

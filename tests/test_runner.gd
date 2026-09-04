@@ -773,6 +773,25 @@ func _test_rent_firesale_beat() -> void:
 		&"undercut",
 		"rent price focus suggests Undercut"
 	)
+	var fire_sale_preview := _demand_signals.call(
+		"price_signal",
+		_captured_price_sku,
+		_inventory_service.call("listed_price_for", _captured_price_sku),
+		_inventory_service.call("location_for", _captured_price_sku)
+	) as PriceConfirmSignal
+	var undercut_cents := floori(
+		fire_sale_preview.suggested_price_cents * 0.90
+	)
+	fire_sale_preview = _demand_signals.call(
+		"refresh_price_signal",
+		fire_sale_preview,
+		undercut_cents
+	) as PriceConfirmSignal
+	_expect_equal(
+		fire_sale_preview.position,
+		&"undercut",
+		"rent fire-sale preview refresh shows Undercut"
+	)
 	_beat_director.call(
 		"_on_beat_ui_resolved",
 		RENT_FIRESALE_BEAT,
