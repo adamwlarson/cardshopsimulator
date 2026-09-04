@@ -3,14 +3,14 @@
   "products": [
     {
       "sku": "AA-SKIE-ETB",
-      "display_name": "Skiefall Ascension Elite Trainer Box",
+      "display_name": "Skiefall Ascension Explorer Box",
       "product_type": "sealed",
       "default_condition": "sealed",
       "market_price_cents": 4499
     },
     {
       "sku": "AA-DUST-ETB",
-      "display_name": "Dustway Chronicles Elite Trainer Box",
+      "display_name": "Dustway Chronicles Explorer Box",
       "product_type": "sealed",
       "default_condition": "sealed",
       "market_price_cents": 4499
