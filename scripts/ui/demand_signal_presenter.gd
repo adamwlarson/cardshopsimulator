@@ -13,7 +13,20 @@ enum PriceContext {
 static func format_cents(value: int) -> String:
 	var sign_text := "-" if value < 0 else ""
 	var absolute := absi(value)
-	return "%s$%d.%02d" % [sign_text, absolute / 100, absolute % 100]
+	return "%s$%s.%02d" % [
+		sign_text,
+		_group_thousands(absolute / 100),
+		absolute % 100,
+	]
+
+
+static func _group_thousands(dollars: int) -> String:
+	var raw := str(dollars)
+	var grouped := ""
+	while raw.length() > 3:
+		grouped = "," + raw.substr(raw.length() - 3, 3) + grouped
+		raw = raw.substr(0, raw.length() - 3)
+	return raw + grouped
 
 
 static func undercut_fill_cents(suggested_price_cents: int) -> int:
@@ -80,7 +93,7 @@ static func _format_grade(grade: float) -> String:
 
 
 static func parse_cents(text: String) -> int:
-	var cleaned := text.strip_edges().trim_prefix("$")
+	var cleaned := text.strip_edges().trim_prefix("$").replace(",", "")
 	if cleaned.is_empty():
 		return 0
 	var parts := cleaned.split(".", false, 1)
@@ -187,8 +200,10 @@ static func buy_summary(dto: BuyConfirmSignal) -> String:
 			String(dto.confidence).capitalize(),
 		],
 		"Condition: %s" % dto.condition_cue,
-		"After buy: %s · Space: %d needed / %d free" % [
+		"After buy: %s %s · Space: %s %d needed / %d free" % [
+			"✓" if dto.remaining_cash_cents >= 0 else "✗",
 			format_cents(dto.remaining_cash_cents),
+			"✓" if dto.space_free >= dto.space_required else "✗",
 			dto.space_required,
 			dto.space_free,
 		],
@@ -215,20 +230,31 @@ static func buylist_seller_summary(dto: BuyConfirmSignal) -> String:
 	])
 
 
-static func price_summary(dto: PriceConfirmSignal) -> String:
+static func price_summary(
+	dto: PriceConfirmSignal,
+	include_signal_chips: bool = true
+) -> String:
 	var percent := roundi(dto.price_delta_percent * 100.0)
-	return "\n".join([
+	var lines: PackedStringArray = [
 		"Suggested (noisy): %s" % format_cents(dto.suggested_price_cents),
 		"Vs suggestion: %s (%+d%%)" % [
 			format_cents(dto.price_delta_cents),
 			percent,
 		],
-		"Position: %s · Demand: %s" % [
-			position_chip(dto.position),
-			band_chip(dto.shown_demand_band),
-		],
-		"Move feel: %s · %s" % [
-			move_feel_chip(dto.move_feel),
-			dto.display_context,
-		],
-	])
+	]
+	if include_signal_chips:
+		lines.append(
+			"Position: %s · Demand: %s" % [
+				position_chip(dto.position),
+				band_chip(dto.shown_demand_band),
+			]
+		)
+		lines.append(
+			"Move feel: %s · %s" % [
+				move_feel_chip(dto.move_feel),
+				dto.display_context,
+			]
+		)
+	elif not dto.display_context.strip_edges().is_empty():
+		lines.append(dto.display_context)
+	return "\n".join(lines)

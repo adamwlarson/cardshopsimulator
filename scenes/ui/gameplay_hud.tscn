@@ -73,7 +73,7 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
 theme_type_variation = &"CashValue"
-text = "$8000.00"
+text = "$8,000.00"
 vertical_alignment = 1
 
 [node name="AttentionLabel" type="Label" parent="TopBar/Stats"]
@@ -345,10 +345,60 @@ theme_type_variation = &"TitleLabel"
 text = "PRICE"
 autowrap_mode = 3
 
+[node name="PriceChipRow" type="HBoxContainer" parent="PriceEditor/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PositionChip" type="PanelContainer" parent="PriceEditor/Content/PriceChipRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SignalChip"
+
+[node name="PricePositionChip" type="Label" parent="PriceEditor/Content/PriceChipRow/PositionChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "◆ Position"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DemandChip" type="PanelContainer" parent="PriceEditor/Content/PriceChipRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SignalChip"
+
+[node name="PriceDemandChip" type="Label" parent="PriceEditor/Content/PriceChipRow/DemandChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "● Demand"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MoveChip" type="PanelContainer" parent="PriceEditor/Content/PriceChipRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SignalChip"
+
+[node name="PriceMoveChip" type="Label" parent="PriceEditor/Content/PriceChipRow/MoveChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "→ Move"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PriceInputCaption" type="Label" parent="PriceEditor/Content"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Your list"
+
 [node name="PriceInput" type="LineEdit" parent="PriceEditor/Content"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 42)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
+theme_override_font_sizes/font_size = 18
 placeholder_text = "$44.99"
 
 [node name="PriceSummary" type="Label" parent="PriceEditor/Content"]
@@ -397,6 +447,26 @@ layout_mode = 2
 theme_type_variation = &"TitleLabel"
 text = "CUSTOMER"
 autowrap_mode = 3
+
+[node name="PatienceRow" type="HBoxContainer" parent="CustomerServe/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PatienceCaption" type="Label" parent="CustomerServe/Content/PatienceRow"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Patience"
+vertical_alignment = 1
+
+[node name="PatienceBar" type="ProgressBar" parent="CustomerServe/Content/PatienceRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 12)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+value = 1.0
+show_percentage = false
 
 [node name="CustomerSummary" type="Label" parent="CustomerServe/Content"]
 unique_name_in_owner = true
@@ -478,7 +548,7 @@ custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 theme_type_variation = &"ListRowButton"
 text = "Cut accessories
-Focus ACC-* · suggest Undercut"
+Focus accessories · suggest Undercut"
 
 [node name="RentLoanButton" type="Button" parent="RentDecision/Content/RentChoices"]
 unique_name_in_owner = true

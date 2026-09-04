@@ -23,9 +23,13 @@ extends Control
 @onready var price_title: Label = %PriceTitle
 @onready var price_input: LineEdit = %PriceInput
 @onready var price_summary: Label = %PriceSummary
+@onready var price_position_chip: Label = %PricePositionChip
+@onready var price_demand_chip: Label = %PriceDemandChip
+@onready var price_move_chip: Label = %PriceMoveChip
 @onready var serve_panel: PanelContainer = %CustomerServe
 @onready var customer_title: Label = %CustomerTitle
 @onready var customer_summary: Label = %CustomerSummary
+@onready var patience_bar: ProgressBar = %PatienceBar
 @onready var beat_toast: Label = %BeatToast
 @onready var rent_panel: PanelContainer = %RentDecision
 @onready var rent_title: Label = %RentTitle
@@ -91,6 +95,7 @@ func _ready() -> void:
 	)
 	showcase_slab_button.pressed.connect(_select_showcase_choice.bind(&"slab"))
 	showcase_singles_button.pressed.connect(_select_showcase_choice.bind(&"singles"))
+	set_process(false)
 	_bind_seeded_status()
 	_update_queue(0)
 
@@ -263,6 +268,7 @@ func _select_price_stock(dto: PriceConfirmSignal) -> void:
 	price_input.text = DemandSignalPresenter.format_cents(
 		dto.listed_price_cents
 	)
+	_bind_price_chips(dto)
 	_update_price_preview(price_input.text)
 	price_list_panel.hide()
 	price_panel.show()
@@ -279,7 +285,11 @@ func _update_price_preview(value: String) -> void:
 	)
 	if _price_signal == null:
 		return
-	price_summary.text = DemandSignalPresenter.price_summary(_price_signal)
+	price_summary.text = DemandSignalPresenter.price_summary(
+		_price_signal,
+		false
+	)
+	_bind_price_chips(_price_signal)
 	%PriceApplyButton.disabled = listed_price_cents <= 0
 
 
@@ -456,9 +466,12 @@ func _on_customer_head_changed(customer: CustomerProfile) -> void:
 	_current_customer = customer
 	if _current_customer == null:
 		serve_panel.hide()
+		set_process(false)
 		_sync_modal_veil()
 		return
 	serve_panel.show()
+	set_process(true)
+	_sync_patience_bar(_current_customer)
 	_sync_modal_veil()
 	if (
 		_current_customer.trade_intent
@@ -543,6 +556,27 @@ func _customer_wants_label(customer: CustomerProfile) -> String:
 	):
 		condition = CardInstance.Condition.keys()[CardInstance.Condition.NM]
 	return DemandSignalPresenter.wants_label(display_name, sku_id, condition)
+
+
+func _bind_price_chips(dto: PriceConfirmSignal) -> void:
+	price_position_chip.text = DemandSignalPresenter.position_chip(dto.position)
+	price_demand_chip.text = DemandSignalPresenter.band_chip(
+		dto.shown_demand_band
+	)
+	price_move_chip.text = DemandSignalPresenter.move_feel_chip(dto.move_feel)
+
+
+func _sync_patience_bar(customer: CustomerProfile) -> void:
+	patience_bar.max_value = maxf(customer.patience_seconds, 0.001)
+	patience_bar.value = maxf(
+		customer.patience_seconds - customer.waited_seconds,
+		0.0
+	)
+
+
+func _process(_delta: float) -> void:
+	if _current_customer != null and serve_panel.visible:
+		_sync_patience_bar(_current_customer)
 
 
 func _sync_modal_veil() -> void:

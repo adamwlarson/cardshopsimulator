@@ -649,9 +649,44 @@ func _test_ui_price_labels() -> void:
 		"buylist seller summary uses You offer helper"
 	)
 	_expect_equal(
-		seller_summary.contains("Your list") or seller_summary.contains("Ask"),
-		false,
-		"buylist seller summary excludes other price labels"
+		DemandSignalPresenter.parse_cents("$8,000.00"),
+		800_000,
+		"parse_cents accepts grouped cash"
+	)
+	_expect_equal(
+		DemandSignalPresenter.format_cents(800_000),
+		"$8,000.00",
+		"format_cents groups thousands"
+	)
+	_expect_equal(
+		DemandSignalPresenter.parse_cents("$44.99"),
+		4499,
+		"parse_cents still accepts ungrouped dollars"
+	)
+	var buy_dto := BuyConfirmSignal.new()
+	buy_dto.unit_cost_cents = 100
+	buy_dto.lot_total_cents = 100
+	buy_dto.shown_comp_low_cents = 90
+	buy_dto.shown_comp_high_cents = 110
+	buy_dto.shown_demand_band = &"steady"
+	buy_dto.confidence = &"medium"
+	buy_dto.condition_cue = "NM"
+	buy_dto.remaining_cash_cents = 500
+	buy_dto.space_required = 1
+	buy_dto.space_free = 2
+	var buy_ok := DemandSignalPresenter.buy_summary(buy_dto)
+	_expect_equal(
+		buy_ok.contains("After buy: ✓") and buy_ok.contains("Space: ✓"),
+		true,
+		"Buy cash/space check uses ✓ when affordable"
+	)
+	buy_dto.remaining_cash_cents = -25
+	buy_dto.space_free = 0
+	var buy_fail := DemandSignalPresenter.buy_summary(buy_dto)
+	_expect_equal(
+		buy_fail.contains("After buy: ✗") and buy_fail.contains("Space: ✗"),
+		true,
+		"Buy cash/space check uses ✗ when blocked"
 	)
 
 
@@ -822,8 +857,8 @@ func _test_prep_hud_seed_before_bind() -> void:
 	)
 	_expect_equal(
 		DemandSignalPresenter.format_cents(int(_economy.get("balance_cents"))),
-		"$8000.00",
-		"Prep cash formats as $8000.00"
+		"$8,000.00",
+		"Prep cash formats as $8,000.00"
 	)
 	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
@@ -840,7 +875,7 @@ func _test_prep_hud_seed_before_bind() -> void:
 		"res://scenes/ui/gameplay_hud.tscn"
 	)
 	_expect_equal(
-		hud_scene.contains("$8000.00"),
+		hud_scene.contains("$8,000.00"),
 		true,
 		"Prep HUD scene default is seeded cash"
 	)
@@ -882,7 +917,7 @@ func _test_gameplay_hud_visual_smoke() -> void:
 	var buy_button := hud.get_node_or_null("%OpenBuyButton") as Button
 	var price_button := hud.get_node_or_null("%OpenPriceButton") as Button
 	var serve := hud.get_node_or_null("%CustomerServe") as PanelContainer
-	_expect_equal(cash != null and cash.text == "$8000.00", true, "HUD binds Prep $8000.00")
+	_expect_equal(cash != null and cash.text == "$8,000.00", true, "HUD binds Prep $8,000.00")
 	_expect_equal(
 		attention != null and attention.text == "Att 100/100",
 		true,
@@ -924,12 +959,51 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		true,
 		"Price inventory hit target height"
 	)
+	var price_input := hud.get_node_or_null("%PriceInput") as LineEdit
+	_expect_equal(
+		price_input != null and price_input.custom_minimum_size.y >= 40.0,
+		true,
+		"Your list input is the larger primary field"
+	)
 	_expect_equal(
 		open_floor != null and open_floor.theme_type_variation == &"PrimaryButton",
 		true,
 		"Open floor uses primary button variation"
 	)
 	_expect_equal(serve != null, true, "CustomerServe panel present")
+	var patience := hud.get_node_or_null("%PatienceBar") as ProgressBar
+	_expect_equal(patience != null, true, "CustomerServe patience bar present")
+	_expect_equal(
+		patience != null and patience.custom_minimum_size.x >= 120.0,
+		true,
+		"Patience bar is at least 120px wide"
+	)
+	_expect_equal(
+		patience != null and patience.show_percentage == false,
+		true,
+		"Patience bar is a meter, not a percent label"
+	)
+	var price_chip_row := hud.get_node_or_null("%PriceChipRow") as HBoxContainer
+	var position_chip := hud.get_node_or_null("%PricePositionChip") as Label
+	_expect_equal(price_chip_row != null, true, "PriceEditor has a chip strip")
+	_expect_equal(
+		position_chip != null,
+		true,
+		"PriceEditor position chip is present"
+	)
+	var hud_scene := FileAccess.get_file_as_string(
+		"res://scenes/ui/gameplay_hud.tscn"
+	)
+	_expect_equal(
+		hud_scene.contains("text = \"Your list\""),
+		true,
+		"PriceEditor labels the primary input Your list"
+	)
+	_expect_equal(
+		hud_scene.contains("ACC-*"),
+		false,
+		"HUD chrome does not show raw accessory SKU walls"
+	)
 	_expect_equal(
 		serve != null and serve.offset_left >= 48.0 and serve.offset_bottom <= 480.0,
 		true,
@@ -975,6 +1049,16 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		theme_source.contains("Color(0.24, 0.43, 0.42"),
 		true,
 		"Muted teal is the system accent"
+	)
+	_expect_equal(
+		theme_source.contains("id=\"StyleSignalChip\""),
+		true,
+		"Signal chips use calm gunmetal chrome, not extra accent fill"
+	)
+	_expect_equal(
+		theme_source.contains("id=\"StyleProgressFill\""),
+		true,
+		"Patience meter fill is themed cream, not a second accent"
 	)
 	var hud_script: Script = hud.get_script()
 	_expect_equal(hud_script != null, true, "HUD script attached")
