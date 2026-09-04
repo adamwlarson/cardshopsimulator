@@ -132,6 +132,65 @@ func apply_move(fixture_id: StringName, new_origin: Vector2i) -> StringName:
 	return &"ok"
 
 
+func walkable_tile_count() -> int:
+	return maxi(0, width * height - _blocked_cells().size())
+
+
+func would_circulate_at(new_width: int, new_height: int) -> bool:
+	return preview_expand(new_width, new_height) == &"ok"
+
+
+func preview_expand(new_width: int, new_height: int) -> StringName:
+	if new_width < width or new_height < height:
+		return &"out_of_bounds"
+	var saved_width := width
+	var saved_height := height
+	width = new_width
+	height = new_height
+	var circulation := has_circulation()
+	width = saved_width
+	height = saved_height
+	if not circulation:
+		return &"blocked_path"
+	return &"ok"
+
+
+func expand(new_width: int, new_height: int) -> StringName:
+	var reason := preview_expand(new_width, new_height)
+	if reason != &"ok":
+		return reason
+	width = new_width
+	height = new_height
+	return &"ok"
+
+
+func to_save() -> Dictionary:
+	var rows: Array[Dictionary] = []
+	for fixture: ShopFixture in fixtures:
+		rows.append(fixture.to_save())
+	return {
+		"width": width,
+		"height": height,
+		"entrance_x": entrance.x,
+		"entrance_y": entrance.y,
+		"fixtures": rows,
+	}
+
+
+func apply_save(data: Dictionary) -> void:
+	width = int(data.get("width", ShopState.SMALL_GRID_WIDTH))
+	height = int(data.get("height", ShopState.SMALL_GRID_HEIGHT))
+	entrance = Vector2i(
+		int(data.get("entrance_x", DEFAULT_ENTRANCE.x)),
+		int(data.get("entrance_y", DEFAULT_ENTRANCE.y))
+	)
+	fixtures.clear()
+	var rows: Array = data.get("fixtures", [])
+	for row: Variant in rows:
+		if row is Dictionary:
+			fixtures.append(ShopFixture.from_save(row as Dictionary))
+
+
 func _add_architecture(
 	architecture_id: StringName,
 	origin: Vector2i,

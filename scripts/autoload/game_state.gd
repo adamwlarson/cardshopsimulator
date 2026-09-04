@@ -43,6 +43,7 @@ func start_new_game() -> void:
 	EventBus.reputation_changed.emit(current_reputation)
 	EventBus.attention_changed.emit(attention_remaining)
 	EventBus.day_phase_changed.emit(current_phase)
+	EventBus.shop_layout_changed.emit()
 
 
 func start_floor() -> bool:
@@ -157,3 +158,52 @@ func return_to_menu() -> void:
 	if is_game_active:
 		QaInstrumentation.end_day(current_day, Economy.balance_cents)
 	is_game_active = false
+
+
+func capture_save() -> Dictionary:
+	var inventory := {
+		"case_slot_bonus": 0,
+		"backstock_bin_bonus": 0,
+	}
+	if InventoryService.model != null:
+		inventory["case_slot_bonus"] = InventoryService.model.case_slot_bonus
+		inventory["backstock_bin_bonus"] = InventoryService.model.backstock_bin_bonus
+	var payload := {
+		"version": 1,
+		"day": current_day,
+		"reputation": current_reputation,
+		"phase": int(current_phase),
+		"attention_remaining": attention_remaining,
+		"shop": shop.to_save(),
+		"inventory": inventory,
+	}
+	var serialized := JSON.stringify(payload).to_utf8_buffer()
+	QaInstrumentation.record_save_pre_write(serialized)
+	return payload
+
+
+func restore_save(data: Dictionary) -> bool:
+	if data.is_empty() or int(data.get("version", 0)) != 1:
+		return false
+	if not data.has("shop") or not data.get("shop") is Dictionary:
+		return false
+	is_game_active = true
+	current_day = int(data.get("day", FIRST_DAY))
+	current_reputation = int(data.get("reputation", 0))
+	current_phase = int(data.get("phase", DayPhase.PREP)) as DayPhase
+	attention_remaining = int(
+		data.get("attention_remaining", balance_config.attention_pool)
+	)
+	shop.apply_save(data.get("shop", {}), balance_config)
+	var inventory: Dictionary = data.get("inventory", {})
+	InventoryService.apply_medium_capacity(
+		int(inventory.get("case_slot_bonus", 0)),
+		int(inventory.get("backstock_bin_bonus", 0))
+	)
+	var serialized := JSON.stringify(data).to_utf8_buffer()
+	QaInstrumentation.record_save_post_load(serialized)
+	EventBus.reputation_changed.emit(current_reputation)
+	EventBus.attention_changed.emit(attention_remaining)
+	EventBus.day_phase_changed.emit(current_phase)
+	EventBus.shop_layout_changed.emit()
+	return true

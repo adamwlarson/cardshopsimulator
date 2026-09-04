@@ -48,3 +48,32 @@ func duplicate_fixture() -> ShopFixture:
 	copy.is_display = is_display
 	copy.is_counter = is_counter
 	return copy
+
+
+func to_save() -> Dictionary:
+	return {
+		"id": String(id),
+		"kind": String(kind),
+		"display_name": display_name,
+		"origin_x": origin.x,
+		"origin_y": origin.y,
+		"size_x": size.x,
+		"size_y": size.y,
+		"movable": movable,
+		"is_display": is_display,
+		"is_counter": is_counter,
+	}
+
+
+static func from_save(data: Dictionary) -> ShopFixture:
+	var fixture := ShopFixture.new(
+		StringName(data.get("id", "")),
+		StringName(data.get("kind", "")),
+		String(data.get("display_name", "")),
+		Vector2i(int(data.get("origin_x", 0)), int(data.get("origin_y", 0))),
+		Vector2i(int(data.get("size_x", 1)), int(data.get("size_y", 1)))
+	)
+	fixture.movable = bool(data.get("movable", false))
+	fixture.is_display = bool(data.get("is_display", false))
+	fixture.is_counter = bool(data.get("is_counter", false))
+	return fixture

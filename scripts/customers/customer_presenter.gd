@@ -34,17 +34,20 @@ var _entrance: Vector3 = Vector3(4.05, 0.0, -0.45)
 func _ready() -> void:
 	_rng.randomize()
 	_bind_shop_markers()
+	_sync_floor_grid()
 	if _browse_points.is_empty():
 		for tile: Vector2i in _grid.browse_tiles:
 			_browse_points.append(_grid.tile_to_world(tile))
 	if _queue_points.is_empty():
 		for tile: Vector2i in _grid.queue_tiles:
 			_queue_points.append(_grid.tile_to_world(tile))
-	_entrance = _grid.tile_to_world(_grid.entrance_tile)
+	if _floor_root == null or _floor_root.get_node_or_null("Entrance") == null:
+		_entrance = _grid.tile_to_world(_grid.entrance_tile)
 	_connect_bus("customer_arrived", _on_customer_arrived)
 	_connect_bus("customer_resolved", _on_customer_resolved)
 	_connect_bus("customer_head_changed", _on_customer_head_changed)
 	_connect_bus("day_phase_changed", _on_phase_changed)
+	_connect_bus("shop_layout_changed", _on_shop_layout_changed)
 
 
 func _bind_shop_markers() -> void:
@@ -188,6 +191,20 @@ func _on_phase_changed(phase: int) -> void:
 		return
 	for npc: CustomerNpc in _npc_list():
 		_enter_exit(npc)
+
+
+func _on_shop_layout_changed() -> void:
+	_sync_floor_grid()
+
+
+func _sync_floor_grid() -> void:
+	var gs := _autoload("GameState")
+	if gs == null:
+		return
+	var shop := gs.get("shop") as ShopState
+	if shop == null or shop.floor_grid == null:
+		return
+	_grid = shop.floor_grid
 
 
 func _begin_browse(npc: CustomerNpc) -> void:

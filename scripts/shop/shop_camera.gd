@@ -20,6 +20,7 @@ const PITCH_MAX_DEGREES := 5.0
 const YAW_MIN_DEGREES := -70.0
 const YAW_MAX_DEGREES := 70.0
 const HOME_FOV := 70.0
+const MEDIUM_AISLE_OFFSET := Vector3(1.8, 0.15, -0.9)
 
 @export var aisle_position: Vector3 = AISLE_POSITION
 @export var aisle_rotation_degrees: Vector3 = AISLE_ROTATION_DEGREES
@@ -32,10 +33,12 @@ var _home_pose: StringName = POSE_BEHIND_COUNTER
 var _yaw_offset_degrees: float = 0.0
 var _pitch_offset_degrees: float = 0.0
 var _looking: bool = false
+var _extent_offset: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
 	fov = HOME_FOV
+	_bind_shop_extent()
 	apply_home_pose(default_home_pose)
 
 
@@ -104,7 +107,7 @@ func _set_looking(pressed: bool) -> void:
 
 func _home_position() -> Vector3:
 	if _home_pose == POSE_AISLE:
-		return aisle_position
+		return aisle_position + _extent_offset
 	return behind_counter_position
 
 
@@ -135,3 +138,41 @@ func _apply_clamped_look() -> void:
 func _gui_owns_text_input() -> bool:
 	var focus := get_viewport().gui_get_focus_owner()
 	return focus is LineEdit or focus is TextEdit
+
+
+func _bind_shop_extent() -> void:
+	var bus := _event_bus()
+	if bus != null and not bus.is_connected("shop_layout_changed", _on_shop_layout_changed):
+		bus.connect("shop_layout_changed", _on_shop_layout_changed)
+	_sync_extent_from_shop()
+
+
+func _on_shop_layout_changed() -> void:
+	_sync_extent_from_shop()
+	if _home_pose == POSE_AISLE:
+		apply_home_pose(POSE_AISLE)
+
+
+func _sync_extent_from_shop() -> void:
+	_extent_offset = Vector3.ZERO
+	var gs := _game_state()
+	if gs == null:
+		return
+	var shop := gs.get("shop") as ShopState
+	if shop == null or shop.tier != ShopState.Tier.MEDIUM:
+		return
+	_extent_offset = MEDIUM_AISLE_OFFSET
+
+
+func _event_bus() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	return tree.root.get_node_or_null("EventBus")
+
+
+func _game_state() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	return tree.root.get_node_or_null("GameState")

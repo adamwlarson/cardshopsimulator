@@ -1,4 +1,4 @@
-[gd_scene load_steps=35 format=3]
+[gd_scene load_steps=36 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
@@ -33,6 +33,7 @@
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_back_office_glimpse_01/prop_back_office_glimpse_01.glb" id="31_back_office"]
 [ext_resource type="Script" path="res://scripts/shop/shop_camera.gd" id="32_camera"]
 [ext_resource type="Script" path="res://scripts/customers/customer_presenter.gd" id="33_presenter"]
+[ext_resource type="Script" path="res://scripts/shop/shop_floor_extent.gd" id="34_extent"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -66,6 +67,9 @@ script = ExtResource("32_camera")
 [node name="Architecture" type="Node3D" parent="."]
 
 [node name="ShopShell" parent="Architecture" instance=ExtResource("4_shell")]
+
+[node name="FloorExtent" type="Node3D" parent="."]
+script = ExtResource("34_extent")
 
 [node name="Fixtures" type="Node3D" parent="."]
 

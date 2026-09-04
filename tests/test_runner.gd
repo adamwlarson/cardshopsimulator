@@ -112,6 +112,7 @@ func _initialize() -> void:
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
 	_test_expand_medium_beat()
+	_test_medium_floor_growth()
 	_test_shady_trunk_beat()
 	_test_showcase_slab_and_singles_preconditions()
 	_test_shop_camera_framing()
@@ -2457,13 +2458,20 @@ func _test_expand_medium_beat() -> void:
 		"Sign cannot upgrade without gates"
 	)
 	_assert_payload_has_no_truth(_captured_beat_decision, "expand soft-fail")
+	var shop: ShopState = _game_state.get("shop")
+	var stay_walkable := shop.walkable_tile_count()
 	_expect_equal(
 		_beat_director.call("choose_beat_path", &"stay_small"),
 		true,
 		"Stay Small leaves the shop Small"
 	)
-	var shop: ShopState = _game_state.get("shop")
+	shop = _game_state.get("shop")
 	_expect_equal(shop.tier, ShopState.Tier.SMALL, "Stay Small keeps Small tier")
+	_expect_equal(shop.grid_width, ShopState.SMALL_GRID_WIDTH, "Stay Small width")
+	_expect_equal(shop.grid_height, ShopState.SMALL_GRID_HEIGHT, "Stay Small height")
+	_expect_equal(shop.layout.width, ShopState.SMALL_GRID_WIDTH, "Stay Small layout width")
+	_expect_equal(shop.layout.height, ShopState.SMALL_GRID_HEIGHT, "Stay Small layout height")
+	_expect_equal(shop.walkable_tile_count(), stay_walkable, "Stay Small walkable count")
 
 	_game_state.call("start_new_game")
 	_game_state.set("current_day", 18)
@@ -2503,12 +2511,22 @@ func _test_expand_medium_beat() -> void:
 	shop = _game_state.get("shop")
 	_expect_equal(shop.tier, ShopState.Tier.MEDIUM, "Sign upgrades to Medium")
 	_expect_equal(shop.staff_cap(), 3, "Medium staff cap unlocks")
+	_expect_equal(shop.grid_width, ShopState.MEDIUM_GRID_WIDTH, "Medium grid width 14")
+	_expect_equal(shop.grid_height, ShopState.MEDIUM_GRID_HEIGHT, "Medium grid height 10")
+	_expect_equal(shop.layout.width, 14, "layout grows to Medium width")
+	_expect_equal(shop.layout.height, 10, "layout grows to Medium height")
+	_expect_equal(shop.tile_count(), 140, "Medium tile count is 140")
 	_expect_equal(
-		shop.grid_width > ShopState.SMALL_GRID_WIDTH
-		or shop.grid_height > ShopState.SMALL_GRID_HEIGHT,
+		shop.walkable_tile_count() > stay_walkable,
 		true,
-		"Medium grid upgrade on confirm"
+		"Sign increases walkable tiles"
 	)
+	_expect_equal(
+		shop.layout.fixture_by_id(&"binder_rack").origin,
+		Vector2i(1, 4),
+		"existing fixtures stay on old tiles"
+	)
+	_expect_equal(shop.layout.has_circulation(), true, "Medium circulation holds")
 	_expect_equal(
 		(_inventory_service.get("model") as InventoryModel).case_slot_limit(),
 		NORMAL_CONFIG.case_slots + ShopState.MEDIUM_CASE_SLOT_BONUS,
@@ -2548,6 +2566,225 @@ func _test_expand_medium_beat() -> void:
 	)
 	_qa_autoload.call("set_force_enabled", false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_medium_floor_growth() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop: ShopState = _game_state.get("shop")
+	var small_walkable := shop.walkable_tile_count()
+	var small_grid_walkable := shop.floor_grid.walkable_count()
+	_expect_equal(shop.tile_count(), 80, "Small starts 10×8")
+	_expect_equal(small_walkable > 0, true, "Small has walkable tiles")
+
+	_game_state.set("current_day", 18)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_economy.set("balance_cents", 1_000_000)
+	_game_state.set("current_reputation", 40)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 18)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"wait_for_rep"),
+		true,
+		"Wait for Rep is available when Rep is low"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.SMALL, "Wait for Rep keeps Small")
+	_expect_equal(shop.grid_width, 10, "Wait for Rep width unchanged")
+	_expect_equal(shop.grid_height, 8, "Wait for Rep height unchanged")
+	_expect_equal(shop.layout.width, 10, "Wait for Rep layout width")
+	_expect_equal(shop.walkable_tile_count(), small_walkable, "Wait for Rep walkable")
+	_expect_equal(
+		shop.weekly_rent_cents(21),
+		NORMAL_CONFIG.rent_small_weekly_cents,
+		"Wait for Rep rent stays Small"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop")
+	var counter := shop.layout.fixture_by_id(&"counter")
+	_expect_equal(counter != null, true, "default counter exists")
+	counter.is_counter = false
+	_economy.set("balance_cents", 1_600_000)
+	_game_state.set("current_reputation", 55)
+	_expect_equal(
+		shop.preview_expand_medium(),
+		&"blocked_path",
+		"expand preview fails when counter is unreachable"
+	)
+	_expect_equal(
+		shop.expand_to_medium(18, 1_600_000, 55),
+		false,
+		"Sign refuses when Medium pathing fails"
+	)
+	_expect_equal(shop.tier, ShopState.Tier.SMALL, "failed Sign stays Small")
+	_expect_equal(shop.layout.width, 10, "failed Sign leaves layout Small")
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 18)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_economy.set("balance_cents", 1_600_000)
+	_game_state.set("current_reputation", 55)
+	shop = _game_state.get("shop")
+	var binder_origin := shop.layout.fixture_by_id(&"binder_rack").origin
+	_expect_equal(
+		_beat_director.call("_start_expand_medium"),
+		true,
+		"expand modal opens for growth test"
+	)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"sign_lease"),
+		true,
+		"Sign lease grows the floor"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.grid_width, 14, "signed width is 14")
+	_expect_equal(shop.grid_height, 10, "signed height is 10")
+	_expect_equal(
+		shop.walkable_tile_count() > small_walkable,
+		true,
+		"domain walkable tiles increase"
+	)
+	_expect_equal(
+		shop.floor_grid.walkable_count() > small_grid_walkable,
+		true,
+		"NPC grid walkable tiles increase"
+	)
+	_expect_equal(shop.floor_grid.width, 14, "NPC grid width is Medium")
+	_expect_equal(shop.floor_grid.is_walkable(Vector2i(12, 8)), true, "new Medium tile unlocks")
+	_expect_equal(
+		shop.layout.fixture_by_id(&"binder_rack").origin,
+		binder_origin,
+		"binder stays on its Small tile"
+	)
+	_expect_equal(shop.layout.has_circulation(), true, "layout circulation on Medium")
+	var circulation := shop.layout.circulation_path()
+	_expect_equal(circulation.is_empty(), false, "entrance→displays→counter path")
+	_assert_grid_path(
+		shop.floor_grid,
+		shop.floor_grid.entrance_tile,
+		shop.floor_grid.browse_tiles[0],
+		"Medium entrance→display"
+	)
+	_assert_grid_path(
+		shop.floor_grid,
+		shop.floor_grid.browse_tiles[0],
+		shop.floor_grid.desk_tile,
+		"Medium display→counter"
+	)
+	_assert_grid_path(
+		shop.floor_grid,
+		shop.floor_grid.entrance_tile,
+		Vector2i(12, 8),
+		"Medium entrance→new tile"
+	)
+	_game_state.call("start_floor")
+	var presenter := _make_floor_presenter()
+	_expect_equal(presenter.path_between(
+		shop.floor_grid.tile_to_world(shop.floor_grid.entrance_tile),
+		shop.floor_grid.tile_to_world(shop.floor_grid.desk_tile)
+	).is_empty(), false, "presenter paths on Medium grid")
+	presenter.free()
+
+	_expect_equal(
+		_economy.call("settle_weekly_obligations", 21),
+		true,
+		"week after Sign is a rent SETTLE day"
+	)
+	var rent_posted := 0
+	var ledger: Array = _economy.call("get_ledger")
+	for entry: Variant in ledger:
+		var row := entry as LedgerEntry
+		if row != null and row.category == &"rent":
+			rent_posted = row.amount_cents
+	_expect_equal(
+		rent_posted,
+		NORMAL_CONFIG.rent_medium_weekly_cents,
+		"SETTLE posts Medium weekly rent"
+	)
+
+	_game_state.set("attention_remaining", 100)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	var moved := _game_state.call(
+		"rearrange_fixture",
+		&"binder_rack",
+		Vector2i(12, 3)
+	) as Dictionary
+	_expect_equal(bool(moved.get("ok", false)), true, "rearrange onto new Medium tile")
+	_expect_equal(
+		shop.layout.fixture_by_id(&"binder_rack").origin,
+		Vector2i(12, 3),
+		"binder occupies unlocked tile"
+	)
+
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(saved.has("shop"), true, "save includes shop")
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.SMALL, "new game resets to Small")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"restore Medium save"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.MEDIUM, "save/load restores Medium")
+	_expect_equal(shop.grid_width, 14, "save/load width")
+	_expect_equal(shop.grid_height, 10, "save/load height")
+	_expect_equal(shop.layout.width, 14, "save/load layout width")
+	_expect_equal(shop.staff_cap(), 3, "save/load staff cap")
+	_expect_equal(
+		shop.layout.fixture_by_id(&"binder_rack").origin,
+		Vector2i(12, 3),
+		"save/load keeps migrated fixture"
+	)
+	_expect_equal(
+		shop.weekly_rent_cents(int(_game_state.get("current_day"))),
+		NORMAL_CONFIG.rent_small_weekly_cents,
+		"save/load signed-day rent stays Small"
+	)
+	_expect_equal(
+		shop.weekly_rent_cents(int(_game_state.get("current_day")) + 3),
+		NORMAL_CONFIG.rent_medium_weekly_cents,
+		"save/load Medium rent tier"
+	)
+	_expect_equal(
+		(_inventory_service.get("model") as InventoryModel).case_slot_limit(),
+		NORMAL_CONFIG.case_slots + ShopState.MEDIUM_CASE_SLOT_BONUS,
+		"save/load Medium case bonus"
+	)
+	_expect_equal(is_equal_approx(shop.usable_sq_ft(), 1220.625), true, "14×10 is ~1,221 sq ft")
+
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "shop_floor loads for Medium extent")
+	if packed != null:
+		var floor: Node = packed.instantiate()
+		root.add_child(floor)
+		var extent := floor.get_node_or_null("FloorExtent") as ShopFloorExtent
+		_expect_equal(extent != null, true, "FloorExtent present")
+		if extent != null:
+			extent.sync_from_shop()
+			_expect_equal(extent.is_medium_extension_visible(), true, "Medium floor+fog shown")
+			_expect_equal(extent.extra_floor_tile_count(), 60, "60 new tiles beyond Small")
+		var camera := floor.get_node_or_null("Camera") as ShopCamera
+		if camera != null:
+			camera.apply_home_pose(ShopCamera.POSE_AISLE)
+			_expect_equal(
+				camera.position.is_equal_approx(
+					ShopCamera.AISLE_POSITION + ShopCamera.MEDIUM_AISLE_OFFSET
+				),
+				true,
+				"Medium aisle camera pulls back"
+			)
+			camera.apply_home_pose(ShopCamera.POSE_BEHIND_COUNTER)
+			_expect_equal(
+				camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
+				true,
+				"Medium keeps Art behind-counter home"
+			)
+		floor.free()
+
 	_game_state.call("start_new_game")
 
 
