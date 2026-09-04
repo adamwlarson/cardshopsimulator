@@ -4,10 +4,6 @@ var balance_cents: int = 0
 var _ledger: Array[LedgerEntry] = []
 
 
-func _ready() -> void:
-	EventBus.day_started.connect(_on_day_started)
-
-
 func reset() -> void:
 	balance_cents = GameState.balance_config.start_cash_cents
 	_ledger.clear()
@@ -42,6 +38,11 @@ func settle_weekly_obligations(day: int) -> bool:
 	)
 
 
+func settle_day(day: int) -> void:
+	# Wage and utility services can attach here without changing phase ownership.
+	settle_weekly_obligations(day)
+
+
 func _record(kind: LedgerEntry.Kind, amount_cents: int, category: StringName, memo: String) -> bool:
 	if amount_cents <= 0:
 		push_warning("Transactions must have a positive amount.")
@@ -56,6 +57,3 @@ func _record(kind: LedgerEntry.Kind, amount_cents: int, category: StringName, me
 	return true
 
 
-func _on_day_started(day: int) -> void:
-	# TODO: Move this boundary to an explicit weekly settle phase.
-	settle_weekly_obligations(day)

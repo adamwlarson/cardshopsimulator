@@ -62,6 +62,7 @@ func seed_from_balance() -> void:
 			sku.base_market_cents / 2,
 			InventoryLocation.new(InventoryLocation.Type.BINDER)
 		)
+		card.listed_price_cents = sku.base_market_cents
 		add_card(card)
 	for index: int in balance_config.seed_bulk_cards:
 		add_card(CardInstance.new(
@@ -108,6 +109,7 @@ func add_stock(
 		lot.location = location.duplicate_location()
 		lot.qty = quantity
 		lot.acquired_cost_avg_cents = unit_cost_cents
+		lot.listed_price_cents = product.base_market_cents
 		stock_lots.append(lot)
 	else:
 		var new_qty := lot.qty + quantity

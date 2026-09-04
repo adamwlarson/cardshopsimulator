@@ -4,7 +4,13 @@ signal cash_changed(balance_cents: int)
 signal transaction_recorded(entry: LedgerEntry)
 signal inventory_changed(sku: StringName, quantity: int)
 signal day_started(day: int)
+signal day_phase_changed(phase: int)
+signal attention_changed(remaining: int)
+signal reputation_changed(reputation: int)
 signal customer_arrived(customer: CustomerProfile)
+signal customer_queue_changed(length: int)
+signal customer_head_changed(customer: CustomerProfile)
+signal customer_action_requested(action: StringName)
 
 func publish_cash_changed(balance_cents: int) -> void:
 	cash_changed.emit(balance_cents)
