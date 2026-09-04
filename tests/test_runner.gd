@@ -5493,7 +5493,7 @@ func _assert_medium_overheads(lights_root: Node, want_visible: bool, label: Stri
 	if lights_root == null:
 		return
 	var sot := {
-		"MidCenter": Vector3(6.3, 2.79, -4.95),
+		"MidCenter": Vector3(5.4, 2.79, -4.95),
 		"FarFront": Vector3(10.35, 2.79, -2.25),
 		"FarBack": Vector3(10.35, 2.79, -4.95),
 		"DeepLeft": Vector3(2.25, 2.79, -7.2),
@@ -5535,13 +5535,24 @@ func _assert_medium_overheads(lights_root: Node, want_visible: bool, label: Stri
 			"%s %sFill same XZ Y=2.55" % [label, mesh_name]
 		)
 		_assert_overhead_fill_recipe(fill, "%s %sFill" % [label, mesh_name])
-	var mid := lights_root.get_node_or_null("MidCenter")
-	var back_right := lights_root.get_node_or_null("BackRight")
+	var mid := lights_root.get_node_or_null("MidCenter") as Node3D
+	var back_right := lights_root.get_node_or_null("BackRight") as Node3D
 	_expect_equal(
 		mid != null and back_right != null and mid != back_right,
 		true,
 		"%s MidCenter stays a distinct node from BackRight" % label
 	)
+	if mid != null and back_right != null:
+		_expect_equal(
+			is_equal_approx(back_right.position.x, 6.75),
+			true,
+			"%s BackRight stays at X=6.75" % label
+		)
+		_expect_equal(
+			is_equal_approx(absf(mid.position.x - back_right.position.x), 1.35),
+			true,
+			"%s MidCenter dX 1.35 m from BackRight" % label
+		)
 
 
 func _assert_overhead_fill_recipe(omni: OmniLight3D, label: String) -> void:
