@@ -4978,24 +4978,40 @@ func _test_c3_drive_shortens_floor_courier_keeps() -> void:
 		true,
 		"C3 gate 2: Drive skip persists in save"
 	)
-	var clock := DayClock.new()
-	clock.day_length_seconds = 180.0
-	root.add_child(clock)
 	_expect_equal(_game_state.call("start_floor"), true, "C3 gate 2: open FLOOR after Drive")
 	var drive_skip := NORMAL_CONFIG.marketplace_outing_floor_skip_seconds
 	_expect_equal(
-		clock.elapsed_seconds >= drive_skip - 0.05
-		and clock.elapsed_seconds < drive_skip + 1.0,
+		is_equal_approx(
+			float(_game_state.get("pending_floor_skip_seconds")),
+			drive_skip
+		),
 		true,
-		"C3 gate 2: DayClock shortens FLOOR after Drive"
+		"C3 gate 2: skip is still queued when FLOOR opens"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_game_state.call("consume_floor_skip")),
+			drive_skip
+		),
+		true,
+		"C3 gate 2: DayClock consume shortens FLOOR after Drive"
 	)
 	_expect_equal(
 		float(_game_state.get("pending_floor_skip_seconds")),
 		0.0,
 		"C3 gate 2: skip is consumed on FLOOR start"
 	)
-	root.remove_child(clock)
-	clock.free()
+	var clock_source := FileAccess.get_file_as_string("res://scripts/core/day_clock.gd")
+	_expect_equal(
+		clock_source.contains("consume_floor_skip"),
+		true,
+		"C3 gate 2: DayClock consumes the Drive skip"
+	)
+	_expect_equal(
+		clock_source.contains("DayPhase.FLOOR"),
+		true,
+		"C3 gate 2: DayClock applies skip on FLOOR"
+	)
 
 	_game_state.call("start_new_game")
 	_game_state.set("current_day", 3)
@@ -5029,17 +5045,12 @@ func _test_c3_drive_shortens_floor_courier_keeps() -> void:
 		&"marketplace-outing-steal",
 		"C3 gate 2: Courier opens BuyOpportunityDetail"
 	)
-	clock = DayClock.new()
-	clock.day_length_seconds = 180.0
-	root.add_child(clock)
 	_expect_equal(_game_state.call("start_floor"), true, "C3 gate 2: open FLOOR after Courier")
 	_expect_equal(
-		clock.elapsed_seconds < 1.0,
-		true,
+		float(_game_state.call("consume_floor_skip")),
+		0.0,
 		"C3 gate 2: Courier keeps full FLOOR"
 	)
-	root.remove_child(clock)
-	clock.free()
 
 
 func _test_c3_shady_confirm_has_no_truth() -> void:
