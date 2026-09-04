@@ -30,6 +30,7 @@
 | Backstock bins | 48 | 40 | 32 |
 | Seed sealed | 4 blasters + 2 Dust ETBs + **1 Skie blaster** | 4 blasters + 2 Dust ETBs | 3 blasters + 2 Dust ETBs |
 | Seed staples (named) | 10 playable rares | 8 | 5 |
+| Bulk binder cards (`seed_bulk_cards`) | 100 | **80** | 50 |
 | Accessories | sleeves 300 / top 75 | 200 / 50 | 120 / 30 |
 | Staff | Owner + **trainee cashier** (Reliability 0.85, 3 days free then $80) | Owner only | Owner only |
 | First rent due | Day **10** | Day **7** | Day **7** (no grace) |
@@ -155,6 +156,7 @@ enum Difficulty { EASY, NORMAL, HARD }
 @export var seed_dust_etbs: int = 2
 @export var seed_skie_blasters: int = 0              # Easy: 1
 @export var seed_named_staples: int = 8
+@export var seed_bulk_cards: int = 80             # systems §2.5 binder C/U; Easy 100 / Hard 50
 @export var seed_sleeves: int = 200
 @export var seed_toploaders: int = 50
 @export var start_with_trainee_cashier: bool = false # Easy: true
@@ -224,6 +226,8 @@ enum Difficulty { EASY, NORMAL, HARD }
 4. **Easy trainee cashier** — `start_with_trainee_cashier` + `trainee_free_days` (default 3) are BalanceConfig. Post-free wage = staff table Cashier **$80/day** (not duplicated on BalanceConfig).
 5. **Gross margin target blend** (§2) — **QA / design playtest target only**; omit from Resource.
 6. **Attention action costs** — correctly **absent** from BalanceConfig (pool-only scarcity); costs stay in systems-design §6.2 constants.
+
+7. **`seed_bulk_cards`** — binder commons/uncommons count (systems §2.5). Normal default **80**; Easy 100 / Hard 50. Eng shipped this field; doc folded 2026-09-04.
 
 ## 9. Out of scope
 
