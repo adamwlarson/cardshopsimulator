@@ -1,0 +1,17 @@
+width=12.8400
+depth=9.2500
+height=2.8700
+min_z=-0.040000
+min_x=-0.120000
+min_y=-0.130000
+floor_w=12.6000
+floor_d=9.0000
+wall_h=2.8000
+verts=480
+polys=520
+tris=880
+materials=Floor,Wall,TrimMetal,Trim,Ceiling
+footprint_tiles=14x10
+tile_m=0.9
+pivot=floor_southwest_corner
+size=medium

@@ -2474,6 +2474,7 @@ func _test_expand_medium_beat() -> void:
 	_expect_equal(shop.layout.width, ShopState.SMALL_GRID_WIDTH, "Stay Small layout width")
 	_expect_equal(shop.layout.height, ShopState.SMALL_GRID_HEIGHT, "Stay Small layout height")
 	_expect_equal(shop.walkable_tile_count(), stay_walkable, "Stay Small walkable count")
+	_assert_shop_shell_state(false, "Stay Small")
 
 	_game_state.call("start_new_game")
 	_game_state.set("current_day", 18)
@@ -2579,6 +2580,12 @@ func _test_medium_floor_growth() -> void:
 	var small_grid_walkable := shop.floor_grid.walkable_count()
 	_expect_equal(shop.tile_count(), 80, "Small starts 10×8")
 	_expect_equal(small_walkable > 0, true, "Small has walkable tiles")
+	_expect_equal(
+		FileAccess.file_exists(ShopFloorExtent.MEDIUM_SHELL_SCENE),
+		true,
+		"Art Medium shell GLB is on disk"
+	)
+	_assert_shop_shell_state(false, "pre-Sign / Stay Small")
 
 	_game_state.set("current_day", 18)
 	_game_state.set("current_phase", DayPhasePolicy.PREP)
@@ -2758,41 +2765,10 @@ func _test_medium_floor_growth() -> void:
 	)
 	_expect_equal(is_equal_approx(shop.usable_sq_ft(), 1220.625), true, "14×10 is ~1,221 sq ft")
 
-	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
-	_expect_equal(packed != null, true, "shop_floor loads for Medium extent")
-	if packed != null:
-		var floor: Node = packed.instantiate()
-		root.add_child(floor)
-		var extent := floor.get_node_or_null("FloorExtent") as ShopFloorExtent
-		_expect_equal(extent != null, true, "FloorExtent present")
-		if extent != null:
-			extent.sync_from_shop()
-			_expect_equal(extent.is_medium_extension_visible(), true, "Medium floor/wall stub shown")
-			_expect_equal(extent.extra_floor_tile_count(), 60, "60 new tiles beyond Small")
-			_expect_equal(extent.has_fog_veil(), false, "Medium stub is floor/walls, not fog")
-			_expect_equal(extent.has_node("MediumWallEast"), true, "Medium east wall stub")
-			_expect_equal(extent.has_node("MediumWallNorth"), true, "Medium north wall stub")
-			var art_shell := floor.get_node_or_null("Architecture/ShopShell") as Node3D
-			if art_shell != null:
-				_expect_equal(art_shell.visible, false, "Small Art GLB hidden on Medium")
-		var camera := floor.get_node_or_null("Camera") as ShopCamera
-		if camera != null:
-			camera.apply_home_pose(ShopCamera.POSE_AISLE)
-			_expect_equal(
-				camera.position.is_equal_approx(ShopCamera.AISLE_POSITION),
-				true,
-				"Medium does not churn aisle camera"
-			)
-			_expect_equal(is_equal_approx(camera.fov, ShopCamera.HOME_FOV), true, "Medium does not churn FOV")
-			camera.apply_home_pose(ShopCamera.POSE_BEHIND_COUNTER)
-			_expect_equal(
-				camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
-				true,
-				"Medium keeps Art behind-counter home"
-			)
-		floor.free()
+	_assert_shop_shell_state(true, "Sign / save-load Medium")
 
 	_game_state.call("start_new_game")
+	_assert_shop_shell_state(false, "new game resets Small shell")
 
 
 func _test_shady_trunk_beat() -> void:
@@ -4193,6 +4169,76 @@ func _expect_payload_keys(
 	var payload: Dictionary = event["payload"]
 	for key: StringName in expected_keys:
 		_expect_equal(payload.has(String(key)), true, "%s key %s" % [label, key])
+
+
+func _assert_shop_shell_state(want_medium: bool, label: String) -> void:
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "%s shop_floor loads" % label)
+	if packed == null:
+		return
+	var floor: Node = packed.instantiate()
+	root.add_child(floor)
+	var extent := floor.get_node_or_null("FloorExtent") as ShopFloorExtent
+	_expect_equal(extent != null, true, "%s FloorExtent present" % label)
+	if extent != null:
+		extent.sync_from_shop()
+		_expect_equal(
+			extent.is_medium_extension_visible(),
+			want_medium,
+			"%s Art Medium shell visibility" % label
+		)
+		_expect_equal(
+			extent.extra_floor_tile_count(),
+			60 if want_medium else 0,
+			"%s extra tiles" % label
+		)
+		_expect_equal(extent.has_fog_veil(), false, "%s fog stays nacked" % label)
+		_expect_equal(
+			extent.has_code_driven_stub(),
+			false,
+			"%s code-driven MediumFloor stub gone" % label
+		)
+		_expect_equal(extent.has_node("MediumFloor"), false, "%s no MediumFloor node" % label)
+		_expect_equal(extent.has_node("MediumWallEast"), false, "%s no east wall stub" % label)
+		_expect_equal(extent.has_node("MediumWallNorth"), false, "%s no north wall stub" % label)
+	var small_shell := floor.get_node_or_null("Architecture/ShopShell") as Node3D
+	var medium_shell := floor.get_node_or_null("Architecture/ShopShellMedium") as Node3D
+	_expect_equal(small_shell != null, true, "%s Small Art GLB instanced" % label)
+	_expect_equal(medium_shell != null, true, "%s Medium Art GLB instanced" % label)
+	if small_shell != null:
+		_expect_equal(small_shell.visible, not want_medium, "%s Small shell visible" % label)
+	if medium_shell != null:
+		_expect_equal(medium_shell.visible, want_medium, "%s Medium shell visible" % label)
+		_expect_equal(
+			medium_shell.position.is_equal_approx(Vector3.ZERO),
+			true,
+			"%s Medium SW pivot at origin" % label
+		)
+		_expect_equal(
+			medium_shell.scale.is_equal_approx(Vector3.ONE),
+			true,
+			"%s Medium scale 1u=1m" % label
+		)
+	var camera := floor.get_node_or_null("Camera") as ShopCamera
+	if camera != null:
+		camera.apply_home_pose(ShopCamera.POSE_AISLE)
+		_expect_equal(
+			camera.position.is_equal_approx(ShopCamera.AISLE_POSITION),
+			true,
+			"%s does not churn aisle camera" % label
+		)
+		_expect_equal(
+			is_equal_approx(camera.fov, ShopCamera.HOME_FOV),
+			true,
+			"%s does not churn FOV" % label
+		)
+		camera.apply_home_pose(ShopCamera.POSE_BEHIND_COUNTER)
+		_expect_equal(
+			camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
+			true,
+			"%s keeps Art behind-counter home" % label
+		)
+	floor.free()
 
 
 func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:
