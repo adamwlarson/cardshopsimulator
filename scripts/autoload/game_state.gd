@@ -103,7 +103,12 @@ func consume_attention(amount: int) -> bool:
 
 
 func can_research() -> bool:
-	return is_game_active and current_phase in [DayPhase.PREP, DayPhase.FLOOR]
+	# HOLD H1: Att-0 fold — same gate as other owner Att verbs.
+	return (
+		is_game_active
+		and current_phase in [DayPhase.PREP, DayPhase.FLOOR]
+		and attention_remaining >= shop.research_attention_cost()
+	)
 
 
 func can_inspect() -> bool:

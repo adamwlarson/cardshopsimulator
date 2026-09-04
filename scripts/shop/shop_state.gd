@@ -88,13 +88,21 @@ func seed_attendance_rng(rng_seed: int) -> void:
 	_attendance_rng.seed = rng_seed
 
 
+func staff_noshow_mult() -> float:
+	# HOLD H2: Easy/Hard omit or inherit Normal 0.4 via BalanceConfig default.
+	if _config != null:
+		return _config.staff_noshow_mult
+	return 0.4
+
+
 func noshow_chance(member: StaffMember) -> float:
 	if member == null or not member.is_cashier():
 		return 0.0
-	var scale := 0.4
-	if _config != null:
-		scale = _config.staff_noshow_mult
-	return clampf((1.0 - member.clamped_reliability()) * scale, 0.0, 0.95)
+	return clampf(
+		(1.0 - member.clamped_reliability()) * staff_noshow_mult(),
+		0.0,
+		0.95
+	)
 
 
 func reset_daily_attendance() -> void:
@@ -142,6 +150,7 @@ func shrink_rate() -> float:
 
 
 func pull_attention_cost() -> int:
+	# HOLD H3: Easy/Hard inherit Normal Pull Att 5 via BalanceConfig default.
 	if _config != null:
 		return maxi(1, _config.pull_attention)
 	return 5
@@ -156,8 +165,9 @@ func specialist_count() -> int:
 
 
 func specialist_wage_cents() -> int:
-	if _config != null:
-		return maxi(1, _config.specialist_wage_cents)
+	# HOLD H4: omitted Easy/Hard overrides fall back to Normal $140/day.
+	if _config != null and _config.specialist_wage_cents > 0:
+		return _config.specialist_wage_cents
 	return 14_000
 
 
@@ -165,8 +175,10 @@ func staff_cap() -> int:
 	var small_cap := 1
 	var medium_cap := 3
 	if _config != null:
-		small_cap = _config.staff_cap_small
-		medium_cap = _config.staff_cap_medium
+		if _config.staff_cap_small > 0:
+			small_cap = _config.staff_cap_small
+		if _config.staff_cap_medium > 0:
+			medium_cap = _config.staff_cap_medium
 	if tier == Tier.MEDIUM:
 		return medium_cap
 	return small_cap
