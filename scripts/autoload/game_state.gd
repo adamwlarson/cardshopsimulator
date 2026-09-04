@@ -22,15 +22,20 @@ func start_new_game() -> void:
 	is_game_active = true
 	Economy.reset()
 	InventoryService.reset()
+	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
 
 
 func advance_day() -> void:
 	if not is_game_active:
 		return
+	QaInstrumentation.end_day(current_day, Economy.balance_cents)
 	current_day += 1
+	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
 
 
 func return_to_menu() -> void:
+	if is_game_active:
+		QaInstrumentation.end_day(current_day, Economy.balance_cents)
 	is_game_active = false

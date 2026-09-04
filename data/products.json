@@ -6,7 +6,14 @@
       "display_name": "Skiefall Ascension Explorer Box",
       "product_type": "sealed",
       "default_condition": "sealed",
-      "market_price_cents": 4499
+      "market_price_cents": 4999
+    },
+    {
+      "sku": "AA-SKIE-BLST",
+      "display_name": "Skiefall Ascension Blaster",
+      "product_type": "sealed",
+      "default_condition": "sealed",
+      "market_price_cents": 2999
     },
     {
       "sku": "AA-DUST-ETB",
@@ -16,32 +23,44 @@
       "market_price_cents": 4499
     },
     {
-      "sku": "AA-BASE-088-NM",
-      "display_name": "Bastion Captain \u2014 Near Mint",
+      "sku": "AA-BASE-BULK",
+      "display_name": "Foundations Bulk Card",
       "product_type": "single",
       "default_condition": "near_mint",
-      "market_price_cents": 1299
+      "market_price_cents": 25,
+      "tags": ["bulk"]
     },
     {
-      "sku": "AA-BASE-078-NM",
-      "display_name": "Arcbolt Adept \u2014 Near Mint",
+      "sku": "AA-BASE-088",
+      "display_name": "Bastion Captain",
       "product_type": "single",
       "default_condition": "near_mint",
-      "market_price_cents": 999
+      "market_price_cents": 500,
+      "tags": ["staple", "archetype:mid"]
     },
     {
-      "sku": "AA-SKIE-047-NM",
-      "display_name": "Skiefall Titan \u2014 Near Mint",
+      "sku": "AA-BASE-078",
+      "display_name": "Arcbolt Adept",
       "product_type": "single",
       "default_condition": "near_mint",
-      "market_price_cents": 4999
+      "market_price_cents": 450,
+      "tags": ["staple", "archetype:aggro"]
     },
     {
-      "sku": "AA-SKIE-052-NM",
-      "display_name": "Empress of Updrafts \u2014 Near Mint",
+      "sku": "AA-SKIE-047",
+      "display_name": "Skiefall Titan",
       "product_type": "single",
       "default_condition": "near_mint",
-      "market_price_cents": 7999
+      "market_price_cents": 2200,
+      "tags": ["chase", "staple"]
+    },
+    {
+      "sku": "AA-SKIE-052",
+      "display_name": "Empress of Updrafts",
+      "product_type": "single",
+      "default_condition": "near_mint",
+      "market_price_cents": 7500,
+      "tags": ["chase", "legendary"]
     },
     {
       "sku": "ACC-SLV-60",
@@ -49,6 +68,13 @@
       "product_type": "accessory",
       "default_condition": "sealed",
       "market_price_cents": 599
+    },
+    {
+      "sku": "ACC-TOP-25",
+      "display_name": "Toploaders (25)",
+      "product_type": "accessory",
+      "default_condition": "sealed",
+      "market_price_cents": 699
     }
   ]
 }

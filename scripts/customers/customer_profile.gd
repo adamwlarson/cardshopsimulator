@@ -10,7 +10,7 @@ extends Resource
 func find_desired_stock() -> StockLot:
 	for sku: StringName in desired_skus:
 		var lot := InventoryService.get_lot(sku)
-		if lot != null and lot.quantity > 0:
+		if lot != null and lot.qty > 0:
 			return lot
 	return null
 

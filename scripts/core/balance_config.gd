@@ -18,6 +18,7 @@ enum Difficulty {
 @export var seed_dust_etbs: int = 2
 @export var seed_skie_blasters: int = 0
 @export var seed_named_staples: int = 8
+@export var seed_bulk_cards: int = 80
 @export var seed_sleeves: int = 200
 @export var seed_toploaders: int = 50
 @export var start_with_trainee_cashier: bool = false
