@@ -573,23 +573,24 @@ func _test_inspect_buy_opportunity() -> void:
 	)
 
 	_game_state.call("start_new_game")
-	var packed: PackedScene = load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
-	_expect_equal(packed != null, true, "gameplay HUD loads for inspect")
-	if packed == null:
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "gameplay HUD loads for inspect")
+	if hud == null:
 		return
-	var hud: Node = packed.instantiate()
-	root.add_child(hud)
-	var marketplace: BuyConfirmSignal = null
-	var distributor: BuyConfirmSignal = null
-	for dto: BuyConfirmSignal in _demand_signals.call("open_buy_signals"):
-		if dto.channel == &"marketplace" and marketplace == null:
-			marketplace = dto
-		elif dto.channel == &"distributor":
-			distributor = dto
-	_expect_equal(marketplace != null, true, "day 1 marketplace lot exists")
-	hud.call("_select_buy_opportunity", marketplace)
 	var inspect_button := hud.get_node_or_null("%InspectButton") as Button
 	var attention := hud.get_node_or_null("%AttentionLabel") as Label
+	var summary_label := hud.get_node_or_null("%BuySummary") as Label
+	var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+	_expect_equal(open_buy != null, true, "OpenBuyButton present")
+	open_buy.pressed.emit()
+	var marketplace_row_clicked := _click_buy_row_for_channel(hud, &"marketplace")
+	_expect_equal(marketplace_row_clicked, true, "day 1 marketplace lot exists")
+	var selected := hud.get("_buy_signal") as BuyConfirmSignal
+	_expect_equal(
+		selected != null and selected.channel == &"marketplace",
+		true,
+		"detail opened for marketplace lot"
+	)
 	_expect_equal(
 		inspect_button != null and inspect_button.visible,
 		true,
@@ -600,9 +601,10 @@ func _test_inspect_buy_opportunity() -> void:
 		true,
 		"Inspect★ enabled with full Attention"
 	)
-	var summary_label := hud.get_node("%BuySummary") as Label
-	var fog_summary := summary_label.text
+	var fog_summary := summary_label.text if summary_label != null else ""
+	var marketplace_fog := selected.condition_cue if selected != null else ""
 	inspect_button.pressed.emit()
+	selected = hud.get("_buy_signal") as BuyConfirmSignal
 	_expect_equal(
 		int(_game_state.get("attention_remaining")),
 		95,
@@ -613,14 +615,22 @@ func _test_inspect_buy_opportunity() -> void:
 		true,
 		"HUD Att label reflects inspect spend"
 	)
-	_expect_equal(marketplace.inspected, true, "HUD inspect updates the lot")
 	_expect_equal(
-		marketplace.condition_cue != ""
-		and marketplace.condition_cue != "Photo only — inspect recommended",
+		selected != null and selected.inspected,
+		true,
+		"HUD inspect updates the lot"
+	)
+	_expect_equal(
+		selected != null
+		and selected.condition_cue != ""
+		and selected.condition_cue != marketplace_fog,
 		true,
 		"HUD inspect updates condition cue"
 	)
-	_assert_text_has_no_truth(marketplace.condition_cue, "HUD inspect cue")
+	_assert_text_has_no_truth(
+		selected.condition_cue if selected != null else "",
+		"HUD inspect cue"
+	)
 	_assert_text_has_no_truth(summary_label.text, "HUD inspect summary")
 	_expect_equal(
 		summary_label.text != fog_summary,
@@ -634,7 +644,7 @@ func _test_inspect_buy_opportunity() -> void:
 	)
 
 	_game_state.set("attention_remaining", 4)
-	hud.call("_update_attention", 4)
+	Callable(hud, "_update_attention").call(4)
 	var shady := _demand_signals.call(
 		"buy_signal",
 		&"AA-SKIE-047",
@@ -643,7 +653,7 @@ func _test_inspect_buy_opportunity() -> void:
 		1
 	) as BuyConfirmSignal
 	shady.opportunity_id = &"test-shady-inspect"
-	hud.call("_select_buy_opportunity", shady)
+	_select_buy_on_hud(hud, shady)
 	_expect_equal(
 		inspect_button.visible,
 		true,
@@ -655,7 +665,7 @@ func _test_inspect_buy_opportunity() -> void:
 		"Inspect★ disabled when Attention is below cost"
 	)
 	var shady_fog_cue := shady.condition_cue
-	hud.call("_inspect_buy")
+	Callable(hud, "_inspect_buy").call()
 	_expect_equal(shady.inspected, false, "blocked inspect does not resolve")
 	_expect_equal(shady.condition_cue, shady_fog_cue, "blocked inspect keeps fog")
 	_expect_equal(
@@ -664,8 +674,12 @@ func _test_inspect_buy_opportunity() -> void:
 		"blocked Inspect★ does not debit Attention"
 	)
 
-	_expect_equal(distributor != null, true, "day 1 distributor lot exists")
-	hud.call("_select_buy_opportunity", distributor)
+	open_buy.pressed.emit()
+	_expect_equal(
+		_click_buy_row_for_channel(hud, &"distributor"),
+		true,
+		"day 1 distributor lot exists"
+	)
 	_expect_equal(
 		inspect_button.visible,
 		false,
@@ -2547,6 +2561,34 @@ func _choice_enabled(payload: Dictionary, choice_id: StringName) -> bool:
 			continue
 		return bool(choice.get("enabled", false))
 	return false
+
+
+func _instantiate_gameplay_hud() -> Node:
+	var packed: PackedScene = load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
+	if packed == null:
+		return null
+	var hud: Node = packed.instantiate()
+	root.add_child(hud)
+	if not hud.is_node_ready():
+		hud.notification(Node.NOTIFICATION_READY)
+	return hud
+
+
+func _click_buy_row_for_channel(hud: Node, channel: StringName) -> bool:
+	var rows := hud.get_node_or_null("%BuyOpportunityRows") as VBoxContainer
+	if rows == null:
+		return false
+	var prefix := "%s ·" % String(channel).capitalize()
+	for child: Node in rows.get_children():
+		var row := child as Button
+		if row != null and row.text.begins_with(prefix):
+			row.pressed.emit()
+			return true
+	return false
+
+
+func _select_buy_on_hud(hud: Node, dto: BuyConfirmSignal) -> void:
+	Callable(hud, "_select_buy_opportunity").call(dto)
 
 
 func _assert_text_has_no_truth(text: String, label: String) -> void:
