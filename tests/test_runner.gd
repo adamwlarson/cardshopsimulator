@@ -212,17 +212,19 @@ func _test_buy_opportunity_picker_seed() -> void:
 func _test_price_editor_inventory_picker() -> void:
 	var priceable_stock := InventoryService.get_priceable_stock()
 	var priceable_skus: Array[StringName] = []
+	var has_non_dustway_sku := false
 	for item: Dictionary in priceable_stock:
-		priceable_skus.append(StringName(item["sku_id"]))
+		var sku_id := StringName(item["sku_id"])
+		priceable_skus.append(sku_id)
+		if sku_id != &"AA-DUST-ETB":
+			has_non_dustway_sku = true
 	_expect_equal(
 		priceable_skus.size() > 1,
 		true,
 		"price picker exposes multiple seeded SKUs"
 	)
 	_expect_equal(
-		priceable_skus.any(func(sku: StringName) -> bool:
-			return sku != &"AA-DUST-ETB"
-		),
+		has_non_dustway_sku,
 		true,
 		"price picker is not Dustway-only"
 	)
