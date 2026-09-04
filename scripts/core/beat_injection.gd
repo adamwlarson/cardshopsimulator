@@ -545,16 +545,19 @@ func _start_expand_medium() -> bool:
 	):
 		return false
 	var config := GameState.balance_config
-	var can_sign := GameState.shop.can_expand_medium()
+	var can_sign := GameState.shop.can_expand_medium(
+		Economy.balance_cents,
+		GameState.current_reputation
+	)
 	var gate_lines: PackedStringArray = []
-	if not GameState.shop.cash_meets_medium():
+	if not GameState.shop.cash_meets_medium(Economy.balance_cents):
 		gate_lines.append(
 			"Need %s cash (have %s)." % [
 				DemandSignalPresenter.format_cents(config.expand_medium_cash_cents),
 				DemandSignalPresenter.format_cents(Economy.balance_cents),
 			]
 		)
-	if not GameState.shop.rep_meets_medium():
+	if not GameState.shop.rep_meets_medium(GameState.current_reputation):
 		gate_lines.append(
 			"Need Rep %d (have %d)." % [
 				config.expand_medium_rep,
@@ -578,7 +581,9 @@ func _start_expand_medium() -> bool:
 			{
 				"id": &"wait_for_rep",
 				"label": "Wait for Rep\nStay Small until reputation catches up",
-				"enabled": not GameState.shop.rep_meets_medium(),
+				"enabled": not GameState.shop.rep_meets_medium(
+					GameState.current_reputation
+				),
 			},
 			{
 				"id": &"stay_small",
@@ -722,10 +727,18 @@ func _choose_hire_cashier(choice: StringName) -> bool:
 func _choose_expand_medium(choice: StringName) -> bool:
 	match choice:
 		&"sign_lease":
-			if not GameState.shop.expand_to_medium(GameState.current_day):
+			if not GameState.shop.expand_to_medium(
+				GameState.current_day,
+				Economy.balance_cents,
+				GameState.current_reputation
+			):
 				return false
+			InventoryService.apply_medium_capacity(
+				ShopState.MEDIUM_CASE_SLOT_BONUS,
+				ShopState.MEDIUM_BACKSTOCK_BONUS
+			)
 		&"wait_for_rep":
-			if GameState.shop.rep_meets_medium():
+			if GameState.shop.rep_meets_medium(GameState.current_reputation):
 				return false
 		&"stay_small":
 			pass

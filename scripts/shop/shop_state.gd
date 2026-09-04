@@ -22,9 +22,11 @@ var staff: Array[StaffMember] = []
 var grid_width: int = SMALL_GRID_WIDTH
 var grid_height: int = SMALL_GRID_HEIGHT
 var medium_lease_signed_day: int = -1
+var _config: BalanceConfig
 
 
 func reset(config: BalanceConfig) -> void:
+	_config = config
 	tier = Tier.SMALL
 	staff.clear()
 	grid_width = SMALL_GRID_WIDTH
@@ -42,9 +44,14 @@ func hired_count() -> int:
 
 
 func staff_cap() -> int:
+	var small_cap := 1
+	var medium_cap := 3
+	if _config != null:
+		small_cap = _config.staff_cap_small
+		medium_cap = _config.staff_cap_medium
 	if tier == Tier.MEDIUM:
-		return GameState.balance_config.staff_cap_medium
-	return GameState.balance_config.staff_cap_small
+		return medium_cap
+	return small_cap
 
 
 func can_hire() -> bool:
@@ -63,67 +70,56 @@ func hire_cashier(cheap: bool) -> StaffMember:
 	return member
 
 
-func cash_meets_medium() -> bool:
-	return Economy.balance_cents >= GameState.balance_config.expand_medium_cash_cents
+func cash_meets_medium(cash_cents: int) -> bool:
+	return _config != null and cash_cents >= _config.expand_medium_cash_cents
 
 
-func rep_meets_medium() -> bool:
-	return GameState.current_reputation >= GameState.balance_config.expand_medium_rep
+func rep_meets_medium(reputation: int) -> bool:
+	return _config != null and reputation >= _config.expand_medium_rep
 
 
-func can_expand_medium() -> bool:
-	return tier == Tier.SMALL and cash_meets_medium() and rep_meets_medium()
+func can_expand_medium(cash_cents: int, reputation: int) -> bool:
+	return (
+		tier == Tier.SMALL
+		and cash_meets_medium(cash_cents)
+		and rep_meets_medium(reputation)
+	)
 
 
-func expand_to_medium(signed_day: int) -> bool:
-	if not can_expand_medium():
+func expand_to_medium(signed_day: int, cash_cents: int, reputation: int) -> bool:
+	if not can_expand_medium(cash_cents, reputation):
 		return false
 	tier = Tier.MEDIUM
 	medium_lease_signed_day = signed_day
 	grid_width = MEDIUM_GRID_WIDTH
 	grid_height = MEDIUM_GRID_HEIGHT
-	InventoryService.apply_medium_capacity(
-		MEDIUM_CASE_SLOT_BONUS,
-		MEDIUM_BACKSTOCK_BONUS
-	)
 	return true
 
 
 func weekly_rent_cents(day: int) -> int:
-	var config := GameState.balance_config
+	if _config == null:
+		return 0
 	if (
 		tier == Tier.MEDIUM
 		and medium_lease_signed_day >= 0
 		and day > medium_lease_signed_day
 	):
-		return config.rent_medium_weekly_cents
-	return config.rent_small_weekly_cents
+		return _config.rent_medium_weekly_cents
+	return _config.rent_small_weekly_cents
 
 
-func daily_wage_cents() -> int:
-	var total := 0
-	var wage_mult := GameState.balance_config.wage_mult
-	for member: StaffMember in staff:
-		if member.free_days_remaining > 0:
-			continue
-		total += maxi(1, roundi(float(member.wage_cents) * wage_mult))
-	return total
-
-
-func settle_wages() -> void:
+func take_due_wages() -> Array[Dictionary]:
+	var due: Array[Dictionary] = []
+	var wage_mult := _config.wage_mult if _config != null else 1.0
 	for member: StaffMember in staff:
 		if member.free_days_remaining > 0:
 			member.free_days_remaining -= 1
 			continue
-		var wage_cents := maxi(
-			1,
-			roundi(float(member.wage_cents) * GameState.balance_config.wage_mult)
-		)
-		Economy.record_expense(
-			wage_cents,
-			&"wages",
-			"%s wage" % member.display_name
-		)
+		due.append({
+			"amount_cents": maxi(1, roundi(float(member.wage_cents) * wage_mult)),
+			"memo": "%s wage" % member.display_name,
+		})
+	return due
 
 
 func _make_cashier(cheap: bool) -> StaffMember:

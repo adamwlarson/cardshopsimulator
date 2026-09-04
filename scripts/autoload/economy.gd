@@ -79,7 +79,12 @@ func settle_payday_loan() -> bool:
 func settle_day(day: int) -> void:
 	# Wage and utility services can attach here without changing phase ownership.
 	settle_weekly_obligations(day)
-	GameState.shop.settle_wages()
+	for wage: Dictionary in GameState.shop.take_due_wages():
+		record_expense(
+			int(wage.get("amount_cents", 0)),
+			&"wages",
+			String(wage.get("memo", "Staff wage"))
+		)
 	settle_payday_loan()
 
 
