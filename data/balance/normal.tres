@@ -48,6 +48,7 @@ comp_noise_width_mult = 1.0
 demand_band_sigma = 0.12
 research_cost_cents = 5000
 research_attention = 15
+inspect_attention = 5
 inspect_accuracy = 0.85
 shady_fake_slab_rate = 0.08
 fair_comp_mae_max = 0.12

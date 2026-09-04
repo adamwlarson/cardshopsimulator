@@ -62,6 +62,14 @@ func is_owner_only() -> bool:
 	return hired_count() == 0
 
 
+func inspect_attention_cost() -> int:
+	var cost := 5
+	if _config != null:
+		cost = _config.inspect_attention
+	# Specialist on duty later may reduce Owner 5 → 2.
+	return maxi(1, cost)
+
+
 func hire_cashier(cheap: bool) -> StaffMember:
 	if not can_hire():
 		return null

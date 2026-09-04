@@ -14,6 +14,7 @@ extends Resource
 @export var shown_demand_band: StringName
 @export var confidence: StringName
 @export var condition_cue: String
+@export var inspected: bool = false
 @export var remaining_cash_cents: int
 @export var space_required: int
 @export var space_free: int

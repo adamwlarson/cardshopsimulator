@@ -13,6 +13,7 @@ extends Control
 @onready var buy_panel: PanelContainer = %BuyOpportunityDetail
 @onready var buy_title: Label = %BuyOpportunityTitle
 @onready var buy_summary: Label = %BuySummary
+@onready var inspect_button: Button = %InspectButton
 @onready var buy_button: Button = %BuyButton
 @onready var buy_confirm_panel: PanelContainer = %BuyConfirm
 @onready var buy_confirm_summary: Label = %BuyConfirmSummary
@@ -87,6 +88,7 @@ func _ready() -> void:
 	%OpenBuyButton.pressed.connect(_open_buy_list)
 	%BuyListCancelButton.pressed.connect(_close_buy)
 	%BuyCancelButton.pressed.connect(_close_buy)
+	inspect_button.pressed.connect(_inspect_buy)
 	buy_button.pressed.connect(_open_buy_confirm)
 	%BuyBackButton.pressed.connect(_back_to_buy_detail)
 	%BuyConfirmButton.pressed.connect(_confirm_buy)
@@ -165,6 +167,7 @@ func _update_attention(remaining: int) -> void:
 		remaining,
 		GameState.balance_config.attention_pool,
 	]
+	_sync_inspect_button()
 
 
 func _update_queue(length: int) -> void:
@@ -210,6 +213,7 @@ func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
 	]
 	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
 	buy_button.disabled = not _buy_signal.can_confirm
+	_sync_inspect_button()
 	buy_list_panel.hide()
 	buy_panel.show()
 	buy_confirm_panel.hide()
@@ -246,6 +250,41 @@ func _confirm_buy() -> void:
 		_close_buy()
 
 
+func _inspect_buy() -> void:
+	if _buy_signal == null or _buy_signal.inspected:
+		_sync_inspect_button()
+		return
+	if not DemandSignals.can_inspect(_buy_signal):
+		_sync_inspect_button()
+		return
+	var cost := GameState.shop.inspect_attention_cost()
+	if GameState.attention_remaining < cost:
+		_sync_inspect_button()
+		return
+	if not GameState.consume_attention(cost):
+		_sync_inspect_button()
+		return
+	DemandSignals.inspect_buy(_buy_signal)
+	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
+	_sync_inspect_button()
+
+
+func _sync_inspect_button() -> void:
+	if inspect_button == null:
+		return
+	var recommended := (
+		_buy_signal != null
+		and DemandSignalService.recommends_inspect(_buy_signal.channel)
+	)
+	inspect_button.visible = recommended
+	if not recommended:
+		return
+	inspect_button.disabled = (
+		_buy_signal.inspected
+		or GameState.attention_remaining < GameState.shop.inspect_attention_cost()
+	)
+
+
 func _back_to_buy_detail() -> void:
 	buy_confirm_panel.hide()
 	buy_panel.show()
@@ -257,6 +296,7 @@ func _close_buy() -> void:
 	buy_panel.hide()
 	buy_confirm_panel.hide()
 	_buy_signal = null
+	_sync_inspect_button()
 	_sync_modal_veil()
 
 

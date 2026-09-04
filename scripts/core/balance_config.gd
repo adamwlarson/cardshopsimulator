@@ -57,6 +57,7 @@ enum Difficulty {
 
 @export var research_cost_cents: int = 5_000
 @export var research_attention: int = 15
+@export var inspect_attention: int = 5
 @export var inspect_accuracy: float = 0.85
 @export var shady_fake_slab_rate: float = 0.08
 
