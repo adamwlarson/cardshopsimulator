@@ -79,6 +79,7 @@ func advance_day() -> bool:
 	current_day += 1
 	current_phase = DayPhase.PREP
 	attention_remaining = balance_config.attention_pool
+	pending_floor_skip_seconds = 0.0
 	shop.reset_daily_attendance()
 	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
@@ -170,6 +171,10 @@ func _rearrange_result(
 	}
 
 
+func is_night_prep() -> bool:
+	return is_game_active and current_phase == DayPhase.PREP
+
+
 func queue_floor_skip(seconds: float) -> void:
 	if seconds <= 0.0:
 		return
@@ -207,6 +212,7 @@ func capture_save() -> Dictionary:
 		"reputation": current_reputation,
 		"phase": int(current_phase),
 		"attention_remaining": attention_remaining,
+		"pending_floor_skip_seconds": pending_floor_skip_seconds,
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
@@ -228,6 +234,7 @@ func restore_save(data: Dictionary) -> bool:
 	attention_remaining = int(
 		data.get("attention_remaining", balance_config.attention_pool)
 	)
+	pending_floor_skip_seconds = float(data.get("pending_floor_skip_seconds", 0.0))
 	shop.apply_save(data.get("shop", {}), balance_config)
 	var inventory: Dictionary = data.get("inventory", {})
 	InventoryService.apply_medium_capacity(

@@ -142,6 +142,10 @@ func _initialize() -> void:
 	_test_c2_unreliable_ten_day_stress()
 	_test_c2_att_zero_owner_verbs()
 	_test_c2_specialist_attention_assert()
+	_test_c3_beats_reachable_without_debug()
+	_test_c3_drive_shortens_floor_courier_keeps()
+	_test_c3_shady_confirm_has_no_truth()
+	_test_c3_report_applies_rep()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -2552,6 +2556,8 @@ func _test_marketplace_outing_beat() -> void:
 	_game_state.set("current_phase", DayPhasePolicy.PREP)
 	_beat_director.call("_start_day_beats", 3)
 	var cash_before_courier := int(_economy.get("balance_cents"))
+	var attention_before_courier := int(_game_state.get("attention_remaining"))
+	_captured_buy_focus_id = &""
 	_expect_equal(
 		_beat_director.call("choose_beat_path", &"courier"),
 		true,
@@ -2563,9 +2569,24 @@ func _test_marketplace_outing_beat() -> void:
 		"Courier pays fee and keeps FLOOR"
 	)
 	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		attention_before_courier,
+		"Courier does not spend Attention"
+	)
+	_expect_equal(
 		float(_game_state.get("pending_floor_skip_seconds")),
 		0.0,
 		"Courier does not skip FLOOR hours"
+	)
+	_expect_equal(
+		_captured_buy_focus_id,
+		&"marketplace-outing-steal",
+		"Courier opens BuyOpportunityDetail"
+	)
+	_expect_equal(
+		_captured_buy_focus_beat,
+		MARKETPLACE_OUTING_BEAT,
+		"Courier focus stays on the outing lot"
 	)
 
 	_game_state.call("start_new_game")
@@ -3301,6 +3322,16 @@ func _test_shady_trunk_beat() -> void:
 	_expect_equal(&"buy" in shady_ids, true, "shady offers Buy")
 	_expect_equal(&"report" in shady_ids, true, "shady offers Report")
 	_expect_equal(&"ignore" in shady_ids, true, "shady offers Ignore")
+	_expect_equal(
+		bool(_captured_beat_decision.get("night_prep", false)),
+		true,
+		"shady carries Night/PREP flag"
+	)
+	_expect_equal(
+		_game_state.call("is_night_prep"),
+		true,
+		"shady starts during Night/PREP"
+	)
 	_assert_payload_has_no_truth(_captured_beat_decision, "shady decision")
 	var shady_dto := _demand_signals.call(
 		"buy_signal_for_id",
@@ -3381,6 +3412,11 @@ func _test_shady_trunk_beat() -> void:
 		_beat_director.call("choose_beat_path", &"ignore"),
 		true,
 		"shady Ignore path"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"shady-trunk-lot") == null,
+		true,
+		"Ignore dismisses the opportunity"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 	_game_state.call("set_balance_config", HARD_CONFIG)
@@ -4802,6 +4838,342 @@ func _test_c2_specialist_attention_assert() -> void:
 	)
 	root.remove_child(hud)
 	hud.free()
+
+
+func _test_c3_beats_reachable_without_debug() -> void:
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call("start_pack_event", MarketEvent.KIND_FOG, {
+		"duration_days": 2,
+		"remaining_days": 2,
+	})
+	_game_state.set("current_day", 3)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "C3 gate 1: HUD loads")
+	_beat_director.call("_start_day_beats", 3)
+	_expect_equal(
+		_beat_director.call("is_started", MARKETPLACE_OUTING_BEAT),
+		true,
+		"C3 gate 1: outing reachable on Normal day 3 without debug"
+	)
+	_expect_equal(
+		StringName(_captured_beat_decision.get("beat_id", &"")),
+		MARKETPLACE_OUTING_BEAT,
+		"C3 gate 1: outing decision fires without QA trigger"
+	)
+	var outing_ids := _choice_ids(_captured_beat_decision)
+	_expect_equal(&"drive_out" in outing_ids, true, "C3 gate 1: Drive reachable")
+	_expect_equal(&"courier" in outing_ids, true, "C3 gate 1: Courier reachable")
+	_expect_equal(&"skip" in outing_ids, true, "C3 gate 1: Skip reachable")
+	if hud != null:
+		var decision := hud.get_node_or_null("%BeatDecision") as Control
+		var title := hud.get_node_or_null("%BeatDecisionTitle") as Label
+		_expect_equal(
+			decision != null and decision.visible,
+			true,
+			"C3 gate 1: outing modal is live"
+		)
+		_expect_equal(
+			title != null and title.text == "Off-site lot — leave the floor?",
+			true,
+			"C3 gate 1: outing modal title"
+		)
+		var drive := hud.get_node_or_null("%BeatChoiceAButton") as Button
+		var courier := hud.get_node_or_null("%BeatChoiceBButton") as Button
+		var skip := hud.get_node_or_null("%BeatChoiceCButton") as Button
+		_expect_equal(
+			drive != null and drive.visible and not drive.disabled,
+			true,
+			"C3 gate 1: Drive button live"
+		)
+		_expect_equal(
+			courier != null and courier.visible and not courier.disabled,
+			true,
+			"C3 gate 1: Courier button live"
+		)
+		_expect_equal(
+			skip != null and skip.visible and not skip.disabled,
+			true,
+			"C3 gate 1: Skip button live"
+		)
+		root.remove_child(hud)
+		hud.free()
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 18)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 18)
+	_beat_director.call("choose_beat_path", &"stay_small")
+	_game_state.set("current_day", 20)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	hud = _instantiate_gameplay_hud()
+	_beat_director.call("_start_day_beats", 20)
+	_expect_equal(
+		_beat_director.call("is_started", SHADY_TRUNK_BEAT),
+		true,
+		"C3 gate 1: shady reachable on Normal day 20 without debug"
+	)
+	_expect_equal(
+		_game_state.call("is_night_prep"),
+		true,
+		"C3 gate 1: shady uses Night/PREP window"
+	)
+	var shady_ids := _choice_ids(_captured_beat_decision)
+	_expect_equal(&"buy" in shady_ids, true, "C3 gate 1: Buy reachable")
+	_expect_equal(&"report" in shady_ids, true, "C3 gate 1: Report reachable")
+	_expect_equal(&"ignore" in shady_ids, true, "C3 gate 1: Ignore reachable")
+	if hud != null:
+		var shady_decision := hud.get_node_or_null("%BeatDecision") as Control
+		var shady_title := hud.get_node_or_null("%BeatDecisionTitle") as Label
+		_expect_equal(
+			shady_decision != null and shady_decision.visible,
+			true,
+			"C3 gate 1: shady modal is live"
+		)
+		_expect_equal(
+			shady_title != null and shady_title.text == "Trunk sale — too good?",
+			true,
+			"C3 gate 1: shady modal title"
+		)
+		root.remove_child(hud)
+		hud.free()
+
+
+func _test_c3_drive_shortens_floor_courier_keeps() -> void:
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 3)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 3)
+	var attention_before := int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"drive_out"),
+		true,
+		"C3 gate 2: Drive commits"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		attention_before - NORMAL_CONFIG.marketplace_outing_attention,
+		"C3 gate 2: Drive spends Att 25"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_game_state.get("pending_floor_skip_seconds")),
+			NORMAL_CONFIG.marketplace_outing_floor_skip_seconds
+		),
+		true,
+		"C3 gate 2: Drive queues 1–2 FLOOR hours"
+	)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(
+		is_equal_approx(
+			float(saved.get("pending_floor_skip_seconds", 0.0)),
+			NORMAL_CONFIG.marketplace_outing_floor_skip_seconds
+		),
+		true,
+		"C3 gate 2: Drive skip persists in save"
+	)
+	var clock := DayClock.new()
+	clock.day_length_seconds = 180.0
+	root.add_child(clock)
+	_expect_equal(_game_state.call("start_floor"), true, "C3 gate 2: open FLOOR after Drive")
+	var drive_skip := NORMAL_CONFIG.marketplace_outing_floor_skip_seconds
+	_expect_equal(
+		clock.elapsed_seconds >= drive_skip - 0.05
+		and clock.elapsed_seconds < drive_skip + 1.0,
+		true,
+		"C3 gate 2: DayClock shortens FLOOR after Drive"
+	)
+	_expect_equal(
+		float(_game_state.get("pending_floor_skip_seconds")),
+		0.0,
+		"C3 gate 2: skip is consumed on FLOOR start"
+	)
+	root.remove_child(clock)
+	clock.free()
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 3)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 3)
+	var cash_before := int(_economy.get("balance_cents"))
+	var attention_courier := int(_game_state.get("attention_remaining"))
+	_captured_buy_focus_id = &""
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"courier"),
+		true,
+		"C3 gate 2: Courier commits"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - NORMAL_CONFIG.marketplace_courier_fee_cents,
+		"C3 gate 2: Courier pays fee"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		attention_courier,
+		"C3 gate 2: Courier keeps Attention"
+	)
+	_expect_equal(
+		float(_game_state.get("pending_floor_skip_seconds")),
+		0.0,
+		"C3 gate 2: Courier does not queue FLOOR skip"
+	)
+	_expect_equal(
+		_captured_buy_focus_id,
+		&"marketplace-outing-steal",
+		"C3 gate 2: Courier opens BuyOpportunityDetail"
+	)
+	clock = DayClock.new()
+	clock.day_length_seconds = 180.0
+	root.add_child(clock)
+	_expect_equal(_game_state.call("start_floor"), true, "C3 gate 2: open FLOOR after Courier")
+	_expect_equal(
+		clock.elapsed_seconds < 1.0,
+		true,
+		"C3 gate 2: Courier keeps full FLOOR"
+	)
+	root.remove_child(clock)
+	clock.free()
+
+
+func _test_c3_shady_confirm_has_no_truth() -> void:
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_start_shady_on_normal_window()
+	_captured_buy_focus_id = &""
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"buy"),
+		true,
+		"C3 gate 3: Buy opens the trunk lot"
+	)
+	var dto := _demand_signals.call(
+		"buy_signal_for_id",
+		&"shady-trunk-lot"
+	) as BuyConfirmSignal
+	_expect_equal(dto != null, true, "C3 gate 3: shady lot still open")
+	if dto == null:
+		return
+	_expect_dto_has_no_truth_fields(dto, "C3 gate 3 shady DTO")
+	_expect_equal(dto.confidence, &"low", "C3 gate 3: Low confidence on detail")
+	_expect_equal(
+		dto.condition_cue.to_lower().contains("inspect"),
+		true,
+		"C3 gate 3: inspect cue on detail"
+	)
+	_assert_text_has_no_truth(dto.condition_cue, "C3 gate 3 condition cue")
+	_expect_equal(
+		dto.condition_cue.to_lower().contains("cert"),
+		false,
+		"C3 gate 3: cue has no cert token"
+	)
+	var summary := DemandSignalPresenter.buy_summary(dto)
+	_assert_text_has_no_truth(summary, "C3 gate 3 buy summary")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "C3 gate 3: HUD loads")
+	if hud == null:
+		return
+	_select_buy_on_hud(hud, dto)
+	var detail := hud.get_node_or_null("%BuyOpportunityDetail") as Control
+	var buy_summary := hud.get_node_or_null("%BuySummary") as Label
+	var inspect_button := hud.get_node_or_null("%InspectButton") as Button
+	_expect_equal(
+		detail != null and detail.visible,
+		true,
+		"C3 gate 3: BuyOpportunityDetail opens"
+	)
+	if buy_summary != null:
+		_assert_text_has_no_truth(buy_summary.text, "C3 gate 3 detail HUD")
+		_expect_equal(
+			buy_summary.text.to_lower().contains("low"),
+			true,
+			"C3 gate 3: detail shows Low confidence"
+		)
+		_expect_equal(
+			buy_summary.text.to_lower().contains("inspect"),
+			true,
+			"C3 gate 3: detail shows inspect cue"
+		)
+	_expect_equal(
+		inspect_button != null and inspect_button.visible,
+		true,
+		"C3 gate 3: Inspect★ shown on shady detail"
+	)
+	Callable(hud, "_open_buy_confirm").call()
+	var confirm := hud.get_node_or_null("%BuyConfirm") as Control
+	var confirm_summary := hud.get_node_or_null("%BuyConfirmSummary") as Label
+	_expect_equal(
+		confirm != null and confirm.visible,
+		true,
+		"C3 gate 3: confirm screen opens"
+	)
+	if confirm_summary != null:
+		_assert_text_has_no_truth(confirm_summary.text, "C3 gate 3 confirm HUD")
+		_expect_equal(
+			confirm_summary.text.to_lower().contains("cert_valid"),
+			false,
+			"C3 gate 3: confirm hides cert_valid"
+		)
+		for grade: String in DemandSignalService.CONDITION_GRADE_CUES:
+			_expect_equal(
+				confirm_summary.text.contains(grade),
+				false,
+				"C3 gate 3: confirm hides true condition %s" % grade
+			)
+	root.remove_child(hud)
+	hud.free()
+
+
+func _test_c3_report_applies_rep() -> void:
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_start_shady_on_normal_window()
+	var rep_before := int(_game_state.get("current_reputation"))
+	var expected_gain := NORMAL_CONFIG.shady_report_rep_gain
+	_expect_equal(expected_gain > 0, true, "C3 gate 4: BalanceConfig Report Rep > 0")
+	var stock_before: int = _inventory_service.call("total_owned", &"AA-SKIE-ETB")
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"report"),
+		true,
+		"C3 gate 4: Report commits without debug"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before + expected_gain,
+		"C3 gate 4: Report applies BalanceConfig Rep delta"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-SKIE-ETB")),
+		stock_before,
+		"C3 gate 4: Report grants no stock"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"shady-trunk-lot") == null,
+		true,
+		"C3 gate 4: Report removes the opportunity"
+	)
+	_expect_equal(
+		_beat_director.call("is_completed", SHADY_TRUNK_BEAT),
+		true,
+		"C3 gate 4: Report completes the beat"
+	)
+
+
+func _start_shady_on_normal_window() -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 18)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 18)
+	_beat_director.call("choose_beat_path", &"stay_small")
+	_game_state.set("current_day", 20)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 20)
 
 
 func _capture_scripted_customer(customer: CustomerProfile) -> void:
