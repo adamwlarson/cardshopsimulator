@@ -251,7 +251,7 @@ Scripted focus must use these names — no placeholders.
 ---
 
 
-### 5.1 Beat injection specs — §10 #4 / #7 / #8 (eng hooks)
+### 5.1 Beat injection specs — §10 required + optional (eng hooks)
 
 Inject via day script / `BeatDirector` (name flexible). Tag `beat_id` for QA. **No docs edits from cloud agents** — implement against this table.
 
@@ -300,16 +300,66 @@ Inject via day script / `BeatDirector` (name flexible). Tag `beat_id` for QA. **
 | Pass | Player can display slab **or** both singles, not all three if capacity blocks; decision is visible and reversible later same day |
 | Fail | Allows illegal over-capacity without warning |
 
+
+#### #3 Marketplace “steal” lot (day ~3 Normal) — optional
+
+| Field | Value |
+|-------|-------|
+| `beat_id` | `sec10_3_marketplace_outing` |
+| Preconditions | PREP has ≥1 marketplace `BuyOpportunity` (noisy comps, Low confidence, condition Photo only). Prefer a lot that looks underpriced vs noisy comp. |
+| Trigger | Modal “Off-site lot — leave the floor?” with **Drive out** (Attention 25 + miss 1–2 FLOOR hours) / **Courier fee** (pay fee, keep FLOOR) / **Skip** |
+| UI | Decision modal → if Drive/Courier, open `BuyOpportunityDetail` for that lot (§1.2); Skip dismisses opportunity |
+| Pass | All three options reachable; Drive reduces Attention + shortens FLOOR window that day; §4.5 signals on detail |
+| Fail | Auto-accepts lot; or missing Skip |
+
+#### #5 Hire first cashier (day ~5 Normal) — optional
+
+| Field | Value |
+|-------|-------|
+| `beat_id` | `sec10_5_hire_cashier` |
+| Preconditions | Staff roster = owner only; Small shop staff cap allows +1 |
+| Trigger | PREP modal “Counter’s getting slammed — hire help?” |
+| Options | **Hire Cashier** ($80/day, Reliability ~0.85) / **Keep solo** / **Hire cheap** (lower wage, Reliability ≤0.55, theft/no-show bias) |
+| UI | Staff hire confirm (new thin modal OK) → roster update; Keep solo closes beat |
+| Pass | Hire paths add staff + wage at SETTLE; cheap path shows Reliability warning |
+| Fail | Hires without wage; or exceeds staff cap |
+
+#### #9 Expand to Medium (day ~18–25 Normal) — optional
+
+| Field | Value |
+|-------|-------|
+| `beat_id` | `sec10_9_expand_medium` |
+| Preconditions | Systems §7.3 unlock check visible: Cash ≥ $15k **and** Rep ≥ 55 (or soft-fail modal explaining missing gate). |
+| Trigger | PREP modal “Landlord offered Medium unit — sign?” |
+| Options | **Sign lease** (rent → Medium weekly; grid/staff cap upgrade on confirm) / **Wait for Rep** (if Rep low) / **Stay Small** |
+| UI | Lease confirm showing old vs new rent + staff cap; no instant free upgrade |
+| Pass | Sign applies Medium rent next week + unlocks Medium grid/staff; Stay/Wait leave Small |
+| Fail | Upgrade without meeting gates; or rent unchanged after Sign |
+
+#### #10 Shady trunk deal (day ~20–30 Normal) — optional
+
+| Field | Value |
+|-------|-------|
+| `beat_id` | `sec10_10_shady_trunk` |
+| Preconditions | Night/PREP flag; one shady-channel `BuyOpportunity` (deep discount, Low confidence, elevated fake/condition risk) |
+| Trigger | Modal “Trunk sale — too good?” |
+| Options | **Buy** (opens BuyOpportunityDetail, shady confidence) / **Report** (+Rep, opportunity gone) / **Ignore** |
+| UI | Detail uses §4.5 Low confidence + strong inspect cue; graded lots may roll `cert_valid` fail on sale later |
+| Pass | All three options; Report grants Rep without inventory; Buy keeps asymmetric info |
+| Fail | Guarantees authentic stock; or skips §4.5 fog |
+
 #### Shared rules
 
 - Beats are **reachable on Normal** without cheats once day index hits window (difficulty-curves §6 day shifts OK).
-- MVP required set with hooks: **#1/#2** (picker), **#4/#6/#7/#8** (this §5.1).
+- MVP required set: **#1/#2** (picker), **#4/#6/#7/#8** (this §5.1).
+- Optional set (post visual pass): **#3/#5/#9/#10** (this §5.1).
 - Instrumentation: emit `beat_started` / `beat_completed` with `beat_id` behind `qa_instrumentation`.
 - Do not hardcode unrelated SKUs into buy HUD; use existing `BuyOpportunity` / customer / price flows.
 
 ## 6. QA hooks
 
-- Beats #1/#2/#4/#6/#7/#8 must open these flows with §4.5 fields visible **before** commit.
+- Required beats #1/#2/#4/#6/#7/#8 must open these flows with §4.5 fields visible **before** commit.
+- Optional #3/#5/#9/#10: same §4.5 rule when enabled.
 - Probe: player ranks deal quality above chance using only on-screen signals.
 - Forbidden if UI shows exact true_market or sell-through %.
 
