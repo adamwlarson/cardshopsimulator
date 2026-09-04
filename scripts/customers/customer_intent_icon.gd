@@ -1,5 +1,5 @@
 class_name CustomerIntentIcon
-extends Sprite3D
+extends Node3D
 
 enum Intent {
 	BROWSE,
@@ -7,30 +7,41 @@ enum Intent {
 	SELL,
 }
 
+const SCENE_BROWSE := (
+	"res://assets/props/shop/fixtures/prop_icon_browse_01/"
+	+ "prop_icon_browse_01.glb"
+)
+const SCENE_BUY := (
+	"res://assets/props/shop/fixtures/prop_icon_buy_01/"
+	+ "prop_icon_buy_01.glb"
+)
+const SCENE_SELL := (
+	"res://assets/props/shop/fixtures/prop_icon_sell_01/"
+	+ "prop_icon_sell_01.glb"
+)
+
 const COLOR_BROWSE := Color(0.82, 0.84, 0.86)
 const COLOR_BUY := Color(0.22, 0.72, 0.68)
 const COLOR_SELL := Color(0.92, 0.62, 0.22)
-const SIZE_PX := 64
 
 var intent: Intent = Intent.BROWSE
+var _meshes: Dictionary = {}
 
 
 func _ready() -> void:
-	billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	shaded = false
-	double_sided = true
-	pixel_size = 0.022
-	centered = true
-	alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
-	texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	render_priority = 8
+	_instance_icon(Intent.BROWSE, SCENE_BROWSE, COLOR_BROWSE)
+	_instance_icon(Intent.BUY, SCENE_BUY, COLOR_BUY)
+	_instance_icon(Intent.SELL, SCENE_SELL, COLOR_SELL)
 	apply_intent(intent)
+	set_process(true)
 
 
 func apply_intent(next: Intent) -> void:
 	intent = next
-	texture = _make_texture(next)
-	modulate = Color.WHITE
+	for key: Variant in _meshes.keys():
+		var node := _meshes[key] as Node3D
+		if node != null:
+			node.visible = int(key) == int(next)
 
 
 func intent_name() -> StringName:
@@ -47,6 +58,16 @@ func presentation() -> Dictionary:
 	return {"intent": intent_name()}
 
 
+static func scene_path_for(which: Intent) -> String:
+	match which:
+		Intent.BUY:
+			return SCENE_BUY
+		Intent.SELL:
+			return SCENE_SELL
+		_:
+			return SCENE_BROWSE
+
+
 func has_truth_fields() -> bool:
 	for key: Variant in presentation().keys():
 		var field := String(key)
@@ -61,70 +82,75 @@ func has_truth_fields() -> bool:
 	return false
 
 
-func _make_texture(next: Intent) -> Texture2D:
-	var image := Image.create(SIZE_PX, SIZE_PX, false, Image.FORMAT_RGBA8)
-	image.fill(Color(0, 0, 0, 0))
-	var color := COLOR_BROWSE
-	match next:
-		Intent.BUY:
-			color = COLOR_BUY
-		Intent.SELL:
-			color = COLOR_SELL
-	_fill_circle(image, 32, 32, 30, Color(0.08, 0.08, 0.09, 0.92))
-	_fill_circle(image, 32, 32, 26, color)
-	match next:
-		Intent.BUY:
-			_draw_bag(image)
-		Intent.SELL:
-			_draw_tag(image)
-		_:
-			_draw_magnifier(image)
-	return ImageTexture.create_from_image(image)
+func _process(_delta: float) -> void:
+	if not is_inside_tree():
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var target := cam.global_position
+	target.y = global_position.y
+	if target.distance_squared_to(global_position) < 0.0001:
+		return
+	# Icon GLBs face +Z; yaw-only billboard keeps the disc upright.
+	look_at(target, Vector3.UP, true)
 
 
-func _draw_magnifier(image: Image) -> void:
-	var ink := Color(0.10, 0.11, 0.12, 1.0)
-	_fill_circle(image, 28, 26, 12, ink)
-	_fill_circle(image, 28, 26, 7, COLOR_BROWSE)
-	_fill_rect(image, 36, 36, 12, 5, ink)
+func _instance_icon(which: Intent, path: String, fallback_color: Color) -> void:
+	var node := _load_art_icon(path)
+	if node == null:
+		node = _make_fallback_disc(fallback_color)
+	node.visible = false
+	node.scale = Vector3.ONE
+	add_child(node)
+	_unshade_icon(node)
+	_meshes[which] = node
 
 
-func _draw_bag(image: Image) -> void:
-	var ink := Color(0.08, 0.14, 0.14, 1.0)
-	_fill_rect(image, 20, 28, 24, 20, ink)
-	_fill_rect(image, 24, 18, 5, 12, ink)
-	_fill_rect(image, 35, 18, 5, 12, ink)
+func _load_art_icon(path: String) -> Node3D:
+	if not ResourceLoader.exists(path):
+		return null
+	var packed := load(path) as PackedScene
+	if packed == null:
+		return null
+	return packed.instantiate() as Node3D
 
 
-func _draw_tag(image: Image) -> void:
-	var ink := Color(0.18, 0.10, 0.04, 1.0)
-	_fill_rect(image, 22, 18, 20, 28, ink)
-	_fill_circle(image, 32, 26, 4, COLOR_SELL)
-	_fill_rect(image, 28, 34, 8, 4, COLOR_SELL)
+func _make_fallback_disc(color: Color) -> Node3D:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.16
+	mesh.bottom_radius = 0.16
+	mesh.height = 0.032
+	mesh.radial_segments = 16
+	var body := MeshInstance3D.new()
+	body.mesh = mesh
+	body.position = Vector3(0.0, 0.16, 0.0)
+	body.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	body.material_override = mat
+	return body
 
 
-func _fill_circle(image: Image, cx: int, cy: int, radius: int, color: Color) -> void:
-	var r2 := radius * radius
-	for y: int in range(cy - radius, cy + radius + 1):
-		for x: int in range(cx - radius, cx + radius + 1):
-			if x < 0 or y < 0 or x >= SIZE_PX or y >= SIZE_PX:
+func _unshade_icon(root: Node) -> void:
+	if root is MeshInstance3D:
+		var inst := root as MeshInstance3D
+		inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var surfaces := 1
+		if inst.mesh != null:
+			surfaces = inst.mesh.get_surface_count()
+		for i: int in range(surfaces):
+			var surface := inst.get_active_material(i)
+			if not (surface is StandardMaterial3D):
 				continue
-			var dx := x - cx
-			var dy := y - cy
-			if dx * dx + dy * dy <= r2:
-				image.set_pixel(x, y, color)
-
-
-func _fill_rect(
-	image: Image,
-	left: int,
-	top: int,
-	width: int,
-	height: int,
-	color: Color
-) -> void:
-	for y: int in range(top, top + height):
-		for x: int in range(left, left + width):
-			if x < 0 or y < 0 or x >= SIZE_PX or y >= SIZE_PX:
-				continue
-			image.set_pixel(x, y, color)
+			var copy := (surface as StandardMaterial3D).duplicate() as StandardMaterial3D
+			copy.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			copy.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
+			inst.set_surface_override_material(i, copy)
+	elif root is GeometryInstance3D:
+		(root as GeometryInstance3D).cast_shadow = (
+			GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		)
+	for child: Node in root.get_children():
+		_unshade_icon(child)

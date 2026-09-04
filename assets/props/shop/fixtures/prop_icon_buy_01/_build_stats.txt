@@ -1,0 +1,11 @@
+width=0.3200
+depth=0.0320
+height=0.3200
+min_z=0.000000
+max_z=0.320000
+verts=112
+polys=120
+tris=180
+materials=Plastic,Metal,Paper,Accent_Teal
+pivot=bottom_center_disc
+face=-Y

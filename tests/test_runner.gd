@@ -2803,7 +2803,38 @@ func _test_shop_camera_framing() -> void:
 		for child: Node in lights_root.get_children():
 			if child is OmniLight3D:
 				omni_count += 1
-	_expect_equal(omni_count, 4, "overhead omni fills")
+	_expect_equal(omni_count, 5, "four overheads plus back-left aisle lighting amp")
+	var aisle_amp: Node3D = null
+	if lights_root != null:
+		aisle_amp = lights_root.get_node_or_null("BackLeftAisle") as Node3D
+		var front_left := lights_root.get_node_or_null("FrontLeft") as Node3D
+		if front_left != null:
+			_expect_equal(
+				front_left.position.is_equal_approx(Vector3(2.25, 2.79, -2.25)),
+				true,
+				"existing FrontLeft overhead did not move"
+			)
+	_expect_equal(aisle_amp != null, true, "optional 5th overhead instance present")
+	if aisle_amp != null:
+		_expect_equal(
+			aisle_amp.position.is_equal_approx(Vector3(2.8, 2.78, -5.4)),
+			true,
+			"Light5 covers binder-rack / back-left aisle"
+		)
+	if lights_root != null:
+		for child: Node in lights_root.get_children():
+			if child is OmniLight3D:
+				var omni := child as OmniLight3D
+				_expect_equal(
+					omni.light_energy >= 1.5,
+					true,
+					"overhead fill is lighting-amp energy"
+				)
+				_expect_equal(
+					is_equal_approx(omni.omni_range, 7.0),
+					true,
+					"overhead fill range 7m"
+				)
 	var stool := shop.get_node_or_null("Fixtures/CounterStool") as Node3D
 	_expect_equal(stool != null, true, "CounterStool present")
 	if stool != null:
@@ -3280,6 +3311,88 @@ func _test_customer_npc_mvp_cast() -> void:
 		c1.body_color != c2.body_color and c2.body_color != c3.body_color,
 		true,
 		"C1–C3 capsules use distinct tints"
+	)
+	_expect_equal(is_equal_approx(c1.body_height, 1.74), true, "C1 Art hero 1.74m")
+	_expect_equal(is_equal_approx(c2.body_height, 1.70), true, "C2 Art hero 1.70m")
+	_expect_equal(is_equal_approx(c3.body_height, 1.66), true, "C3 Art hero 1.66m")
+	_expect_equal(
+		c1.body_scene_path.contains("char_customer_casual_a_01"),
+		true,
+		"C1 uses casual A GLB"
+	)
+	_expect_equal(
+		c2.body_scene_path.contains("char_customer_casual_b_01"),
+		true,
+		"C2 uses casual B GLB"
+	)
+	_expect_equal(
+		c3.body_scene_path.contains("char_customer_casual_c_01"),
+		true,
+		"C3 uses casual C GLB"
+	)
+	_expect_equal(
+		FileAccess.file_exists(CustomerCast.SCENE_C1),
+		true,
+		"C1 GLB is on disk"
+	)
+	_expect_equal(
+		FileAccess.file_exists(CustomerIntentIcon.SCENE_BROWSE),
+		true,
+		"browse icon GLB is on disk"
+	)
+	_expect_equal(
+		FileAccess.file_exists(CustomerIntentIcon.SCENE_BUY),
+		true,
+		"buy icon GLB is on disk"
+	)
+	_expect_equal(
+		FileAccess.file_exists(CustomerIntentIcon.SCENE_SELL),
+		true,
+		"sell icon GLB is on disk"
+	)
+	_expect_equal(
+		CustomerIntentIcon.scene_path_for(CustomerIntentIcon.Intent.BROWSE).contains(
+			"prop_icon_browse_01"
+		),
+		true,
+		"browse Art icon path"
+	)
+	_expect_equal(
+		CustomerIntentIcon.scene_path_for(CustomerIntentIcon.Intent.BUY).contains(
+			"prop_icon_buy_01"
+		),
+		true,
+		"buy Art icon path"
+	)
+	_expect_equal(
+		CustomerIntentIcon.scene_path_for(CustomerIntentIcon.Intent.SELL).contains(
+			"prop_icon_sell_01"
+		),
+		true,
+		"sell Art icon path"
+	)
+	_expect_equal(
+		CustomerIntentIcon.COLOR_SELL.r > 0.8 and CustomerIntentIcon.COLOR_SELL.g > 0.45,
+		true,
+		"sell stays warm amber Accent_Amber"
+	)
+	_expect_equal(
+		CustomerIntentIcon.COLOR_SELL.b < 0.35,
+		true,
+		"sell is not burgundy"
+	)
+	_expect_equal(
+		CustomerIntentIcon.COLOR_BUY.b > CustomerIntentIcon.COLOR_BUY.r,
+		true,
+		"buy stays teal"
+	)
+	var sell_notes := FileAccess.get_file_as_string(
+		"res://assets/props/shop/fixtures/prop_icon_sell_01/IMPORT_NOTES.md"
+	)
+	_expect_equal(
+		sell_notes.contains("Accent_Amber"),
+		true,
+		"sell icon notes lock Accent_Amber"
 	)
 	presenter.free()
 

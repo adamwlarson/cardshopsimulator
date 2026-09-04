@@ -1,0 +1,14 @@
+width=0.9000
+depth=0.1280
+height=0.0950
+min_z=-0.095000
+max_z=0.000000
+verts=192
+polys=208
+tris=352
+materials=Housing,EndCap,LED_Diffuser
+pivot=mount_top_center
+emission_rgb=1.0,0.82,0.62
+emission_strength=9.0
+kelvin_feel=3600
+pass=lighting_amp
