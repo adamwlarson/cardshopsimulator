@@ -13,7 +13,20 @@ enum PriceContext {
 static func format_cents(value: int) -> String:
 	var sign_text := "-" if value < 0 else ""
 	var absolute := absi(value)
-	return "%s$%d.%02d" % [sign_text, absolute / 100, absolute % 100]
+	return "%s$%s.%02d" % [
+		sign_text,
+		_group_thousands(absolute / 100),
+		absolute % 100,
+	]
+
+
+static func _group_thousands(dollars: int) -> String:
+	var raw := str(dollars)
+	var grouped := ""
+	while raw.length() > 3:
+		grouped = "," + raw.substr(raw.length() - 3, 3) + grouped
+		raw = raw.substr(0, raw.length() - 3)
+	return raw + grouped
 
 
 static func undercut_fill_cents(suggested_price_cents: int) -> int:
@@ -80,7 +93,7 @@ static func _format_grade(grade: float) -> String:
 
 
 static func parse_cents(text: String) -> int:
-	var cleaned := text.strip_edges().trim_prefix("$")
+	var cleaned := text.strip_edges().trim_prefix("$").replace(",", "")
 	if cleaned.is_empty():
 		return 0
 	var parts := cleaned.split(".", false, 1)
@@ -107,22 +120,64 @@ static func price_label(context: PriceContext) -> String:
 	return ""
 
 
+static func band_chip(band: StringName) -> String:
+	var label := String(band).to_upper()
+	match String(band):
+		"cold":
+			return "○ %s" % label
+		"steady":
+			return "● %s" % label
+		"warm":
+			return "▲ %s" % label
+		"hot":
+			return "■ %s" % label
+	return "● %s" % label
+
+
+static func position_chip(position: StringName) -> String:
+	var label := String(position).replace("_", " ").capitalize()
+	match String(position):
+		"undercut":
+			return "▼ %s" % label
+		"competitive":
+			return "◆ %s" % label
+		"premium":
+			return "▲ %s" % label
+	return "◆ %s" % label
+
+
+static func move_feel_chip(move_feel: StringName) -> String:
+	var label := String(move_feel).replace("_", " ").capitalize()
+	match String(move_feel):
+		"likely_sits":
+			return "▢ %s" % label
+		"should_move":
+			return "→ %s" % label
+		"walk_risk":
+			return "! %s" % label
+	return "· %s" % label
+
+
 static func opportunity_row(dto: BuyConfirmSignal) -> String:
-	return "%s · %s · %s ×%d\nAsk %s · %s · %s confidence" % [
+	var name_text := dto.display_name
+	if name_text.strip_edges().is_empty():
+		name_text = String(dto.sku_id)
+	return "%s · %s ×%d\nAsk %s · %s · %s confidence" % [
 		String(dto.channel).capitalize(),
-		dto.display_name,
-		String(dto.sku_id),
+		name_text,
 		dto.quantity,
 		format_cents(dto.lot_total_cents),
-		String(dto.shown_demand_band).to_upper(),
+		band_chip(dto.shown_demand_band),
 		String(dto.confidence).capitalize(),
 	]
 
 
 static func priceable_stock_row(dto: PriceConfirmSignal) -> String:
-	return "%s · %s ×%d\nYour list %s · %s" % [
-		dto.display_name,
-		String(dto.sku_id),
+	var name_text := dto.display_name
+	if name_text.strip_edges().is_empty():
+		name_text = String(dto.sku_id)
+	return "%s ×%d\nYour list %s · %s" % [
+		name_text,
 		dto.quantity,
 		format_cents(dto.listed_price_cents),
 		dto.display_context,
@@ -141,12 +196,14 @@ static func buy_summary(dto: BuyConfirmSignal) -> String:
 			format_cents(dto.shown_comp_high_cents),
 		],
 		"Demand: %s · Confidence: %s" % [
-			String(dto.shown_demand_band).to_upper(),
+			band_chip(dto.shown_demand_band),
 			String(dto.confidence).capitalize(),
 		],
 		"Condition: %s" % dto.condition_cue,
-		"After buy: %s · Space: %d needed / %d free" % [
+		"After buy: %s %s · Space: %s %d needed / %d free" % [
+			"✓" if dto.remaining_cash_cents >= 0 else "✗",
 			format_cents(dto.remaining_cash_cents),
+			"✓" if dto.space_free >= dto.space_required else "✗",
 			dto.space_required,
 			dto.space_free,
 		],
@@ -166,27 +223,38 @@ static func buylist_seller_summary(dto: BuyConfirmSignal) -> String:
 			format_cents(dto.shown_comp_high_cents),
 		],
 		"Demand: %s · Confidence: %s" % [
-			String(dto.shown_demand_band).to_upper(),
+			band_chip(dto.shown_demand_band),
 			String(dto.confidence).capitalize(),
 		],
 		"Condition: %s" % dto.condition_cue,
 	])
 
 
-static func price_summary(dto: PriceConfirmSignal) -> String:
+static func price_summary(
+	dto: PriceConfirmSignal,
+	include_signal_chips: bool = true
+) -> String:
 	var percent := roundi(dto.price_delta_percent * 100.0)
-	return "\n".join([
+	var lines: PackedStringArray = [
 		"Suggested (noisy): %s" % format_cents(dto.suggested_price_cents),
 		"Vs suggestion: %s (%+d%%)" % [
 			format_cents(dto.price_delta_cents),
 			percent,
 		],
-		"Position: %s · Demand: %s" % [
-			String(dto.position).capitalize(),
-			String(dto.shown_demand_band).to_upper(),
-		],
-		"Move feel: %s · %s" % [
-			String(dto.move_feel).replace("_", " ").capitalize(),
-			dto.display_context,
-		],
-	])
+	]
+	if include_signal_chips:
+		lines.append(
+			"Position: %s · Demand: %s" % [
+				position_chip(dto.position),
+				band_chip(dto.shown_demand_band),
+			]
+		)
+		lines.append(
+			"Move feel: %s · %s" % [
+				move_feel_chip(dto.move_feel),
+				dto.display_context,
+			]
+		)
+	elif not dto.display_context.strip_edges().is_empty():
+		lines.append(dto.display_context)
+	return "\n".join(lines)

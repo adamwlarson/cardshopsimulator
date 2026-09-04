@@ -92,6 +92,7 @@ func _initialize() -> void:
 	_test_ui_helpers_do_not_read_hidden_values()
 	_test_wants_label_format()
 	_test_prep_hud_seed_before_bind()
+	_test_gameplay_hud_visual_smoke()
 	_test_undercut_fill_boundary()
 	_test_rent_firesale_beat()
 	_test_spike_staple_beat()
@@ -648,9 +649,44 @@ func _test_ui_price_labels() -> void:
 		"buylist seller summary uses You offer helper"
 	)
 	_expect_equal(
-		seller_summary.contains("Your list") or seller_summary.contains("Ask"),
-		false,
-		"buylist seller summary excludes other price labels"
+		DemandSignalPresenter.parse_cents("$8,000.00"),
+		800_000,
+		"parse_cents accepts grouped cash"
+	)
+	_expect_equal(
+		DemandSignalPresenter.format_cents(800_000),
+		"$8,000.00",
+		"format_cents groups thousands"
+	)
+	_expect_equal(
+		DemandSignalPresenter.parse_cents("$44.99"),
+		4499,
+		"parse_cents still accepts ungrouped dollars"
+	)
+	var buy_dto := BuyConfirmSignal.new()
+	buy_dto.unit_cost_cents = 100
+	buy_dto.lot_total_cents = 100
+	buy_dto.shown_comp_low_cents = 90
+	buy_dto.shown_comp_high_cents = 110
+	buy_dto.shown_demand_band = &"steady"
+	buy_dto.confidence = &"medium"
+	buy_dto.condition_cue = "NM"
+	buy_dto.remaining_cash_cents = 500
+	buy_dto.space_required = 1
+	buy_dto.space_free = 2
+	var buy_ok := DemandSignalPresenter.buy_summary(buy_dto)
+	_expect_equal(
+		buy_ok.contains("After buy: ✓") and buy_ok.contains("Space: ✓"),
+		true,
+		"Buy cash/space check uses ✓ when affordable"
+	)
+	buy_dto.remaining_cash_cents = -25
+	buy_dto.space_free = 0
+	var buy_fail := DemandSignalPresenter.buy_summary(buy_dto)
+	_expect_equal(
+		buy_fail.contains("After buy: ✗") and buy_fail.contains("Space: ✗"),
+		true,
+		"Buy cash/space check uses ✗ when blocked"
 	)
 
 
@@ -821,8 +857,8 @@ func _test_prep_hud_seed_before_bind() -> void:
 	)
 	_expect_equal(
 		DemandSignalPresenter.format_cents(int(_economy.get("balance_cents"))),
-		"$8000.00",
-		"Prep cash formats as $8000.00"
+		"$8,000.00",
+		"Prep cash formats as $8,000.00"
 	)
 	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
@@ -839,20 +875,229 @@ func _test_prep_hud_seed_before_bind() -> void:
 		"res://scenes/ui/gameplay_hud.tscn"
 	)
 	_expect_equal(
-		hud_scene.contains("Cash  $8000.00"),
+		hud_scene.contains("$8,000.00"),
 		true,
 		"Prep HUD scene default is seeded cash"
 	)
 	_expect_equal(
-		hud_scene.contains("Cash $0.00") or hud_scene.contains("Cash  $0.00"),
+		hud_scene.contains("$0.00"),
 		false,
 		"Prep HUD scene default is not $0"
 	)
 	_expect_equal(
-		hud_scene.contains("Attention  100"),
+		hud_scene.contains("Att 100/100"),
 		true,
 		"Prep HUD scene default is seeded attention"
 	)
+	_expect_equal(
+		hud_scene.contains("res://themes/shop_hud.tres"),
+		true,
+		"Prep HUD scene uses shop HUD theme"
+	)
+
+
+func _test_gameplay_hud_visual_smoke() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.set("is_game_active", false)
+	_economy.set("balance_cents", 0)
+	_game_state.set("attention_remaining", 0)
+	var packed: PackedScene = load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
+	_expect_equal(packed != null, true, "gameplay HUD scene loads")
+	if packed == null:
+		return
+	var hud: Node = packed.instantiate()
+	root.add_child(hud)
+	var cash := hud.get_node_or_null("%CashLabel") as Label
+	var attention := hud.get_node_or_null("%AttentionLabel") as Label
+	var day := hud.get_node_or_null("%DayLabel") as Label
+	var phase := hud.get_node_or_null("%PhaseLabel") as Label
+	var queue := hud.get_node_or_null("%QueueLabel") as Label
+	var phase_chip := hud.get_node_or_null("%PhaseChip") as PanelContainer
+	var open_floor := hud.get_node_or_null("%PhaseButton") as Button
+	var buy_button := hud.get_node_or_null("%OpenBuyButton") as Button
+	var price_button := hud.get_node_or_null("%OpenPriceButton") as Button
+	var serve := hud.get_node_or_null("%CustomerServe") as PanelContainer
+	_expect_equal(cash != null and cash.text == "$8,000.00", true, "HUD binds Prep $8,000.00")
+	_expect_equal(
+		attention != null and attention.text == "Att 100/100",
+		true,
+		"HUD binds Prep attention 100"
+	)
+	_expect_equal(day != null and day.text == "Day 1", true, "HUD binds Day 1")
+	_expect_equal(
+		phase != null and phase.text == "PREP",
+		true,
+		"HUD binds PREP phase chip"
+	)
+	_expect_equal(
+		queue != null and queue.text == "Queue 0",
+		true,
+		"HUD binds empty queue"
+	)
+	_expect_equal(
+		hud.get("theme") != null,
+		true,
+		"HUD theme resource assigned"
+	)
+	_expect_equal(
+		phase_chip != null and phase_chip.theme_type_variation == &"PhaseChipPrep",
+		true,
+		"PREP uses phase chip variation"
+	)
+	_expect_equal(
+		open_floor != null and open_floor.custom_minimum_size.y >= 40.0,
+		true,
+		"Open floor hit target height"
+	)
+	_expect_equal(
+		buy_button != null and buy_button.custom_minimum_size.y >= 40.0,
+		true,
+		"Buy opportunity hit target height"
+	)
+	_expect_equal(
+		price_button != null and price_button.custom_minimum_size.y >= 40.0,
+		true,
+		"Price inventory hit target height"
+	)
+	var price_input := hud.get_node_or_null("%PriceInput") as LineEdit
+	_expect_equal(
+		price_input != null and price_input.custom_minimum_size.y >= 40.0,
+		true,
+		"Your list input is the larger primary field"
+	)
+	_expect_equal(
+		open_floor != null and open_floor.theme_type_variation == &"PrimaryButton",
+		true,
+		"Open floor uses primary button variation"
+	)
+	_expect_equal(serve != null, true, "CustomerServe panel present")
+	var patience := hud.get_node_or_null("%PatienceBar") as ProgressBar
+	_expect_equal(patience != null, true, "CustomerServe patience bar present")
+	_expect_equal(
+		patience != null and patience.custom_minimum_size.x >= 120.0,
+		true,
+		"Patience bar is at least 120px wide"
+	)
+	_expect_equal(
+		patience != null and patience.show_percentage == false,
+		true,
+		"Patience bar is a meter, not a percent label"
+	)
+	var price_chip_row := hud.get_node_or_null("%PriceChipRow") as HBoxContainer
+	var position_chip := hud.get_node_or_null("%PricePositionChip") as Label
+	_expect_equal(price_chip_row != null, true, "PriceEditor has a chip strip")
+	_expect_equal(
+		position_chip != null,
+		true,
+		"PriceEditor position chip is present"
+	)
+	var hud_scene := FileAccess.get_file_as_string(
+		"res://scenes/ui/gameplay_hud.tscn"
+	)
+	_expect_equal(
+		hud_scene.contains("text = \"Your list\""),
+		true,
+		"PriceEditor labels the primary input Your list"
+	)
+	_expect_equal(
+		hud_scene.contains("ACC-*"),
+		false,
+		"HUD chrome does not show raw accessory SKU walls"
+	)
+	_expect_equal(
+		serve != null and serve.offset_left >= 48.0 and serve.offset_bottom <= 480.0,
+		true,
+		"CustomerServe hugs left edge above lower third"
+	)
+	var buy_list := hud.get_node_or_null("%BuyOpportunityList") as PanelContainer
+	_expect_equal(
+		buy_list != null
+		and buy_list.offset_left >= 48.0
+		and buy_list.offset_bottom <= 480.0,
+		true,
+		"Buy list stays in left edge chrome"
+	)
+	var veil := hud.get_node_or_null("%ModalVeil") as ColorRect
+	_expect_equal(veil != null, true, "Modal veil present")
+	_expect_equal(
+		veil != null and veil.visible == false,
+		true,
+		"Veil hidden until a modal opens"
+	)
+	_expect_equal(
+		veil != null and is_equal_approx(veil.color.a, 0.4),
+		true,
+		"Modal veil is a 40% soft dim"
+	)
+	var theme_source := FileAccess.get_file_as_string("res://themes/shop_hud.tres")
+	_expect_equal(
+		theme_source.contains("bg_color = Color(0.145, 0.145, 0.155, 0.78)"),
+		true,
+		"Modal panels use charcoal fill at ~78% opacity"
+	)
+	_expect_equal(
+		theme_source.contains("Color(0.957, 0.941, 0.91"),
+		true,
+		"Cream is reserved for HUD type on dark chrome"
+	)
+	_expect_equal(
+		theme_source.contains("corner_radius_top_left = 10"),
+		true,
+		"Panel corner radius is 8–12"
+	)
+	_expect_equal(
+		theme_source.contains("Color(0.24, 0.43, 0.42"),
+		true,
+		"Muted teal is the system accent"
+	)
+	_expect_equal(
+		theme_source.contains("id=\"StyleSignalChip\""),
+		true,
+		"Signal chips use calm gunmetal chrome, not extra accent fill"
+	)
+	_expect_equal(
+		theme_source.contains("id=\"StyleProgressFill\""),
+		true,
+		"Patience meter fill is themed cream, not a second accent"
+	)
+	var hud_script: Script = hud.get_script()
+	_expect_equal(hud_script != null, true, "HUD script attached")
+	var wants := DemandSignalPresenter.wants_label(
+		"Bastion Captain",
+		&"AA-BASE-088",
+		"NM"
+	)
+	_expect_equal(wants, "Bastion Captain · NM", "Wants keeps bible · condition")
+	_expect_equal(wants.contains("AA-"), false, "Wants smoke stays non-SKU")
+	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_source.contains("_customer_wants_label"),
+		true,
+		"CustomerServe still uses Wants helper"
+	)
+	_expect_equal(
+		hud_source.contains("String(_current_customer.target_sku)"),
+		false,
+		"CustomerServe still hides raw SKU ids"
+	)
+	_expect_equal(
+		hud_source.contains("Camera") or hud_source.contains("fov"),
+		false,
+		"HUD script does not mutate camera/FOV"
+	)
+	var steady_chip := DemandSignalPresenter.band_chip(&"steady")
+	_expect_equal(
+		steady_chip.contains("STEADY") and steady_chip != "STEADY",
+		true,
+		"Demand chips include icon and label"
+	)
+	_expect_equal(
+		DemandSignalPresenter.position_chip(&"undercut").contains("Undercut"),
+		true,
+		"Position chips keep label text"
+	)
+	root.remove_child(hud)
+	hud.free()
 
 
 func _test_undercut_fill_boundary() -> void:

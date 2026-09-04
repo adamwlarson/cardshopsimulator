@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
+[ext_resource type="Theme" path="res://themes/shop_hud.tres" id="2_theme"]
 
 [node name="GameplayHUD" type="Control"]
 layout_mode = 3
@@ -10,72 +11,130 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme = ExtResource("2_theme")
 script = ExtResource("1_hud")
 
+[node name="ModalVeil" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.11, 0.098, 0.09, 0.4)
+
 [node name="TopBar" type="PanelContainer" parent="."]
-layout_mode = 0
-offset_left = 20.0
-offset_top = 20.0
-offset_right = 1260.0
-offset_bottom = 76.0
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 64.0
+grow_horizontal = 2
+theme_type_variation = &"TopBar"
 
 [node name="Stats" type="HBoxContainer" parent="TopBar"]
 layout_mode = 2
-theme_override_constants/separation = 22
+theme_override_constants/separation = 16
+alignment = 1
 
 [node name="DayLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"HeroLabel"
 text = "Day 1"
+vertical_alignment = 1
 
-[node name="PhaseLabel" type="Label" parent="TopBar/Stats"]
+[node name="PhaseChip" type="PanelContainer" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Phase Prep"
+size_flags_vertical = 4
+theme_type_variation = &"PhaseChipPrep"
+
+[node name="PhaseLabel" type="Label" parent="TopBar/Stats/PhaseChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "PREP"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Rule" type="ColorRect" parent="TopBar/Stats"]
+custom_minimum_size = Vector2(1, 28)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+color = Color(0.52, 0.38, 0.24, 0.4)
 
 [node name="CashLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Cash  $8000.00"
+size_flags_vertical = 4
+theme_type_variation = &"CashValue"
+text = "$8,000.00"
+vertical_alignment = 1
 
 [node name="AttentionLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Attention  100"
+size_flags_vertical = 4
+theme_type_variation = &"MetricValue"
+text = "Att 100/100"
+vertical_alignment = 1
 
 [node name="QueueLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"MetricValue"
 text = "Queue 0"
+vertical_alignment = 1
+
+[node name="Spacer" type="Control" parent="TopBar/Stats"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
 
 [node name="PhaseButton" type="Button" parent="TopBar/Stats"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(132, 40)
 layout_mode = 2
+size_flags_vertical = 4
 mouse_filter = 0
+theme_type_variation = &"PrimaryButton"
 text = "Open floor"
 
 [node name="OpenBuyButton" type="Button" parent="TopBar/Stats"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(148, 40)
 layout_mode = 2
+size_flags_vertical = 4
 mouse_filter = 0
 text = "Buy opportunity"
 
 [node name="OpenPriceButton" type="Button" parent="TopBar/Stats"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(148, 40)
 layout_mode = 2
+size_flags_vertical = 4
 mouse_filter = 0
 text = "Price inventory"
 
 [node name="BeatToast" type="Label" parent="."]
 unique_name_in_owner = true
 visible = false
-layout_mode = 0
-offset_left = 470.0
-offset_top = 86.0
-offset_right = 810.0
-offset_bottom = 120.0
-theme_override_colors/font_color = Color(1, 0.78, 0.28, 1)
-theme_override_font_sizes/font_size = 20
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -220.0
+offset_top = 72.0
+offset_right = 220.0
+offset_bottom = 100.0
+grow_horizontal = 2
+theme_type_variation = &"ToastLabel"
 text = "Beat event"
 horizontal_alignment = 1
 
@@ -83,24 +142,26 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 90.0
-offset_top = 120.0
-offset_right = 690.0
-offset_bottom = 540.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="BuyOpportunityList"]
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="BuyOpportunityList/Content"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
+theme_type_variation = &"TitleLabel"
 text = "BUY OPPORTUNITIES"
 
 [node name="Hint" type="Label" parent="BuyOpportunityList/Content"]
 layout_mode = 2
+theme_type_variation = &"HintLabel"
 text = "Select a deal to review its signals and seller ask."
+autowrap_mode = 3
 
 [node name="BuyOpportunityRows" type="VBoxContainer" parent="BuyOpportunityList/Content"]
 unique_name_in_owner = true
@@ -113,12 +174,14 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
+theme_type_variation = &"EmptyLabel"
 text = "No deals today"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="BuyListCancelButton" type="Button" parent="BuyOpportunityList/Content"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "Close"
 
@@ -126,97 +189,118 @@ text = "Close"
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 90.0
-offset_top = 120.0
-offset_right = 570.0
-offset_bottom = 490.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="BuyOpportunityDetail"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="BuyOpportunityTitle" type="Label" parent="BuyOpportunityDetail/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
+theme_type_variation = &"TitleLabel"
 text = "BUY OPPORTUNITY"
+autowrap_mode = 3
 
 [node name="BuySummary" type="Label" parent="BuyOpportunityDetail/Content"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 3
 text = "Demand signal"
+autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="BuyOpportunityDetail/Content"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="BuyCancelButton" type="Button" parent="BuyOpportunityDetail/Content/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Cancel"
 
 [node name="BuyButton" type="Button" parent="BuyOpportunityDetail/Content/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
 text = "Buy"
 
 [node name="BuyConfirm" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 180.0
-offset_top = 190.0
-offset_right = 610.0
-offset_bottom = 390.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 520.0
+offset_bottom = 360.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="BuyConfirm"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="BuyConfirm/Content"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
+theme_type_variation = &"TitleLabel"
 text = "Confirm purchase?"
 
 [node name="BuyConfirmSummary" type="Label" parent="BuyConfirm/Content"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 3
 text = "Signal snapshot"
+autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="BuyConfirm/Content"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="BuyBackButton" type="Button" parent="BuyConfirm/Content/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Back"
 
 [node name="BuyConfirmButton" type="Button" parent="BuyConfirm/Content/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
 text = "Confirm"
 
 [node name="PriceInventoryList" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 90.0
-offset_top = 120.0
-offset_right = 690.0
-offset_bottom = 540.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="PriceInventoryList"]
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="PriceInventoryList/Content"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
+theme_type_variation = &"TitleLabel"
 text = "PRICE INVENTORY"
 
 [node name="Hint" type="Label" parent="PriceInventoryList/Content"]
 layout_mode = 2
+theme_type_variation = &"HintLabel"
 text = "Select stock to edit its shop list price."
+autowrap_mode = 3
 
 [node name="PriceInventoryRows" type="VBoxContainer" parent="PriceInventoryList/Content"]
 unique_name_in_owner = true
@@ -229,12 +313,14 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
+theme_type_variation = &"EmptyLabel"
 text = "No priceable stock"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="PriceListCancelButton" type="Button" parent="PriceInventoryList/Content"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "Close"
 
@@ -242,110 +328,206 @@ text = "Close"
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 90.0
-offset_top = 120.0
-offset_right = 570.0
-offset_bottom = 490.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="PriceEditor"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="PriceTitle" type="Label" parent="PriceEditor/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
+theme_type_variation = &"TitleLabel"
 text = "PRICE"
+autowrap_mode = 3
+
+[node name="PriceChipRow" type="HBoxContainer" parent="PriceEditor/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PositionChip" type="PanelContainer" parent="PriceEditor/Content/PriceChipRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SignalChip"
+
+[node name="PricePositionChip" type="Label" parent="PriceEditor/Content/PriceChipRow/PositionChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "◆ Position"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DemandChip" type="PanelContainer" parent="PriceEditor/Content/PriceChipRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SignalChip"
+
+[node name="PriceDemandChip" type="Label" parent="PriceEditor/Content/PriceChipRow/DemandChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "● Demand"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MoveChip" type="PanelContainer" parent="PriceEditor/Content/PriceChipRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SignalChip"
+
+[node name="PriceMoveChip" type="Label" parent="PriceEditor/Content/PriceChipRow/MoveChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "→ Move"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PriceInputCaption" type="Label" parent="PriceEditor/Content"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Your list"
 
 [node name="PriceInput" type="LineEdit" parent="PriceEditor/Content"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
+theme_override_font_sizes/font_size = 18
 placeholder_text = "$44.99"
 
 [node name="PriceSummary" type="Label" parent="PriceEditor/Content"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 3
 text = "Demand signal"
+autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="PriceEditor/Content"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="PriceCancelButton" type="Button" parent="PriceEditor/Content/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Cancel"
 
 [node name="PriceApplyButton" type="Button" parent="PriceEditor/Content/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
 text = "Apply"
 
 [node name="CustomerServe" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 720.0
-offset_top = 120.0
-offset_right = 1240.0
-offset_bottom = 510.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="CustomerServe"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="CustomerTitle" type="Label" parent="CustomerServe/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
+theme_type_variation = &"TitleLabel"
 text = "CUSTOMER"
+autowrap_mode = 3
+
+[node name="PatienceRow" type="HBoxContainer" parent="CustomerServe/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PatienceCaption" type="Label" parent="CustomerServe/Content/PatienceRow"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Patience"
+vertical_alignment = 1
+
+[node name="PatienceBar" type="ProgressBar" parent="CustomerServe/Content/PatienceRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 12)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+value = 1.0
+show_percentage = false
 
 [node name="CustomerSummary" type="Label" parent="CustomerServe/Content"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 3
 text = "Waiting"
+autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="CustomerServe/Content"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="RefuseButton" type="Button" parent="CustomerServe/Content/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"DangerButton"
 text = "Refuse"
 
 [node name="NegotiateButton" type="Button" parent="CustomerServe/Content/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Negotiate −10%"
 
 [node name="SellButton" type="Button" parent="CustomerServe/Content/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
 text = "Sell at list"
 
 [node name="RentDecision" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 350.0
-offset_top = 135.0
-offset_right = 930.0
-offset_bottom = 535.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 640.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="RentDecision"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="RentTitle" type="Label" parent="RentDecision/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+theme_type_variation = &"TitleLabel"
 text = "Rent due today — shelf is soft"
+autowrap_mode = 3
 
 [node name="RentSummary" type="Label" parent="RentDecision/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Choose a response before opening the floor."
+autowrap_mode = 3
 
 [node name="RentChoices" type="VBoxContainer" parent="RentDecision/Content"]
 unique_name_in_owner = true
@@ -354,21 +536,31 @@ theme_override_constants/separation = 8
 
 [node name="RentFireSaleButton" type="Button" parent="RentDecision/Content/RentChoices"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
-text = "Fire-sale sealed\nFocus Dustway sealed · suggest Undercut"
+theme_type_variation = &"ListRowButton"
+text = "Fire-sale sealed
+Focus Dustway sealed · suggest Undercut"
 
 [node name="RentAccessoriesButton" type="Button" parent="RentDecision/Content/RentChoices"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
-text = "Cut accessories\nFocus ACC-* · suggest Undercut"
+theme_type_variation = &"ListRowButton"
+text = "Cut accessories
+Focus accessories · suggest Undercut"
 
 [node name="RentLoanButton" type="Button" parent="RentDecision/Content/RentChoices"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
-text = "Payday loan\nReview terms"
+theme_type_variation = &"ListRowButton"
+text = "Payday loan
+Review terms"
 
 [node name="RentDismissButton" type="Button" parent="RentDecision/Content/RentChoices"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 text = "Dismiss — rent still due at SETTLE"
 
@@ -376,62 +568,75 @@ text = "Dismiss — rent still due at SETTLE"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="RentDecision/Content/RentLoanConfirm"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_type_variation = &"TitleLabel"
 text = "Confirm payday loan?"
 
 [node name="RentLoanTerms" type="Label" parent="RentDecision/Content/RentLoanConfirm"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Loan terms"
+autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="RentDecision/Content/RentLoanConfirm"]
 layout_mode = 2
+theme_override_constants/separation = 16
 
 [node name="RentLoanBackButton" type="Button" parent="RentDecision/Content/RentLoanConfirm/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Back"
 
 [node name="RentLoanConfirmButton" type="Button" parent="RentDecision/Content/RentLoanConfirm/Actions"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
 text = "Accept loan"
 
 [node name="ShowcaseChoice" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 650.0
-offset_top = 150.0
-offset_right = 1210.0
-offset_bottom = 470.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="ShowcaseChoice"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="ShowcaseTitle" type="Label" parent="ShowcaseChoice/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 22
+theme_type_variation = &"TitleLabel"
 text = "Showcase tight — pick display"
+autowrap_mode = 3
 
 [node name="ShowcaseSummary" type="Label" parent="ShowcaseChoice/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Slab costs 2; each single costs 1."
+autowrap_mode = 3
 
 [node name="ShowcaseSlabButton" type="Button" parent="ShowcaseChoice/Content"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
+theme_type_variation = &"ListRowButton"
 text = "Display slab"
 
 [node name="ShowcaseSinglesButton" type="Button" parent="ShowcaseChoice/Content"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
+theme_type_variation = &"ListRowButton"
 text = "Display chase singles"
