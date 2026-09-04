@@ -45,6 +45,7 @@ var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
 var _current_customer: CustomerProfile
 var _active_price_beat_id: StringName = &""
+var _rent_beat_id: StringName = &""
 var _showcase_beat_id: StringName = &""
 var _showcase_choice_made: bool = false
 
@@ -306,6 +307,7 @@ func _on_price_focus_requested(
 
 
 func _on_rent_decision_requested(payload: Dictionary) -> void:
+	_rent_beat_id = StringName(payload.get("beat_id", &""))
 	rent_title.text = String(
 		payload.get("title", "Rent due today — shelf is soft")
 	)
@@ -362,9 +364,10 @@ func _on_rent_decision_resolved(
 	beat_id: StringName,
 	outcome: StringName
 ) -> void:
-	if beat_id != BeatInjectionService.RENT_FIRESALE_BEAT:
+	if beat_id != _rent_beat_id:
 		return
 	rent_panel.hide()
+	_rent_beat_id = &""
 	phase_button.disabled = false
 	if outcome == &"dismissed":
 		beat_toast.text = "Rent still due at SETTLE"
