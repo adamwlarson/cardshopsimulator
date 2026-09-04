@@ -124,6 +124,7 @@ func _initialize() -> void:
 	_test_customer_npc_does_not_change_camera()
 	_test_customer_npc_visible_when_queued()
 	_test_customer_npc_mvp_cast()
+	_test_customer_npc_locomotion_clips()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -3641,6 +3642,92 @@ func _test_customer_npc_mvp_cast() -> void:
 		c1.icon.get_child_count() >= 3,
 		true,
 		"browse/buy/sell Art icons are instanced"
+	)
+	presenter.free()
+
+
+func _test_customer_npc_locomotion_clips() -> void:
+	_game_state.call("start_new_game")
+	_game_state.call("start_floor")
+	var presenter := CustomerPresenter.new()
+	presenter.instant_travel = false
+	presenter.dwell_override = 10.0
+	root.add_child(presenter)
+	if not presenter.is_node_ready():
+		presenter.notification(Node.NOTIFICATION_READY)
+	var c1 := presenter.spawn_for(_make_floor_customer(&"regular"))
+	var c2 := presenter.spawn_for(_make_floor_customer(&"flipper"))
+	var c3 := presenter.spawn_for(_make_floor_customer(&"kid_parent"))
+	for npc: CustomerNpc in [c1, c2, c3]:
+		_expect_equal(
+			npc.has_locomotion_clips(),
+			true,
+			"%s GLB exposes walk + browse_idle" % npc.cast_slot
+		)
+		_expect_equal(
+			npc.current_locomotion_clip(),
+			CustomerNpc.CLIP_BROWSE_IDLE,
+			"%s rests on browse_idle at spawn" % npc.cast_slot
+		)
+	var start := c1.position
+	presenter.simulate(0.35)
+	_expect_equal(c1.is_moving(), true, "C1 is translating along path")
+	_expect_equal(
+		c1.current_locomotion_clip(),
+		CustomerNpc.CLIP_WALK,
+		"walk plays while moving"
+	)
+	_expect_equal(
+		c1.position.distance_to(start) > 0.05,
+		true,
+		"pathing owns world translation"
+	)
+	_expect_equal(
+		c1.body_root_local_position().is_equal_approx(Vector3.ZERO),
+		true,
+		"in-place clips keep the GLB root at origin"
+	)
+	var arrived := false
+	var elapsed := 0.0
+	while elapsed <= 20.0:
+		if (
+			c1.floor_state == CustomerPresenter.FloorState.BROWSE
+			and not c1.is_moving()
+		):
+			arrived = true
+			break
+		presenter.simulate(0.1)
+		elapsed += 0.1
+	_expect_equal(arrived, true, "C1 reaches a browse stop")
+	_expect_equal(
+		c1.current_locomotion_clip(),
+		CustomerNpc.CLIP_BROWSE_IDLE,
+		"browse_idle plays at the case while not translating"
+	)
+	c1.follow_path([c1.position + Vector3(1.2, 0.0, 0.0)])
+	_expect_equal(
+		c1.current_locomotion_clip(),
+		CustomerNpc.CLIP_WALK,
+		"walk resumes when a new path starts"
+	)
+	c1.snap_to_path_end()
+	_expect_equal(
+		c1.current_locomotion_clip(),
+		CustomerNpc.CLIP_BROWSE_IDLE,
+		"browse_idle resumes when translation stops"
+	)
+	var npc_source := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_npc.gd"
+	)
+	_expect_equal(
+		npc_source.contains("AnimationPlayer"),
+		true,
+		"locomotion uses AnimationPlayer"
+	)
+	_expect_equal(
+		npc_source.contains("AnimationTree"),
+		false,
+		"does not invent a second animation system"
 	)
 	presenter.free()
 

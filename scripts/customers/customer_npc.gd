@@ -6,6 +6,8 @@ const WALK_SPEED := 1.35
 # locked aisle HUD (−28° / FOV 70); authored GLB scale stays 1,1,1.
 const ICON_HANG := -0.18
 const ICON_READ_SCALE := 2.0
+const CLIP_WALK := &"walk"
+const CLIP_BROWSE_IDLE := &"browse_idle"
 
 var customer: CustomerProfile
 var floor_state: int = 0
@@ -19,6 +21,8 @@ var icon: CustomerIntentIcon
 var _body_root: Node3D
 var _material: StandardMaterial3D
 var _highlight_meshes: Array[GeometryInstance3D] = []
+var _anim: AnimationPlayer
+var _active_clip: StringName = &""
 
 
 func configure(profile: CustomerProfile) -> void:
@@ -58,6 +62,7 @@ func _try_instance_hero() -> bool:
 	node.position = Vector3.ZERO
 	add_child(node)
 	_body_root = node
+	_bind_animation_player()
 	return true
 
 
@@ -113,6 +118,7 @@ func follow_path(points: Array[Vector3]) -> void:
 	path = points.duplicate()
 	if not path.is_empty() and position.distance_to(path[0]) < 0.05:
 		path.pop_front()
+	_sync_locomotion_clip()
 
 
 func is_moving() -> bool:
@@ -121,13 +127,16 @@ func is_moving() -> bool:
 
 func snap_to_path_end() -> void:
 	if path.is_empty():
+		_sync_locomotion_clip()
 		return
 	position = path.back()
 	path.clear()
+	_sync_locomotion_clip()
 
 
 func tick_move(delta: float) -> void:
 	if path.is_empty():
+		_sync_locomotion_clip()
 		return
 	var target: Vector3 = path[0]
 	target.y = 0.0
@@ -138,11 +147,30 @@ func tick_move(delta: float) -> void:
 	if distance <= step:
 		position = target
 		path.pop_front()
+		_sync_locomotion_clip()
 		return
 	var next := here + offset.normalized() * step
 	position = next
 	if distance > 0.02 and is_inside_tree():
 		look_at(Vector3(target.x, position.y, target.z), Vector3.UP, true)
+	_sync_locomotion_clip()
+
+
+func current_locomotion_clip() -> StringName:
+	return _active_clip
+
+
+func has_locomotion_clips() -> bool:
+	return (
+		not _resolve_clip(CLIP_WALK).is_empty()
+		and not _resolve_clip(CLIP_BROWSE_IDLE).is_empty()
+	)
+
+
+func body_root_local_position() -> Vector3:
+	if _body_root == null:
+		return Vector3.ZERO
+	return _body_root.position
 
 
 func icon_presentation() -> Dictionary:
@@ -159,3 +187,54 @@ func _collect_highlight_meshes(root: Node) -> void:
 		_highlight_meshes.append(root as GeometryInstance3D)
 	for child: Node in root.get_children():
 		_collect_highlight_meshes(child)
+
+
+func _bind_animation_player() -> void:
+	_anim = _find_animation_player(_body_root)
+	_play_locomotion_clip(CLIP_BROWSE_IDLE)
+
+
+func _find_animation_player(root: Node) -> AnimationPlayer:
+	if root == null:
+		return null
+	if root is AnimationPlayer:
+		return root as AnimationPlayer
+	for child: Node in root.get_children():
+		var found := _find_animation_player(child)
+		if found != null:
+			return found
+	return null
+
+
+func _sync_locomotion_clip() -> void:
+	if is_moving():
+		_play_locomotion_clip(CLIP_WALK)
+	else:
+		_play_locomotion_clip(CLIP_BROWSE_IDLE)
+
+
+func _play_locomotion_clip(clip: StringName) -> void:
+	if _anim == null:
+		return
+	var resolved := _resolve_clip(clip)
+	if resolved.is_empty():
+		return
+	if _active_clip == clip and _anim.is_playing():
+		return
+	var animation := _anim.get_animation(resolved)
+	if animation != null and animation.loop_mode != Animation.LOOP_LINEAR:
+		animation.loop_mode = Animation.LOOP_LINEAR
+	_anim.play(resolved)
+	_active_clip = clip
+
+
+func _resolve_clip(clip: StringName) -> String:
+	if _anim == null:
+		return ""
+	if _anim.has_animation(clip):
+		return String(clip)
+	var suffix := "/" + String(clip)
+	for listed: String in _anim.get_animation_list():
+		if listed == String(clip) or listed.ends_with(suffix):
+			return listed
+	return ""
