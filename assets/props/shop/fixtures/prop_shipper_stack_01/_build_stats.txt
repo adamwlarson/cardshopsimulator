@@ -1,0 +1,10 @@
+width=0.5000
+depth=0.4000
+height=0.5500
+min_z=0.000000
+verts=240
+polys=260
+tris=440
+materials=Cardboard_Kraft,Tape,Shipping_Label,Cardboard_Dark,Cardboard_Light
+pivot=bottom_center
+boxes=3
