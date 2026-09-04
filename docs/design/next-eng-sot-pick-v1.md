@@ -27,7 +27,7 @@
 | Research action | PREP (and/or quiet FLOOR): pick a set → spend **$50 + Att 15** (Normal; difficulty-curves table) → 24–72h soft telegraph for rotation + narrower comps/bands for that set (§4.5 Research gates) |
 | Layout rearrange | PREP: move fixture instance on grid → **Att 10**; blocked if pathing breaks entrance→displays→counter |
 | HUD | Show Att cost on Research / Rearrange buttons before confirm; refuse if Att < cost |
-| Specialist | On duty: Research Att 15→~10; Inspect already 5→2. Hired `role == specialist` on the roster uses `research_attention_specialist` / `inspect_attention_specialist`. |
+| Specialist | On duty: Research Att 15→~10; Inspect already 5→2 |
 
 **Acceptance (falsifiable):**
 
