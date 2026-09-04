@@ -119,13 +119,13 @@ func _test_balance_seed_inventory() -> void:
 		)
 		_expect_equal(
 			inventory.get_stock_quantity(&"ACC-SLV-60"),
-			config.seed_sleeves,
-			"seed sleeves"
+			ceili(config.seed_sleeves / 60.0),
+			"seed sleeve packs"
 		)
 		_expect_equal(
 			inventory.get_stock_quantity(&"ACC-TOP-25"),
-			config.seed_toploaders,
-			"seed toploaders"
+			ceili(config.seed_toploaders / 25.0),
+			"seed toploader packs"
 		)
 		_expect_equal(
 			inventory.cards.size(),

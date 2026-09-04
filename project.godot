@@ -19,7 +19,7 @@ InventoryService="*res://scripts/autoload/inventory_service.gd"
 
 [debug]
 
-qa_instrumentation=true
+qa_instrumentation=false
 
 [display]
 

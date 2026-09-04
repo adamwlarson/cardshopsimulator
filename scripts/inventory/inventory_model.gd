@@ -38,13 +38,13 @@ func seed_from_balance() -> void:
 	)
 	add_stock(
 		&"ACC-SLV-60",
-		balance_config.seed_sleeves,
+		ceili(balance_config.seed_sleeves / 60.0),
 		250,
 		InventoryLocation.new(InventoryLocation.Type.SHELF)
 	)
 	add_stock(
 		&"ACC-TOP-25",
-		balance_config.seed_toploaders,
+		ceili(balance_config.seed_toploaders / 25.0),
 		300,
 		InventoryLocation.new(InventoryLocation.Type.SHELF)
 	)
