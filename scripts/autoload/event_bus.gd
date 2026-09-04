@@ -38,6 +38,7 @@ signal buy_focus_requested(
 	beat_id: StringName,
 	message: String
 )
+signal shop_layout_changed()
 
 func publish_cash_changed(balance_cents: int) -> void:
 	cash_changed.emit(balance_cents)
