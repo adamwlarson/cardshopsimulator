@@ -371,10 +371,14 @@ func _start_titan_hype() -> bool:
 			sku.base_market_cents
 		) == null:
 			return false
-	if not DemandSignals.apply_hype_event(
-		TITAN_SKU,
-		GameState.current_day + 1
-	):
+	if DemandSignals.start_pack_event(
+		MarketEvent.KIND_HYPE,
+		{
+			"sku_id": TITAN_SKU,
+			"duration_days": 2,
+			"remaining_days": 2,
+		}
+	) == null:
 		return false
 	_mark_started(TITAN_HYPE_BEAT)
 	EventBus.price_focus_requested.emit(

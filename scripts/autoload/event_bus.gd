@@ -40,6 +40,7 @@ signal buy_focus_requested(
 )
 signal shop_layout_changed()
 signal staff_changed()
+signal market_event_changed(payload: Dictionary)
 
 func publish_cash_changed(balance_cents: int) -> void:
 	cash_changed.emit(balance_cents)

@@ -65,6 +65,7 @@ extends Control
 @onready var open_research_button: Button = %OpenResearchButton
 @onready var open_rearrange_button: Button = %OpenRearrangeButton
 @onready var rotation_watch_label: Label = %RotationWatchLabel
+@onready var event_banner_label: Label = %EventBannerLabel
 @onready var research_list_panel: PanelContainer = %ResearchList
 @onready var research_rows: VBoxContainer = %ResearchRows
 @onready var research_hint: Label = %ResearchHint
@@ -115,6 +116,7 @@ func _ready() -> void:
 	EventBus.beat_decision_resolved.connect(_on_beat_decision_resolved)
 	EventBus.buy_focus_requested.connect(_on_buy_focus_requested)
 	EventBus.staff_changed.connect(_on_staff_changed)
+	EventBus.market_event_changed.connect(_on_market_event_changed)
 	phase_button.pressed.connect(_on_phase_pressed)
 	%OpenBuyButton.pressed.connect(_open_buy_list)
 	%BuyListCancelButton.pressed.connect(_close_buy)
@@ -181,6 +183,7 @@ func _bind_seeded_status() -> void:
 	_update_phase(GameState.current_phase)
 	_update_attention(GameState.attention_remaining)
 	_sync_rotation_watch()
+	_sync_event_banner()
 
 
 func _update_cash(balance_cents: int) -> void:
@@ -191,6 +194,7 @@ func _update_cash(balance_cents: int) -> void:
 func _update_day(day: int) -> void:
 	day_label.text = "Day %d" % day
 	_sync_rotation_watch()
+	_sync_event_banner()
 
 
 func _update_phase(phase: int) -> void:
@@ -993,6 +997,7 @@ func _confirm_research() -> void:
 	beat_toast.text = String(result.get("rotation_watch", "Research complete"))
 	beat_toast.show()
 	_sync_rotation_watch()
+	_sync_event_banner()
 	_close_research()
 
 
@@ -1011,12 +1016,25 @@ func _close_research() -> void:
 	_sync_modal_veil()
 
 
+func _on_market_event_changed(_payload: Dictionary) -> void:
+	_sync_event_banner()
+	_sync_rotation_watch()
+
+
 func _sync_rotation_watch() -> void:
 	if rotation_watch_label == null:
 		return
 	var text := DemandSignals.rotation_watch_text()
 	rotation_watch_label.text = text
 	rotation_watch_label.visible = not text.is_empty()
+
+
+func _sync_event_banner() -> void:
+	if event_banner_label == null:
+		return
+	var text := DemandSignalPresenter.event_banner(DemandSignals.event_banner_text())
+	event_banner_label.text = text
+	event_banner_label.visible = not text.is_empty()
 
 
 func _open_rearrange() -> void:

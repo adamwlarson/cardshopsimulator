@@ -108,6 +108,10 @@ func _initialize() -> void:
 	_test_rent_firesale_beat()
 	_test_spike_staple_beat()
 	_test_titan_hype_price_focus()
+	_test_market_events_seven_day_seeded_run()
+	_test_hype_spike_target_sku_only()
+	_test_fog_day_sigma_and_inversion()
+	_test_market_event_save_load()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -1103,6 +1107,11 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(NORMAL_CONFIG.rent_small_weekly_cents, 120_000, "normal weekly rent")
 	_expect_equal(NORMAL_CONFIG.first_rent_due_day, 7, "normal first rent due day")
 	_expect_equal(NORMAL_CONFIG.event_chance_settle, 0.18, "normal settle event chance")
+	_expect_equal(EASY_CONFIG.event_chance_settle, 0.12, "easy settle event chance")
+	_expect_equal(HARD_CONFIG.event_chance_settle, 0.26, "hard settle event chance")
+	_expect_equal(NORMAL_CONFIG.negative_event_weight_mult, 1.0, "normal negative event weight")
+	_expect_equal(EASY_CONFIG.negative_event_weight_mult, 0.7, "easy negative event weight")
+	_expect_equal(HARD_CONFIG.negative_event_weight_mult, 1.4, "hard negative event weight")
 	_expect_equal(NORMAL_CONFIG.comp_noise_width_mult, 1.0, "normal comp noise width")
 	_expect_equal(EASY_CONFIG.start_cash_cents, 1_200_000, "easy starting cash")
 	_expect_equal(HARD_CONFIG.start_cash_cents, 550_000, "hard starting cash")
@@ -1646,6 +1655,13 @@ func _test_gameplay_hud_visual_smoke() -> void:
 	)
 	var research_button := hud.get_node_or_null("%OpenResearchButton") as Button
 	var rearrange_button := hud.get_node_or_null("%OpenRearrangeButton") as Button
+	var event_banner := hud.get_node_or_null("%EventBannerLabel") as Label
+	_expect_equal(event_banner != null, true, "thin event banner present")
+	_expect_equal(
+		event_banner != null and event_banner.visible == false,
+		true,
+		"event banner hidden with no active event"
+	)
 	_expect_equal(research_button != null, true, "Research button present")
 	_expect_equal(
 		research_button != null
@@ -2166,6 +2182,275 @@ func _test_titan_hype_price_focus() -> void:
 		"ignored Titan completes at SETTLE instead of staying stuck"
 	)
 	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_market_events_seven_day_seeded_run() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_qa_autoload.call("set_force_enabled", true)
+	var non_null := 0
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 32):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		_qa_autoload.call("clear")
+		non_null = 0
+		for _day_index: int in range(7):
+			_expect_equal(
+				_game_state.call("start_floor"),
+				true,
+				"7-day seeded run can open floor"
+			)
+			_expect_equal(
+				_game_state.call("start_settle"),
+				true,
+				"7-day seeded run can settle"
+			)
+			if int(_game_state.get("current_day")) < 7:
+				_expect_equal(
+					_game_state.call("advance_day"),
+					true,
+					"7-day seeded run can advance"
+				)
+		for event: Dictionary in _qa_autoload.call("get_events"):
+			if String(event.get("event", "")) != "market_event_rolled":
+				continue
+			var payload: Dictionary = event.get("payload", {})
+			_assert_payload_has_no_truth(payload, "7-day market_event_rolled")
+			if String(payload.get("event_id", "")).is_empty():
+				continue
+			non_null += 1
+		if non_null >= 1:
+			break
+	_expect_equal(non_null >= 1, true, "Normal 7-day seeded run emits ≥1 non-null event")
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("hype_spike")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("soft_rotation_leak")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("fog_day"),
+		true,
+		"C1 pack catalogs hype, rotation leak, and fog"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_hype_spike_target_sku_only() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var control_sku := &"AA-BASE-088"
+	var titan := &"AA-SKIE-047"
+	var control_before := _demand_signals.call(
+		"price_signal",
+		control_sku,
+		500,
+		_inventory_service.call("location_for", control_sku)
+	) as PriceConfirmSignal
+	var control_market_before := (
+		_demand_signals.get("_market_state") as MarketState
+	).market_cents_for(control_sku)
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": titan, "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(started != null, true, "hype pack starts")
+	_expect_equal(started.sku_id, titan, "hype targets Titan only")
+	var titan_signal := _demand_signals.call(
+		"price_signal",
+		titan,
+		2200,
+		_inventory_service.call("location_for", titan)
+	) as PriceConfirmSignal
+	var control_after := _demand_signals.call(
+		"price_signal",
+		control_sku,
+		500,
+		_inventory_service.call("location_for", control_sku)
+	) as PriceConfirmSignal
+	_expect_equal(titan_signal.shown_demand_band, &"hot", "hype elevates target band to HOT")
+	_expect_equal(
+		titan_signal.suggested_price_cents > 2200,
+		true,
+		"hype elevates target noisy comps"
+	)
+	_expect_equal(
+		(
+			_demand_signals.get("_market_state") as MarketState
+		).market_cents_for(control_sku),
+		control_market_before,
+		"hype does not change other SKU market"
+	)
+	_expect_equal(
+		control_after.shown_demand_band,
+		control_before.shown_demand_band,
+		"hype leaves control SKU band unchanged"
+	)
+	_expect_dto_has_no_truth_fields(titan_signal, "hype price signal")
+	_expect_dto_has_no_truth_fields(control_after, "hype control price signal")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(titan_signal),
+		"hype PriceEditor summary"
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("HOT"), true, "hype banner uses HOT chip language")
+	_expect_equal(banner.contains("Titan"), true, "hype banner names the SKU")
+	_assert_text_has_no_truth(banner, "hype banner")
+	var hud := _instantiate_gameplay_hud()
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		_expect_equal(banner_label != null, true, "thin event banner exists")
+		_expect_equal(
+			banner_label != null and banner_label.visible and banner_label.text.contains("HOT"),
+			true,
+			"HUD banner shows hype without a new screen"
+		)
+		_assert_text_has_no_truth(
+			banner_label.text if banner_label != null else "",
+			"HUD hype banner"
+		)
+		var demand_chip := hud.get_node_or_null("%PriceDemandChip") as Label
+		_expect_equal(demand_chip != null, true, "PriceEditor demand chip still present")
+		hud.queue_free()
+
+
+func _test_fog_day_sigma_and_inversion() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var base_sigma: float = _demand_signals.call("active_demand_band_sigma", false)
+	_expect_equal(is_equal_approx(base_sigma, 0.12), true, "Normal base σ is 0.12")
+	_expect_equal(
+		_demand_signals.call("has_fog_flag"),
+		false,
+		"no fog flag before fog day"
+	)
+	var market_state := MarketState.new()
+	for demand_score: float in [0.0, 1.0]:
+		market_state.update_sku(&"AA-SKIE-047", 10_000, demand_score)
+		var inversion_service := DemandSignalService.new(
+			NORMAL_CONFIG, market_state, 123, _qa
+		)
+		_expect_equal(inversion_service.has_fog_flag(), false, "service starts without fog flag")
+		for day: int in range(1, 81):
+			var dto := inversion_service.buy_confirm(
+				day, &"AA-SKIE-047", DemandSignalService.Channel.SHADY,
+				5000, 1, 800_000, 1, 10
+			)
+			var cruel_inversion := (
+				demand_score == 0.0 and dto.shown_demand_band == &"hot"
+				or demand_score == 1.0 and dto.shown_demand_band == &"cold"
+			)
+			_expect_equal(
+				cruel_inversion,
+				false,
+				"without fog flag Cold↔Hot inversion never shown"
+			)
+	var fog: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_FOG,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(fog != null, true, "fog day starts")
+	_expect_equal(fog.fog_flag, true, "fog day sets fog flag")
+	_expect_equal(_demand_signals.call("has_fog_flag"), true, "pack exposes fog flag")
+	var fog_sigma: float = _demand_signals.call("active_demand_band_sigma", false)
+	_expect_equal(fog_sigma > base_sigma, true, "fog day widens σ")
+	_expect_equal(
+		is_equal_approx(fog_sigma, base_sigma * MarketEventService.FOG_SIGMA_MULT),
+		true,
+		"fog σ uses pack widen, not a new BalanceConfig knob"
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Fog"), true, "fog banner is thin and named")
+	_assert_text_has_no_truth(banner, "fog banner")
+	_demand_signals.call("apply_event_save", {})
+	_expect_equal(_demand_signals.call("has_fog_flag"), false, "clearing fog drops the flag")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_demand_band_sigma", false)),
+			base_sigma
+		),
+		true,
+		"σ returns to Normal after fog expires"
+	)
+
+
+func _test_market_event_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": &"AA-SKIE-047", "duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(started != null, true, "save-load fixture hype starts")
+	_game_state.set("current_day", 4)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "market event save")
+	var stored: Dictionary = saved.get("market_event", {})
+	_expect_equal(String(stored.get("id", "")), "hype_spike", "save writes event id")
+	_expect_equal(int(stored.get("remaining_days", 0)), 3, "save writes remaining days")
+	_expect_equal(String(stored.get("sku_id", "")), "AA-SKIE-047", "save writes target SKU")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_demand_signals.call("active_event") == null,
+		true,
+		"new game clears active event"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"restore_save accepts market event snapshot"
+	)
+	var restored: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(restored != null, true, "save/load restores active event")
+	_expect_equal(restored.kind, MarketEvent.KIND_HYPE, "restored kind")
+	_expect_equal(restored.remaining_days, 3, "save/load restores remaining days")
+	_expect_equal(restored.sku_id, &"AA-SKIE-047", "restored hype SKU")
+	var titan_signal := _demand_signals.call(
+		"price_signal",
+		&"AA-SKIE-047",
+		2200,
+		_inventory_service.call("location_for", &"AA-SKIE-047")
+	) as PriceConfirmSignal
+	_expect_equal(titan_signal.shown_demand_band, &"hot", "restored hype still HOT")
+	_expect_dto_has_no_truth_fields(titan_signal, "restored hype signal")
+
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION,
+		{"set_id": &"AA-DUST", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(
+		String(_demand_signals.call("event_banner_text")),
+		"",
+		"rotation leak stays hidden without Research/Specialist"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	shop.hire_specialist()
+	_expect_equal(
+		String(_demand_signals.call("event_banner_text")).contains("Dustway"),
+		true,
+		"Specialist foreshadows the rotation leak"
+	)
+	_assert_text_has_no_truth(
+		String(_demand_signals.call("event_banner_text")),
+		"rotation leak banner"
+	)
+	_assert_text_has_no_truth(
+		String(_demand_signals.call("rotation_watch_text")),
+		"rotation leak watch"
+	)
+	var rotation_saved: Dictionary = _game_state.call("capture_save")
+	_game_state.call("start_new_game")
+	_game_state.call("restore_save", rotation_saved)
+	var leak: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(leak != null, true, "save/load restores rotation leak")
+	_expect_equal(leak.remaining_days, 2, "rotation remaining days restore")
+	_expect_equal(
+		String(_demand_signals.call("event_banner_text")).contains("Dustway"),
+		true,
+		"restored Specialist still sees the leak"
+	)
 
 
 func _test_marketplace_outing_beat() -> void:
