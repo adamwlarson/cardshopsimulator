@@ -25,6 +25,7 @@ rent_medium_weekly_cents = 240000
 wage_mult = 1.0
 staff_cap_small = 1
 staff_cap_medium = 3
+specialist_wage_cents = 14000
 expand_medium_cash_cents = 1500000
 expand_medium_rep = 55
 marketplace_outing_attention = 25

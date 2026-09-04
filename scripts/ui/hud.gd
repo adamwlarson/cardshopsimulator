@@ -52,6 +52,13 @@ extends Control
 @onready var beat_choice_a_button: Button = %BeatChoiceAButton
 @onready var beat_choice_b_button: Button = %BeatChoiceBButton
 @onready var beat_choice_c_button: Button = %BeatChoiceCButton
+@onready var beat_choice_d_button: Button = %BeatChoiceDButton
+@onready var open_staff_button: Button = %OpenStaffButton
+@onready var staff_panel: PanelContainer = %StaffPanel
+@onready var staff_hint: Label = %StaffHint
+@onready var staff_rows: VBoxContainer = %StaffRows
+@onready var hire_cashier_button: Button = %HireCashierButton
+@onready var hire_specialist_button: Button = %HireSpecialistButton
 @onready var beat_confirm: VBoxContainer = %BeatConfirm
 @onready var beat_confirm_title: Label = %BeatConfirmTitle
 @onready var beat_confirm_body: Label = %BeatConfirmBody
@@ -107,6 +114,7 @@ func _ready() -> void:
 	EventBus.beat_decision_requested.connect(_on_beat_decision_requested)
 	EventBus.beat_decision_resolved.connect(_on_beat_decision_resolved)
 	EventBus.buy_focus_requested.connect(_on_buy_focus_requested)
+	EventBus.staff_changed.connect(_on_staff_changed)
 	phase_button.pressed.connect(_on_phase_pressed)
 	%OpenBuyButton.pressed.connect(_open_buy_list)
 	%BuyListCancelButton.pressed.connect(_close_buy)
@@ -138,6 +146,19 @@ func _ready() -> void:
 	beat_choice_a_button.pressed.connect(_select_beat_choice.bind(beat_choice_a_button))
 	beat_choice_b_button.pressed.connect(_select_beat_choice.bind(beat_choice_b_button))
 	beat_choice_c_button.pressed.connect(_select_beat_choice.bind(beat_choice_c_button))
+	if beat_choice_d_button != null:
+		beat_choice_d_button.pressed.connect(
+			_select_beat_choice.bind(beat_choice_d_button)
+		)
+	if open_staff_button != null:
+		open_staff_button.pressed.connect(_open_staff)
+	var staff_cancel := get_node_or_null("%StaffListCancelButton") as Button
+	if staff_cancel != null:
+		staff_cancel.pressed.connect(_close_staff)
+	if hire_cashier_button != null:
+		hire_cashier_button.pressed.connect(_hire_from_panel.bind(&"cashier"))
+	if hire_specialist_button != null:
+		hire_specialist_button.pressed.connect(_hire_from_panel.bind(&"specialist"))
 	%BeatConfirmBackButton.pressed.connect(_close_beat_confirm)
 	%BeatConfirmButton.pressed.connect(_confirm_beat_choice)
 	open_research_button.pressed.connect(_open_research_list)
@@ -192,6 +213,7 @@ func _update_phase(phase: int) -> void:
 	_close_price()
 	_close_research()
 	_close_rearrange()
+	_close_staff()
 	if phase == GameState.DayPhase.SETTLE and _showcase_choice_made:
 		showcase_panel.hide()
 	_sync_prep_action_buttons()
@@ -311,6 +333,8 @@ func _inspect_buy() -> void:
 func _sync_inspect_button() -> void:
 	if inspect_button == null:
 		return
+	var cost := GameState.shop.inspect_attention_cost()
+	inspect_button.text = DemandSignalPresenter.inspect_action_label(cost)
 	var recommended := (
 		_buy_signal != null
 		and DemandSignalService.recommends_inspect(_buy_signal.channel)
@@ -320,7 +344,7 @@ func _sync_inspect_button() -> void:
 		return
 	inspect_button.disabled = (
 		_buy_signal.inspected
-		or GameState.attention_remaining < GameState.shop.inspect_attention_cost()
+		or GameState.attention_remaining < cost
 	)
 
 
@@ -573,6 +597,8 @@ func _on_beat_decision_requested(payload: Dictionary) -> void:
 		beat_choice_b_button,
 		beat_choice_c_button,
 	]
+	if beat_choice_d_button != null:
+		buttons.append(beat_choice_d_button)
 	for index: int in buttons.size():
 		var button := buttons[index]
 		if index >= choices.size() or not choices[index] is Dictionary:
@@ -638,7 +664,7 @@ func _on_beat_decision_resolved(
 			beat_toast.text = "Courier fee paid — FLOOR stays open"
 		&"skip":
 			beat_toast.text = "Passed on the off-site lot"
-		&"hire_cashier", &"hire_cheap":
+		&"hire_cashier", &"hire_cheap", &"hire_specialist":
 			beat_toast.text = "Hire booked — wage posts at SETTLE"
 		&"keep_solo":
 			beat_toast.text = "Staying solo today"
@@ -830,6 +856,7 @@ func _sync_patience_bar(customer: CustomerProfile) -> void:
 
 
 func _sync_prep_action_buttons() -> void:
+	_sync_staff_panel()
 	if open_research_button == null or open_rearrange_button == null:
 		return
 	var research_att := GameState.shop.research_attention_cost()
@@ -1132,6 +1159,122 @@ func _close_rearrange() -> void:
 	_sync_modal_veil()
 
 
+func _on_staff_changed() -> void:
+	_sync_inspect_button()
+	_sync_prep_action_buttons()
+
+
+func _open_staff() -> void:
+	if open_staff_button == null or open_staff_button.disabled:
+		return
+	_close_research()
+	_close_rearrange()
+	_sync_staff_panel()
+	if staff_panel != null:
+		staff_panel.show()
+	_sync_modal_veil()
+
+
+func _close_staff() -> void:
+	if staff_panel != null:
+		staff_panel.hide()
+	_sync_modal_veil()
+
+
+func _hire_from_panel(role: StringName) -> void:
+	if not _can_hire_from_panel():
+		_sync_staff_panel()
+		return
+	var hired: StaffMember = null
+	match role:
+		&"cashier":
+			hired = GameState.shop.hire_cashier(false)
+		&"specialist":
+			hired = GameState.shop.hire_specialist()
+		_:
+			return
+	if hired == null:
+		_sync_staff_panel()
+		return
+	beat_toast.text = "Hire booked — wage posts at SETTLE"
+	beat_toast.show()
+	_sync_staff_panel()
+
+
+func _can_hire_from_panel() -> bool:
+	return (
+		GameState.is_game_active
+		and GameState.current_phase == GameState.DayPhase.PREP
+		and GameState.shop.can_hire()
+	)
+
+
+func _sync_staff_panel() -> void:
+	if open_staff_button != null:
+		open_staff_button.disabled = (
+			not GameState.is_game_active
+			or GameState.current_phase != GameState.DayPhase.PREP
+		)
+	if staff_hint != null:
+		staff_hint.text = (
+			"Roster %d / %d. Wages post at SETTLE. Specialist lowers Inspect and Research Attention."
+			% [GameState.shop.hired_count(), GameState.shop.staff_cap()]
+		)
+	if hire_cashier_button != null:
+		hire_cashier_button.text = (
+			"Hire Cashier · %s/day"
+			% DemandSignalPresenter.format_cents(ShopState.CASHIER_WAGE_CENTS)
+		)
+		hire_cashier_button.disabled = not _can_hire_from_panel()
+	if hire_specialist_button != null:
+		hire_specialist_button.text = (
+			"Hire Specialist · %s/day"
+			% DemandSignalPresenter.format_cents(GameState.shop.specialist_wage_cents())
+		)
+		hire_specialist_button.disabled = not _can_hire_from_panel()
+	if staff_rows == null:
+		return
+	for child: Node in staff_rows.get_children():
+		staff_rows.remove_child(child)
+		child.queue_free()
+	if GameState.shop.staff.is_empty():
+		var empty := Label.new()
+		empty.text = "Owner only — no hired staff."
+		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		staff_rows.add_child(empty)
+		return
+	for index: int in GameState.shop.staff.size():
+		var member := GameState.shop.staff[index]
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var label := Label.new()
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.text = "%s · %s/day" % [
+			member.display_name,
+			DemandSignalPresenter.format_cents(member.wage_cents),
+		]
+		var fire := Button.new()
+		fire.text = "Fire"
+		fire.custom_minimum_size = Vector2(72, 40)
+		fire.disabled = GameState.current_phase != GameState.DayPhase.PREP
+		fire.pressed.connect(_fire_from_panel.bind(index))
+		row.add_child(label)
+		row.add_child(fire)
+		staff_rows.add_child(row)
+
+
+func _fire_from_panel(index: int) -> void:
+	if GameState.current_phase != GameState.DayPhase.PREP:
+		return
+	var member := GameState.shop.fire_staff(index)
+	if member == null:
+		return
+	beat_toast.text = "Fired %s — wage stops" % member.display_name
+	beat_toast.show()
+	_sync_staff_panel()
+
+
 func _process(_delta: float) -> void:
 	if _current_customer != null and serve_panel.visible:
 		_sync_patience_bar(_current_customer)
@@ -1151,4 +1294,5 @@ func _sync_modal_veil() -> void:
 		or research_list_panel.visible
 		or research_confirm_panel.visible
 		or rearrange_panel.visible
+		or (staff_panel != null and staff_panel.visible)
 	)

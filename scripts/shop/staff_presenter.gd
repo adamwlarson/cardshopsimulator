@@ -2,6 +2,7 @@ class_name StaffPresenter
 extends Node3D
 
 ## Thin floor visual for hired cashiers. One register station for MVP.
+## Specialist is domain-only (no mesh) — ignore non-cashier roles.
 ## No staff AI — idle_stand loop only. Does not touch camera or customer pathing.
 
 const REGISTER_STATIONS := 1

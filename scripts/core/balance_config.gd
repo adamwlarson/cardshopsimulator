@@ -39,6 +39,7 @@ enum Difficulty {
 @export var wage_mult: float = 1.0
 @export var staff_cap_small: int = 1
 @export var staff_cap_medium: int = 3
+@export var specialist_wage_cents: int = 14_000
 @export var expand_medium_cash_cents: int = 1_500_000
 @export var expand_medium_rep: int = 55
 @export var marketplace_outing_attention: int = 25

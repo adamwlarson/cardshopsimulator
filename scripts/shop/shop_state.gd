@@ -61,6 +61,20 @@ func cashier_count() -> int:
 	return count
 
 
+func specialist_count() -> int:
+	var count := 0
+	for member: StaffMember in staff:
+		if member.is_specialist():
+			count += 1
+	return count
+
+
+func specialist_wage_cents() -> int:
+	if _config != null:
+		return maxi(1, _config.specialist_wage_cents)
+	return 14_000
+
+
 func staff_cap() -> int:
 	var small_cap := 1
 	var medium_cap := 3
@@ -83,10 +97,7 @@ func is_owner_only() -> bool:
 func has_specialist_on_duty() -> bool:
 	if specialist_on_duty:
 		return true
-	for member: StaffMember in staff:
-		if member.role == &"specialist":
-			return true
-	return false
+	return specialist_count() > 0
 
 
 func set_specialist_on_duty(enabled: bool) -> void:
@@ -132,6 +143,26 @@ func hire_cashier(cheap: bool) -> StaffMember:
 		return null
 	var member := _make_cashier(cheap)
 	staff.append(member)
+	_emit_staff_changed()
+	return member
+
+
+func hire_specialist() -> StaffMember:
+	if not can_hire():
+		return null
+	var member := _make_specialist()
+	staff.append(member)
+	_emit_staff_changed()
+	return member
+
+
+func fire_staff(index: int) -> StaffMember:
+	if index < 0 or index >= staff.size():
+		return null
+	var member := staff[index]
+	staff.remove_at(index)
+	if specialist_count() == 0:
+		specialist_on_duty = false
 	_emit_staff_changed()
 	return member
 
@@ -277,4 +308,14 @@ func _make_cashier(cheap: bool) -> StaffMember:
 		member.wage_cents = CASHIER_WAGE_CENTS
 		member.reliability = CASHIER_RELIABILITY
 		member.theft_bias = false
+	return member
+
+
+func _make_specialist() -> StaffMember:
+	var member := StaffMember.new()
+	member.role = &"specialist"
+	member.display_name = "Specialist"
+	member.wage_cents = specialist_wage_cents()
+	member.reliability = CASHIER_RELIABILITY
+	member.theft_bias = false
 	return member
