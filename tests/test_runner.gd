@@ -95,6 +95,7 @@ func _initialize() -> void:
 	_test_titan_hype_price_focus()
 	_test_day_ten_beat_serialization()
 	_test_showcase_slab_and_singles_preconditions()
+	_test_shop_camera_framing()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1008,6 +1009,42 @@ func _test_showcase_slab_and_singles_preconditions() -> void:
 	_expect_equal(titan.location.type, InventoryLocation.Type.CASE, "Titan in case")
 	_expect_equal(paragon.location.type, InventoryLocation.Type.CASE, "Paragon in case")
 	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_shop_camera_framing() -> void:
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "shop_floor scene loads")
+	if packed == null:
+		return
+	var shop: Node = packed.instantiate()
+	var camera := shop.get_node_or_null("ShopCamera") as Camera3D
+	_expect_equal(camera != null, true, "ShopCamera present")
+	if camera == null:
+		shop.free()
+		return
+	_expect_equal(camera.current, true, "ShopCamera is current")
+	_expect_equal(camera.position.y >= 1.4, true, "camera above waist height")
+	_expect_equal(camera.position.y <= 2.0, true, "camera below ceiling")
+	var look := -camera.transform.basis.z
+	_expect_equal(look.y < 0.0, true, "camera looks down at the floor")
+	_expect_equal(look.z < 0.0, true, "camera looks into the shop (-Z)")
+	_expect_equal(camera.fov <= 75.0, true, "FOV is not an ultra-wide ceiling bias")
+	var world := shop.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	_expect_equal(world != null, true, "WorldEnvironment present")
+	if world != null and world.environment != null:
+		_expect_equal(
+			world.environment.ambient_light_source,
+			Environment.AMBIENT_SOURCE_COLOR,
+			"interior ambient uses color fill"
+		)
+	var omni_count := 0
+	var lights_root := shop.get_node_or_null("Fixtures/OverheadLights")
+	if lights_root != null:
+		for child: Node in lights_root.get_children():
+			if child is OmniLight3D:
+				omni_count += 1
+	_expect_equal(omni_count, 4, "overhead omni fills")
+	shop.free()
 
 
 func _test_day_ten_beat_serialization() -> void:

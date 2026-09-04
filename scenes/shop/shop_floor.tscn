@@ -1,8 +1,9 @@
-[gd_scene load_steps=29 format=3]
+[gd_scene load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
 [ext_resource type="PackedScene" path="res://scenes/ui/gameplay_hud.tscn" id="3_hud"]
+[ext_resource type="Script" path="res://scripts/shop/shop_camera.gd" id="28_camera"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_shop_shell_01/prop_shop_shell_01.glb" id="4_shell"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_light_overhead_01/prop_light_overhead_01.glb" id="5_light"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_door_01/prop_door_01.glb" id="6_door"]
@@ -31,9 +32,9 @@
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
 background_color = Color(0.08, 0.11, 0.14, 1)
-ambient_light_source = 3
+ambient_light_source = 2
 ambient_light_color = Color(0.72, 0.78, 0.86, 1)
-ambient_light_energy = 0.55
+ambient_light_energy = 0.7
 tonemap_mode = 2
 
 [node name="ShopFloor" type="Node3D"]
@@ -47,11 +48,12 @@ light_color = Color(1, 0.91, 0.78, 1)
 light_energy = 1.2
 shadow_enabled = true
 
-[node name="Camera" type="Camera3D" parent="."]
-position = Vector3(4.5, 2.25, -0.45)
-rotation_degrees = Vector3(-17, 0, 0)
+[node name="ShopCamera" type="Camera3D" parent="."]
+script = ExtResource("28_camera")
+position = Vector3(4.5, 1.62, -0.8)
+rotation_degrees = Vector3(-15, 0, 0)
 current = true
-fov = 90.0
+fov = 68.0
 
 [node name="Architecture" type="Node3D" parent="."]
 
@@ -146,6 +148,34 @@ position = Vector3(2.25, 2.79, -4.95)
 
 [node name="BackRight" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
 position = Vector3(6.75, 2.79, -4.95)
+
+[node name="FrontLeftFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+position = Vector3(2.25, 2.55, -2.25)
+light_color = Color(1, 0.91, 0.78, 1)
+light_energy = 1.15
+omni_range = 5.0
+shadow_enabled = false
+
+[node name="FrontRightFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+position = Vector3(6.75, 2.55, -2.25)
+light_color = Color(1, 0.91, 0.78, 1)
+light_energy = 1.15
+omni_range = 5.0
+shadow_enabled = false
+
+[node name="BackLeftFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+position = Vector3(2.25, 2.55, -4.95)
+light_color = Color(1, 0.91, 0.78, 1)
+light_energy = 1.15
+omni_range = 5.0
+shadow_enabled = false
+
+[node name="BackRightFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+position = Vector3(6.75, 2.55, -4.95)
+light_color = Color(1, 0.91, 0.78, 1)
+light_energy = 1.15
+omni_range = 5.0
+shadow_enabled = false
 
 [node name="Systems" type="Node" parent="."]
 
