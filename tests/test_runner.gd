@@ -3777,9 +3777,14 @@ func _test_cashier_silhouette_on_floor() -> void:
 	_expect_equal(slot != null, true, "CashierSlot marker is behind the register")
 	if slot != null:
 		_expect_equal(
-			slot.position.distance_to(Vector3(8.05, 0.0, -0.95)) < 0.05,
+			slot.position.is_equal_approx(StaffPresenter.DEFAULT_STATION),
 			true,
-			"cashier slot sits on the stool/owner side of the counter"
+			"CashierSlot matches StaffPresenter.DEFAULT_STATION"
+		)
+		_expect_equal(
+			StaffPresenter.DEFAULT_STATION.is_equal_approx(Vector3(8.05, 0.0, -0.95)),
+			true,
+			"presenter default is stool/owner side (8.05, 0, −0.95)"
 		)
 		_expect_equal(
 			slot.position.z <= -0.85 and slot.position.z >= -1.05,
@@ -3787,9 +3792,14 @@ func _test_cashier_silhouette_on_floor() -> void:
 			"cashier Z stays in the owner-side band (−1.05…−0.85)"
 		)
 		_expect_equal(
-			is_equal_approx(slot.rotation_degrees.y, 90.0),
+			is_equal_approx(slot.rotation_degrees.y, StaffPresenter.DEFAULT_YAW_DEGREES),
 			true,
-			"cashier yaw 90 faces customers (−X / queue)"
+			"CashierSlot yaw matches StaffPresenter.DEFAULT_YAW_DEGREES"
+		)
+		_expect_equal(
+			is_equal_approx(StaffPresenter.DEFAULT_YAW_DEGREES, 90.0),
+			true,
+			"presenter default yaw 90 faces customers (−X)"
 		)
 	presenter.sync_from_shop()
 	_expect_equal(presenter.visible_clerk_count(), 0, "owner-only hides the clerk")
@@ -3829,14 +3839,19 @@ func _test_cashier_silhouette_on_floor() -> void:
 			"clerk is near the buy counter / register"
 		)
 		_expect_equal(
+			clerk.position.is_equal_approx(StaffPresenter.DEFAULT_STATION),
+			true,
+			"spawned clerk uses CashierSlot / DEFAULT_STATION"
+		)
+		_expect_equal(
 			clerk.position.z <= -0.85 and clerk.position.z >= -1.05,
 			true,
 			"spawned clerk stays on the stool/owner side (not past counter −1.35)"
 		)
 		_expect_equal(
-			is_equal_approx(clerk.rotation_degrees.y, 90.0),
+			is_equal_approx(clerk.rotation_degrees.y, StaffPresenter.DEFAULT_YAW_DEGREES),
 			true,
-			"spawned clerk yaw 90 faces −X"
+			"spawned clerk yaw matches DEFAULT_YAW_DEGREES (90 / −X)"
 		)
 	_expect_equal(
 		presenter.current_idle_clip(),
