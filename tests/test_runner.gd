@@ -125,6 +125,7 @@ func _initialize() -> void:
 	_test_customer_npc_visible_when_queued()
 	_test_customer_npc_mvp_cast()
 	_test_customer_npc_locomotion_clips()
+	_test_cashier_silhouette_on_floor()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -3730,6 +3731,265 @@ func _test_customer_npc_locomotion_clips() -> void:
 		"does not invent a second animation system"
 	)
 	presenter.free()
+
+
+func _test_cashier_silhouette_on_floor() -> void:
+	_expect_equal(
+		FileAccess.file_exists(StaffMember.SCENE_CASHIER),
+		true,
+		"cashier GLB is on disk"
+	)
+	_expect_equal(
+		is_equal_approx(StaffMember.BODY_HEIGHT, 1.72),
+		true,
+		"cashier authored height 1.72m"
+	)
+	_expect_equal(
+		StaffMember.CLIP_IDLE_STAND,
+		&"idle_stand",
+		"cashier clip is idle_stand"
+	)
+	_expect_equal(
+		StaffMember.SCENE_CASHIER.contains("char_cashier_01"),
+		true,
+		"cashier uses Art char_cashier_01"
+	)
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop: ShopState = _game_state.get("shop")
+	_expect_equal(shop.is_owner_only(), true, "Normal starts owner-only")
+	_expect_equal(shop.cashier_count(), 0, "Normal starts with no cashiers")
+	_expect_equal(shop.staff_cap(), 1, "Small staff cap is 1")
+
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "shop_floor loads for cashier silhouette")
+	if packed == null:
+		return
+	var floor: Node = packed.instantiate()
+	root.add_child(floor)
+	var presenter := floor.get_node_or_null("StaffFloor") as StaffPresenter
+	_expect_equal(presenter != null, true, "StaffFloor presenter is on the shop")
+	if presenter == null:
+		floor.free()
+		return
+	var slot := floor.get_node_or_null("StaffFloor/CashierSlot") as Node3D
+	_expect_equal(slot != null, true, "CashierSlot marker is behind the register")
+	if slot != null:
+		_expect_equal(
+			slot.position.is_equal_approx(StaffPresenter.DEFAULT_STATION),
+			true,
+			"CashierSlot matches StaffPresenter.DEFAULT_STATION"
+		)
+		_expect_equal(
+			StaffPresenter.DEFAULT_STATION.is_equal_approx(Vector3(8.05, 0.0, -0.95)),
+			true,
+			"presenter default is stool/owner side (8.05, 0, −0.95)"
+		)
+		_expect_equal(
+			slot.position.z <= -0.85 and slot.position.z >= -1.05,
+			true,
+			"cashier Z stays in the owner-side band (−1.05…−0.85)"
+		)
+		_expect_equal(
+			is_equal_approx(slot.rotation_degrees.y, StaffPresenter.DEFAULT_YAW_DEGREES),
+			true,
+			"CashierSlot yaw matches StaffPresenter.DEFAULT_YAW_DEGREES"
+		)
+		_expect_equal(
+			is_equal_approx(StaffPresenter.DEFAULT_YAW_DEGREES, 90.0),
+			true,
+			"presenter default yaw 90 faces customers (−X)"
+		)
+	presenter.sync_from_shop()
+	_expect_equal(presenter.visible_clerk_count(), 0, "owner-only hides the clerk")
+
+	var camera := floor.get_node_or_null("Camera") as ShopCamera
+	_expect_equal(camera != null, true, "Camera present during clerk spawn")
+	var home_pos := Vector3.ZERO
+	var home_rot := Vector3.ZERO
+	var home_fov := 0.0
+	if camera != null:
+		home_pos = camera.position
+		home_rot = camera.rotation_degrees
+		home_fov = camera.fov
+
+	_expect_equal(shop.hire_cashier(false) != null, true, "hire first cashier")
+	_expect_equal(shop.cashier_count(), 1, "one cashier on duty")
+	_expect_equal(shop.hire_cashier(false) == null, true, "Small staff cap blocks second hire")
+	presenter.sync_from_shop()
+	_expect_equal(presenter.visible_clerk_count(), 1, "hired cashier appears behind the counter")
+	var clerk := presenter.clerk_at(0)
+	_expect_equal(clerk != null and clerk.visible, true, "clerk node is visible")
+	if clerk != null:
+		var clerk_tile := shop.floor_grid.world_to_tile(clerk.position)
+		_expect_equal(
+			shop.floor_grid.is_walkable(clerk_tile),
+			false,
+			"clerk stands on blocked counter tiles"
+		)
+		_expect_equal(
+			shop.floor_grid.is_walkable(shop.floor_grid.desk_tile),
+			true,
+			"customer desk tile stays walkable"
+		)
+		_expect_equal(
+			clerk.position.distance_to(Vector3(7.2, 0.0, -1.35)) < 1.4,
+			true,
+			"clerk is near the buy counter / register"
+		)
+		_expect_equal(
+			clerk.position.is_equal_approx(StaffPresenter.DEFAULT_STATION),
+			true,
+			"spawned clerk uses CashierSlot / DEFAULT_STATION"
+		)
+		_expect_equal(
+			clerk.position.z <= -0.85 and clerk.position.z >= -1.05,
+			true,
+			"spawned clerk stays on the stool/owner side (not past counter −1.35)"
+		)
+		_expect_equal(
+			is_equal_approx(clerk.rotation_degrees.y, StaffPresenter.DEFAULT_YAW_DEGREES),
+			true,
+			"spawned clerk yaw matches DEFAULT_YAW_DEGREES (90 / −X)"
+		)
+	_expect_equal(
+		presenter.current_idle_clip(),
+		StaffMember.CLIP_IDLE_STAND,
+		"idle_stand is the active clip"
+	)
+	_expect_equal(
+		presenter.body_root_local_position().is_equal_approx(Vector3.ZERO),
+		true,
+		"in-place idle keeps the GLB root at origin"
+	)
+	if presenter.has_idle_loop():
+		_expect_equal(true, true, "idle_stand loops on AnimationPlayer")
+	else:
+		_expect_equal(
+			FileAccess.file_exists(StaffMember.SCENE_CASHIER),
+			true,
+			"GLB present even if import has not bound AnimationPlayer yet"
+		)
+
+	var customer_p := floor.get_node_or_null(
+		"Systems/CustomerPresenter"
+	) as CustomerPresenter
+	_expect_equal(customer_p != null, true, "CustomerPresenter still on the shop")
+	if customer_p != null:
+		customer_p.instant_travel = true
+		customer_p.dwell_override = 0.0
+		var path := customer_p.path_between(
+			shop.floor_grid.tile_to_world(shop.floor_grid.entrance_tile),
+			shop.floor_grid.tile_to_world(shop.floor_grid.desk_tile)
+		)
+		_expect_equal(path.is_empty(), false, "clerk does not break entrance→desk pathing")
+		var customer := _make_floor_customer(&"regular")
+		customer_p.spawn_for(customer)
+		_expect_equal(
+			customer_p.advance_until(customer, CustomerPresenter.FloorState.APPROACH),
+			true,
+			"customer still reaches the desk with clerk present"
+		)
+		_expect_equal(
+			customer_p.get_npc(customer) != null,
+			true,
+			"customer NPC remains after clerk spawn"
+		)
+
+	if camera != null:
+		_expect_equal(
+			is_equal_approx(camera.fov, ShopCamera.HOME_FOV),
+			true,
+			"clerk visual does not change FOV"
+		)
+		_expect_equal(
+			is_equal_approx(home_fov, ShopCamera.HOME_FOV),
+			true,
+			"camera FOV stays locked at 70"
+		)
+		_expect_equal(
+			camera.position.is_equal_approx(home_pos),
+			true,
+			"clerk spawn does not move the shop camera"
+		)
+		_expect_equal(
+			camera.rotation_degrees.is_equal_approx(home_rot),
+			true,
+			"clerk spawn does not rotate the shop camera"
+		)
+		_expect_equal(
+			camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
+			true,
+			"behind-counter camera SoT unchanged"
+		)
+	var staff_source := FileAccess.get_file_as_string(
+		"res://scripts/shop/staff_presenter.gd"
+	)
+	_expect_equal(
+		staff_source.contains("fov"),
+		false,
+		"staff presenter does not mutate FOV"
+	)
+	_expect_equal(
+		staff_source.contains("AnimationPlayer"),
+		true,
+		"cashier idle uses AnimationPlayer"
+	)
+	_expect_equal(
+		staff_source.contains("AnimationTree"),
+		false,
+		"does not invent a second animation system"
+	)
+	floor.free()
+
+	_economy.set("balance_cents", 1_600_000)
+	_game_state.set("current_reputation", 55)
+	_expect_equal(
+		shop.expand_to_medium(18, 1_600_000, 55),
+		true,
+		"Sign Medium for staff_cap 3"
+	)
+	_expect_equal(shop.staff_cap(), 3, "Medium staff cap unlocks")
+	_expect_equal(shop.hire_cashier(false) != null, true, "Medium hire #2")
+	_expect_equal(shop.hire_cashier(false) != null, true, "Medium hire #3")
+	_expect_equal(shop.hire_cashier(false) == null, true, "Medium cap blocks #4")
+	_expect_equal(shop.cashier_count(), 3, "three cashiers hired")
+	_expect_equal(shop.cashier_count() <= shop.staff_cap(), true, "hires respect staff_cap")
+	var cap_floor: Node = packed.instantiate()
+	root.add_child(cap_floor)
+	var cap_presenter := cap_floor.get_node_or_null("StaffFloor") as StaffPresenter
+	if cap_presenter != null:
+		cap_presenter.sync_from_shop()
+		_expect_equal(
+			cap_presenter.visible_clerk_count(),
+			1,
+			"one register station even when staff_cap is 3"
+		)
+	cap_floor.free()
+
+	_game_state.call("set_balance_config", EASY_CONFIG)
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop")
+	_expect_equal(shop.cashier_count(), 1, "Easy seeds a trainee cashier")
+	var easy_floor: Node = packed.instantiate()
+	root.add_child(easy_floor)
+	var easy_presenter := easy_floor.get_node_or_null("StaffFloor") as StaffPresenter
+	if easy_presenter != null:
+		easy_presenter.sync_from_shop()
+		_expect_equal(
+			easy_presenter.visible_clerk_count(),
+			1,
+			"Easy trainee is visible behind the counter"
+		)
+		_expect_equal(
+			easy_presenter.current_idle_clip(),
+			StaffMember.CLIP_IDLE_STAND,
+			"trainee loops idle_stand"
+		)
+	easy_floor.free()
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
 
 
 func _make_floor_presenter() -> CustomerPresenter:

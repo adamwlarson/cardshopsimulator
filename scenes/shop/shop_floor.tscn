@@ -1,4 +1,4 @@
-[gd_scene load_steps=36 format=3]
+[gd_scene load_steps=37 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
@@ -34,6 +34,7 @@
 [ext_resource type="Script" path="res://scripts/shop/shop_camera.gd" id="32_camera"]
 [ext_resource type="Script" path="res://scripts/customers/customer_presenter.gd" id="33_presenter"]
 [ext_resource type="Script" path="res://scripts/shop/shop_floor_extent.gd" id="34_extent"]
+[ext_resource type="Script" path="res://scripts/shop/staff_presenter.gd" id="35_staff"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -269,6 +270,13 @@ monitorable = false
 shape = SubResource("BoxShape_desk")
 
 [node name="Npcs" type="Node3D" parent="CustomerFloor"]
+
+[node name="StaffFloor" type="Node3D" parent="."]
+script = ExtResource("35_staff")
+
+[node name="CashierSlot" type="Marker3D" parent="StaffFloor"]
+position = Vector3(8.05, 0, -0.95)
+rotation_degrees = Vector3(0, 90, 0)
 
 [node name="HUDLayer" type="CanvasLayer" parent="."]
 

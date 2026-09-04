@@ -1,12 +1,29 @@
 class_name StaffMember
 extends Resource
 
+const SCENE_CASHIER := (
+	"res://assets/chars/staff/char_cashier_01/"
+	+ "char_cashier_01.glb"
+)
+const CLIP_IDLE_STAND := &"idle_stand"
+const BODY_HEIGHT := 1.72
+
 @export var role: StringName = &"cashier"
 @export var display_name: String = "Cashier"
 @export var wage_cents: int = 8_000
 @export var reliability: float = 0.85
 @export var theft_bias: bool = false
 @export var free_days_remaining: int = 0
+
+
+func is_cashier() -> bool:
+	return role == &"cashier"
+
+
+func visual_scene_path() -> String:
+	if is_cashier():
+		return SCENE_CASHIER
+	return ""
 
 
 func to_save() -> Dictionary:
