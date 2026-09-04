@@ -1,6 +1,6 @@
 # Next Eng SoT Pick E v1 — post C2 (beats vs polish)
 
-**Status:** Adopted — **C3 §10 #3+#10 GO** (D + HOLD parked); Eng spike in flight  
+**Status:** Adopted — **C3 §10 #3+#10 shipped #29** @ `8bcc1ca0` (QA PASS @ `a25493bb`); D + HOLD parked
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** pick-c (C1/C3), pick-d (C2 shipped #28), ui-wireflows §5.1 #3/#10, systems §8/#10  
