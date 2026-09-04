@@ -2,8 +2,9 @@ class_name CustomerNpc
 extends Node3D
 
 const WALK_SPEED := 1.35
-# Art disc is 0.32 m. Holder is scaled so the bobber still reads under the
-# locked aisle HUD (−28° / FOV 70); authored GLB scale stays 1,1,1.
+# HOLD H6: 2× read scale so billboard icons stay readable from the locked
+# behind-desk aisle HUD (−28° / FOV 70) without clipping the counter. Art disc
+# is 0.32 m; authored GLB scale stays 1,1,1. No price/SKU on the bobber.
 const ICON_HANG := -0.18
 const ICON_READ_SCALE := 2.0
 const CLIP_WALK := &"walk"

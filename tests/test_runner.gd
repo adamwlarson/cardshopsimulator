@@ -146,6 +146,7 @@ func _initialize() -> void:
 	_test_c3_drive_shortens_floor_courier_keeps()
 	_test_c3_shady_confirm_has_no_truth()
 	_test_c3_report_applies_rep()
+	_test_hold_soft_polish()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1169,6 +1170,16 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(NORMAL_CONFIG.inspect_accuracy, 0.85, "normal inspect accuracy")
 	_expect_equal(EASY_CONFIG.inspect_accuracy, 0.92, "easy inspect accuracy unchanged")
 	_expect_equal(HARD_CONFIG.inspect_accuracy, 0.75, "hard inspect accuracy unchanged")
+	_expect_equal(NORMAL_CONFIG.staff_noshow_mult, 0.4, "normal staff_noshow_mult")
+	_expect_equal(EASY_CONFIG.staff_noshow_mult, 0.4, "easy staff_noshow_mult inherits")
+	_expect_equal(HARD_CONFIG.staff_noshow_mult, 0.4, "hard staff_noshow_mult inherits")
+	_expect_equal(NORMAL_CONFIG.pull_attention, 5, "normal pull_attention")
+	_expect_equal(EASY_CONFIG.pull_attention, 5, "easy pull_attention inherits")
+	_expect_equal(HARD_CONFIG.pull_attention, 5, "hard pull_attention inherits")
+	_expect_equal(EASY_CONFIG.staff_cap_small, 1, "easy staff_cap_small inherits")
+	_expect_equal(HARD_CONFIG.staff_cap_small, 1, "hard staff_cap_small inherits")
+	_expect_equal(EASY_CONFIG.staff_cap_medium, 3, "easy staff_cap_medium inherits")
+	_expect_equal(HARD_CONFIG.staff_cap_medium, 3, "hard staff_cap_medium inherits")
 
 
 func _test_normal_shop_capacity() -> void:
@@ -4109,9 +4120,14 @@ func _test_customer_npc_mvp_cast() -> void:
 		"sell Art icon path"
 	)
 	_expect_equal(
-		CustomerIntentIcon.COLOR_SELL.r > 0.8 and CustomerIntentIcon.COLOR_SELL.g > 0.45,
+		CustomerIntentIcon.COLOR_SELL.is_equal_approx(CustomerIntentIcon.ACCENT_AMBER),
 		true,
 		"sell stays warm amber Accent_Amber"
+	)
+	_expect_equal(
+		CustomerIntentIcon.ACCENT_AMBER.is_equal_approx(Color(0.82, 0.52, 0.18)),
+		true,
+		"Accent_Amber lock is 0.82, 0.52, 0.18"
 	)
 	_expect_equal(
 		CustomerIntentIcon.COLOR_SELL.b < 0.35,
@@ -4715,6 +4731,7 @@ func _test_c2_att_zero_owner_verbs() -> void:
 	_expect_equal(_game_state.call("can_inspect"), false, "C2 gate 3: Inspect blocked at Att 0")
 	_expect_equal(_game_state.call("can_negotiate"), false, "C2 gate 3: Negotiate blocked at Att 0")
 	_expect_equal(_game_state.call("can_pull"), false, "C2 gate 3: Pull blocked at Att 0")
+	_expect_equal(_game_state.call("can_research"), false, "C2 gate 3: can_research blocked at Att 0")
 	var research := _demand_signals.call("research_set", &"AA-BASE") as Dictionary
 	_expect_equal(bool(research.get("ok", false)), false, "C2 gate 3: Research blocked at Att 0")
 	_expect_equal(
@@ -5173,6 +5190,190 @@ func _test_c3_report_applies_rep() -> void:
 		true,
 		"C3 gate 4: Report completes the beat"
 	)
+
+
+func _test_hold_soft_polish() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"H1: FLOOR opens for Att-verb compare"
+	)
+	_expect_equal(_game_state.call("can_research"), true, "H1: can_research true at full Att")
+	_expect_equal(_game_state.call("can_inspect"), true, "H1: can_inspect true at full Att")
+	_expect_equal(_game_state.call("can_pull"), true, "H1: can_pull true at full Att")
+	_game_state.set("attention_remaining", 0)
+	_event_bus.emit_signal("attention_changed", 0)
+	_expect_equal(_game_state.call("can_research"), false, "H1: can_research false at Att 0")
+	_expect_equal(_game_state.call("can_inspect"), false, "H1: Inspect refused at Att 0")
+	_expect_equal(_game_state.call("can_negotiate"), false, "H1: Negotiate refused at Att 0")
+	_expect_equal(_game_state.call("can_pull"), false, "H1: Pull refused at Att 0")
+	_economy.set("balance_cents", 800_000)
+	_event_bus.call("publish_cash_changed", 800_000)
+	_expect_equal(
+		_game_state.call("can_research"),
+		false,
+		"H1: cash alone does not unlock Research"
+	)
+	var zero_research := _demand_signals.call("research_set", &"AA-BASE") as Dictionary
+	_expect_equal(bool(zero_research.get("ok", false)), false, "H1: research_set refused at Att 0")
+	_expect_equal(
+		StringName(zero_research.get("reason", &"")),
+		&"insufficient_attention",
+		"H1: Att 0 reason is insufficient_attention"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	var research_att := shop.research_attention_cost()
+	_game_state.set("attention_remaining", research_att)
+	_event_bus.emit_signal("attention_changed", research_att)
+	_expect_equal(
+		_game_state.call("can_research"),
+		true,
+		"H1: can_research true at Att >= cost"
+	)
+	_expect_equal(
+		_demand_signals.call("can_research_set", &"AA-BASE"),
+		true,
+		"H1: can_research_set true at Att >= cost"
+	)
+	var ok_research := _demand_signals.call("research_set", &"AA-BASE") as Dictionary
+	_expect_equal(bool(ok_research.get("ok", false)), true, "H1: Research still works at Att >= cost")
+
+	_assert_hold_inherit_scalars(EASY_CONFIG, "easy")
+	_assert_hold_inherit_scalars(NORMAL_CONFIG, "normal")
+	_assert_hold_inherit_scalars(HARD_CONFIG, "hard")
+	_assert_hold_staff_panel(EASY_CONFIG, "easy", true)
+	_assert_hold_staff_panel(HARD_CONFIG, "hard", false)
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_expect_equal(_game_state.call("start_floor"), true, "H6: FLOOR for icon scale")
+	var presenter := _make_floor_presenter()
+	var npc := presenter.spawn_for(_make_floor_customer(&"regular"))
+	_expect_equal(CustomerNpc.ICON_READ_SCALE, 2.0, "H6: ICON_READ_SCALE is 2×")
+	_expect_equal(
+		npc.icon.scale.is_equal_approx(Vector3.ONE * CustomerNpc.ICON_READ_SCALE),
+		true,
+		"H6: bobber holder is 2× read scale"
+	)
+	_expect_equal(
+		is_equal_approx(npc.icon.position.y, npc.body_height + CustomerNpc.ICON_HANG),
+		true,
+		"H6: bobber hangs above the head, not into the counter"
+	)
+	_expect_equal(npc.icon.has_truth_fields(), false, "H6: bobber has no truth fields")
+	_assert_payload_has_no_truth(npc.icon_presentation(), "H6 bobber")
+	_expect_equal(
+		npc.icon_presentation().has("price"),
+		false,
+		"H6: no price on bobber"
+	)
+	_expect_equal(
+		npc.icon_presentation().has("sku"),
+		false,
+		"H6: no SKU on bobber"
+	)
+	_expect_equal(
+		CustomerIntentIcon.COLOR_SELL.is_equal_approx(CustomerIntentIcon.ACCENT_AMBER),
+		true,
+		"H7: sell fallback tint is Accent_Amber"
+	)
+	_expect_equal(
+		CustomerIntentIcon.ACCENT_AMBER.is_equal_approx(Color(0.82, 0.52, 0.18)),
+		true,
+		"H7: Accent_Amber lock 0.82, 0.52, 0.18"
+	)
+	_expect_equal(
+		CustomerIntentIcon.ACCENT_AMBER.r > CustomerIntentIcon.ACCENT_AMBER.g
+		and CustomerIntentIcon.ACCENT_AMBER.g > CustomerIntentIcon.ACCENT_AMBER.b,
+		true,
+		"H7: sell tint stays warm amber, not burgundy"
+	)
+	presenter.free()
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _assert_hold_inherit_scalars(config: BalanceConfig, label: String) -> void:
+	_expect_equal(config.staff_noshow_mult, 0.4, "H2: %s staff_noshow_mult readable" % label)
+	_expect_equal(config.pull_attention, 5, "H3: %s pull_attention readable" % label)
+	_game_state.call("set_balance_config", config)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.staff_noshow_mult(), 0.4, "H2: %s ShopState staff_noshow_mult" % label)
+	_expect_equal(shop.pull_attention_cost(), 5, "H3: %s ShopState pull Att" % label)
+	_expect_equal(shop.specialist_wage_cents(), 14_000, "H4: %s specialist wage inherits" % label)
+	_expect_equal(shop.staff_cap(), 1, "H4: %s Small staff cap inherits" % label)
+
+
+func _assert_hold_staff_panel(
+	config: BalanceConfig,
+	label: String,
+	expect_seeded_staff: bool
+) -> void:
+	_game_state.call("set_balance_config", config)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "H4: %s StaffPanel HUD loads" % label)
+	if hud == null:
+		return
+	var open_staff := hud.get_node_or_null("%OpenStaffButton") as Button
+	_expect_equal(open_staff != null, true, "H4: %s Open Staff present" % label)
+	open_staff.pressed.emit()
+	var hire_cashier := hud.get_node_or_null("%HireCashierButton") as Button
+	var hire_specialist := hud.get_node_or_null("%HireSpecialistButton") as Button
+	var staff_hint := hud.get_node_or_null("%StaffHint") as Label
+	var staff_rows := hud.get_node_or_null("%StaffRows") as VBoxContainer
+	_expect_equal(
+		hire_cashier != null and hire_cashier.text.contains("$80.00"),
+		true,
+		"H4: %s cashier wage is not blank" % label
+	)
+	_expect_equal(
+		hire_specialist != null and hire_specialist.text.contains("$140.00"),
+		true,
+		"H4: %s specialist wage is not blank" % label
+	)
+	_expect_equal(
+		staff_hint != null and staff_hint.text.contains("Roster"),
+		true,
+		"H4: %s roster hint is not blank" % label
+	)
+	_expect_equal(
+		staff_hint.text.contains("%d / %d" % [shop.hired_count(), shop.staff_cap()]),
+		true,
+		"H4: %s roster uses inherited cap" % label
+	)
+	_expect_equal(staff_rows != null, true, "H4: %s staff rows present" % label)
+	if staff_rows != null:
+		_expect_equal(staff_rows.get_child_count() > 0, true, "H4: %s staff rows not empty" % label)
+		var first := staff_rows.get_child(0)
+		var row_text := ""
+		if first is Label:
+			row_text = (first as Label).text
+		elif first is HBoxContainer and first.get_child_count() > 0:
+			var inner := first.get_child(0)
+			if inner is Label:
+				row_text = (inner as Label).text
+		_expect_equal(row_text.is_empty(), false, "H4: %s roster row text not blank" % label)
+		if expect_seeded_staff:
+			_expect_equal(row_text.contains("$"), true, "H4: %s seeded wage visible" % label)
+		else:
+			_expect_equal(
+				row_text.contains("Owner only"),
+				true,
+				"H4: %s owner-only empty state" % label
+			)
+	_assert_text_has_no_truth(
+		hire_specialist.text if hire_specialist != null else "",
+		"H4 %s specialist hire" % label
+	)
+	root.remove_child(hud)
+	hud.free()
 
 
 func _start_shady_on_normal_window() -> void:

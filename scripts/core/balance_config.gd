@@ -34,7 +34,9 @@ enum Difficulty {
 @export var online_fee: float = 0.08
 @export var shrink_daily_base: float = 0.002
 @export var shrink_unstaffed_add: float = 0.005
+## HOLD H2: Easy/Hard inherit this Normal default when omitted from .tres.
 @export var staff_noshow_mult: float = 0.4
+## HOLD H3: Easy/Hard inherit this Normal Pull Att cost when omitted from .tres.
 @export var pull_attention: int = 5
 @export var rent_small_weekly_cents: int = 120_000
 @export var rent_medium_weekly_cents: int = 240_000

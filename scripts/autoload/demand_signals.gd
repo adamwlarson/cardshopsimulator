@@ -386,7 +386,13 @@ func can_research_set(set_id: StringName) -> bool:
 func research_block_reason(set_id: StringName) -> StringName:
 	if _service == null or set_id.is_empty():
 		return &"invalid"
-	if not GameState.can_research():
+	if (
+		not GameState.is_game_active
+		or GameState.current_phase not in [
+			GameState.DayPhase.PREP,
+			GameState.DayPhase.FLOOR,
+		]
+	):
 		return &"wrong_phase"
 	if _service.is_set_informed(set_id, GameState.current_day):
 		return &"already_researched"

@@ -22,7 +22,9 @@ const SCENE_SELL := (
 
 const COLOR_BROWSE := Color(0.82, 0.84, 0.86)
 const COLOR_BUY := Color(0.22, 0.72, 0.68)
-const COLOR_SELL := Color(0.92, 0.62, 0.22)
+# HOLD H7: fallback tint matches Accent_Amber lock — warm amber, not burgundy.
+const ACCENT_AMBER := Color(0.82, 0.52, 0.18)
+const COLOR_SELL := ACCENT_AMBER
 
 var intent: Intent = Intent.BROWSE
 var _meshes: Dictionary = {}
