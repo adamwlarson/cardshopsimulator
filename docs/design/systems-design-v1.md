@@ -84,7 +84,7 @@ A buy offer and shelf price are separate decisions. Suggested buy price consider
 
 Each SKU may have hidden `true_market_cents`, demand velocity, volatility, supply pressure, and trend. These drive simulated transactions and event effects. Hidden state is deterministic under a seeded run for QA.
 
-### 4.5 Demand-signal contract
+### 4.5 MVP demand-signal contract
 
 The player never sees `true_market_cents` in UI, tooltips, exports intended for players, or customer dialogue. They receive noisy evidence:
 
