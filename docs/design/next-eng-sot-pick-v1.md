@@ -1,9 +1,9 @@
 # Next Eng SoT Pick v1 — Attention deepen vs Medium floor growth
 
-**Status:** Ready for PM choice (after Inspect★ lands)  
+**Status:** Adopted — Option A shipped (#19 @ 2d3569f4); Option B in flight (eng `bc-f33c888e`)  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
-**Pick one** for the next eng spike. Other parks.  
+**Updated:** 2026-09-04 — track spike outcomes (no new design)  
 **Depends on:** systems-design §6.2 / §7.3, ui-wireflows §5.1 #9, difficulty-curves Normal defaults.
 
 ---
@@ -16,7 +16,9 @@
 
 ---
 
-## Option A — Deepen Attention (Research + layout costs)
+## Option A — Deepen Attention (Research + layout costs) — **SHIPPED**
+
+**Outcome:** Merged PR #19 → main @ `2d3569f4` (Eng APPROVE-with-notes + QA PASS-with-notes). Soft S4 parked.
 
 **Player fantasy:** Owner time is scarce; smart prep (research, rearrange) beats panic FLOOR multitasking.
 
@@ -38,21 +40,21 @@
 
 **Modules:** `economy` + `shop` + thin `ui` + existing DemandSignal fog hooks.
 
-**Why pick A:** Tightens the owned bandwidth fantasy with systems already half-written; low art dependency.
-
 ---
 
-## Option B — Medium expand = actual floor growth
+## Option B — Medium expand = actual floor growth — **IN FLIGHT**
+
+**Outcome:** Eng cloud agent `bc-f33c888e` in flight. Medium dims stay **14×10** (140 tiles ≈ ~1,020 sq ft @ 0.9 m) unless Art/Eng flags a tighter lock.
 
 **Player fantasy:** Signing Medium isn’t just a rent buff — the shop **gets bigger** and pathing/staff capacity matter.
 
 | Deliverable | Spec |
 |-------------|------|
-| Grid upgrade | On `sign_lease` (#9): Small **10×8** → Medium grid (propose **14×10** = 140 tiles ≈ ~1,020 sq ft @ 0.9 m — or Art/Eng lock nearest tile dims to ~1,200 sq ft usable); `staff_cap` 1→3 already |
+| Grid upgrade | On `sign_lease` (#9): Small **10×8** → Medium **14×10** (140 tiles ≈ ~1,020 sq ft @ 0.9 m); `staff_cap` 1→3 already |
 | Rent | Apply `rent_medium_weekly_cents` next SETTLE week (already on BalanceConfig Normal) |
-| Placement | Existing fixtures stay; new empty tiles unlock; player may rearrange (Att cost only if Option A also shipped — else free one-time migrate) |
+| Placement | Existing fixtures stay; new empty tiles unlock; rearrange uses Option A Att 10 (now shipped) |
 | Pathing | Recompute customer paths; fail expand preview if counter unreachable |
-| Camera/shell | Art: extend floor/walls OR fog unused — **needs Art Lead one-liner** before eng starts |
+| Camera/shell | Art: extend floor/walls OR fog unused — Art Lead one-liner before/during eng |
 
 **Acceptance (falsifiable):**
 
@@ -65,21 +67,22 @@
 
 **Modules:** `shop` (grid/tier) + `economy` rent + light `ui` lease confirm (exists) + Art shell.
 
-**Why pick B:** Makes #9 a real spatial decision; needs Art coordination.
-
 ---
 
-## Recommendation (non-binding)
+## Decision log
 
-**Prefer A first** if Art is still holding B09+ / shell work — ships owned-time pressure without new mesh.  
-**Prefer B first** if Adam wants the expand fantasy to feel physical before more economy verbs.
+| Pick | Result |
+|------|--------|
+| A first | Shipped — PR #19 @ `2d3569f4` |
+| B next | In flight — eng `bc-f33c888e`; Medium **14×10** locked for this spike |
 
 ---
 
 ## PM checklist
 
-- [ ] Choose **A** or **B**
-- [ ] If B: Art confirms Medium footprint + shell approach
-- [ ] Sync this file to main before cloud agent
-- [ ] Loser becomes the following spike
+- [x] Choose **A** or **B** → A first, then B
+- [x] Sync this file to main before cloud agent (A)
+- [ ] If B: Art confirms Medium footprint + shell approach (14×10 working lock)
+- [ ] Sync this status update to main
+- [ ] B tip-freeze → Eng → QA → merge
 
