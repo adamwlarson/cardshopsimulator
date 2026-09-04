@@ -86,7 +86,30 @@ func settle_day(day: int) -> void:
 			String(wage.get("memo", "Staff wage"))
 		)
 	settle_payday_loan()
+	_settle_shrink()
 	DemandSignals.roll_settle_events()
+
+
+func _settle_shrink() -> void:
+	var rate := GameState.shop.shrink_rate()
+	var applied: Dictionary = InventoryService.apply_daily_shrink(rate)
+	QaInstrumentation.record_shrink_applied({
+		"day": GameState.current_day,
+		"rate": rate,
+		"cogs_cents": int(applied.get("cogs_cents", 0)),
+		"loss_cents": int(applied.get("loss_cents", 0)),
+		"units_removed": int(applied.get("units_removed", 0)),
+		"understaffed": GameState.shop.is_floor_understaffed()
+			or not GameState.shop.has_cashier_on_duty(),
+		"theft_bias": _on_duty_theft_bias(),
+	})
+
+
+func _on_duty_theft_bias() -> bool:
+	for member: StaffMember in GameState.shop.staff:
+		if member.is_cashier() and member.on_duty_today and member.theft_bias:
+			return true
+	return false
 
 
 func _record(kind: LedgerEntry.Kind, amount_cents: int, category: StringName, memo: String) -> bool:

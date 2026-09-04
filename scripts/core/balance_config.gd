@@ -34,6 +34,8 @@ enum Difficulty {
 @export var online_fee: float = 0.08
 @export var shrink_daily_base: float = 0.002
 @export var shrink_unstaffed_add: float = 0.005
+@export var staff_noshow_mult: float = 0.4
+@export var pull_attention: int = 5
 @export var rent_small_weekly_cents: int = 120_000
 @export var rent_medium_weekly_cents: int = 240_000
 @export var wage_mult: float = 1.0

@@ -88,6 +88,138 @@ func get_stock_quantity(sku_id: StringName) -> int:
 	return quantity
 
 
+func inventory_cogs_cents() -> int:
+	var total := 0
+	for lot: StockLot in stock_lots:
+		total += lot.total_cost_cents()
+	for card: CardInstance in cards:
+		total += card.acquired_cost_cents
+	for slab: SlabInstance in slabs:
+		total += slab.acquired_cost_cents
+	return total
+
+
+func unit_count() -> int:
+	var total := 0
+	for lot: StockLot in stock_lots:
+		total += lot.qty
+	total += cards.size()
+	total += slabs.size()
+	return total
+
+
+func apply_shrink_loss(loss_cents: int) -> Dictionary:
+	var removed_cents := 0
+	var units_removed := 0
+	if loss_cents <= 0:
+		return {
+			"loss_cents": 0,
+			"units_removed": 0,
+		}
+	var remaining := loss_cents
+	while remaining > 0 and unit_count() > 1:
+		var target := _cheapest_shrink_target()
+		if target.is_empty():
+			break
+		var kind := StringName(target.get("kind", &""))
+		var cost := int(target.get("cost_cents", 0))
+		if kind == &"lot":
+			var lot := target.get("lot") as StockLot
+			if lot == null or lot.qty <= 0:
+				break
+			if not remove_stock(lot.sku.id, 1):
+				break
+		elif kind == &"card":
+			var card := target.get("card") as CardInstance
+			if card == null or not remove_card(card):
+				break
+		elif kind == &"slab":
+			var slab := target.get("slab") as SlabInstance
+			if slab == null or not remove_slab(slab):
+				break
+		else:
+			break
+		removed_cents += maxi(1, cost)
+		units_removed += 1
+		remaining -= maxi(1, cost)
+	return {
+		"loss_cents": removed_cents,
+		"units_removed": units_removed,
+	}
+
+
+func has_backstock(sku_id: StringName) -> bool:
+	return _first_backstock_target(sku_id) != null
+
+
+func pull_from_backstock(sku_id: StringName) -> bool:
+	var target := _first_backstock_target(sku_id)
+	if target == null:
+		return false
+	if target is StockLot:
+		var lot := target as StockLot
+		var dest := InventoryLocation.new(InventoryLocation.Type.SHELF)
+		return move_stock(lot.sku.id, lot.location, dest, 1)
+	if target is CardInstance:
+		return move_card(
+			target as CardInstance,
+			InventoryLocation.new(InventoryLocation.Type.BINDER)
+		)
+	if target is SlabInstance:
+		return move_slab(
+			target as SlabInstance,
+			InventoryLocation.new(InventoryLocation.Type.CASE)
+		)
+	return false
+
+
+func _first_backstock_target(sku_id: StringName) -> Resource:
+	for lot: StockLot in stock_lots:
+		if (
+			lot.sku.id == sku_id
+			and lot.qty > 0
+			and lot.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			return lot
+	for card: CardInstance in cards:
+		if (
+			card.sku_id == sku_id
+			and card.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			return card
+	for slab: SlabInstance in slabs:
+		if (
+			slab.card_ref != null
+			and slab.card_ref.sku_id == sku_id
+			and slab.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			return slab
+	return null
+
+
+func _cheapest_shrink_target() -> Dictionary:
+	var best: Dictionary = {}
+	var best_cost := 1_000_000_000
+	for lot: StockLot in stock_lots:
+		if lot.qty <= 0:
+			continue
+		var cost := maxi(1, lot.unit_cost_cents())
+		if cost < best_cost:
+			best_cost = cost
+			best = {"kind": &"lot", "lot": lot, "cost_cents": cost}
+	for card: CardInstance in cards:
+		var cost := maxi(1, card.acquired_cost_cents)
+		if cost < best_cost:
+			best_cost = cost
+			best = {"kind": &"card", "card": card, "cost_cents": cost}
+	for slab: SlabInstance in slabs:
+		var cost := maxi(1, slab.acquired_cost_cents)
+		if cost < best_cost:
+			best_cost = cost
+			best = {"kind": &"slab", "slab": slab, "cost_cents": cost}
+	return best
+
+
 func add_stock(
 	sku_id: StringName,
 	quantity: int,

@@ -6,6 +6,7 @@ signal customer_ready(customer: CustomerProfile)
 signal customer_finished(customer: CustomerProfile, outcome: StringName)
 
 const NEGOTIATE_ATTENTION_COST := 8
+const PULL_ATTENTION_COST := 5
 
 var _customers: Array[CustomerProfile] = []
 var _inventory_service: Node
@@ -148,6 +149,21 @@ func accept_buylist_offer() -> bool:
 		return false
 	_complete(customer, &"bought")
 	return true
+
+
+func pull_from_backstock() -> bool:
+	var customer := begin_serving_head()
+	if customer == null or customer.target_sku.is_empty():
+		return false
+	if _inventory_service == null:
+		return false
+	if not bool(_inventory_service.call("has_backstock", customer.target_sku)):
+		return false
+	if _attention_hook.is_valid() and not bool(
+		_attention_hook.call(PULL_ATTENTION_COST)
+	):
+		return false
+	return bool(_inventory_service.call("pull_from_backstock", customer.target_sku))
 
 
 func negotiate(percent_from_list: float = -0.10) -> bool:

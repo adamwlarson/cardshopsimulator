@@ -139,6 +139,9 @@ func _on_customer_action_requested(action: StringName) -> void:
 		&"negotiate":
 			_queue.negotiate(-0.10)
 			EventBus.customer_head_changed.emit(_queue.queue_head())
+		&"pull":
+			_queue.pull_from_backstock()
+			EventBus.customer_head_changed.emit(_queue.queue_head())
 		&"refuse":
 			_queue.refuse()
 

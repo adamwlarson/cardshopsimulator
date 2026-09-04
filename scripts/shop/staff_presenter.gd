@@ -74,7 +74,10 @@ func _wanted_clerk_count() -> int:
 	var shop := _shop()
 	if shop == null:
 		return 0
-	return mini(shop.cashier_count(), mini(shop.staff_cap(), REGISTER_STATIONS))
+	return mini(
+		shop.cashiers_on_duty_count(),
+		mini(shop.staff_cap(), REGISTER_STATIONS)
+	)
 
 
 func _resize_clerks(wanted: int) -> void:

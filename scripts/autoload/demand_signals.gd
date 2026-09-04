@@ -320,11 +320,17 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 
 
 func can_inspect(dto: BuyConfirmSignal) -> bool:
-	return _service != null and _service.can_inspect(dto)
+	return (
+		_service != null
+		and _service.can_inspect(dto)
+		and GameState.can_inspect()
+	)
 
 
 func inspect_buy(dto: BuyConfirmSignal) -> bool:
-	return _service != null and _service.inspect_condition(dto)
+	if not can_inspect(dto):
+		return false
+	return _service.inspect_condition(dto)
 
 
 func price_signal(

@@ -124,6 +124,18 @@ func record_rearrange_attempted(payload: Dictionary) -> void:
 	_emit(&"rearrange_attempted", payload)
 
 
+func record_staff_noshow(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"staff_noshow", payload)
+
+
+func record_shrink_applied(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"shrink_applied", payload)
+
+
 func record_save_pre_write(serialized_save: PackedByteArray) -> void:
 	if is_enabled():
 		_emit(&"save_hash_pre_write", {"hash": _sha256(serialized_save)})
