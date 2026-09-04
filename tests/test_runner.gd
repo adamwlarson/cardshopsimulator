@@ -1551,6 +1551,14 @@ func _test_shop_camera_framing() -> void:
 			if child is OmniLight3D:
 				omni_count += 1
 	_expect_equal(omni_count, 4, "overhead omni fills")
+	var stool := shop.get_node_or_null("Fixtures/CounterStool") as Node3D
+	_expect_equal(stool != null, true, "CounterStool present")
+	if stool != null:
+		_expect_equal(
+			stool.position.is_equal_approx(Vector3(8.1, 0, -0.9)),
+			true,
+			"Art SoT CounterStool off entrance lane"
+		)
 	shop.free()
 
 

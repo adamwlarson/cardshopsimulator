@@ -110,7 +110,7 @@ position = Vector3(8.1, 1.35, -5.4)
 rotation_degrees = Vector3(0, 90, 0)
 
 [node name="CounterStool" parent="Fixtures" instance=ExtResource("24_stool")]
-position = Vector3(8.1, 0, -0.45)
+position = Vector3(8.1, 0, -0.9)
 
 [node name="BackstockShipperStack" parent="Fixtures" instance=ExtResource("25_shipper")]
 position = Vector3(3.6, 0, -6.75)
