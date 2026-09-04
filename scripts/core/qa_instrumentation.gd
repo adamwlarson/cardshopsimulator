@@ -106,6 +106,18 @@ func record_demand_signal_shown(
 	_emit(&"demand_signal_shown", payload)
 
 
+func record_research_applied(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"research_applied", payload)
+
+
+func record_rearrange_attempted(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"rearrange_attempted", payload)
+
+
 func record_save_pre_write(serialized_save: PackedByteArray) -> void:
 	if is_enabled():
 		_emit(&"save_hash_pre_write", {"hash": _sha256(serialized_save)})

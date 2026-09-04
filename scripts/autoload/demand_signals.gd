@@ -124,7 +124,8 @@ func buy_signal(
 		quantity,
 		Economy.balance_cents,
 		space_required,
-		InventoryService.backstock_free_bins()
+		InventoryService.backstock_free_bins(),
+		_informed_for_sku(sku_id)
 	)
 
 
@@ -225,5 +226,118 @@ func price_signal(
 		GameState.current_day,
 		sku_id,
 		listed_price_cents,
-		location
+		location,
+		DemandSignalService.Channel.BUYLIST,
+		_informed_for_sku(sku_id)
 	)
+
+
+func researchable_sets() -> Array[Dictionary]:
+	var seen := {}
+	var result: Array[Dictionary] = []
+	if _service == null:
+		return result
+	for value: Variant in InventoryService.model.catalog.values():
+		var sku := value as ProductSKU
+		if sku == null or sku.set_id.is_empty() or seen.has(String(sku.set_id)):
+			continue
+		seen[String(sku.set_id)] = true
+		var snapshot := _service.research_snapshot(sku.set_id, GameState.current_day)
+		result.append(snapshot)
+	return result
+
+
+func rotation_watch_text() -> String:
+	if _service == null:
+		return ""
+	return "\n".join(_service.active_rotation_watches(GameState.current_day))
+
+
+func can_research_set(set_id: StringName) -> bool:
+	return research_block_reason(set_id).is_empty()
+
+
+func research_block_reason(set_id: StringName) -> StringName:
+	if _service == null or set_id.is_empty():
+		return &"invalid"
+	if not GameState.can_research():
+		return &"wrong_phase"
+	if _service.is_set_informed(set_id, GameState.current_day):
+		return &"already_researched"
+	var attention_cost := GameState.shop.research_attention_cost()
+	if GameState.attention_remaining < attention_cost:
+		return &"insufficient_attention"
+	if not Economy.can_afford(GameState.shop.research_cash_cost_cents()):
+		return &"insufficient_cash"
+	return &""
+
+
+func research_set(set_id: StringName) -> Dictionary:
+	var reason := research_block_reason(set_id)
+	if not reason.is_empty():
+		return {"ok": false, "reason": reason}
+	var sample := _sample_sku_for_set(set_id)
+	var width_before := -1
+	var width_after := -1
+	var condition_cue := ""
+	if not sample.is_empty():
+		var before := buy_signal(
+			sample,
+			DemandSignalService.Channel.MARKETPLACE,
+			1_200,
+			1
+		)
+		width_before = before.shown_comp_high_cents - before.shown_comp_low_cents
+		condition_cue = before.condition_cue
+	var cash_cost := GameState.shop.research_cash_cost_cents()
+	var attention_cost := GameState.shop.research_attention_cost()
+	if not Economy.record_expense(cash_cost, &"research", "Research %s" % String(set_id)):
+		return {"ok": false, "reason": &"insufficient_cash"}
+	if not GameState.consume_attention(attention_cost):
+		return {"ok": false, "reason": &"insufficient_attention"}
+	var snapshot := _service.apply_research(set_id, GameState.current_day)
+	if not sample.is_empty():
+		var after := buy_signal(
+			sample,
+			DemandSignalService.Channel.MARKETPLACE,
+			1_200,
+			1
+		)
+		width_after = after.shown_comp_high_cents - after.shown_comp_low_cents
+	var payload := {
+		"ok": true,
+		"reason": &"ok",
+		"set_id": String(set_id),
+		"display_name": String(snapshot.get("display_name", "")),
+		"attention_spent": attention_cost,
+		"cash_spent_cents": cash_cost,
+		"through_day": int(snapshot.get("through_day", -1)),
+		"telegraph_through_day": int(snapshot.get("telegraph_through_day", -1)),
+		"demand_band_sigma": GameState.balance_config.demand_band_sigma,
+		"research_demand_band_sigma": float(snapshot.get("demand_band_sigma", 0.07)),
+		"comp_narrow_factor": float(snapshot.get("comp_narrow_factor", 0.55)),
+		"sample_sku_id": String(sample),
+		"sample_comp_width_before": width_before,
+		"sample_comp_width_after": width_after,
+		"rotation_watch": rotation_watch_text(),
+		"condition_cue": condition_cue,
+	}
+	QaInstrumentation.record_research_applied(payload)
+	return payload
+
+
+func _informed_for_sku(sku_id: StringName) -> bool:
+	if _service == null:
+		return false
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null:
+		return false
+	return _service.is_set_informed(sku.set_id, GameState.current_day)
+
+
+func _sample_sku_for_set(set_id: StringName) -> StringName:
+	for value: Variant in InventoryService.model.catalog.values():
+		var sku := value as ProductSKU
+		if sku != null and sku.set_id == set_id:
+			return sku.id
+	return &""

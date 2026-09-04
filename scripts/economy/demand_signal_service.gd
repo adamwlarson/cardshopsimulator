@@ -10,6 +10,11 @@ enum Channel {
 }
 
 const RESEARCH_NARROW_FACTOR := 0.55
+const SET_DISPLAY_NAMES := {
+	"AA-BASE": "Aether Arc: Foundations",
+	"AA-SKIE": "Skiefall Ascension",
+	"AA-DUST": "Dustway Chronicles",
+}
 const CONDITION_GRADE_CUES: PackedStringArray = [
 	"Looks NM",
 	"Light wear",
@@ -25,6 +30,7 @@ var _demand_cache: Dictionary = {}
 var _forced_band_by_sku: Dictionary = {}
 var _true_grade_by_key: Dictionary = {}
 var _inspect_cue_by_key: Dictionary = {}
+var _research_by_set: Dictionary = {}
 var _instrumentation: QaInstrumentationService
 
 
@@ -142,6 +148,82 @@ func apply_inspect_state(dto: BuyConfirmSignal) -> void:
 	dto.inspected = true
 
 
+func display_name_for_set(set_id: StringName) -> String:
+	var key := String(set_id)
+	if SET_DISPLAY_NAMES.has(key):
+		return String(SET_DISPLAY_NAMES[key])
+	if key.is_empty():
+		return "Unknown set"
+	return key.replace("-", " ")
+
+
+func is_set_informed(set_id: StringName, day: int) -> bool:
+	if set_id.is_empty():
+		return false
+	var entry: Dictionary = _research_by_set.get(String(set_id), {})
+	return day <= int(entry.get("through_day", -1))
+
+
+func active_rotation_watches(day: int) -> PackedStringArray:
+	var watches: PackedStringArray = []
+	for set_key: Variant in _research_by_set.keys():
+		var entry: Dictionary = _research_by_set[set_key]
+		if day <= int(entry.get("telegraph_through_day", -1)):
+			watches.append(
+				"Rotation watch: %s" % display_name_for_set(StringName(String(set_key)))
+			)
+	return watches
+
+
+func research_snapshot(set_id: StringName, day: int) -> Dictionary:
+	var entry: Dictionary = _research_by_set.get(String(set_id), {})
+	return {
+		"set_id": String(set_id),
+		"display_name": display_name_for_set(set_id),
+		"informed": is_set_informed(set_id, day),
+		"through_day": int(entry.get("through_day", -1)),
+		"telegraph_through_day": int(entry.get("telegraph_through_day", -1)),
+		"demand_band_sigma": _informed_sigma(),
+		"comp_narrow_factor": _narrow_factor(),
+	}
+
+
+func apply_research(set_id: StringName, day: int, duration_days: int = -1) -> Dictionary:
+	if set_id.is_empty():
+		return {}
+	var span := _research_duration_days(duration_days)
+	var through_day := day + span - 1
+	_research_by_set[String(set_id)] = {
+		"through_day": through_day,
+		"telegraph_through_day": through_day,
+	}
+	return research_snapshot(set_id, day)
+
+
+func _research_duration_days(requested: int) -> int:
+	var min_days := 1
+	var max_days := 3
+	if _config != null:
+		min_days = maxi(1, _config.research_duration_days_min)
+		max_days = maxi(min_days, _config.research_duration_days_max)
+	if requested >= 1:
+		return clampi(requested, min_days, max_days)
+	var span := maxi(0, max_days - min_days)
+	return min_days + (_rng.randi() % (span + 1))
+
+
+func _narrow_factor() -> float:
+	if _config != null:
+		return _config.research_comp_narrow_factor
+	return RESEARCH_NARROW_FACTOR
+
+
+func _informed_sigma() -> float:
+	if _config != null:
+		return _config.research_demand_band_sigma
+	return 0.07
+
+
 func inspect_condition(dto: BuyConfirmSignal) -> bool:
 	if not can_inspect(dto):
 		return false
@@ -233,7 +315,7 @@ func _comp_range(
 		return Vector2i.ZERO
 	var width := _channel_width(channel) * _config.comp_noise_width_mult
 	if informed:
-		width *= RESEARCH_NARROW_FACTOR
+		width *= _narrow_factor()
 	var center_noise := _rng.randf_range(-width * 0.5, width * 0.5)
 	var center := maxi(1, roundi(true_market_cents * (1.0 + center_noise)))
 	var half_width := roundi(true_market_cents * width * 0.5)
@@ -252,7 +334,7 @@ func _shown_demand_band(
 	var key := "%d:%s:%s" % [day, sku_id, informed]
 	if _demand_cache.has(key):
 		return _demand_cache[key] as StringName
-	var sigma := 0.07 if informed else _config.demand_band_sigma
+	var sigma := _informed_sigma() if informed else _config.demand_band_sigma
 	var shown_score := clampf(true_demand + _rng.randfn(0.0, sigma), 0.0, 1.0)
 	var shown_band := _true_demand_band(shown_score)
 	var true_band := _true_demand_band(true_demand)

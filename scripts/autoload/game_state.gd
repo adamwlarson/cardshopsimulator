@@ -90,6 +90,52 @@ func consume_attention(amount: int) -> bool:
 	return true
 
 
+func can_research() -> bool:
+	return is_game_active and current_phase in [DayPhase.PREP, DayPhase.FLOOR]
+
+
+func can_rearrange() -> bool:
+	return is_game_active and current_phase == DayPhase.PREP
+
+
+func rearrange_fixture(fixture_id: StringName, new_origin: Vector2i) -> Dictionary:
+	var cost := shop.rearrange_attention_cost()
+	if not can_rearrange():
+		return _rearrange_result(false, &"wrong_phase", fixture_id, new_origin, 0)
+	if attention_remaining < cost:
+		return _rearrange_result(false, &"insufficient_attention", fixture_id, new_origin, 0)
+	var reason := shop.layout.preview_move(fixture_id, new_origin)
+	if reason != &"ok":
+		var rejected := _rearrange_result(false, reason, fixture_id, new_origin, 0)
+		QaInstrumentation.record_rearrange_attempted(rejected)
+		return rejected
+	if not consume_attention(cost):
+		return _rearrange_result(false, &"insufficient_attention", fixture_id, new_origin, 0)
+	shop.layout.apply_move(fixture_id, new_origin)
+	var applied := _rearrange_result(true, &"ok", fixture_id, new_origin, cost)
+	QaInstrumentation.record_rearrange_attempted(applied)
+	return applied
+
+
+func _rearrange_result(
+	ok: bool,
+	reason: StringName,
+	fixture_id: StringName,
+	new_origin: Vector2i,
+	attention_spent: int
+) -> Dictionary:
+	return {
+		"ok": ok,
+		"reason": reason,
+		"fixture_id": String(fixture_id),
+		"origin_x": new_origin.x,
+		"origin_y": new_origin.y,
+		"attention_spent": attention_spent,
+		"attention_remaining": attention_remaining,
+		"has_circulation": shop.layout.has_circulation(),
+	}
+
+
 func queue_floor_skip(seconds: float) -> void:
 	if seconds <= 0.0:
 		return

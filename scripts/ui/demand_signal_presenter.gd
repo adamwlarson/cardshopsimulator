@@ -92,6 +92,14 @@ static func _format_grade(grade: float) -> String:
 	return str(grade)
 
 
+static func research_action_label(cash_cents: int, attention_cost: int) -> String:
+	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
+
+
+static func rearrange_action_label(attention_cost: int) -> String:
+	return "Rearrange · Att %d" % attention_cost
+
+
 static func parse_cents(text: String) -> int:
 	var cleaned := text.strip_edges().trim_prefix("$").replace(",", "")
 	if cleaned.is_empty():

@@ -55,6 +55,22 @@ extends Control
 @onready var beat_confirm: VBoxContainer = %BeatConfirm
 @onready var beat_confirm_title: Label = %BeatConfirmTitle
 @onready var beat_confirm_body: Label = %BeatConfirmBody
+@onready var open_research_button: Button = %OpenResearchButton
+@onready var open_rearrange_button: Button = %OpenRearrangeButton
+@onready var rotation_watch_label: Label = %RotationWatchLabel
+@onready var research_list_panel: PanelContainer = %ResearchList
+@onready var research_rows: VBoxContainer = %ResearchRows
+@onready var research_hint: Label = %ResearchHint
+@onready var research_confirm_panel: PanelContainer = %ResearchConfirm
+@onready var research_confirm_title: Label = %ResearchConfirmTitle
+@onready var research_confirm_body: Label = %ResearchConfirmBody
+@onready var research_confirm_button: Button = %ResearchConfirmButton
+@onready var rearrange_panel: PanelContainer = %RearrangePanel
+@onready var rearrange_hint: Label = %RearrangeHint
+@onready var rearrange_fixture_rows: VBoxContainer = %RearrangeFixtureRows
+@onready var rearrange_grid: GridContainer = %RearrangeGrid
+@onready var rearrange_status: Label = %RearrangeStatus
+@onready var rearrange_confirm_button: Button = %RearrangeConfirmButton
 
 var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
@@ -66,6 +82,10 @@ var _showcase_choice_made: bool = false
 var _beat_decision_id: StringName = &""
 var _beat_confirms: Dictionary = {}
 var _pending_confirm_choice: StringName = &""
+var _queue_length: int = 0
+var _pending_research_set: StringName = &""
+var _selected_rearrange_fixture: StringName = &""
+var _selected_rearrange_origin := Vector2i(-1, -1)
 
 
 func _ready() -> void:
@@ -117,6 +137,13 @@ func _ready() -> void:
 	beat_choice_c_button.pressed.connect(_select_beat_choice.bind(beat_choice_c_button))
 	%BeatConfirmBackButton.pressed.connect(_close_beat_confirm)
 	%BeatConfirmButton.pressed.connect(_confirm_beat_choice)
+	open_research_button.pressed.connect(_open_research_list)
+	%ResearchListCancelButton.pressed.connect(_close_research)
+	%ResearchConfirmBackButton.pressed.connect(_back_to_research_list)
+	research_confirm_button.pressed.connect(_confirm_research)
+	open_rearrange_button.pressed.connect(_open_rearrange)
+	%RearrangeCancelButton.pressed.connect(_close_rearrange)
+	rearrange_confirm_button.pressed.connect(_confirm_rearrange)
 	set_process(false)
 	_bind_seeded_status()
 	_update_queue(0)
@@ -129,14 +156,17 @@ func _bind_seeded_status() -> void:
 	_update_day(GameState.current_day)
 	_update_phase(GameState.current_phase)
 	_update_attention(GameState.attention_remaining)
+	_sync_rotation_watch()
 
 
 func _update_cash(balance_cents: int) -> void:
 	cash_label.text = DemandSignalPresenter.format_cents(balance_cents)
+	_sync_prep_action_buttons()
 
 
 func _update_day(day: int) -> void:
 	day_label.text = "Day %d" % day
+	_sync_rotation_watch()
 
 
 func _update_phase(phase: int) -> void:
@@ -157,8 +187,11 @@ func _update_phase(phase: int) -> void:
 			phase_button.text = "Next day"
 	_close_buy()
 	_close_price()
+	_close_research()
+	_close_rearrange()
 	if phase == GameState.DayPhase.SETTLE and _showcase_choice_made:
 		showcase_panel.hide()
+	_sync_prep_action_buttons()
 	_sync_modal_veil()
 
 
@@ -168,10 +201,13 @@ func _update_attention(remaining: int) -> void:
 		GameState.balance_config.attention_pool,
 	]
 	_sync_inspect_button()
+	_sync_prep_action_buttons()
 
 
 func _update_queue(length: int) -> void:
+	_queue_length = length
 	queue_label.text = "Queue %d" % length
+	_sync_prep_action_buttons()
 
 
 func _on_phase_pressed() -> void:
@@ -747,6 +783,309 @@ func _sync_patience_bar(customer: CustomerProfile) -> void:
 	)
 
 
+func _sync_prep_action_buttons() -> void:
+	if open_research_button == null or open_rearrange_button == null:
+		return
+	var research_att := GameState.shop.research_attention_cost()
+	var research_cash := GameState.shop.research_cash_cost_cents()
+	var rearrange_att := GameState.shop.rearrange_attention_cost()
+	open_research_button.text = DemandSignalPresenter.research_action_label(
+		research_cash,
+		research_att
+	)
+	open_rearrange_button.text = DemandSignalPresenter.rearrange_action_label(
+		rearrange_att
+	)
+	research_hint.text = (
+		"Spend %s and Att %d to narrow comps and demand bands for one set. "
+		+ "Rotation watch lasts 1–3 days. Does not reveal condition or certs."
+	) % [
+		DemandSignalPresenter.format_cents(research_cash),
+		research_att,
+	]
+	research_confirm_button.text = DemandSignalPresenter.research_action_label(
+		research_cash,
+		research_att
+	)
+	rearrange_hint.text = (
+		"Move a fixture. Costs Att %d. Rejected if the path from entrance "
+		+ "to displays to counter breaks."
+	) % rearrange_att
+	rearrange_confirm_button.text = DemandSignalPresenter.rearrange_action_label(
+		rearrange_att
+	)
+	var research_ok := (
+		GameState.can_research()
+		and GameState.attention_remaining >= research_att
+		and Economy.can_afford(research_cash)
+	)
+	if GameState.current_phase == GameState.DayPhase.FLOOR and _queue_length > 0:
+		research_ok = false
+	open_research_button.disabled = not research_ok
+	open_rearrange_button.disabled = (
+		not GameState.can_rearrange()
+		or GameState.attention_remaining < rearrange_att
+	)
+	if research_confirm_panel.visible:
+		research_confirm_button.disabled = not DemandSignals.can_research_set(
+			_pending_research_set
+		)
+	if rearrange_panel.visible:
+		var preview := (
+			GameState.shop.layout.preview_move(
+				_selected_rearrange_fixture,
+				_selected_rearrange_origin
+			)
+			if not _selected_rearrange_fixture.is_empty()
+			and _selected_rearrange_origin != Vector2i(-1, -1)
+			else &"unchanged"
+		)
+		rearrange_confirm_button.disabled = (
+			preview != &"ok"
+			or GameState.attention_remaining < rearrange_att
+			or not GameState.can_rearrange()
+		)
+
+
+func _open_research_list() -> void:
+	if open_research_button.disabled:
+		return
+	_close_research()
+	for child: Node in research_rows.get_children():
+		research_rows.remove_child(child)
+		child.queue_free()
+	var research_att := GameState.shop.research_attention_cost()
+	var research_cash := GameState.shop.research_cash_cost_cents()
+	for snapshot: Dictionary in DemandSignals.researchable_sets():
+		var set_id := StringName(snapshot.get("set_id", &""))
+		var row := Button.new()
+		var informed := bool(snapshot.get("informed", false))
+		row.text = "%s\n%s" % [
+			String(snapshot.get("display_name", String(set_id))),
+			(
+				"Active through day %d" % int(snapshot.get("through_day", 0))
+				if informed
+				else DemandSignalPresenter.research_action_label(
+					research_cash,
+					research_att
+				)
+			),
+		]
+		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		row.custom_minimum_size = Vector2(0.0, 56.0)
+		row.theme_type_variation = &"ListRowButton"
+		row.disabled = informed or not DemandSignals.can_research_set(set_id)
+		row.pressed.connect(_select_research_set.bind(snapshot))
+		research_rows.add_child(row)
+	research_list_panel.show()
+	_sync_modal_veil()
+
+
+func _select_research_set(snapshot: Dictionary) -> void:
+	_pending_research_set = StringName(snapshot.get("set_id", &""))
+	var research_att := GameState.shop.research_attention_cost()
+	var research_cash := GameState.shop.research_cash_cost_cents()
+	research_confirm_title.text = "RESEARCH · %s" % snapshot.get("display_name", "")
+	research_confirm_body.text = "\n".join([
+		DemandSignalPresenter.research_action_label(research_cash, research_att),
+		"Narrows comps (×%.2f) and demand-band σ for this set." % (
+			GameState.balance_config.research_comp_narrow_factor
+		),
+		"Soft telegraph: Rotation watch: %s (1–3 days)." % snapshot.get(
+			"display_name",
+			""
+		),
+		"Condition grade and certification stay hidden.",
+	])
+	research_confirm_button.disabled = not DemandSignals.can_research_set(
+		_pending_research_set
+	)
+	research_list_panel.hide()
+	research_confirm_panel.show()
+	_sync_modal_veil()
+
+
+func _confirm_research() -> void:
+	if _pending_research_set.is_empty():
+		return
+	if not DemandSignals.can_research_set(_pending_research_set):
+		_sync_prep_action_buttons()
+		return
+	var result := DemandSignals.research_set(_pending_research_set)
+	if not bool(result.get("ok", false)):
+		beat_toast.text = "Research blocked"
+		beat_toast.show()
+		_sync_prep_action_buttons()
+		return
+	beat_toast.text = String(result.get("rotation_watch", "Research complete"))
+	beat_toast.show()
+	_sync_rotation_watch()
+	_close_research()
+
+
+func _back_to_research_list() -> void:
+	research_confirm_panel.hide()
+	research_list_panel.show()
+	_sync_modal_veil()
+
+
+func _close_research() -> void:
+	if research_list_panel != null:
+		research_list_panel.hide()
+	if research_confirm_panel != null:
+		research_confirm_panel.hide()
+	_pending_research_set = &""
+	_sync_modal_veil()
+
+
+func _sync_rotation_watch() -> void:
+	if rotation_watch_label == null:
+		return
+	var text := DemandSignals.rotation_watch_text()
+	rotation_watch_label.text = text
+	rotation_watch_label.visible = not text.is_empty()
+
+
+func _open_rearrange() -> void:
+	if open_rearrange_button.disabled:
+		return
+	_selected_rearrange_fixture = &""
+	_selected_rearrange_origin = Vector2i(-1, -1)
+	_rebuild_rearrange_fixtures()
+	_rebuild_rearrange_grid()
+	rearrange_status.text = "Select a fixture, then a destination tile."
+	rearrange_panel.show()
+	_sync_prep_action_buttons()
+	_sync_modal_veil()
+
+
+func _rebuild_rearrange_fixtures() -> void:
+	for child: Node in rearrange_fixture_rows.get_children():
+		rearrange_fixture_rows.remove_child(child)
+		child.queue_free()
+	for fixture: ShopFixture in GameState.shop.layout.movable_fixtures():
+		var row := Button.new()
+		row.text = "%s\n(%d, %d)" % [
+			fixture.display_name,
+			fixture.origin.x,
+			fixture.origin.y,
+		]
+		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		row.custom_minimum_size = Vector2(0.0, 56.0)
+		row.theme_type_variation = &"ListRowButton"
+		row.pressed.connect(_select_rearrange_fixture.bind(fixture.id))
+		rearrange_fixture_rows.add_child(row)
+
+
+func _rebuild_rearrange_grid() -> void:
+	for child: Node in rearrange_grid.get_children():
+		rearrange_grid.remove_child(child)
+		child.queue_free()
+	var layout := GameState.shop.layout
+	rearrange_grid.columns = layout.width
+	for y: int in layout.height:
+		for x: int in layout.width:
+			var cell := Vector2i(x, y)
+			var tile := Button.new()
+			tile.custom_minimum_size = Vector2(28, 28)
+			tile.text = _rearrange_tile_label(cell)
+			tile.pressed.connect(_select_rearrange_tile.bind(cell))
+			rearrange_grid.add_child(tile)
+
+
+func _rearrange_tile_label(cell: Vector2i) -> String:
+	var layout := GameState.shop.layout
+	if cell == layout.entrance:
+		return "E"
+	for fixture: ShopFixture in layout.fixtures:
+		if fixture.occupies(cell):
+			if fixture.is_counter:
+				return "C"
+			if fixture.kind == &"architecture":
+				return "■"
+			return fixture.display_name.left(1)
+	return ""
+
+
+func _select_rearrange_fixture(fixture_id: StringName) -> void:
+	_selected_rearrange_fixture = fixture_id
+	var fixture := GameState.shop.layout.fixture_by_id(fixture_id)
+	if fixture == null:
+		return
+	rearrange_status.text = "Moving %s from (%d, %d). Pick a destination." % [
+		fixture.display_name,
+		fixture.origin.x,
+		fixture.origin.y,
+	]
+	_sync_prep_action_buttons()
+
+
+func _select_rearrange_tile(cell: Vector2i) -> void:
+	if _selected_rearrange_fixture.is_empty():
+		rearrange_status.text = "Select a fixture first."
+		return
+	_selected_rearrange_origin = cell
+	var preview := GameState.shop.layout.preview_move(
+		_selected_rearrange_fixture,
+		cell
+	)
+	rearrange_status.text = _rearrange_preview_text(preview, cell)
+	_sync_prep_action_buttons()
+
+
+func _rearrange_preview_text(reason: StringName, cell: Vector2i) -> String:
+	match reason:
+		&"ok":
+			return "Move to (%d, %d). Confirm spends Att %d." % [
+				cell.x,
+				cell.y,
+				GameState.shop.rearrange_attention_cost(),
+			]
+		&"blocked_path":
+			return "Illegal pathing: entrance must reach displays then counter."
+		&"overlap":
+			return "That tile is occupied."
+		&"out_of_bounds":
+			return "That destination does not fit on the grid."
+		&"immovable":
+			return "That fixture cannot be moved."
+		&"unchanged":
+			return "Already at (%d, %d)." % [cell.x, cell.y]
+	return "Cannot move there (%s)." % String(reason)
+
+
+func _confirm_rearrange() -> void:
+	if _selected_rearrange_fixture.is_empty():
+		return
+	if GameState.attention_remaining < GameState.shop.rearrange_attention_cost():
+		_sync_prep_action_buttons()
+		return
+	var result := GameState.rearrange_fixture(
+		_selected_rearrange_fixture,
+		_selected_rearrange_origin
+	)
+	if not bool(result.get("ok", false)):
+		rearrange_status.text = _rearrange_preview_text(
+			StringName(result.get("reason", &"blocked_path")),
+			_selected_rearrange_origin
+		)
+		beat_toast.text = rearrange_status.text
+		beat_toast.show()
+		_sync_prep_action_buttons()
+		return
+	beat_toast.text = "Layout updated · Att %d" % int(result.get("attention_spent", 0))
+	beat_toast.show()
+	_close_rearrange()
+
+
+func _close_rearrange() -> void:
+	if rearrange_panel != null:
+		rearrange_panel.hide()
+	_selected_rearrange_fixture = &""
+	_selected_rearrange_origin = Vector2i(-1, -1)
+	_sync_modal_veil()
+
+
 func _process(_delta: float) -> void:
 	if _current_customer != null and serve_panel.visible:
 		_sync_patience_bar(_current_customer)
@@ -763,4 +1102,7 @@ func _sync_modal_veil() -> void:
 		or rent_panel.visible
 		or showcase_panel.visible
 		or beat_decision_panel.visible
+		or research_list_panel.visible
+		or research_confirm_panel.visible
+		or rearrange_panel.visible
 	)

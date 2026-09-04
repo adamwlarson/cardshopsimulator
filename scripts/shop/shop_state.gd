@@ -22,6 +22,8 @@ var staff: Array[StaffMember] = []
 var grid_width: int = SMALL_GRID_WIDTH
 var grid_height: int = SMALL_GRID_HEIGHT
 var medium_lease_signed_day: int = -1
+var specialist_on_duty: bool = false
+var layout := ShopLayout.new()
 var _config: BalanceConfig
 
 
@@ -32,6 +34,8 @@ func reset(config: BalanceConfig) -> void:
 	grid_width = SMALL_GRID_WIDTH
 	grid_height = SMALL_GRID_HEIGHT
 	medium_lease_signed_day = -1
+	specialist_on_duty = false
+	layout.reset_small()
 	if config != null and config.start_with_trainee_cashier:
 		var trainee := _make_cashier(false)
 		trainee.display_name = "Trainee cashier"
@@ -62,12 +66,51 @@ func is_owner_only() -> bool:
 	return hired_count() == 0
 
 
+func has_specialist_on_duty() -> bool:
+	if specialist_on_duty:
+		return true
+	for member: StaffMember in staff:
+		if member.role == &"specialist":
+			return true
+	return false
+
+
+func set_specialist_on_duty(enabled: bool) -> void:
+	specialist_on_duty = enabled
+
+
 func inspect_attention_cost() -> int:
 	var cost := 5
 	if _config != null:
 		cost = _config.inspect_attention
-	# Specialist on duty later may reduce Owner 5 → 2.
+		if has_specialist_on_duty():
+			cost = _config.inspect_attention_specialist
+	elif has_specialist_on_duty():
+		cost = 2
 	return maxi(1, cost)
+
+
+func research_attention_cost() -> int:
+	var cost := 15
+	if _config != null:
+		cost = _config.research_attention
+		if has_specialist_on_duty():
+			cost = mini(cost, _config.research_attention_specialist)
+	elif has_specialist_on_duty():
+		cost = 10
+	return maxi(1, cost)
+
+
+func rearrange_attention_cost() -> int:
+	if _config != null:
+		return maxi(1, _config.rearrange_attention)
+	return 10
+
+
+func research_cash_cost_cents() -> int:
+	if _config != null:
+		return maxi(0, _config.research_cost_cents)
+	return 5_000
 
 
 func hire_cashier(cheap: bool) -> StaffMember:
