@@ -21,3 +21,7 @@ enum Difficulty {
 @export_range(0.1, 3.0, 0.05) var customer_spawn_rate_scalar: float = 1.0
 @export_range(0.0, 3.0, 0.05) var shrink_rate_scalar: float = 1.0
 @export_range(0.0, 1.0, 0.01) var comp_noise_scalar: float = 0.15
+
+
+static func is_weekly_settle_day(day: int) -> bool:
+	return day > 1 and day % 7 == 0

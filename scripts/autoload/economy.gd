@@ -33,7 +33,7 @@ func get_ledger() -> Array[LedgerEntry]:
 
 
 func settle_weekly_obligations(day: int) -> bool:
-	if day <= GameState.FIRST_DAY or day % 7 != 0:
+	if not BalanceConfig.is_weekly_settle_day(day):
 		return false
 	return record_expense(
 		GameState.balance_config.weekly_rent_cents,

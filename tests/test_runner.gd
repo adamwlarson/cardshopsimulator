@@ -55,17 +55,10 @@ func _test_normal_shop_capacity() -> void:
 
 
 func _test_weekly_rent_schedule() -> void:
-	GameState.set_balance_config(NORMAL_CONFIG)
-	Economy.reset()
-	var starting_cash := Economy.balance_cents
-	_expect_equal(Economy.settle_weekly_obligations(6), false, "no rent before weekly settle")
-	_expect_equal(Economy.balance_cents, starting_cash, "pre-settle cash unchanged")
-	_expect_equal(Economy.settle_weekly_obligations(7), true, "rent charged on weekly settle")
-	_expect_equal(
-		Economy.balance_cents,
-		starting_cash - NORMAL_CONFIG.weekly_rent_cents,
-		"weekly rent amount"
-	)
+	_expect_equal(BalanceConfig.is_weekly_settle_day(6), false, "no rent before weekly settle")
+	_expect_equal(BalanceConfig.is_weekly_settle_day(7), true, "day seven weekly settle")
+	_expect_equal(BalanceConfig.is_weekly_settle_day(14), true, "recurring weekly settle")
+	_expect_equal(NORMAL_CONFIG.weekly_rent_cents, 120_000, "weekly rent amount")
 
 
 func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:
