@@ -1,0 +1,55 @@
+[gd_resource type="Resource" script_class="BalanceConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/balance_config.gd" id="1_balance"]
+
+[resource]
+script = ExtResource("1_balance")
+difficulty = 0
+tile_size_m = 0.9
+start_cash_cents = 1200000
+start_reputation = 50
+case_slots = 28
+backstock_bins = 48
+seed_blasters = 4
+seed_dust_etbs = 2
+seed_skie_blasters = 1
+seed_named_staples = 10
+seed_sleeves = 300
+seed_toploaders = 75
+start_with_trainee_cashier = true
+trainee_free_days = 3
+first_rent_due_day = 10
+rent_small_weekly_cents = 100000
+wage_mult = 0.9
+customer_spawn_mult = 1.25
+whale_weight_mult = 1.4
+flipper_weight_mult = 0.7
+distributor_discount_min = 0.35
+distributor_discount_max = 0.42
+online_fee = 0.06
+shrink_daily_base = 0.001
+shrink_unstaffed_add = 0.0025
+attention_pool = 120
+event_chance_settle = 0.12
+negative_event_weight_mult = 0.7
+market_drift_low = 0.99
+market_drift_high = 1.01
+comp_noise_width_mult = 0.7
+demand_band_sigma = 0.09
+research_cost_cents = 3000
+research_attention = 10
+inspect_accuracy = 0.92
+shady_fake_slab_rate = 0.04
+fair_comp_mae_max = 0.1
+fair_band_within1_min = 0.85
+fair_forbid_hot_cold_invert = true
+loan_shark_enabled = true
+loan_shark_cash_cents = 600000
+loan_shark_daily_cents = 15000
+loan_shark_days = 40
+loan_shark_rep_hit = 5
+missed_rent_weeks_to_lose = 3
+ironman_destitution_default = false
+survive_y1_rep_floor = 30
+flagship_cash_cents = 4000000
+liquidity_king_cash_cents = 7500000

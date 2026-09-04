@@ -1,7 +1,7 @@
 extends Node
 
 const FIRST_DAY := 1
-const NORMAL_BALANCE_CONFIG: BalanceConfig = preload("res://data/balance/balance_normal.tres")
+const NORMAL_BALANCE_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
 
 var current_day: int = FIRST_DAY
 var current_reputation: int = 0

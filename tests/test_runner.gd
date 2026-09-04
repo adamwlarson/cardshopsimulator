@@ -1,8 +1,8 @@
 extends SceneTree
 
-const EASY_CONFIG: BalanceConfig = preload("res://data/balance/balance_easy.tres")
-const NORMAL_CONFIG: BalanceConfig = preload("res://data/balance/balance_normal.tres")
-const HARD_CONFIG: BalanceConfig = preload("res://data/balance/balance_hard.tres")
+const EASY_CONFIG: BalanceConfig = preload("res://data/balance/easy.tres")
+const NORMAL_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
+const HARD_CONFIG: BalanceConfig = preload("res://data/balance/hard.tres")
 
 var _failures: int = 0
 
@@ -50,6 +50,22 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(NORMAL_CONFIG.first_rent_due_day, 7, "normal first rent due day")
 	_expect_equal(NORMAL_CONFIG.event_chance_settle, 0.18, "normal settle event chance")
 	_expect_equal(NORMAL_CONFIG.comp_noise_width_mult, 1.0, "normal comp noise width")
+	_expect_equal(EASY_CONFIG.start_cash_cents, 1_200_000, "easy starting cash")
+	_expect_equal(HARD_CONFIG.start_cash_cents, 550_000, "hard starting cash")
+	_expect_equal(EASY_CONFIG.rent_small_weekly_cents, 100_000, "easy weekly rent")
+	_expect_equal(HARD_CONFIG.rent_small_weekly_cents, 135_000, "hard weekly rent")
+	_expect_equal(EASY_CONFIG.first_rent_due_day, 10, "easy first rent due day")
+	_expect_equal(EASY_CONFIG.whale_weight_mult, 1.4, "easy whale weight")
+	_expect_equal(NORMAL_CONFIG.whale_weight_mult, 1.0, "normal whale weight")
+	_expect_equal(HARD_CONFIG.whale_weight_mult, 0.7, "hard whale weight")
+	_expect_equal(
+		EASY_CONFIG.whale_weight_mult > HARD_CONFIG.whale_weight_mult,
+		true,
+		"easy whale weight exceeds hard"
+	)
+	_expect_equal(EASY_CONFIG.demand_band_sigma, 0.09, "easy demand sigma")
+	_expect_equal(NORMAL_CONFIG.demand_band_sigma, 0.12, "normal demand sigma")
+	_expect_equal(HARD_CONFIG.demand_band_sigma, 0.16, "hard demand sigma")
 
 
 func _test_normal_shop_capacity() -> void:
