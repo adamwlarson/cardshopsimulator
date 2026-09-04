@@ -13,7 +13,15 @@ signal customer_head_changed(customer: CustomerProfile)
 signal customer_action_requested(action: StringName)
 signal scripted_customer_requested(customer: CustomerProfile)
 signal customer_resolved(customer: CustomerProfile, outcome: StringName)
-signal price_focus_requested(sku_id: StringName, beat_id: StringName, message: String)
+signal price_focus_requested(
+	sku_id: StringName,
+	beat_id: StringName,
+	message: String,
+	suggestion_mode: StringName
+)
+signal rent_decision_requested(payload: Dictionary)
+signal rent_decision_selected(choice: StringName)
+signal rent_decision_resolved(beat_id: StringName, outcome: StringName)
 signal showcase_choice_requested(payload: Dictionary)
 signal showcase_choice_selected(choice: StringName)
 signal showcase_choice_resolved(beat_id: StringName, choice: StringName)

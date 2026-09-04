@@ -2,11 +2,13 @@ extends Node
 
 var balance_cents: int = 0
 var _ledger: Array[LedgerEntry] = []
+var _payday_loan_days_remaining: int = 0
 
 
 func reset() -> void:
 	balance_cents = GameState.balance_config.start_cash_cents
 	_ledger.clear()
+	_payday_loan_days_remaining = 0
 	EventBus.publish_cash_changed(balance_cents)
 
 
@@ -38,9 +40,42 @@ func settle_weekly_obligations(day: int) -> bool:
 	)
 
 
+func take_payday_loan() -> bool:
+	var config := GameState.balance_config
+	if not config.loan_shark_enabled or _payday_loan_days_remaining > 0:
+		return false
+	if not record_income(
+		config.loan_shark_cash_cents,
+		&"payday_loan",
+		"Payday loan principal"
+	):
+		return false
+	_payday_loan_days_remaining = config.loan_shark_days
+	GameState.adjust_reputation(-config.loan_shark_rep_hit)
+	return true
+
+
+func has_active_payday_loan() -> bool:
+	return _payday_loan_days_remaining > 0
+
+
+func settle_payday_loan() -> bool:
+	if _payday_loan_days_remaining <= 0:
+		return false
+	if not record_expense(
+		GameState.balance_config.loan_shark_daily_cents,
+		&"payday_loan",
+		"Payday loan payment"
+	):
+		return false
+	_payday_loan_days_remaining -= 1
+	return true
+
+
 func settle_day(day: int) -> void:
 	# Wage and utility services can attach here without changing phase ownership.
 	settle_weekly_obligations(day)
+	settle_payday_loan()
 
 
 func _record(kind: LedgerEntry.Kind, amount_cents: int, category: StringName, memo: String) -> bool:

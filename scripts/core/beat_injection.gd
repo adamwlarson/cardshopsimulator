@@ -2,17 +2,21 @@ class_name BeatInjectionService
 extends Node
 
 const SPIKE_STAPLE_BEAT := &"sec10_4_spike_staple"
+const RENT_FIRESALE_BEAT := &"sec10_6_rent_firesale"
 const TITAN_HYPE_BEAT := &"sec10_7_titan_hype"
 const SHOWCASE_BEAT := &"sec10_8_slab_vs_singles"
 
 const BASTION_SKU := &"AA-BASE-088"
 const ARCBOLT_SKU := &"AA-BASE-078"
+const DUST_ETB_SKU := &"AA-DUST-ETB"
+const DUST_BLASTER_SKU := &"AA-DUST-BLST"
 const TITAN_SKU := &"AA-SKIE-047"
 const EMPRESS_SKU := &"AA-SKIE-052"
 const PARAGON_SKU := &"AA-SKIE-058"
 
 var _started: Dictionary = {}
 var _completed: Dictionary = {}
+var _rent_price_path: StringName = &""
 
 
 func _ready() -> void:
@@ -20,6 +24,7 @@ func _ready() -> void:
 	EventBus.day_phase_changed.connect(_on_day_phase_changed)
 	EventBus.customer_resolved.connect(_on_customer_resolved)
 	EventBus.beat_ui_resolved.connect(_on_beat_ui_resolved)
+	EventBus.rent_decision_selected.connect(choose_rent_path)
 	EventBus.showcase_choice_selected.connect(choose_showcase)
 	EventBus.showcase_choice_resolved.connect(_on_showcase_choice_resolved)
 
@@ -27,6 +32,7 @@ func _ready() -> void:
 func reset() -> void:
 	_started.clear()
 	_completed.clear()
+	_rent_price_path = &""
 
 
 func trigger_qa_beat(beat_id: StringName) -> bool:
@@ -37,6 +43,11 @@ func trigger_qa_beat(beat_id: StringName) -> bool:
 			return (
 				GameState.current_phase == GameState.DayPhase.FLOOR
 				and _start_spike_staple()
+			)
+		RENT_FIRESALE_BEAT:
+			return (
+				GameState.current_phase == GameState.DayPhase.PREP
+				and _start_rent_firesale()
 			)
 		TITAN_HYPE_BEAT:
 			return _start_titan_hype()
@@ -54,6 +65,46 @@ func is_started(beat_id: StringName) -> bool:
 
 func is_completed(beat_id: StringName) -> bool:
 	return _completed.has(beat_id)
+
+
+func choose_rent_path(choice: StringName) -> bool:
+	if (
+		not _is_rent_pending()
+		or GameState.current_phase != GameState.DayPhase.PREP
+	):
+		return false
+	match choice:
+		&"fire_sale":
+			var dust_sku := _dustway_target()
+			if dust_sku.is_empty():
+				return false
+			_rent_price_path = choice
+			EventBus.price_focus_requested.emit(
+				dust_sku,
+				RENT_FIRESALE_BEAT,
+				"Rent due today — Dustway fire-sale",
+				&"undercut"
+			)
+		&"cut_accessories":
+			var accessory_sku := _accessory_target()
+			if accessory_sku.is_empty():
+				return false
+			_rent_price_path = choice
+			EventBus.price_focus_requested.emit(
+				accessory_sku,
+				RENT_FIRESALE_BEAT,
+				"Rent due today — cut accessories",
+				&"undercut"
+			)
+		&"payday_loan":
+			if not Economy.take_payday_loan():
+				return false
+			_resolve_rent(choice)
+		&"dismissed":
+			_resolve_rent(choice)
+		_:
+			return false
+	return true
 
 
 func choose_showcase(choice: StringName) -> bool:
@@ -113,13 +164,22 @@ func choose_showcase(choice: StringName) -> bool:
 
 
 func _on_day_started(day: int) -> void:
-	if not _is_normal_game():
+	if not GameState.is_game_active:
 		return
 	call_deferred("_start_day_beats", day)
 
 
 func _start_day_beats(day: int) -> void:
-	if not _is_normal_game() or day != GameState.current_day:
+	if not GameState.is_game_active or day != GameState.current_day:
+		return
+	if (
+		GameState.balance_config.is_rent_due_day(day)
+		and day == GameState.balance_config.first_rent_due_day
+		and not _started.has(RENT_FIRESALE_BEAT)
+		and _start_rent_firesale()
+	):
+		return
+	if not _is_normal_game():
 		return
 	if day >= 8 and day <= 10 and not _started.has(TITAN_HYPE_BEAT):
 		_start_titan_hype()
@@ -199,6 +259,50 @@ func _start_spike_staple() -> bool:
 	return true
 
 
+func _start_rent_firesale() -> bool:
+	if (
+		GameState.current_phase != GameState.DayPhase.PREP
+		or _started.has(RENT_FIRESALE_BEAT)
+	):
+		return false
+	var dust_sku := _dustway_target()
+	var projected_cash := (
+		Economy.balance_cents
+		- GameState.balance_config.rent_small_weekly_cents
+	)
+	var has_buffer_pressure := (
+		projected_cash < GameState.balance_config.rent_small_weekly_cents
+	)
+	var has_soft_shelf := (
+		not dust_sku.is_empty()
+		and DemandSignals.apply_soft_shelf_signal(
+			dust_sku,
+			GameState.current_day
+		)
+	)
+	if not has_soft_shelf and not has_buffer_pressure:
+		return false
+	var accessory_sku := _accessory_target()
+	_mark_started(RENT_FIRESALE_BEAT)
+	EventBus.rent_decision_requested.emit({
+		"beat_id": RENT_FIRESALE_BEAT,
+		"title": "Rent due today — shelf is soft",
+		"rent_cents": GameState.balance_config.rent_small_weekly_cents,
+		"projected_cash_cents": projected_cash,
+		"fire_sale_enabled": not dust_sku.is_empty(),
+		"accessory_enabled": not accessory_sku.is_empty(),
+		"loan_enabled": (
+			GameState.balance_config.loan_shark_enabled
+			and not Economy.has_active_payday_loan()
+		),
+		"loan_cash_cents": GameState.balance_config.loan_shark_cash_cents,
+		"loan_daily_cents": GameState.balance_config.loan_shark_daily_cents,
+		"loan_days": GameState.balance_config.loan_shark_days,
+		"loan_rep_hit": GameState.balance_config.loan_shark_rep_hit,
+	})
+	return true
+
+
 func _start_titan_hype() -> bool:
 	var sku := InventoryService.model.get_sku(TITAN_SKU)
 	if sku == null:
@@ -220,7 +324,8 @@ func _start_titan_hype() -> bool:
 	EventBus.price_focus_requested.emit(
 		TITAN_SKU,
 		TITAN_HYPE_BEAT,
-		"Hype: Skiefall Titan"
+		"Hype: Skiefall Titan",
+		&"suggested"
 	)
 	return true
 
@@ -231,7 +336,8 @@ func _refocus_pending_titan() -> void:
 	EventBus.price_focus_requested.emit(
 		TITAN_SKU,
 		TITAN_HYPE_BEAT,
-		"Hype: Skiefall Titan"
+		"Hype: Skiefall Titan",
+		&"suggested"
 	)
 
 
@@ -294,6 +400,20 @@ func _choose_staple() -> StringName:
 	return BASTION_SKU
 
 
+func _dustway_target() -> StringName:
+	for sku_id: StringName in [DUST_ETB_SKU, DUST_BLASTER_SKU]:
+		if InventoryService.has_stock(sku_id):
+			return sku_id
+	return &""
+
+
+func _accessory_target() -> StringName:
+	for lot: StockLot in InventoryService.get_all_stock():
+		if lot.qty > 0 and String(lot.sku.id).begins_with("ACC-"):
+			return lot.sku.id
+	return &""
+
+
 func _on_customer_resolved(
 	customer: CustomerProfile,
 	outcome: StringName
@@ -306,6 +426,11 @@ func _on_beat_ui_resolved(
 	beat_id: StringName,
 	outcome: StringName
 ) -> void:
+	if beat_id == RENT_FIRESALE_BEAT and _is_rent_pending():
+		_resolve_rent(
+			StringName("%s_%s" % [_rent_price_path, outcome])
+		)
+		return
 	if beat_id == TITAN_HYPE_BEAT and _is_titan_pending():
 		_mark_completed(beat_id, outcome)
 		if (
@@ -338,6 +463,19 @@ func _mark_completed(beat_id: StringName, outcome: StringName) -> void:
 		beat_id,
 		GameState.current_day,
 		outcome
+	)
+
+
+func _resolve_rent(outcome: StringName) -> void:
+	_mark_completed(RENT_FIRESALE_BEAT, outcome)
+	_rent_price_path = &""
+	EventBus.rent_decision_resolved.emit(RENT_FIRESALE_BEAT, outcome)
+
+
+func _is_rent_pending() -> bool:
+	return (
+		_started.has(RENT_FIRESALE_BEAT)
+		and not _completed.has(RENT_FIRESALE_BEAT)
 	)
 
 

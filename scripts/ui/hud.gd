@@ -26,6 +26,15 @@ extends Control
 @onready var customer_title: Label = %CustomerTitle
 @onready var customer_summary: Label = %CustomerSummary
 @onready var beat_toast: Label = %BeatToast
+@onready var rent_panel: PanelContainer = %RentDecision
+@onready var rent_title: Label = %RentTitle
+@onready var rent_summary: Label = %RentSummary
+@onready var rent_fire_sale_button: Button = %RentFireSaleButton
+@onready var rent_accessories_button: Button = %RentAccessoriesButton
+@onready var rent_loan_button: Button = %RentLoanButton
+@onready var rent_dismiss_button: Button = %RentDismissButton
+@onready var rent_loan_confirm: VBoxContainer = %RentLoanConfirm
+@onready var rent_loan_terms: Label = %RentLoanTerms
 @onready var showcase_panel: PanelContainer = %ShowcaseChoice
 @onready var showcase_title: Label = %ShowcaseTitle
 @onready var showcase_summary: Label = %ShowcaseSummary
@@ -36,6 +45,7 @@ var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
 var _current_customer: CustomerProfile
 var _active_price_beat_id: StringName = &""
+var _rent_beat_id: StringName = &""
 var _showcase_beat_id: StringName = &""
 var _showcase_choice_made: bool = false
 
@@ -48,6 +58,8 @@ func _ready() -> void:
 	EventBus.customer_queue_changed.connect(_update_queue)
 	EventBus.customer_head_changed.connect(_on_customer_head_changed)
 	EventBus.price_focus_requested.connect(_on_price_focus_requested)
+	EventBus.rent_decision_requested.connect(_on_rent_decision_requested)
+	EventBus.rent_decision_resolved.connect(_on_rent_decision_resolved)
 	EventBus.showcase_choice_requested.connect(_on_showcase_choice_requested)
 	EventBus.showcase_choice_resolved.connect(_on_showcase_choice_resolved)
 	EventBus.showcase_choice_failed.connect(_on_showcase_choice_failed)
@@ -66,6 +78,16 @@ func _ready() -> void:
 	%SellButton.pressed.connect(_sell_customer)
 	%NegotiateButton.pressed.connect(_negotiate_customer)
 	%RefuseButton.pressed.connect(_refuse_customer)
+	rent_fire_sale_button.pressed.connect(_select_rent_path.bind(&"fire_sale"))
+	rent_accessories_button.pressed.connect(
+		_select_rent_path.bind(&"cut_accessories")
+	)
+	rent_loan_button.pressed.connect(_open_rent_loan_confirm)
+	rent_dismiss_button.pressed.connect(_select_rent_path.bind(&"dismissed"))
+	%RentLoanBackButton.pressed.connect(_close_rent_loan_confirm)
+	%RentLoanConfirmButton.pressed.connect(
+		_select_rent_path.bind(&"payday_loan")
+	)
 	showcase_slab_button.pressed.connect(_select_showcase_choice.bind(&"slab"))
 	showcase_singles_button.pressed.connect(_select_showcase_choice.bind(&"singles"))
 	_update_cash(Economy.balance_cents)
@@ -265,7 +287,8 @@ func _close_price() -> void:
 func _on_price_focus_requested(
 	sku_id: StringName,
 	beat_id: StringName,
-	message: String
+	message: String,
+	suggestion_mode: StringName
 ) -> void:
 	beat_toast.text = message
 	beat_toast.show()
@@ -274,8 +297,90 @@ func _on_price_focus_requested(
 			continue
 		_active_price_beat_id = beat_id
 		_select_price_stock(dto)
+		if suggestion_mode == &"undercut":
+			price_input.text = DemandSignalPresenter.format_cents(
+				maxi(1, floori(_price_signal.suggested_price_cents * 0.90))
+			)
+			_update_price_preview(price_input.text)
+			assert(
+				_price_signal != null
+				and _price_signal.position == &"undercut",
+				"Undercut focus must refresh to an undercut position."
+			)
 		price_input.grab_focus()
 		return
+
+
+func _on_rent_decision_requested(payload: Dictionary) -> void:
+	_rent_beat_id = StringName(payload.get("beat_id", &""))
+	rent_title.text = String(
+		payload.get("title", "Rent due today — shelf is soft")
+	)
+	rent_summary.text = (
+		"Due at SETTLE: %s\nProjected cash after rent: %s\n"
+		+ "Choose a response before opening the floor."
+	) % [
+		DemandSignalPresenter.format_cents(int(payload.get("rent_cents", 0))),
+		DemandSignalPresenter.format_cents(
+			int(payload.get("projected_cash_cents", 0))
+		),
+	]
+	rent_fire_sale_button.disabled = not bool(
+		payload.get("fire_sale_enabled", false)
+	)
+	rent_accessories_button.disabled = not bool(
+		payload.get("accessory_enabled", false)
+	)
+	rent_loan_button.visible = bool(payload.get("loan_enabled", false))
+	rent_loan_terms.text = (
+		"Receive %s now.\nPay %s daily for %d days; lose %d Rep."
+		% [
+			DemandSignalPresenter.format_cents(
+				int(payload.get("loan_cash_cents", 0))
+			),
+			DemandSignalPresenter.format_cents(
+				int(payload.get("loan_daily_cents", 0))
+			),
+			int(payload.get("loan_days", 0)),
+			int(payload.get("loan_rep_hit", 0)),
+		]
+	)
+	_close_rent_loan_confirm()
+	phase_button.disabled = true
+	rent_panel.show()
+
+
+func _select_rent_path(choice: StringName) -> void:
+	rent_panel.hide()
+	EventBus.rent_decision_selected.emit(choice)
+
+
+func _open_rent_loan_confirm() -> void:
+	%RentChoices.hide()
+	rent_loan_confirm.show()
+
+
+func _close_rent_loan_confirm() -> void:
+	rent_loan_confirm.hide()
+	%RentChoices.show()
+
+
+func _on_rent_decision_resolved(
+	beat_id: StringName,
+	outcome: StringName
+) -> void:
+	if beat_id != _rent_beat_id:
+		return
+	rent_panel.hide()
+	_rent_beat_id = &""
+	phase_button.disabled = false
+	if outcome == &"dismissed":
+		beat_toast.text = "Rent still due at SETTLE"
+	elif outcome == &"payday_loan":
+		beat_toast.text = "Payday loan accepted — rent still due at SETTLE"
+	else:
+		beat_toast.text = "Pricing path resolved — rent still due at SETTLE"
+	beat_toast.show()
 
 
 func _on_showcase_choice_requested(payload: Dictionary) -> void:

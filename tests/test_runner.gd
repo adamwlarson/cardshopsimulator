@@ -4,6 +4,7 @@ const EASY_CONFIG: BalanceConfig = preload("res://data/balance/easy.tres")
 const NORMAL_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
 const HARD_CONFIG: BalanceConfig = preload("res://data/balance/hard.tres")
 const SPIKE_STAPLE_BEAT := &"sec10_4_spike_staple"
+const RENT_FIRESALE_BEAT := &"sec10_6_rent_firesale"
 const TITAN_HYPE_BEAT := &"sec10_7_titan_hype"
 const SHOWCASE_BEAT := &"sec10_8_slab_vs_singles"
 
@@ -12,9 +13,12 @@ var _qa := QaInstrumentationService.new()
 var _captured_scripted_customer: CustomerProfile
 var _captured_price_sku: StringName = &""
 var _captured_price_beat: StringName = &""
+var _captured_price_mode: StringName = &""
 var _captured_price_focus_count: int = 0
+var _captured_rent_decision: Dictionary = {}
 var _event_bus: Node
 var _game_state: Node
+var _economy: Node
 var _inventory_service: Node
 var _demand_signals: Node
 var _beat_director: Node
@@ -56,6 +60,7 @@ class FakeCustomerInventory:
 func _initialize() -> void:
 	_event_bus = root.get_node("EventBus")
 	_game_state = root.get_node("GameState")
+	_economy = root.get_node("Economy")
 	_inventory_service = root.get_node("InventoryService")
 	_demand_signals = root.get_node("DemandSignals")
 	_beat_director = root.get_node("BeatDirector")
@@ -65,6 +70,7 @@ func _initialize() -> void:
 		_capture_scripted_customer
 	)
 	_event_bus.connect("price_focus_requested", _capture_price_focus)
+	_event_bus.connect("rent_decision_requested", _capture_rent_decision)
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
 	_test_inventory_mutations_and_capacity()
@@ -84,6 +90,7 @@ func _initialize() -> void:
 	_test_customer_service_actions()
 	_test_ui_price_labels()
 	_test_ui_helpers_do_not_read_hidden_values()
+	_test_rent_firesale_beat()
 	_test_spike_staple_beat()
 	_test_titan_hype_price_focus()
 	_test_day_ten_beat_serialization()
@@ -701,6 +708,142 @@ func _test_spike_staple_beat() -> void:
 	_qa_autoload.call("set_force_enabled", false)
 
 
+func _test_rent_firesale_beat() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 7)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_rent_decision = {}
+	_beat_director.call("_start_day_beats", 7)
+	_expect_equal(
+		_beat_director.call("is_started", RENT_FIRESALE_BEAT),
+		true,
+		"rent fire-sale starts on Normal day seven PREP"
+	)
+	_expect_equal(
+		StringName(_captured_rent_decision.get("beat_id", &"")),
+		RENT_FIRESALE_BEAT,
+		"rent decision carries beat tag"
+	)
+	_expect_equal(
+		bool(_captured_rent_decision.get("fire_sale_enabled", false)),
+		true,
+		"rent decision offers sealed fire-sale"
+	)
+	_expect_equal(
+		bool(_captured_rent_decision.get("accessory_enabled", false)),
+		true,
+		"rent decision offers accessory cut"
+	)
+	_expect_equal(
+		bool(_captured_rent_decision.get("loan_enabled", false)),
+		true,
+		"rent decision offers Normal payday loan"
+	)
+	for key: Variant in _captured_rent_decision.keys():
+		var field := String(key)
+		_expect_equal(
+			field.contains("true_market")
+			or field.contains("p_buy")
+			or field.contains("cert_valid"),
+			false,
+			"rent decision field %s does not leak truth" % field
+		)
+
+	_captured_price_sku = &""
+	_captured_price_beat = &""
+	_captured_price_mode = &""
+	_expect_equal(
+		_beat_director.call("choose_rent_path", &"fire_sale"),
+		true,
+		"rent fire-sale path opens pricing"
+	)
+	_expect_equal(
+		_captured_price_sku in [&"AA-DUST-ETB", &"AA-DUST-BLST"],
+		true,
+		"rent fire-sale focuses owned Dustway sealed"
+	)
+	_expect_equal(
+		_captured_price_beat,
+		RENT_FIRESALE_BEAT,
+		"rent price focus carries beat tag"
+	)
+	_expect_equal(
+		_captured_price_mode,
+		&"undercut",
+		"rent price focus suggests Undercut"
+	)
+	var fire_sale_preview := _demand_signals.call(
+		"price_signal",
+		_captured_price_sku,
+		_inventory_service.call("listed_price_for", _captured_price_sku),
+		_inventory_service.call("location_for", _captured_price_sku)
+	) as PriceConfirmSignal
+	var undercut_cents := floori(
+		fire_sale_preview.suggested_price_cents * 0.90
+	)
+	fire_sale_preview = _demand_signals.call(
+		"refresh_price_signal",
+		fire_sale_preview,
+		undercut_cents
+	) as PriceConfirmSignal
+	_expect_equal(
+		fire_sale_preview.position,
+		&"undercut",
+		"rent fire-sale preview refresh shows Undercut"
+	)
+	_beat_director.call(
+		"_on_beat_ui_resolved",
+		RENT_FIRESALE_BEAT,
+		&"cancelled"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 7)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 7)
+	var cash_before_rent := int(_economy.get("balance_cents"))
+	_expect_equal(
+		_beat_director.call("choose_rent_path", &"dismissed"),
+		true,
+		"rent decision can explicitly dismiss"
+	)
+	_expect_equal(
+		(_economy.call("get_ledger") as Array).is_empty(),
+		true,
+		"dismiss does not auto-pay rent"
+	)
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before_rent - NORMAL_CONFIG.rent_small_weekly_cents,
+		"dismissed rent still collects at SETTLE"
+	)
+
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 7)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_rent_decision = {}
+	_beat_director.call("_start_day_beats", 7)
+	_expect_equal(
+		bool(_captured_rent_decision.get("loan_enabled", true)),
+		false,
+		"Hard rent decision hides payday loan"
+	)
+	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_source.contains(
+			"rent_loan_button.visible = bool(payload.get(\"loan_enabled\", false))"
+		),
+		true,
+		"HUD hides unavailable loan option"
+	)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
 func _test_titan_hype_price_focus() -> void:
 	_beat_director.call("reset")
 	var inventory := _inventory_service.get("model") as InventoryModel
@@ -898,11 +1041,17 @@ func _capture_scripted_customer(customer: CustomerProfile) -> void:
 func _capture_price_focus(
 	sku_id: StringName,
 	beat_id: StringName,
-	_message: String
+	_message: String,
+	suggestion_mode: StringName
 ) -> void:
 	_captured_price_sku = sku_id
 	_captured_price_beat = beat_id
+	_captured_price_mode = suggestion_mode
 	_captured_price_focus_count += 1
+
+
+func _capture_rent_decision(payload: Dictionary) -> void:
+	_captured_rent_decision = payload
 
 
 func _expect_dto_has_no_truth_fields(dto: Resource, label: String) -> void:

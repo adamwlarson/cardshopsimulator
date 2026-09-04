@@ -132,6 +132,26 @@ func price_confirm(
 	return dto
 
 
+func refresh_price_confirm(
+	dto: PriceConfirmSignal,
+	listed_price_cents: int,
+	location: InventoryLocation
+) -> PriceConfirmSignal:
+	if dto == null:
+		return null
+	dto.listed_price_cents = listed_price_cents
+	dto.price_delta_cents = listed_price_cents - dto.suggested_price_cents
+	dto.price_delta_percent = (
+		float(dto.price_delta_cents) / float(dto.suggested_price_cents)
+		if dto.suggested_price_cents > 0
+		else 0.0
+	)
+	dto.position = _position(dto.price_delta_percent)
+	dto.move_feel = _move_feel(dto.price_delta_percent)
+	dto.display_context = _display_context(location)
+	return dto
+
+
 func _comp_range(
 	true_market_cents: int,
 	channel: Channel,

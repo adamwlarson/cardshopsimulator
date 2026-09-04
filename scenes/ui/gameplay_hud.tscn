@@ -322,6 +322,85 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Sell at list"
 
+[node name="RentDecision" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 350.0
+offset_top = 135.0
+offset_right = 930.0
+offset_bottom = 535.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="RentDecision"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="RentTitle" type="Label" parent="RentDecision/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Rent due today — shelf is soft"
+
+[node name="RentSummary" type="Label" parent="RentDecision/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Choose a response before opening the floor."
+
+[node name="RentChoices" type="VBoxContainer" parent="RentDecision/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RentFireSaleButton" type="Button" parent="RentDecision/Content/RentChoices"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Fire-sale sealed\nFocus Dustway sealed · suggest Undercut"
+
+[node name="RentAccessoriesButton" type="Button" parent="RentDecision/Content/RentChoices"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Cut accessories\nFocus ACC-* · suggest Undercut"
+
+[node name="RentLoanButton" type="Button" parent="RentDecision/Content/RentChoices"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Payday loan\nReview terms"
+
+[node name="RentDismissButton" type="Button" parent="RentDecision/Content/RentChoices"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Dismiss — rent still due at SETTLE"
+
+[node name="RentLoanConfirm" type="VBoxContainer" parent="RentDecision/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="RentDecision/Content/RentLoanConfirm"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Confirm payday loan?"
+
+[node name="RentLoanTerms" type="Label" parent="RentDecision/Content/RentLoanConfirm"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Loan terms"
+
+[node name="Actions" type="HBoxContainer" parent="RentDecision/Content/RentLoanConfirm"]
+layout_mode = 2
+
+[node name="RentLoanBackButton" type="Button" parent="RentDecision/Content/RentLoanConfirm/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Back"
+
+[node name="RentLoanConfirmButton" type="Button" parent="RentDecision/Content/RentLoanConfirm/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Accept loan"
+
 [node name="ShowcaseChoice" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
