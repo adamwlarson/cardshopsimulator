@@ -229,6 +229,11 @@ enum Difficulty { EASY, NORMAL, HARD }
 
 7. **`seed_bulk_cards`** — binder commons/uncommons count (systems §2.5). **80 on all diffs** (MVP; matches Eng PR #2). Doc folded 2026-09-04.
 
+
+### Optional-beat BalanceConfig knobs (MVP)
+
+New knobs from optional §10 #3/#5/#9/#10 (outing attention/fee, expand Medium cash/rep/rent, shady report Rep): **Easy/Hard `.tres` inherit Normal defaults** for MVP. Day windows may still follow difficulty-curves §6 where listed; do not invent Easy/Hard overrides until a playtest asks.
+
 ## 9. Out of scope
 
 - Per-archetype AI difficulty  
