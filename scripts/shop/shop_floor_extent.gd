@@ -5,12 +5,29 @@ extends Node3D
 ## Medium instances `prop_shop_shell_medium_01` at SW origin, scale 1 (1u=1m).
 ## Walkable grid SoT remains 14×10 @ 0.9 m. No code-driven MediumFloor stub.
 ## Fog-as-Medium stays nacked.
+## Medium overhead extras (same `prop_light_overhead_01`) show only at tier=MEDIUM.
 
 const MEDIUM_SHELL_SCENE := (
 	"res://assets/props/shop/fixtures/prop_shop_shell_medium_01/prop_shop_shell_medium_01.glb"
 )
 const SMALL_SHELL_PATH := "Architecture/ShopShell"
 const MEDIUM_SHELL_PATH := "Architecture/ShopShellMedium"
+const OVERHEAD_LIGHTS_PATH := "Fixtures/OverheadLights"
+const SMALL_OVERHEAD_MESH_NAMES := [
+	"FrontLeft",
+	"FrontRight",
+	"BackLeft",
+	"BackRight",
+	"BackLeftAisle",
+]
+const MEDIUM_OVERHEAD_MESH_NAMES := [
+	"MidCenter",
+	"FarFront",
+	"FarBack",
+	"DeepLeft",
+	"DeepCenter",
+	"DeepRight",
+]
 const STUB_NODE_NAMES := [
 	"MediumFloor",
 	"MediumCeiling",
@@ -57,12 +74,49 @@ func has_code_driven_stub() -> bool:
 	return false
 
 
+func is_medium_overhead_visible() -> bool:
+	if not _medium_active:
+		return false
+	var root := _overhead_lights()
+	if root == null:
+		return false
+	for mesh_name: String in MEDIUM_OVERHEAD_MESH_NAMES:
+		var mesh := root.get_node_or_null(mesh_name) as Node3D
+		var fill := root.get_node_or_null("%sFill" % mesh_name) as Node3D
+		if mesh == null or fill == null or not mesh.visible or not fill.visible:
+			return false
+	return true
+
+
+func visible_overhead_mesh_count() -> int:
+	return _count_visible_overheads(SMALL_OVERHEAD_MESH_NAMES) + _count_visible_overheads(
+		MEDIUM_OVERHEAD_MESH_NAMES
+	)
+
+
+func visible_overhead_fill_count() -> int:
+	var root := _overhead_lights()
+	if root == null:
+		return 0
+	var count := 0
+	for mesh_name: String in SMALL_OVERHEAD_MESH_NAMES:
+		var fill := root.get_node_or_null("%sFill" % mesh_name) as Node3D
+		if fill != null and fill.visible:
+			count += 1
+	for mesh_name: String in MEDIUM_OVERHEAD_MESH_NAMES:
+		var fill := root.get_node_or_null("%sFill" % mesh_name) as Node3D
+		if fill != null and fill.visible:
+			count += 1
+	return count
+
+
 func sync_from_shop() -> void:
 	var shop := _shop()
 	_medium_active = shop != null and shop.tier == ShopState.Tier.MEDIUM
 	_clear_extension()
 	_ensure_medium_shell()
 	_apply_shell_visibility()
+	_apply_medium_overhead_visibility()
 
 
 func _bind_bus() -> void:
@@ -93,6 +147,32 @@ func _apply_shell_visibility() -> void:
 		if _medium_active:
 			medium.position = Vector3.ZERO
 			medium.scale = Vector3.ONE
+
+
+func _apply_medium_overhead_visibility() -> void:
+	var root := _overhead_lights()
+	if root == null:
+		return
+	for mesh_name: String in MEDIUM_OVERHEAD_MESH_NAMES:
+		var mesh := root.get_node_or_null(mesh_name) as Node3D
+		if mesh != null:
+			mesh.visible = _medium_active
+			mesh.scale = Vector3.ONE
+		var fill := root.get_node_or_null("%sFill" % mesh_name) as Node3D
+		if fill != null:
+			fill.visible = _medium_active
+
+
+func _count_visible_overheads(mesh_names: Array) -> int:
+	var root := _overhead_lights()
+	if root == null:
+		return 0
+	var count := 0
+	for mesh_name: Variant in mesh_names:
+		var mesh := root.get_node_or_null(String(mesh_name)) as Node3D
+		if mesh != null and mesh.visible:
+			count += 1
+	return count
 
 
 func _ensure_medium_shell() -> void:
@@ -132,6 +212,12 @@ func _medium_shell() -> Node3D:
 	if get_parent() == null:
 		return null
 	return get_parent().get_node_or_null(MEDIUM_SHELL_PATH) as Node3D
+
+
+func _overhead_lights() -> Node3D:
+	if get_parent() == null:
+		return null
+	return get_parent().get_node_or_null(OVERHEAD_LIGHTS_PATH) as Node3D
 
 
 func _shop() -> ShopState:
