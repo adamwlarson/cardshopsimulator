@@ -1,30 +1,25 @@
 class_name StockLot
 extends Resource
 
-enum ProductType {
-	SEALED,
-	SINGLE,
-	GRADED,
-	ACCESSORY,
-}
-
-enum Condition {
-	SEALED,
-	MINT,
-	NEAR_MINT,
-	PLAYED,
-	DAMAGED,
-}
-
-@export var sku: StringName
-@export var display_name: String
-@export var product_type: ProductType = ProductType.SEALED
-@export var condition: Condition = Condition.SEALED
-@export_range(0, 1_000_000, 1) var quantity: int = 0
-@export_range(0, 100_000_000, 1) var cost_basis_cents: int = 0
+@export var sku: ProductSKU
+@export_range(0, 1_000_000, 1) var qty: int = 0
+@export_range(0, 100_000_000, 1) var acquired_cost_avg_cents: int = 0
+@export var location: InventoryLocation = InventoryLocation.new()
 
 
 func unit_cost_cents() -> int:
-	if quantity <= 0:
-		return 0
-	return cost_basis_cents / quantity
+	return acquired_cost_avg_cents
+
+
+func total_cost_cents() -> int:
+	return acquired_cost_avg_cents * qty
+
+
+func accepts_product(product: ProductSKU) -> bool:
+	return (
+		product != null
+		and product.product_class in [
+			ProductSKU.ProductClass.SEALED,
+			ProductSKU.ProductClass.ACCESSORY,
+		]
+	)

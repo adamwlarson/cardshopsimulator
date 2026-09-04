@@ -12,9 +12,14 @@ config/features=PackedStringArray("4.3", "Forward Plus")
 [autoload]
 
 EventBus="*res://scripts/autoload/event_bus.gd"
+QaInstrumentation="*res://scripts/core/qa_instrumentation.gd"
 GameState="*res://scripts/autoload/game_state.gd"
 Economy="*res://scripts/autoload/economy.gd"
 InventoryService="*res://scripts/autoload/inventory_service.gd"
+
+[debug]
+
+qa_instrumentation=true
 
 [display]
 

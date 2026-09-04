@@ -1,66 +1,72 @@
 extends Node
 
-var _stock_by_sku: Dictionary = {}
+var model: InventoryModel
+
+
+func _ready() -> void:
+	reset()
 
 
 func reset() -> void:
-	_stock_by_sku.clear()
+	model = InventoryModel.new(GameState.balance_config)
+	model.reset_and_seed()
+	for lot: StockLot in model.stock_lots:
+		EventBus.publish_inventory_changed(lot.sku.id, lot.qty)
 
 
 func receive_stock(
-	sku: StringName,
-	display_name: String,
-	product_type: StockLot.ProductType,
-	condition: StockLot.Condition,
+	sku_id: StringName,
 	quantity: int,
-	total_cost_cents: int
+	unit_cost_cents: int,
+	location: InventoryLocation
 ) -> bool:
-	if sku.is_empty() or quantity <= 0 or total_cost_cents < 0:
-		return false
+	var received := model.add_stock(sku_id, quantity, unit_cost_cents, location)
+	if received:
+		EventBus.publish_inventory_changed(sku_id, model.get_stock_quantity(sku_id))
+	return received
 
-	var lot := get_lot(sku)
-	if lot == null:
-		lot = StockLot.new()
-		lot.sku = sku
-		lot.display_name = display_name
-		lot.product_type = product_type
-		lot.condition = condition
-		_stock_by_sku[sku] = lot
-	elif lot.product_type != product_type or lot.condition != condition:
-		# TODO: Support multiple condition-specific lots under one catalog product.
-		return false
 
-	lot.quantity += quantity
-	lot.cost_basis_cents += total_cost_cents
-	EventBus.publish_inventory_changed(sku, lot.quantity)
+func confirm_stock_purchase(
+	sku_id: StringName,
+	quantity: int,
+	unit_cost_cents: int,
+	expected_margin_cents: int,
+	location: InventoryLocation
+) -> bool:
+	var total_cost_cents := quantity * unit_cost_cents
+	if quantity <= 0 or unit_cost_cents < 0 or not Economy.can_afford(total_cost_cents):
+		return false
+	if not receive_stock(sku_id, quantity, unit_cost_cents, location):
+		return false
+	if not Economy.record_expense(total_cost_cents, &"inventory", "Stock purchase"):
+		remove_stock(sku_id, quantity)
+		return false
+	QaInstrumentation.record_buy_confirm(
+		sku_id,
+		quantity,
+		unit_cost_cents,
+		expected_margin_cents
+	)
 	return true
 
 
-func remove_stock(sku: StringName, quantity: int) -> bool:
-	var lot := get_lot(sku)
-	if lot == null or quantity <= 0 or lot.quantity < quantity:
-		return false
-
-	var removed_cost := lot.unit_cost_cents() * quantity
-	lot.quantity -= quantity
-	lot.cost_basis_cents = maxi(0, lot.cost_basis_cents - removed_cost)
-	EventBus.publish_inventory_changed(sku, lot.quantity)
-	return true
+func remove_stock(sku_id: StringName, quantity: int) -> bool:
+	var removed := model.remove_stock(sku_id, quantity)
+	if removed:
+		EventBus.publish_inventory_changed(sku_id, model.get_stock_quantity(sku_id))
+	return removed
 
 
-func has_stock(sku: StringName, quantity: int = 1) -> bool:
-	var lot := get_lot(sku)
-	return lot != null and quantity > 0 and lot.quantity >= quantity
+func has_stock(sku_id: StringName, quantity: int = 1) -> bool:
+	return quantity > 0 and model.get_stock_quantity(sku_id) >= quantity
 
 
-func get_lot(sku: StringName) -> StockLot:
-	return _stock_by_sku.get(sku) as StockLot
+func get_lot(sku_id: StringName) -> StockLot:
+	for lot: StockLot in model.stock_lots:
+		if lot.sku.id == sku_id:
+			return lot
+	return null
 
 
 func get_all_stock() -> Array[StockLot]:
-	var result: Array[StockLot] = []
-	for value: Variant in _stock_by_sku.values():
-		var lot := value as StockLot
-		if lot != null:
-			result.append(lot)
-	return result
+	return model.stock_lots.duplicate()

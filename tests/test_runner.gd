@@ -10,6 +10,10 @@ var _failures: int = 0
 func _initialize() -> void:
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
+	_test_inventory_mutations_and_capacity()
+	_test_balance_seed_inventory()
+	_test_demand_signal_dto_does_not_leak_truth()
+	_test_qa_instrumentation_payloads()
 	_test_difficulty_balance_ordering()
 	_test_normal_shop_capacity()
 	_test_weekly_rent_schedule()
@@ -30,9 +34,138 @@ func _test_pricing_spread() -> void:
 
 func _test_stock_lot_unit_cost() -> void:
 	var lot := StockLot.new()
-	lot.quantity = 4
-	lot.cost_basis_cents = 1000
+	lot.qty = 4
+	lot.acquired_cost_avg_cents = 250
 	_expect_equal(lot.unit_cost_cents(), 250, "weighted unit cost")
+	_expect_equal(lot.total_cost_cents(), 1000, "lot total cost")
+
+
+func _test_inventory_mutations_and_capacity() -> void:
+	var config := BalanceConfig.new()
+	config.case_slots = 2
+	config.backstock_bins = 1
+	var inventory := InventoryModel.new(config)
+	var backstock := InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+	var shelf := InventoryLocation.new(InventoryLocation.Type.SHELF)
+	_expect_equal(inventory.add_stock(&"ACC-SLV-60", 2, 100, shelf), true, "add accessory lot")
+	_expect_equal(inventory.add_stock(&"ACC-SLV-60", 2, 200, shelf), true, "merge accessory lot")
+	_expect_equal(inventory.get_stock_quantity(&"ACC-SLV-60"), 4, "merged accessory quantity")
+	_expect_equal(inventory.stock_lots[0].unit_cost_cents(), 150, "weighted lot average")
+	_expect_equal(inventory.remove_stock(&"ACC-SLV-60", 3), true, "remove accessory stock")
+	_expect_equal(inventory.remove_stock(&"ACC-SLV-60", 2), false, "reject stock underflow")
+	_expect_equal(inventory.add_stock(&"AA-BASE-088", 1, 100, shelf), false, "single cannot use stock lot")
+	_expect_equal(inventory.add_stock(&"AA-DUST-ETB", 1, 100, backstock), true, "first backstock bin")
+	_expect_equal(inventory.add_stock(&"AA-SKIE-ETB", 1, 100, backstock), false, "backstock capacity")
+
+	var case_location := InventoryLocation.new(InventoryLocation.Type.CASE)
+	var first_card := CardInstance.new(&"AA-BASE-088", 200, case_location)
+	var second_card := CardInstance.new(&"AA-BASE-078", 200, case_location)
+	_expect_equal(inventory.add_card(first_card), true, "first case card")
+	_expect_equal(inventory.add_card(second_card), true, "second case card")
+	var slab_card := CardInstance.new(&"AA-SKIE-052", 300)
+	var slab := SlabInstance.new(slab_card, &"Prism Grade", 10.0, "CERT-1", 500, case_location)
+	_expect_equal(inventory.add_slab(slab), false, "slab needs two free case slots")
+	_expect_equal(inventory.case_slots_used(), 2, "case slot accounting")
+
+
+func _test_balance_seed_inventory() -> void:
+	for config: BalanceConfig in [EASY_CONFIG, NORMAL_CONFIG, HARD_CONFIG]:
+		var inventory := InventoryModel.new(config)
+		inventory.reset_and_seed()
+		_expect_equal(
+			inventory.get_stock_quantity(&"AA-SKIE-BLST"),
+			config.seed_blasters + config.seed_skie_blasters,
+			"seed current-set blasters"
+		)
+		_expect_equal(
+			inventory.get_stock_quantity(&"AA-DUST-ETB"),
+			config.seed_dust_etbs,
+			"seed Dust ETBs"
+		)
+		_expect_equal(
+			inventory.get_stock_quantity(&"ACC-SLV-60"),
+			config.seed_sleeves,
+			"seed sleeves"
+		)
+		_expect_equal(
+			inventory.get_stock_quantity(&"ACC-TOP-25"),
+			config.seed_toploaders,
+			"seed toploaders"
+		)
+		_expect_equal(inventory.cards.size(), config.seed_named_staples, "seed named cards")
+	_expect_equal(
+		InventoryModel.new(NORMAL_CONFIG).get_sku(&"AA-SKIE-ETB") != null,
+		true,
+		"canon Skiefall ETB catalog SKU"
+	)
+
+
+func _test_demand_signal_dto_does_not_leak_truth() -> void:
+	QaInstrumentation.set_force_enabled(false)
+	var service := DemandSignalService.new(NORMAL_CONFIG, 42)
+	var buy_signal := service.buy_confirm(
+		1, &"AA-SKIE-047", 2200, 0.75, DemandSignalService.Channel.MARKETPLACE,
+		1200, 2, 800_000, 1, 3
+	)
+	var price_signal := service.price_confirm(
+		1, &"AA-SKIE-047", 2200, 0.75, 2300,
+		InventoryLocation.new(InventoryLocation.Type.CASE)
+	)
+	_expect_dto_has_no_truth_fields(buy_signal, "buy signal")
+	_expect_dto_has_no_truth_fields(price_signal, "price signal")
+	_expect_equal(
+		buy_signal.shown_demand_band,
+		price_signal.shown_demand_band,
+		"shared daily demand band"
+	)
+	_expect_equal(price_signal.move_feel.is_empty(), false, "qualitative move feel")
+
+
+func _test_qa_instrumentation_payloads() -> void:
+	QaInstrumentation.set_force_enabled(true)
+	QaInstrumentation.clear()
+	QaInstrumentation.begin_day(3, 10_000)
+	QaInstrumentation.end_day(3, 11_500)
+	QaInstrumentation.record_buy_confirm(&"AA-DUST-ETB", 2, 2500, 1500)
+	var service := DemandSignalService.new(NORMAL_CONFIG, 7)
+	service.buy_confirm(
+		3, &"AA-DUST-ETB", 4499, 0.30, DemandSignalService.Channel.DISTRIBUTOR,
+		2500, 2, 20_000, 1, 2
+	)
+	service.price_confirm(
+		3, &"AA-DUST-ETB", 4499, 0.30, 4799,
+		InventoryLocation.new(InventoryLocation.Type.SHELF),
+		DemandSignalService.Channel.DISTRIBUTOR
+	)
+	QaInstrumentation.record_save_pre_write("save-data".to_utf8_buffer())
+	QaInstrumentation.record_save_post_load("save-data".to_utf8_buffer())
+	var events := QaInstrumentation.get_events()
+	_expect_equal(events.size(), 6, "instrumentation event count")
+	_expect_payload_keys(events[0], [&"day", &"cash_start", &"cash_end", &"delta"], "day cash payload")
+	_expect_payload_keys(events[1], [&"sku", &"qty", &"unit_cost", &"expected_margin"], "buy payload")
+	_expect_payload_keys(
+		events[2],
+		[
+			&"screen", &"sku_id", &"shown_comp_low_cents", &"shown_comp_high_cents",
+			&"true_market_cents", &"shown_demand_band", &"true_demand_band", &"confidence",
+		],
+		"buy demand signal payload"
+	)
+	_expect_payload_keys(
+		events[3],
+		[
+			&"screen", &"sku_id", &"shown_comp_low_cents", &"shown_comp_high_cents",
+			&"true_market_cents", &"shown_demand_band", &"true_demand_band", &"confidence",
+			&"listed_price_cents", &"move_feel",
+		],
+		"price demand signal payload"
+	)
+	_expect_equal(
+		events[4]["payload"]["hash"],
+		events[5]["payload"]["hash"],
+		"save round-trip hash"
+	)
+	QaInstrumentation.set_force_enabled(false)
 
 
 func _test_difficulty_balance_ordering() -> void:
@@ -79,6 +212,26 @@ func _test_weekly_rent_schedule() -> void:
 	_expect_equal(NORMAL_CONFIG.is_rent_due_day(7), true, "day seven weekly settle")
 	_expect_equal(NORMAL_CONFIG.is_rent_due_day(14), true, "recurring weekly settle")
 	_expect_equal(NORMAL_CONFIG.rent_small_weekly_cents, 120_000, "weekly rent amount")
+
+
+func _expect_dto_has_no_truth_fields(dto: Resource, label: String) -> void:
+	for property: Dictionary in dto.get_property_list():
+		var property_name := String(property["name"])
+		var leaks_truth := (
+			property_name.contains("true_market")
+			or property_name.contains("p_buy")
+		)
+		_expect_equal(leaks_truth, false, "%s field %s" % [label, property_name])
+
+
+func _expect_payload_keys(
+	event: Dictionary,
+	expected_keys: Array[StringName],
+	label: String
+) -> void:
+	var payload: Dictionary = event["payload"]
+	for key: StringName in expected_keys:
+		_expect_equal(payload.has(String(key)), true, "%s key %s" % [label, key])
 
 
 func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:
