@@ -1,0 +1,9 @@
+width=0.3000
+depth=0.3000
+height=0.5000
+min_z=0.000000
+verts=216
+polys=234
+tris=396
+materials=Plastic_Dark,Metal_Rim,Liner,Metal_Foot
+pivot=bottom_center

@@ -1,0 +1,9 @@
+width=0.3000
+depth=0.3000
+height=0.4500
+min_z=0.000000
+verts=288
+polys=312
+tris=528
+materials=Ceramic,Ceramic_Rim,Soil,Stem,Leaf,Leaf_Dark
+pivot=bottom_center
