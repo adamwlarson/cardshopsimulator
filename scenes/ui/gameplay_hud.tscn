@@ -640,3 +640,94 @@ custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 theme_type_variation = &"ListRowButton"
 text = "Display chase singles"
+
+[node name="BeatDecision" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 640.0
+offset_bottom = 460.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="BeatDecision"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="BeatDecisionTitle" type="Label" parent="BeatDecision/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "Decision"
+autowrap_mode = 3
+
+[node name="BeatDecisionSummary" type="Label" parent="BeatDecision/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Choose a path."
+autowrap_mode = 3
+
+[node name="BeatChoices" type="VBoxContainer" parent="BeatDecision/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BeatChoiceAButton" type="Button" parent="BeatDecision/Content/BeatChoices"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_type_variation = &"ListRowButton"
+text = "Option A"
+
+[node name="BeatChoiceBButton" type="Button" parent="BeatDecision/Content/BeatChoices"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_type_variation = &"ListRowButton"
+text = "Option B"
+
+[node name="BeatChoiceCButton" type="Button" parent="BeatDecision/Content/BeatChoices"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_type_variation = &"ListRowButton"
+text = "Option C"
+
+[node name="BeatConfirm" type="VBoxContainer" parent="BeatDecision/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="BeatConfirmTitle" type="Label" parent="BeatDecision/Content/BeatConfirm"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "Confirm?"
+autowrap_mode = 3
+
+[node name="BeatConfirmBody" type="Label" parent="BeatDecision/Content/BeatConfirm"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Confirm this path."
+autowrap_mode = 3
+
+[node name="Actions" type="HBoxContainer" parent="BeatDecision/Content/BeatConfirm"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="BeatConfirmBackButton" type="Button" parent="BeatDecision/Content/BeatConfirm/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Back"
+
+[node name="BeatConfirmButton" type="Button" parent="BeatDecision/Content/BeatConfirm/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "Confirm"

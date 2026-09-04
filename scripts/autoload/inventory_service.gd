@@ -190,7 +190,16 @@ func total_owned(sku_id: StringName) -> int:
 
 
 func case_free_slot_weight() -> int:
-	return GameState.balance_config.case_slots - model.case_slots_used()
+	return model.case_slot_limit() - model.case_slots_used()
+
+
+func backstock_free_bins() -> int:
+	return model.backstock_bin_limit() - model.backstock_bins_used()
+
+
+func apply_medium_capacity(case_bonus: int, backstock_bonus: int) -> void:
+	model.case_slot_bonus = maxi(0, case_bonus)
+	model.backstock_bin_bonus = maxi(0, backstock_bonus)
 
 
 func move_card_to(card: CardInstance, destination: InventoryLocation) -> bool:

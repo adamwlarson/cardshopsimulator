@@ -45,6 +45,15 @@ extends Control
 @onready var showcase_summary: Label = %ShowcaseSummary
 @onready var showcase_slab_button: Button = %ShowcaseSlabButton
 @onready var showcase_singles_button: Button = %ShowcaseSinglesButton
+@onready var beat_decision_panel: PanelContainer = %BeatDecision
+@onready var beat_decision_title: Label = %BeatDecisionTitle
+@onready var beat_decision_summary: Label = %BeatDecisionSummary
+@onready var beat_choice_a_button: Button = %BeatChoiceAButton
+@onready var beat_choice_b_button: Button = %BeatChoiceBButton
+@onready var beat_choice_c_button: Button = %BeatChoiceCButton
+@onready var beat_confirm: VBoxContainer = %BeatConfirm
+@onready var beat_confirm_title: Label = %BeatConfirmTitle
+@onready var beat_confirm_body: Label = %BeatConfirmBody
 
 var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
@@ -53,6 +62,9 @@ var _active_price_beat_id: StringName = &""
 var _rent_beat_id: StringName = &""
 var _showcase_beat_id: StringName = &""
 var _showcase_choice_made: bool = false
+var _beat_decision_id: StringName = &""
+var _beat_confirms: Dictionary = {}
+var _pending_confirm_choice: StringName = &""
 
 
 func _ready() -> void:
@@ -68,6 +80,9 @@ func _ready() -> void:
 	EventBus.showcase_choice_requested.connect(_on_showcase_choice_requested)
 	EventBus.showcase_choice_resolved.connect(_on_showcase_choice_resolved)
 	EventBus.showcase_choice_failed.connect(_on_showcase_choice_failed)
+	EventBus.beat_decision_requested.connect(_on_beat_decision_requested)
+	EventBus.beat_decision_resolved.connect(_on_beat_decision_resolved)
+	EventBus.buy_focus_requested.connect(_on_buy_focus_requested)
 	phase_button.pressed.connect(_on_phase_pressed)
 	%OpenBuyButton.pressed.connect(_open_buy_list)
 	%BuyListCancelButton.pressed.connect(_close_buy)
@@ -95,6 +110,11 @@ func _ready() -> void:
 	)
 	showcase_slab_button.pressed.connect(_select_showcase_choice.bind(&"slab"))
 	showcase_singles_button.pressed.connect(_select_showcase_choice.bind(&"singles"))
+	beat_choice_a_button.pressed.connect(_select_beat_choice.bind(beat_choice_a_button))
+	beat_choice_b_button.pressed.connect(_select_beat_choice.bind(beat_choice_b_button))
+	beat_choice_c_button.pressed.connect(_select_beat_choice.bind(beat_choice_c_button))
+	%BeatConfirmBackButton.pressed.connect(_close_beat_confirm)
+	%BeatConfirmButton.pressed.connect(_confirm_beat_choice)
 	set_process(false)
 	_bind_seeded_status()
 	_update_queue(0)
@@ -462,6 +482,119 @@ func _on_showcase_choice_failed(message: String) -> void:
 	showcase_summary.text = "Cannot change display: %s" % message
 
 
+func _on_beat_decision_requested(payload: Dictionary) -> void:
+	_beat_decision_id = StringName(payload.get("beat_id", &""))
+	_beat_confirms = payload.get("confirms", {}) as Dictionary
+	_pending_confirm_choice = &""
+	beat_decision_title.text = String(payload.get("title", "Decision"))
+	beat_decision_summary.text = String(payload.get("summary", ""))
+	var choices: Array = payload.get("choices", [])
+	var buttons: Array[Button] = [
+		beat_choice_a_button,
+		beat_choice_b_button,
+		beat_choice_c_button,
+	]
+	for index: int in buttons.size():
+		var button := buttons[index]
+		if index >= choices.size() or not choices[index] is Dictionary:
+			button.hide()
+			continue
+		var choice := choices[index] as Dictionary
+		button.text = String(choice.get("label", "Option"))
+		button.disabled = not bool(choice.get("enabled", true))
+		button.set_meta("choice_id", StringName(choice.get("id", &"")))
+		button.show()
+	_close_beat_confirm()
+	phase_button.disabled = true
+	beat_decision_panel.show()
+	_sync_modal_veil()
+
+
+func _select_beat_choice(button: Button) -> void:
+	var choice := StringName(button.get_meta("choice_id", &""))
+	if choice.is_empty():
+		return
+	var confirm_key := String(choice)
+	if _beat_confirms.has(confirm_key):
+		var confirm: Dictionary = _beat_confirms[confirm_key]
+		_pending_confirm_choice = choice
+		beat_confirm_title.text = String(confirm.get("title", "Confirm?"))
+		beat_confirm_body.text = String(confirm.get("body", ""))
+		%BeatChoices.hide()
+		beat_confirm.show()
+		return
+	EventBus.beat_decision_selected.emit(choice)
+
+
+func _close_beat_confirm() -> void:
+	beat_confirm.hide()
+	%BeatChoices.show()
+	_pending_confirm_choice = &""
+
+
+func _confirm_beat_choice() -> void:
+	if _pending_confirm_choice.is_empty():
+		return
+	var choice := _pending_confirm_choice
+	_close_beat_confirm()
+	EventBus.beat_decision_selected.emit(choice)
+
+
+func _on_beat_decision_resolved(
+	beat_id: StringName,
+	outcome: StringName
+) -> void:
+	if beat_id != _beat_decision_id:
+		return
+	beat_decision_panel.hide()
+	_beat_decision_id = &""
+	_beat_confirms = {}
+	_pending_confirm_choice = &""
+	phase_button.disabled = false
+	_sync_modal_veil()
+	match outcome:
+		&"drive_out":
+			beat_toast.text = "Left the floor — shorter FLOOR window today"
+		&"courier":
+			beat_toast.text = "Courier fee paid — FLOOR stays open"
+		&"skip":
+			beat_toast.text = "Passed on the off-site lot"
+		&"hire_cashier", &"hire_cheap":
+			beat_toast.text = "Hire booked — wage posts at SETTLE"
+		&"keep_solo":
+			beat_toast.text = "Staying solo today"
+		&"sign_lease":
+			beat_toast.text = "Medium lease signed — rent changes next week"
+		&"wait_for_rep":
+			beat_toast.text = "Waiting on reputation — still Small"
+		&"stay_small":
+			beat_toast.text = "Staying Small"
+		&"buy":
+			beat_toast.text = "Reviewing the trunk lot"
+		&"report":
+			beat_toast.text = "Reported the trunk sale"
+		&"ignore":
+			beat_toast.text = "Ignored the trunk sale"
+		_:
+			beat_toast.text = "Decision recorded"
+	beat_toast.show()
+
+
+func _on_buy_focus_requested(
+	opportunity_id: StringName,
+	_beat_id: StringName,
+	message: String
+) -> void:
+	if not message.is_empty():
+		beat_toast.text = message
+		beat_toast.show()
+	for dto: BuyConfirmSignal in DemandSignals.open_buy_signals():
+		if dto.opportunity_id != opportunity_id:
+			continue
+		_select_buy_opportunity(dto)
+		return
+
+
 func _on_customer_head_changed(customer: CustomerProfile) -> void:
 	_current_customer = customer
 	if _current_customer == null:
@@ -589,4 +722,5 @@ func _sync_modal_veil() -> void:
 		or serve_panel.visible
 		or rent_panel.visible
 		or showcase_panel.visible
+		or beat_decision_panel.visible
 	)

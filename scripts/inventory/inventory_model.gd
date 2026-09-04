@@ -9,6 +9,8 @@ var catalog: Dictionary = {}
 var stock_lots: Array[StockLot] = []
 var cards: Array[CardInstance] = []
 var slabs: Array[SlabInstance] = []
+var case_slot_bonus: int = 0
+var backstock_bin_bonus: int = 0
 
 
 func _init(config: BalanceConfig) -> void:
@@ -20,6 +22,8 @@ func reset_and_seed() -> void:
 	stock_lots.clear()
 	cards.clear()
 	slabs.clear()
+	case_slot_bonus = 0
+	backstock_bin_bonus = 0
 	seed_from_balance()
 
 
@@ -245,7 +249,7 @@ func can_place(
 			]:
 				return false
 			var weight := CASE_SLAB_WEIGHT if product_class == ProductSKU.ProductClass.GRADED else CASE_CARD_WEIGHT
-			return case_slots_used(excluding) + weight <= balance_config.case_slots
+			return case_slots_used(excluding) + weight <= case_slot_limit()
 		InventoryLocation.Type.BINDER:
 			return product_class == ProductSKU.ProductClass.SINGLE
 		InventoryLocation.Type.SHELF:
@@ -254,10 +258,18 @@ func can_place(
 				ProductSKU.ProductClass.ACCESSORY,
 			]
 		InventoryLocation.Type.BACKSTOCK:
-			return backstock_bins_used(excluding) < balance_config.backstock_bins
+			return backstock_bins_used(excluding) < backstock_bin_limit()
 		InventoryLocation.Type.ONLINE_HOLD:
 			return true
 	return false
+
+
+func case_slot_limit() -> int:
+	return balance_config.case_slots + case_slot_bonus
+
+
+func backstock_bin_limit() -> int:
+	return balance_config.backstock_bins + backstock_bin_bonus
 
 
 func case_slots_used(excluding: Resource = null) -> int:

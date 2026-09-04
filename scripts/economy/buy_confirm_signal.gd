@@ -18,3 +18,4 @@ extends Resource
 @export var space_required: int
 @export var space_free: int
 @export var can_confirm: bool
+@export var beat_id: StringName

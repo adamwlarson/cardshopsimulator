@@ -43,3 +43,6 @@ func _on_phase_changed(phase: int) -> void:
 	if phase != GameState.DayPhase.FLOOR:
 		elapsed_seconds = 0.0
 		time_changed.emit(0.0)
+		return
+	elapsed_seconds = minf(GameState.consume_floor_skip(), day_length_seconds)
+	time_changed.emit(clampf(elapsed_seconds / day_length_seconds, 0.0, 1.0))
