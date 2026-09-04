@@ -1,6 +1,6 @@
 # UI Wireflows v1 — Card Shop Simulator
 
-**Status:** Adopted + picker acceptance addendum (post playtest ff88fad)  
+**Status:** Adopted + picker/labels + §10 #4/#7/#8 beat-injection notes  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** `systems-design-v1.md` §4.5, `fictional-set-bible-v1.md`  
@@ -234,6 +234,50 @@ flowchart TD
 Scripted focus must use these names — no placeholders.
 
 ---
+
+
+### 5.1 Beat injection specs — §10 #4 / #7 / #8 (eng hooks)
+
+Inject via day script / `BeatDirector` (name flexible). Tag `beat_id` for QA. **No docs edits from cloud agents** — implement against this table.
+
+#### #4 Spike wants last staple (day ~3–5 Normal)
+
+| Field | Value |
+|-------|-------|
+| `beat_id` | `sec10_4_spike_staple` |
+| Preconditions | Player has **exactly 1** NM copy of staple in case/binder: prefer `AA-BASE-088` Bastion Captain, else `AA-BASE-078` Arcbolt Adept. If none, seed one into binder at beat start (cost basis = seed market). |
+| Trigger | FLOOR phase — spawn **Spike** next in queue with `wants_sku` = that card, qty 1 |
+| UI | `CustomerServe` — label **Your list** = `listed_price`; options Sell / Negotiate / Refuse (wireflows §3) |
+| Pass | Player can complete or refuse; inventory/cash/Rep update; beat completes once resolved |
+| Fail | Soft-lock if Spike never spawns or wants a different SKU |
+
+#### #7 Hype spike — Skiefall Titan (day ~8–10 Normal)
+
+| Field | Value |
+|-------|-------|
+| `beat_id` | `sec10_7_titan_hype` |
+| Preconditions | Ensure `AA-SKIE-047` Skiefall Titan (NM) exists in inventory (seed 1 if missing). Fire market event: demand band **HOT**, noisy comps elevated for that SKU only (still §4.5 fog). |
+| Trigger | PREP or mid-FLOOR — toast/modal “Hype: Skiefall Titan” → force focus **PriceEditor** on that instance (or first Titan owned) |
+| UI | PriceEditor §4.5 chips; player may also ignore and close |
+| Pass | Editor opens on Titan with HOT / elevated suggest; player can Apply or Cancel; event duration ≥1 day |
+| Fail | Opens on wrong SKU or shows `true_market` |
+
+#### #8 Case slab vs chase singles (day ~10–12 Normal)
+
+| Field | Value |
+|-------|-------|
+| `beat_id` | `sec10_8_slab_vs_singles` |
+| Preconditions | Seed if needed: (1) **Empress of Updrafts** graded slab `AA-SKIE-052` (Prism 10 or Vaultmark 9.5), (2) two chase singles e.g. `AA-SKIE-047` Titan + `AA-SKIE-058` Paragon Glider. Case has **≥2 free slot-weights** before beat (slab costs 2). |
+| Trigger | PREP — modal “Showcase tight — pick display” → inventory/case assign UI focused on slab **or** the two singles (mutually constrained by case capacity) |
+| UI | Case slot picker / PriceEditor entry from §2; §4.5 on price if they price either |
+| Pass | Player can display slab **or** both singles, not all three if capacity blocks; decision is visible and reversible later same day |
+| Fail | Allows illegal over-capacity without warning |
+
+#### Shared rules
+
+- Beats are **reachable on Normal** without cheats once day index hits window (difficulty-curves §6 day shifts OK).
+- Instrumentation: emit `beat_started` / `beat_completed` with `beat_id` behind `qa_instrumentation`.
+- Do not hardcode unrelated SKUs into buy HUD; use existing `BuyOpportunity` / customer / price flows.
 
 ## 6. QA hooks
 
