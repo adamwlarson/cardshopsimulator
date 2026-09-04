@@ -66,6 +66,19 @@ layout_mode = 2
 mouse_filter = 0
 text = "Price inventory"
 
+[node name="BeatToast" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 470.0
+offset_top = 86.0
+offset_right = 810.0
+offset_bottom = 120.0
+theme_override_colors/font_color = Color(1, 0.78, 0.28, 1)
+theme_override_font_sizes/font_size = 20
+text = "Beat event"
+horizontal_alignment = 1
+
 [node name="BuyOpportunityList" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
@@ -308,3 +321,38 @@ text = "Negotiate −10%"
 unique_name_in_owner = true
 layout_mode = 2
 text = "Sell at list"
+
+[node name="ShowcaseChoice" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 650.0
+offset_top = 150.0
+offset_right = 1210.0
+offset_bottom = 470.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="ShowcaseChoice"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="ShowcaseTitle" type="Label" parent="ShowcaseChoice/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Showcase tight — pick display"
+
+[node name="ShowcaseSummary" type="Label" parent="ShowcaseChoice/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Slab costs 2; each single costs 1."
+
+[node name="ShowcaseSlabButton" type="Button" parent="ShowcaseChoice/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Display slab"
+
+[node name="ShowcaseSinglesButton" type="Button" parent="ShowcaseChoice/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Display chase singles"

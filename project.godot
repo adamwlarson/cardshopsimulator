@@ -17,6 +17,7 @@ GameState="*res://scripts/autoload/game_state.gd"
 Economy="*res://scripts/autoload/economy.gd"
 InventoryService="*res://scripts/autoload/inventory_service.gd"
 DemandSignals="*res://scripts/autoload/demand_signals.gd"
+BeatDirector="*res://scripts/core/beat_injection.gd"
 
 [debug]
 

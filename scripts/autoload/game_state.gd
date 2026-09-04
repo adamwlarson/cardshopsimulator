@@ -33,6 +33,7 @@ func start_new_game() -> void:
 	Economy.reset()
 	InventoryService.reset()
 	DemandSignals.reset()
+	BeatDirector.reset()
 	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
 	EventBus.reputation_changed.emit(current_reputation)

@@ -63,6 +63,14 @@
       "tags": ["chase", "legendary"]
     },
     {
+      "sku": "AA-SKIE-058",
+      "display_name": "Paragon Glider",
+      "product_type": "single",
+      "default_condition": "near_mint",
+      "market_price_cents": 1600,
+      "tags": ["chase"]
+    },
+    {
       "sku": "ACC-SLV-60",
       "display_name": "Arcguard Sleeves (60)",
       "product_type": "accessory",
