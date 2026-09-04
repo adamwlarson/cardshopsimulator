@@ -12,7 +12,7 @@
 ## Scale & Pivot
 - **Unit:** 1 unit = **1 meter**
 - **Target height:** **1.72 m** (authored height=1.7200 m) — between C1 (1.74) / C2 (1.70)
-- **Authored extents:** **0.8023 × 0.3098 × 1.7200 m** (W × D × H)
+- **Authored extents:** **0.8023 × 0.3171 × 1.7200 m** (W × D × H)
 - **Pivot / origin:** **BOTTOM CENTER** — floor between feet (`min_z≈0`). Place on floor tile; no Z offset.
 - Axis: glTF **+Y up**
 
@@ -32,16 +32,24 @@
 | Hair | Hair mass |
 | Cloth | Polo / upper shirt (muted teal accent) |
 | Apron | Retail apron + blank name-tag plate |
-| Cloth_Lower | Trousers |
 | Shoe | Footwear |
+| Cloth_Lower | Trousers |
 
 ## Outfit notes
-- Muted teal polo (sole accent) + cream apron + blank name-tag plate (no text/SKU)
+- Muted teal polo (sole accent) + **warm canvas apron** (FOV polish) + blank name-tag plate (no text/SKU)
+- Apron: higher bib, thicker body, pocket + waistband value break; straps wider for behind-desk / side read
+- Name-tag: larger blank plate with dark charcoal rim (higher contrast) — **no text/SKU**
 - Charcoal trousers, dark loafers, short dark hair
-- Teal kept as polo only; apron/pants/shoes neutrals
+- Teal kept as polo only; apron carries cast distinctness vs C1 hoodie teal
+
+## FOV polish pass (post PR #23 soft notes)
+- Soft MidCenter held until this lands: apron/name-tag were subtler than polo in customer / behind-desk FOV
+- Target reads: behind-desk cam ~(7.2, 1.6, -0.65) / −18° / FOV70 + approach / aisle-ish FOV
+- Mesh front (apron / name-tag / face) aligned to Godot **−Z** so CashierSlot yaw 90 faces customers (−X)
+- Principled BSDF only — **no cel/ink**
 
 ## Mesh budget
-- Verts: 1268 · Tris: 2404 · Soft bevel ~2.5 mm — no cel/ink
+- Verts: 1364 · Tris: 2580 · Soft bevel ~2.5 mm — no cel/ink
 - Soft LOD0 mannequin / stylized-real blockout (soft ≤~3k tris with skinning)
 
 ## Godot tips
@@ -52,4 +60,4 @@
 
 ## Godot 4.5.2 import verification
 - Project: `/workspace/card-shop-simulator/godot-import-test/`
-- QA shots: `NPC_cashier_interact.png`, `NPC_cashier_approach.png`
+- QA shots (apron FOV polish): `NPC_cashier_apron_interact.png`, `NPC_cashier_apron_approach.png`
