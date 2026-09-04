@@ -57,6 +57,16 @@ Under the richer 3600K key, oak reads a hair cool/flat. **Do not rebuild A03/A04
 
 See also `docs/art/props/WOOD_ALBEDO_RICHER_NOTES.md`.
 
+## Medium densify (tier=MEDIUM)
+
+When shop tier is **MEDIUM**, Eng adds extra instances of this **same** GLB (no new overhead mesh). Small OverheadLights nodes stay put.
+
+SoT (Small keep + Medium add tables, Omni recipe, Eng rules, fog nack):
+
+→ **`docs/art/MEDIUM_OVERHEAD_LIGHTS_MVP.md`**
+
+QA: `LIGHTS_medium_densify_interact.png`, `LIGHTS_medium_densify_approach.png` under `docs/art/qa-shots/`.
+
 ## Godot 4.5.2 import verification
 - Project: `/workspace/card-shop-simulator/godot-import-test/`
 - Result: **SUCCESS**

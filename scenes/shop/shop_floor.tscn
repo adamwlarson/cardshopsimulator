@@ -222,6 +222,84 @@ omni_range = 7.0
 omni_attenuation = 1.2
 shadow_enabled = false
 
+[node name="MidCenter" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+visible = false
+position = Vector3(6.3, 2.79, -4.95)
+
+[node name="FarFront" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+visible = false
+position = Vector3(10.35, 2.79, -2.25)
+
+[node name="FarBack" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+visible = false
+position = Vector3(10.35, 2.79, -4.95)
+
+[node name="DeepLeft" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+visible = false
+position = Vector3(2.25, 2.79, -7.2)
+
+[node name="DeepCenter" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+visible = false
+position = Vector3(6.3, 2.79, -7.2)
+
+[node name="DeepRight" parent="Fixtures/OverheadLights" instance=ExtResource("5_light")]
+visible = false
+position = Vector3(10.35, 2.79, -7.2)
+
+[node name="MidCenterFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+visible = false
+position = Vector3(6.3, 2.55, -4.95)
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
+shadow_enabled = false
+
+[node name="FarFrontFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+visible = false
+position = Vector3(10.35, 2.55, -2.25)
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
+shadow_enabled = false
+
+[node name="FarBackFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+visible = false
+position = Vector3(10.35, 2.55, -4.95)
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
+shadow_enabled = false
+
+[node name="DeepLeftFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+visible = false
+position = Vector3(2.25, 2.55, -7.2)
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
+shadow_enabled = false
+
+[node name="DeepCenterFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+visible = false
+position = Vector3(6.3, 2.55, -7.2)
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
+shadow_enabled = false
+
+[node name="DeepRightFill" type="OmniLight3D" parent="Fixtures/OverheadLights"]
+visible = false
+position = Vector3(10.35, 2.55, -7.2)
+light_color = Color(1, 0.83, 0.66, 1)
+light_energy = 1.65
+omni_range = 7.0
+omni_attenuation = 1.2
+shadow_enabled = false
+
 [node name="Systems" type="Node" parent="."]
 
 [node name="DayClock" type="Node" parent="Systems"]

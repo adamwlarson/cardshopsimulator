@@ -114,6 +114,7 @@ func _initialize() -> void:
 	_test_specialist_staff_path()
 	_test_expand_medium_beat()
 	_test_medium_floor_growth()
+	_test_medium_overhead_lights()
 	_test_shady_trunk_beat()
 	_test_showcase_slab_and_singles_preconditions()
 	_test_shop_camera_framing()
@@ -2960,6 +2961,26 @@ func _test_medium_floor_growth() -> void:
 	_assert_shop_shell_state(false, "new game resets Small shell")
 
 
+func _test_medium_overhead_lights() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_assert_overhead_lights_for_tier(false, "pre-Sign Small")
+
+	_economy.set("balance_cents", 1_600_000)
+	_game_state.set("current_reputation", 55)
+	var shop: ShopState = _game_state.get("shop")
+	_expect_equal(
+		shop.expand_to_medium(18, 1_600_000, 55),
+		true,
+		"Sign grows floor so Medium extras can show"
+	)
+	_expect_equal(shop.tier, ShopState.Tier.MEDIUM, "expand sets Medium tier")
+	_assert_overhead_lights_for_tier(true, "post-Sign Medium")
+
+	_game_state.call("start_new_game")
+	_assert_overhead_lights_for_tier(false, "new game hides Medium extras")
+
+
 func _test_shady_trunk_beat() -> void:
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
@@ -3206,23 +3227,12 @@ func _test_shop_camera_framing() -> void:
 			Environment.AMBIENT_SOURCE_COLOR,
 			"interior ambient uses color fill"
 		)
-	var omni_count := 0
 	var lights_root := shop.get_node_or_null("Fixtures/OverheadLights")
-	if lights_root != null:
-		for child: Node in lights_root.get_children():
-			if child is OmniLight3D:
-				omni_count += 1
-	_expect_equal(omni_count, 5, "four overheads plus back-left aisle lighting amp")
+	_assert_small_overheads_locked(lights_root, "camera framing")
+	_assert_medium_overheads(lights_root, false, "camera framing authored Small")
 	var aisle_amp: Node3D = null
 	if lights_root != null:
 		aisle_amp = lights_root.get_node_or_null("BackLeftAisle") as Node3D
-		var front_left := lights_root.get_node_or_null("FrontLeft") as Node3D
-		if front_left != null:
-			_expect_equal(
-				front_left.position.is_equal_approx(Vector3(2.25, 2.79, -2.25)),
-				true,
-				"existing FrontLeft overhead did not move"
-			)
 	_expect_equal(aisle_amp != null, true, "optional 5th overhead instance present")
 	if aisle_amp != null:
 		_expect_equal(
@@ -3230,20 +3240,7 @@ func _test_shop_camera_framing() -> void:
 			true,
 			"Light5 covers binder-rack / back-left aisle"
 		)
-	if lights_root != null:
-		for child: Node in lights_root.get_children():
-			if child is OmniLight3D:
-				var omni := child as OmniLight3D
-				_expect_equal(
-					omni.light_energy >= 1.5,
-					true,
-					"overhead fill is lighting-amp energy"
-				)
-				_expect_equal(
-					is_equal_approx(omni.omni_range, 7.0),
-					true,
-					"overhead fill range 7m"
-				)
+	_assert_shop_fog_nacked(shop, "camera framing")
 	var stool := shop.get_node_or_null("Fixtures/CounterStool") as Node3D
 	_expect_equal(stool != null, true, "CounterStool present")
 	if stool != null:
@@ -4427,7 +4424,180 @@ func _assert_shop_shell_state(want_medium: bool, label: String) -> void:
 			true,
 			"%s keeps Art behind-counter home" % label
 		)
+	_assert_overhead_lights_on_floor(floor, want_medium, label)
 	floor.free()
+
+
+func _assert_overhead_lights_for_tier(want_medium: bool, label: String) -> void:
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "%s shop_floor loads for lights" % label)
+	if packed == null:
+		return
+	var floor: Node = packed.instantiate()
+	root.add_child(floor)
+	_assert_overhead_lights_on_floor(floor, want_medium, label)
+	var camera := floor.get_node_or_null("Camera") as ShopCamera
+	if camera != null:
+		_expect_equal(
+			camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
+			true,
+			"%s lights do not churn behind-desk cam" % label
+		)
+		_expect_equal(
+			is_equal_approx(camera.fov, ShopCamera.HOME_FOV),
+			true,
+			"%s lights do not churn FOV" % label
+		)
+	floor.free()
+
+
+func _assert_overhead_lights_on_floor(floor: Node, want_medium: bool, label: String) -> void:
+	var extent := floor.get_node_or_null("FloorExtent") as ShopFloorExtent
+	_expect_equal(extent != null, true, "%s FloorExtent for lights" % label)
+	if extent != null:
+		extent.sync_from_shop()
+		_expect_equal(
+			extent.is_medium_overhead_visible(),
+			want_medium,
+			"%s Medium extras visibility" % label
+		)
+		_expect_equal(
+			extent.visible_overhead_mesh_count(),
+			11 if want_medium else 5,
+			"%s overhead mesh count" % label
+		)
+		_expect_equal(
+			extent.visible_overhead_fill_count(),
+			11 if want_medium else 5,
+			"%s overhead fill count" % label
+		)
+		_expect_equal(extent.has_fog_veil(), false, "%s lights keep fog nacked" % label)
+	var lights_root := floor.get_node_or_null("Fixtures/OverheadLights")
+	_expect_equal(lights_root != null, true, "%s OverheadLights present" % label)
+	_assert_small_overheads_locked(lights_root, label)
+	_assert_medium_overheads(lights_root, want_medium, label)
+	_assert_shop_fog_nacked(floor, label)
+
+
+func _assert_small_overheads_locked(lights_root: Node, label: String) -> void:
+	_expect_equal(lights_root != null, true, "%s OverheadLights root" % label)
+	if lights_root == null:
+		return
+	var sot := {
+		"FrontLeft": Vector3(2.25, 2.79, -2.25),
+		"FrontRight": Vector3(6.75, 2.79, -2.25),
+		"BackLeft": Vector3(2.25, 2.79, -4.95),
+		"BackRight": Vector3(6.75, 2.79, -4.95),
+		"BackLeftAisle": Vector3(2.8, 2.78, -5.4),
+	}
+	for mesh_name: String in sot:
+		var mesh := lights_root.get_node_or_null(mesh_name) as Node3D
+		_expect_equal(mesh != null, true, "%s %s present" % [label, mesh_name])
+		if mesh == null:
+			continue
+		_expect_equal(mesh.visible, true, "%s %s stays visible" % [label, mesh_name])
+		_expect_equal(
+			mesh.position.is_equal_approx(sot[mesh_name]),
+			true,
+			"%s %s locked SoT" % [label, mesh_name]
+		)
+		_expect_equal(
+			mesh.scale.is_equal_approx(Vector3.ONE),
+			true,
+			"%s %s scale 1,1,1" % [label, mesh_name]
+		)
+		var fill := lights_root.get_node_or_null("%sFill" % mesh_name) as OmniLight3D
+		_expect_equal(fill != null, true, "%s %sFill present" % [label, mesh_name])
+		if fill == null:
+			continue
+		_expect_equal(fill.visible, true, "%s %sFill stays visible" % [label, mesh_name])
+		_expect_equal(
+			fill.position.is_equal_approx(Vector3(sot[mesh_name].x, 2.55, sot[mesh_name].z)),
+			true,
+			"%s %sFill same XZ Y=2.55" % [label, mesh_name]
+		)
+		_assert_overhead_fill_recipe(fill, "%s %sFill" % [label, mesh_name])
+
+
+func _assert_medium_overheads(lights_root: Node, want_visible: bool, label: String) -> void:
+	_expect_equal(lights_root != null, true, "%s OverheadLights for Medium extras" % label)
+	if lights_root == null:
+		return
+	var sot := {
+		"MidCenter": Vector3(6.3, 2.79, -4.95),
+		"FarFront": Vector3(10.35, 2.79, -2.25),
+		"FarBack": Vector3(10.35, 2.79, -4.95),
+		"DeepLeft": Vector3(2.25, 2.79, -7.2),
+		"DeepCenter": Vector3(6.3, 2.79, -7.2),
+		"DeepRight": Vector3(10.35, 2.79, -7.2),
+	}
+	for mesh_name: String in sot:
+		var mesh := lights_root.get_node_or_null(mesh_name) as Node3D
+		_expect_equal(mesh != null, true, "%s %s present" % [label, mesh_name])
+		if mesh == null:
+			continue
+		_expect_equal(
+			mesh.visible,
+			want_visible,
+			"%s %s Medium-only visibility" % [label, mesh_name]
+		)
+		_expect_equal(
+			mesh.position.is_equal_approx(sot[mesh_name]),
+			true,
+			"%s %s SoT position" % [label, mesh_name]
+		)
+		_expect_equal(
+			mesh.scale.is_equal_approx(Vector3.ONE),
+			true,
+			"%s %s scale 1,1,1" % [label, mesh_name]
+		)
+		var fill := lights_root.get_node_or_null("%sFill" % mesh_name) as OmniLight3D
+		_expect_equal(fill != null, true, "%s %sFill present" % [label, mesh_name])
+		if fill == null:
+			continue
+		_expect_equal(
+			fill.visible,
+			want_visible,
+			"%s %sFill Medium-only visibility" % [label, mesh_name]
+		)
+		_expect_equal(
+			fill.position.is_equal_approx(Vector3(sot[mesh_name].x, 2.55, sot[mesh_name].z)),
+			true,
+			"%s %sFill same XZ Y=2.55" % [label, mesh_name]
+		)
+		_assert_overhead_fill_recipe(fill, "%s %sFill" % [label, mesh_name])
+	var mid := lights_root.get_node_or_null("MidCenter")
+	var back_right := lights_root.get_node_or_null("BackRight")
+	_expect_equal(
+		mid != null and back_right != null and mid != back_right,
+		true,
+		"%s MidCenter stays a distinct node from BackRight" % label
+	)
+
+
+func _assert_overhead_fill_recipe(omni: OmniLight3D, label: String) -> void:
+	_expect_equal(
+		omni.light_color.is_equal_approx(Color(1, 0.83, 0.66, 1)),
+		true,
+		"%s color (1.0, 0.83, 0.66)" % label
+	)
+	_expect_equal(is_equal_approx(omni.light_energy, 1.65), true, "%s energy 1.65" % label)
+	_expect_equal(is_equal_approx(omni.omni_range, 7.0), true, "%s range 7.0" % label)
+	_expect_equal(is_equal_approx(omni.omni_attenuation, 1.2), true, "%s atten 1.2" % label)
+	_expect_equal(omni.shadow_enabled, false, "%s shadows off" % label)
+
+
+func _assert_shop_fog_nacked(shop: Node, label: String) -> void:
+	var world := shop.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	_expect_equal(world != null, true, "%s WorldEnvironment present" % label)
+	if world == null or world.environment == null:
+		return
+	_expect_equal(world.environment.fog_enabled, false, "%s fog volume nacked" % label)
+	_expect_equal(
+		world.environment.volumetric_fog_enabled,
+		false,
+		"%s volumetric fog nacked" % label
+	)
 
 
 func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:
