@@ -1,6 +1,6 @@
 # Next Eng SoT Pick C v1 — post A+B decision pressure
 
-**Status:** Adopted — **C1 Market events pack shipped** (#26 @ dd713c26); Specialist #24; Medium shell #25; Medium lights densify shipped #27 @ `d183bfa8`; C2/C3 parked  
+**Status:** Adopted — **C1 Market events pack shipped** (#26 @ dd713c26); Specialist #24; Medium shell #25; Medium lights densify shipped #27 @ `d183bfa8`; **C2 hire-vs-owner in flight** (pick-d); C3 parked  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** systems §6 / §8 / §10, ui-wireflows §5.1, customer-npc-v1, next-eng-sot-pick-v1 (A+B shipped)  
@@ -59,7 +59,7 @@
 | §10 #5 | Hire-first-cashier beat fully live (wireflows §5.1) — Hire / Keep solo / cheap unreliable |
 | Reliability | Hired cashier `Reliability` 0–1; low → rare no-show (FLOOR understaffed) or shrink tick bias (systems §6.3) |
 | Owner gate | At Att 0: owner blocked on Research/Inspect/Negotiate/Pull; cashier still routine-sells (already rule — assert in QA) |
-| Specialist | **Depends on in-flight Att-discount merge** — on-duty applies `research_attention_specialist` / `inspect_attention_specialist`; no duplicate spike |
+| Specialist | On duty → Inspect 2 / Research 10 (**assert** — #24 shipped); no duplicate spike |
 | Cashier mesh | Already shipped #23 — wire hire gate only if not already hire-gated in domain |
 
 **Acceptance:**
@@ -121,7 +121,7 @@ Specialist Att-discount stays **out of pick** (already in flight).
 | C3 Optional #3/#10 | Parked |
 | Specialist Att-discount | **Shipped** #24 (`research_attention_specialist` 10 / `inspect_attention_specialist` 2) |
 | Medium shell swap | **Shipped** #25 |
-| Medium lights densify | Tip-frozen #27 (Eng/Art) |
+| Medium lights densify | **Shipped** #27 → main @ `d183bfa8` |
 
 ---
 
