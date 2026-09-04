@@ -319,7 +319,7 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(EASY_CONFIG.demand_band_sigma, 0.09, "easy demand sigma")
 	_expect_equal(NORMAL_CONFIG.demand_band_sigma, 0.12, "normal demand sigma")
 	_expect_equal(HARD_CONFIG.demand_band_sigma, 0.16, "hard demand sigma")
-	_expect_equal(EASY_CONFIG.seed_bulk_cards, 100, "easy seed bulk cards")
+	_expect_equal(EASY_CONFIG.seed_bulk_cards, 80, "easy seed bulk cards")
 	_expect_equal(NORMAL_CONFIG.seed_bulk_cards, 80, "normal seed bulk cards")
 	_expect_equal(HARD_CONFIG.seed_bulk_cards, 50, "hard seed bulk cards")
 
