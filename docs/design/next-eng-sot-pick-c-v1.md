@@ -1,6 +1,6 @@
 # Next Eng SoT Pick C v1 — post A+B decision pressure
 
-**Status:** Adopted — **C1 Market events pack** in flight (Eng spike launched); Specialist Att-discount shipped #24; Medium shell #25; C2/C3 parked  
+**Status:** Adopted — **C1 Market events pack shipped #26** @ `dd713c26` (QA PASS @ `8ccdcbfd`); Specialist Att-discount shipped #24; Medium shell #25; Medium lights densify #27 in review; C2/C3 parked  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** systems §6 / §8 / §10, ui-wireflows §5.1, customer-npc-v1, next-eng-sot-pick-v1 (A+B shipped)  
@@ -18,7 +18,9 @@
 
 **Shipped (do not re-spec):** Specialist Att-discount #24 — closes Option A Inspect★ stub: `research_attention_specialist = 10`, `inspect_attention_specialist = 2`. Medium hero shell #25 (hide stub, 14×10, fog nack).
 
-**Gap:** Shop feels alive and expandable, but **day-to-day decision pressure** (events, hire vs solo bandwidth, optional §10 beats) is still thin vs systems bible.
+**Shipped (do not re-spec):** C1 Market events #26 — hype / soft rotation leak / fog day; Titan #7 from pack; EventBanner; save/load.
+
+**Gap:** Hire vs owner bandwidth (C2) and optional §10 beats (C3) still parked; day-to-day event pressure now live.
 
 ---
 
