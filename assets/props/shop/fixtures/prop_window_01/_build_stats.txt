@@ -1,0 +1,11 @@
+width=1.8000
+depth=0.1130
+height=1.3000
+min_y=-0.113000
+max_y=0.000000
+verts=408
+polys=442
+tris=748
+materials=Metal,Wood,Glass
+pivot=back_center_wall_mount
+facing=-Y_into_room

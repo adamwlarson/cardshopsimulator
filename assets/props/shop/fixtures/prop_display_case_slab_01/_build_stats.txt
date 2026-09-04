@@ -1,0 +1,12 @@
+width=1.8000
+depth=0.9000
+height=1.1200
+min_z=0.000000
+verts=960
+polys=1040
+tris=1760
+materials=Metal,Wood,Wood_Recess,Plaque,Metal_Slab,Felt,Glass
+footprint_tiles=2x1
+tile_m=0.9
+pivot=bottom_center_footprint
+variant=slab_graded

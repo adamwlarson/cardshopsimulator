@@ -1,12 +1,12 @@
 # Shop fixture assets
 
-Art P0 + A13 + light P1 + light décor Godot-ready GLBs live here (Principled materials, 1u=1m, tile 0.9m).
+Art P0 + A13 + light P1 + light décor + heavier P1 Godot-ready GLBs live here (Principled materials, 1u=1m, tile 0.9m).
 
 Each `prop_*` folder contains:
 - `<folder>.glb` — import-ready mesh
 - `IMPORT_NOTES.md` — provenance / import notes for Engineering
 
-## Props (24)
+## Props (28)
 
 | Folder | Priority notes |
 |--------|----------------|
@@ -34,5 +34,9 @@ Each `prop_*` folder contains:
 | `prop_shipper_stack_01` | B04 light décor |
 | `prop_plant_01` | B05 light décor |
 | `prop_trash_bin_01` | B08 light décor |
+| `prop_play_table_01` | B09 heavier décor |
+| `prop_display_case_slab_01` | B01 heavier décor |
+| `prop_window_01` | B06 heavier décor |
+| `prop_back_office_glimpse_01` | B07 heavier décor |
 
-Placed on `shop_floor` via PR #4 (heroes) and PR #8 (light décor).
+Placed on `shop_floor` via PR #4 (heroes), PR #8 (light décor), and B09+ heavier décor.

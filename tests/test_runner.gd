@@ -115,6 +115,7 @@ func _initialize() -> void:
 	_test_showcase_slab_and_singles_preconditions()
 	_test_shop_camera_framing()
 	_test_shop_camera_look_clamps()
+	_test_heavier_decor_placement()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -2425,6 +2426,114 @@ func _test_shop_camera_framing() -> void:
 			stool.position.is_equal_approx(Vector3(8.1, 0, -0.9)),
 			true,
 			"Art SoT CounterStool off entrance lane"
+		)
+	shop.free()
+
+
+func _test_heavier_decor_placement() -> void:
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "shop_floor scene loads for heavier décor")
+	if packed == null:
+		return
+	var shop: Node = packed.instantiate()
+	var play_table := shop.get_node_or_null("Fixtures/PlayTable") as Node3D
+	var slab_case := shop.get_node_or_null("Fixtures/SlabDisplayCase") as Node3D
+	var window := shop.get_node_or_null("Fixtures/ShopWindow") as Node3D
+	var glimpse := shop.get_node_or_null("Fixtures/BackOfficeGlimpse") as Node3D
+	var a04 := shop.get_node_or_null("Fixtures/HighValueDisplayCase") as Node3D
+	var backstock := shop.get_node_or_null("Fixtures/BackstockDoor") as Node3D
+	var camera := shop.get_node_or_null("Camera") as ShopCamera
+	_expect_equal(play_table != null, true, "PlayTable instanced")
+	_expect_equal(slab_case != null, true, "SlabDisplayCase instanced")
+	_expect_equal(window != null, true, "ShopWindow instanced")
+	_expect_equal(glimpse != null, true, "BackOfficeGlimpse instanced")
+	if play_table != null:
+		_expect_equal(
+			play_table.position.is_equal_approx(Vector3(2.7, 0, -4.5)),
+			true,
+			"B09 play table 2×2 island on open floor"
+		)
+		_expect_equal(
+			play_table.scale.is_equal_approx(Vector3.ONE),
+			true,
+			"B09 authored scale"
+		)
+	if slab_case != null:
+		_expect_equal(
+			slab_case.position.is_equal_approx(Vector3(7.2, 0, -4.05)),
+			true,
+			"B01 slab case adjacent on A04 case run"
+		)
+		_expect_equal(
+			slab_case.scale.is_equal_approx(Vector3.ONE),
+			true,
+			"B01 authored scale"
+		)
+	if a04 != null and slab_case != null:
+		_expect_equal(
+			is_equal_approx(a04.position.x, slab_case.position.x),
+			true,
+			"B01 shares A04 case-run X"
+		)
+		_expect_equal(
+			is_equal_approx(absf(slab_case.position.z - a04.position.z), 0.9),
+			true,
+			"B01 is one 0.9 m tile behind A04"
+		)
+	if window != null:
+		_expect_equal(
+			window.position.is_equal_approx(Vector3(0, 1.62, -2.25)),
+			true,
+			"B06 window left-wall mount at poster height"
+		)
+		_expect_equal(
+			window.rotation_degrees.is_equal_approx(Vector3(0, 90, 0)),
+			true,
+			"B06 yaw faces into room from left wall"
+		)
+		_expect_equal(
+			window.scale.is_equal_approx(Vector3.ONE),
+			true,
+			"B06 authored scale"
+		)
+	if glimpse != null:
+		_expect_equal(
+			glimpse.position.is_equal_approx(Vector3(4.5, 0, -7.05)),
+			true,
+			"B07 glimpse sits at A13 alcove rear on interior floor"
+		)
+		_expect_equal(
+			glimpse.position.z >= -7.15 and glimpse.position.z <= -6.95,
+			true,
+			"B07 Z stays in Art alcove-rear band −7.15…−6.95"
+		)
+		_expect_equal(
+			glimpse.scale.is_equal_approx(Vector3.ONE),
+			true,
+			"B07 authored scale"
+		)
+		_expect_equal(
+			glimpse.rotation_degrees.is_equal_approx(Vector3.ZERO),
+			true,
+			"B07 identity rotation"
+		)
+	if backstock != null and glimpse != null:
+		_expect_equal(
+			is_equal_approx(backstock.position.x, glimpse.position.x),
+			true,
+			"B07 shares A13 X"
+		)
+		_expect_equal(
+			is_equal_approx(glimpse.position.z, backstock.position.z - 0.3),
+			true,
+			"B07 is at alcove rear, 0.3 m behind A13 center"
+		)
+	if camera != null:
+		_expect_equal(is_equal_approx(camera.fov, ShopCamera.HOME_FOV), true, "placement does not change FOV")
+		_expect_equal(
+			camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
+			true,
+			"placement does not move Day1 camera"
 		)
 	shop.free()
 

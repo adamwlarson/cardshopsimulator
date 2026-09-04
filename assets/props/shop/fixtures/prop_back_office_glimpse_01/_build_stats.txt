@@ -1,0 +1,12 @@
+width=0.8800
+depth=0.8800
+height=1.5200
+min_z=0.000000
+verts=576
+polys=624
+tris=1056
+materials=Wood_Dark,Wood,Metal,Plastic,Screen,Accent,Paper
+footprint_tiles=1x1_or_less
+tile_m=0.9
+pivot=bottom_center_footprint
+placement=behind_backstock_door

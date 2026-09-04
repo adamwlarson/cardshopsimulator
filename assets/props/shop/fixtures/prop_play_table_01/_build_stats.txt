@@ -1,0 +1,12 @@
+width=1.8000
+depth=1.8000
+height=0.7610
+min_z=0.000000
+verts=552
+polys=598
+tris=1012
+materials=Wood,Felt,Metal,Wood_Dark
+footprint_tiles=2x2
+tile_m=0.9
+pivot=bottom_center_footprint
+path_block=full_2x2

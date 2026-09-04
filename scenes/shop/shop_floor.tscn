@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=3]
+[gd_scene load_steps=34 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
@@ -27,7 +27,11 @@
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_shipper_stack_01/prop_shipper_stack_01.glb" id="25_shipper"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_plant_01/prop_plant_01.glb" id="26_plant"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_trash_bin_01/prop_trash_bin_01.glb" id="27_trash"]
-[ext_resource type="Script" path="res://scripts/shop/shop_camera.gd" id="28_camera"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_play_table_01/prop_play_table_01.glb" id="28_play_table"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_display_case_slab_01/prop_display_case_slab_01.glb" id="29_slab_case"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_window_01/prop_window_01.glb" id="30_window"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_back_office_glimpse_01/prop_back_office_glimpse_01.glb" id="31_back_office"]
+[ext_resource type="Script" path="res://scripts/shop/shop_camera.gd" id="32_camera"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -53,7 +57,7 @@ position = Vector3(7.2, 1.6, -0.65)
 rotation_degrees = Vector3(-18, 0, 0)
 current = true
 fov = 70.0
-script = ExtResource("28_camera")
+script = ExtResource("32_camera")
 
 [node name="Architecture" type="Node3D" parent="."]
 
@@ -71,6 +75,9 @@ rotation_degrees = Vector3(0, 0, 0)
 [node name="BackstockDoor" parent="Fixtures" instance=ExtResource("17_backstock")]
 position = Vector3(4.5, 0, -6.75)
 
+[node name="BackOfficeGlimpse" parent="Fixtures" instance=ExtResource("31_back_office")]
+position = Vector3(4.5, 0, -7.05)
+
 [node name="CheckoutCounter" parent="Fixtures" instance=ExtResource("8_counter")]
 position = Vector3(7.2, 0, -1.35)
 
@@ -80,6 +87,9 @@ position = Vector3(7.2, 1, -1.35)
 [node name="HighValueDisplayCase" parent="Fixtures" instance=ExtResource("9_case")]
 position = Vector3(7.2, 0, -3.15)
 
+[node name="SlabDisplayCase" parent="Fixtures" instance=ExtResource("29_slab_case")]
+position = Vector3(7.2, 0, -4.05)
+
 [node name="PriceStandee" parent="Fixtures" instance=ExtResource("22_standee")]
 position = Vector3(7.2, 1.05, -3.15)
 
@@ -88,6 +98,9 @@ position = Vector3(6.75, 1.05, -3.15)
 
 [node name="BinderRack" parent="Fixtures" instance=ExtResource("13_binders")]
 position = Vector3(1.35, 0, -3.6)
+
+[node name="PlayTable" parent="Fixtures" instance=ExtResource("28_play_table")]
+position = Vector3(2.7, 0, -4.5)
 
 [node name="SealedWall" parent="Fixtures" instance=ExtResource("12_sealed")]
 position = Vector3(1.8, 0, -6.75)
@@ -134,6 +147,10 @@ rotation_degrees = Vector3(0, 0, 0)
 [node name="PosterSmall" parent="Fixtures" instance=ExtResource("18_poster_sm")]
 position = Vector3(8.1, 1.62, -7.2)
 rotation_degrees = Vector3(0, 0, 0)
+
+[node name="ShopWindow" parent="Fixtures" instance=ExtResource("30_window")]
+position = Vector3(0, 1.62, -2.25)
+rotation_degrees = Vector3(0, 90, 0)
 
 [node name="OverheadLights" type="Node3D" parent="Fixtures"]
 
