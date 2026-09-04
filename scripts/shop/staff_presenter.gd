@@ -5,8 +5,8 @@ extends Node3D
 ## No staff AI — idle_stand loop only. Does not touch camera or customer pathing.
 
 const REGISTER_STATIONS := 1
-const DEFAULT_STATION := Vector3(8.05, 0.0, -1.50)
-const DEFAULT_YAW_DEGREES := -90.0
+const DEFAULT_STATION := Vector3(8.05, 0.0, -0.95)
+const DEFAULT_YAW_DEGREES := 90.0
 const CLIP_IDLE := StaffMember.CLIP_IDLE_STAND
 
 var _slot: Node3D

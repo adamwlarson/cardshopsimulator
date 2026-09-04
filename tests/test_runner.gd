@@ -3777,14 +3777,19 @@ func _test_cashier_silhouette_on_floor() -> void:
 	_expect_equal(slot != null, true, "CashierSlot marker is behind the register")
 	if slot != null:
 		_expect_equal(
-			slot.position.distance_to(Vector3(8.05, 0.0, -1.50)) < 0.05,
+			slot.position.distance_to(Vector3(8.05, 0.0, -0.95)) < 0.05,
 			true,
-			"cashier slot sits on the clerk side of the counter"
+			"cashier slot sits on the stool/owner side of the counter"
 		)
 		_expect_equal(
-			is_equal_approx(slot.rotation_degrees.y, -90.0),
+			slot.position.z <= -0.85 and slot.position.z >= -1.05,
 			true,
-			"cashier faces the aisle (−X / queue)"
+			"cashier Z stays in the owner-side band (−1.05…−0.85)"
+		)
+		_expect_equal(
+			is_equal_approx(slot.rotation_degrees.y, 90.0),
+			true,
+			"cashier yaw 90 faces customers (−X / queue)"
 		)
 	presenter.sync_from_shop()
 	_expect_equal(presenter.visible_clerk_count(), 0, "owner-only hides the clerk")
@@ -3822,6 +3827,16 @@ func _test_cashier_silhouette_on_floor() -> void:
 			clerk.position.distance_to(Vector3(7.2, 0.0, -1.35)) < 1.4,
 			true,
 			"clerk is near the buy counter / register"
+		)
+		_expect_equal(
+			clerk.position.z <= -0.85 and clerk.position.z >= -1.05,
+			true,
+			"spawned clerk stays on the stool/owner side (not past counter −1.35)"
+		)
+		_expect_equal(
+			is_equal_approx(clerk.rotation_degrees.y, 90.0),
+			true,
+			"spawned clerk yaw 90 faces −X"
 		)
 	_expect_equal(
 		presenter.current_idle_clip(),
