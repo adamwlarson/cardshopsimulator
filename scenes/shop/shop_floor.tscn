@@ -47,7 +47,7 @@ shadow_enabled = true
 position = Vector3(4.5, 2.25, -0.45)
 rotation_degrees = Vector3(-17, 0, 0)
 current = true
-fov = 74.0
+fov = 90.0
 
 [node name="Architecture" type="Node3D" parent="."]
 
@@ -85,7 +85,6 @@ position = Vector3(1.35, 0, -3.6)
 
 [node name="SealedWall" parent="Fixtures" instance=ExtResource("12_sealed")]
 position = Vector3(1.8, 0, -6.75)
-rotation_degrees = Vector3(0, 180, 0)
 
 [node name="BoosterBoxProxy" parent="Fixtures" instance=ExtResource("15_box")]
 position = Vector3(1.8, 0.45, -6.3)
