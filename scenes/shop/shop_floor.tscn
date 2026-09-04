@@ -60,7 +60,7 @@ position = Vector3(4.05, 0, 0)
 
 [node name="OpenClosedSign" parent="Fixtures" instance=ExtResource("7_sign")]
 position = Vector3(4.5, 1.62, 0)
-rotation_degrees = Vector3(0, 180, 0)
+rotation_degrees = Vector3(0, 0, 0)
 
 [node name="BackstockDoor" parent="Fixtures" instance=ExtResource("17_backstock")]
 position = Vector3(4.5, 0, -6.75)
@@ -99,7 +99,7 @@ rotation_degrees = Vector3(0, 90, 0)
 
 [node name="PriceTag" parent="Fixtures" instance=ExtResource("21_price_tag")]
 position = Vector3(1.8, 1.35, -6.3)
-rotation_degrees = Vector3(0, 180, 0)
+rotation_degrees = Vector3(0, 0, 0)
 
 [node name="ShelfTalker" parent="Fixtures" instance=ExtResource("23_talker")]
 position = Vector3(8.1, 1.35, -5.4)
@@ -107,15 +107,15 @@ rotation_degrees = Vector3(0, 90, 0)
 
 [node name="PosterLarge" parent="Fixtures" instance=ExtResource("20_poster_lg")]
 position = Vector3(6.3, 1.62, -7.2)
-rotation_degrees = Vector3(0, 180, 0)
+rotation_degrees = Vector3(0, 0, 0)
 
 [node name="PosterMedium" parent="Fixtures" instance=ExtResource("19_poster_md")]
 position = Vector3(7.2, 1.62, -7.2)
-rotation_degrees = Vector3(0, 180, 0)
+rotation_degrees = Vector3(0, 0, 0)
 
 [node name="PosterSmall" parent="Fixtures" instance=ExtResource("18_poster_sm")]
 position = Vector3(8.1, 1.62, -7.2)
-rotation_degrees = Vector3(0, 180, 0)
+rotation_degrees = Vector3(0, 0, 0)
 
 [node name="OverheadLights" type="Node3D" parent="Fixtures"]
 
