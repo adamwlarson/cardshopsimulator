@@ -850,7 +850,7 @@ func _test_prep_hud_seed_before_bind() -> void:
 		"Prep HUD scene default is not $0"
 	)
 	_expect_equal(
-		hud_scene.contains("text = \"100\""),
+		hud_scene.contains("Att 100/100"),
 		true,
 		"Prep HUD scene default is seeded attention"
 	)
@@ -884,7 +884,7 @@ func _test_gameplay_hud_visual_smoke() -> void:
 	var serve := hud.get_node_or_null("%CustomerServe") as PanelContainer
 	_expect_equal(cash != null and cash.text == "$8000.00", true, "HUD binds Prep $8000.00")
 	_expect_equal(
-		attention != null and attention.text == "100",
+		attention != null and attention.text == "Att 100/100",
 		true,
 		"HUD binds Prep attention 100"
 	)
@@ -894,7 +894,11 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		true,
 		"HUD binds PREP phase chip"
 	)
-	_expect_equal(queue != null and queue.text == "0", true, "HUD binds empty queue")
+	_expect_equal(
+		queue != null and queue.text == "Queue 0",
+		true,
+		"HUD binds empty queue"
+	)
 	_expect_equal(
 		hud.get("theme") != null,
 		true,
@@ -926,6 +930,47 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		"Open floor uses primary button variation"
 	)
 	_expect_equal(serve != null, true, "CustomerServe panel present")
+	_expect_equal(
+		serve != null and serve.offset_left >= 48.0 and serve.offset_bottom <= 480.0,
+		true,
+		"CustomerServe hugs left edge above lower third"
+	)
+	var buy_list := hud.get_node_or_null("%BuyOpportunityList") as PanelContainer
+	_expect_equal(
+		buy_list != null
+		and buy_list.offset_left >= 48.0
+		and buy_list.offset_bottom <= 480.0,
+		true,
+		"Buy list stays in left edge chrome"
+	)
+	var veil := hud.get_node_or_null("%ModalVeil") as ColorRect
+	_expect_equal(veil != null, true, "Modal veil present")
+	_expect_equal(
+		veil != null and veil.visible == false,
+		true,
+		"Veil hidden until a modal opens"
+	)
+	_expect_equal(
+		veil != null and is_equal_approx(veil.color.a, 0.4),
+		true,
+		"Modal veil is a 40% soft dim"
+	)
+	var theme_source := FileAccess.get_file_as_string("res://themes/shop_hud.tres")
+	_expect_equal(
+		theme_source.contains("bg_color = Color(0.957, 0.941, 0.91, 0.82)"),
+		true,
+		"Modal panels use cream fill at ~82% opacity"
+	)
+	_expect_equal(
+		theme_source.contains("corner_radius_top_left = 10"),
+		true,
+		"Panel corner radius is 8–12"
+	)
+	_expect_equal(
+		theme_source.contains("Color(0.24, 0.43, 0.42"),
+		true,
+		"Muted teal is the system accent"
+	)
 	var hud_script: Script = hud.get_script()
 	_expect_equal(hud_script != null, true, "HUD script attached")
 	var wants := DemandSignalPresenter.wants_label(
@@ -945,6 +990,22 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		hud_source.contains("String(_current_customer.target_sku)"),
 		false,
 		"CustomerServe still hides raw SKU ids"
+	)
+	_expect_equal(
+		hud_source.contains("Camera") or hud_source.contains("fov"),
+		false,
+		"HUD script does not mutate camera/FOV"
+	)
+	var steady_chip := DemandSignalPresenter.band_chip(&"steady")
+	_expect_equal(
+		steady_chip.contains("STEADY") and steady_chip != "STEADY",
+		true,
+		"Demand chips include icon and label"
+	)
+	_expect_equal(
+		DemandSignalPresenter.position_chip(&"undercut").contains("Undercut"),
+		true,
+		"Position chips keep label text"
 	)
 	root.remove_child(hud)
 	hud.free()

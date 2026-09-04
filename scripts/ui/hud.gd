@@ -118,25 +118,32 @@ func _update_phase(phase: int) -> void:
 	match phase:
 		GameState.DayPhase.PREP:
 			phase_chip.theme_type_variation = &"PhaseChipPrep"
+			phase_label.theme_type_variation = &"ChipLabel"
 			phase_button.text = "Open floor"
 		GameState.DayPhase.FLOOR:
 			phase_chip.theme_type_variation = &"PhaseChipFloor"
+			phase_label.theme_type_variation = &"ChipLabelInverse"
 			phase_button.text = "Close & settle"
 		GameState.DayPhase.SETTLE:
 			phase_chip.theme_type_variation = &"PhaseChipSettle"
+			phase_label.theme_type_variation = &"ChipLabel"
 			phase_button.text = "Next day"
 	_close_buy()
 	_close_price()
 	if phase == GameState.DayPhase.SETTLE and _showcase_choice_made:
 		showcase_panel.hide()
+	_sync_modal_veil()
 
 
 func _update_attention(remaining: int) -> void:
-	attention_label.text = str(remaining)
+	attention_label.text = "Att %d/%d" % [
+		remaining,
+		GameState.balance_config.attention_pool,
+	]
 
 
 func _update_queue(length: int) -> void:
-	queue_label.text = str(length)
+	queue_label.text = "Queue %d" % length
 
 
 func _on_phase_pressed() -> void:
@@ -165,6 +172,7 @@ func _open_buy_list() -> void:
 		row.pressed.connect(_select_buy_opportunity.bind(dto))
 		buy_rows.add_child(row)
 	buy_list_panel.show()
+	_sync_modal_veil()
 
 
 func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
@@ -180,6 +188,7 @@ func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
 	buy_list_panel.hide()
 	buy_panel.show()
 	buy_confirm_panel.hide()
+	_sync_modal_veil()
 
 
 func _open_buy_confirm() -> void:
@@ -194,12 +203,13 @@ func _open_buy_confirm() -> void:
 			DemandSignalPresenter.format_cents(_buy_signal.lot_total_cents),
 			DemandSignalPresenter.format_cents(_buy_signal.shown_comp_low_cents),
 			DemandSignalPresenter.format_cents(_buy_signal.shown_comp_high_cents),
-			String(_buy_signal.shown_demand_band).to_upper(),
+			DemandSignalPresenter.band_chip(_buy_signal.shown_demand_band),
 			String(_buy_signal.confidence).to_upper(),
 		]
 	)
 	buy_panel.hide()
 	buy_confirm_panel.show()
+	_sync_modal_veil()
 
 
 func _confirm_buy() -> void:
@@ -214,6 +224,7 @@ func _confirm_buy() -> void:
 func _back_to_buy_detail() -> void:
 	buy_confirm_panel.hide()
 	buy_panel.show()
+	_sync_modal_veil()
 
 
 func _close_buy() -> void:
@@ -221,6 +232,7 @@ func _close_buy() -> void:
 	buy_panel.hide()
 	buy_confirm_panel.hide()
 	_buy_signal = null
+	_sync_modal_veil()
 
 
 func _open_price_list() -> void:
@@ -239,6 +251,7 @@ func _open_price_list() -> void:
 		row.pressed.connect(_select_price_stock.bind(dto))
 		price_rows.add_child(row)
 	price_list_panel.show()
+	_sync_modal_veil()
 
 
 func _select_price_stock(dto: PriceConfirmSignal) -> void:
@@ -253,6 +266,7 @@ func _select_price_stock(dto: PriceConfirmSignal) -> void:
 	_update_price_preview(price_input.text)
 	price_list_panel.hide()
 	price_panel.show()
+	_sync_modal_veil()
 
 
 func _update_price_preview(value: String) -> void:
@@ -294,6 +308,7 @@ func _close_price() -> void:
 	price_panel.hide()
 	_price_signal = null
 	_active_price_beat_id = &""
+	_sync_modal_veil()
 
 
 func _on_price_focus_requested(
@@ -362,10 +377,12 @@ func _on_rent_decision_requested(payload: Dictionary) -> void:
 	_close_rent_loan_confirm()
 	phase_button.disabled = true
 	rent_panel.show()
+	_sync_modal_veil()
 
 
 func _select_rent_path(choice: StringName) -> void:
 	rent_panel.hide()
+	_sync_modal_veil()
 	EventBus.rent_decision_selected.emit(choice)
 
 
@@ -388,6 +405,7 @@ func _on_rent_decision_resolved(
 	rent_panel.hide()
 	_rent_beat_id = &""
 	phase_button.disabled = false
+	_sync_modal_veil()
 	if outcome == &"dismissed":
 		beat_toast.text = "Rent still due at SETTLE"
 	elif outcome == &"payday_loan":
@@ -410,6 +428,7 @@ func _on_showcase_choice_requested(payload: Dictionary) -> void:
 		"Display chase singles\n%s" % payload.get("singles_label", "")
 	)
 	showcase_panel.show()
+	_sync_modal_veil()
 
 
 func _select_showcase_choice(choice: StringName) -> void:
@@ -437,8 +456,10 @@ func _on_customer_head_changed(customer: CustomerProfile) -> void:
 	_current_customer = customer
 	if _current_customer == null:
 		serve_panel.hide()
+		_sync_modal_veil()
 		return
 	serve_panel.show()
+	_sync_modal_veil()
 	if (
 		_current_customer.trade_intent
 		== CustomerProfile.TradeIntent.SELLING_TO_SHOP
@@ -522,3 +543,16 @@ func _customer_wants_label(customer: CustomerProfile) -> String:
 	):
 		condition = CardInstance.Condition.keys()[CardInstance.Condition.NM]
 	return DemandSignalPresenter.wants_label(display_name, sku_id, condition)
+
+
+func _sync_modal_veil() -> void:
+	%ModalVeil.visible = (
+		buy_list_panel.visible
+		or buy_panel.visible
+		or buy_confirm_panel.visible
+		or price_list_panel.visible
+		or price_panel.visible
+		or serve_panel.visible
+		or rent_panel.visible
+		or showcase_panel.visible
+	)

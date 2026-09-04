@@ -14,11 +14,23 @@ mouse_filter = 2
 theme = ExtResource("2_theme")
 script = ExtResource("1_hud")
 
+[node name="ModalVeil" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.11, 0.098, 0.09, 0.4)
+
 [node name="TopBar" type="PanelContainer" parent="."]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
-offset_bottom = 76.0
+offset_bottom = 64.0
 grow_horizontal = 2
 theme_type_variation = &"TopBar"
 
@@ -50,59 +62,35 @@ horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="Rule" type="ColorRect" parent="TopBar/Stats"]
-custom_minimum_size = Vector2(1, 32)
+custom_minimum_size = Vector2(1, 28)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
-color = Color(0.58, 0.4, 0.22, 0.55)
+color = Color(0.48, 0.34, 0.22, 0.45)
 
-[node name="CashBlock" type="VBoxContainer" parent="TopBar/Stats"]
-layout_mode = 2
-size_flags_vertical = 4
-theme_override_constants/separation = 0
-
-[node name="CashCaption" type="Label" parent="TopBar/Stats/CashBlock"]
-layout_mode = 2
-theme_type_variation = &"CaptionLabel"
-text = "CASH"
-
-[node name="CashLabel" type="Label" parent="TopBar/Stats/CashBlock"]
+[node name="CashLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 4
 theme_type_variation = &"CashValue"
 text = "$8000.00"
+vertical_alignment = 1
 
-[node name="AttentionBlock" type="VBoxContainer" parent="TopBar/Stats"]
-layout_mode = 2
-size_flags_vertical = 4
-theme_override_constants/separation = 0
-
-[node name="AttentionCaption" type="Label" parent="TopBar/Stats/AttentionBlock"]
-layout_mode = 2
-theme_type_variation = &"CaptionLabel"
-text = "ATTENTION"
-
-[node name="AttentionLabel" type="Label" parent="TopBar/Stats/AttentionBlock"]
+[node name="AttentionLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"MetricValue"
-text = "100"
-
-[node name="QueueBlock" type="VBoxContainer" parent="TopBar/Stats"]
-layout_mode = 2
 size_flags_vertical = 4
-theme_override_constants/separation = 0
+theme_type_variation = &"MetricValue"
+text = "Att 100/100"
+vertical_alignment = 1
 
-[node name="QueueCaption" type="Label" parent="TopBar/Stats/QueueBlock"]
-layout_mode = 2
-theme_type_variation = &"CaptionLabel"
-text = "QUEUE"
-
-[node name="QueueLabel" type="Label" parent="TopBar/Stats/QueueBlock"]
+[node name="QueueLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 4
 theme_type_variation = &"MetricValue"
-text = "0"
+text = "Queue 0"
+vertical_alignment = 1
 
 [node name="Spacer" type="Control" parent="TopBar/Stats"]
 layout_mode = 2
@@ -142,9 +130,9 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -220.0
-offset_top = 88.0
+offset_top = 72.0
 offset_right = 220.0
-offset_bottom = 116.0
+offset_bottom = 100.0
 grow_horizontal = 2
 theme_type_variation = &"ToastLabel"
 text = "Beat event"
@@ -155,14 +143,14 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 0
 offset_left = 48.0
-offset_top = 100.0
-offset_right = 668.0
-offset_bottom = 560.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="BuyOpportunityList"]
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="BuyOpportunityList/Content"]
 layout_mode = 2
@@ -202,14 +190,14 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 0
 offset_left = 48.0
-offset_top = 100.0
+offset_top = 80.0
 offset_right = 560.0
-offset_bottom = 520.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="BuyOpportunityDetail"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="BuyOpportunityTitle" type="Label" parent="BuyOpportunityDetail/Content"]
 unique_name_in_owner = true
@@ -227,7 +215,7 @@ autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="BuyOpportunityDetail/Content"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 16
 
 [node name="BuyCancelButton" type="Button" parent="BuyOpportunityDetail/Content/Actions"]
 unique_name_in_owner = true
@@ -248,15 +236,15 @@ text = "Buy"
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 160.0
-offset_top = 170.0
-offset_right = 620.0
-offset_bottom = 400.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 520.0
+offset_bottom = 360.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="BuyConfirm"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="BuyConfirm/Content"]
 layout_mode = 2
@@ -272,7 +260,7 @@ autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="BuyConfirm/Content"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 16
 
 [node name="BuyBackButton" type="Button" parent="BuyConfirm/Content/Actions"]
 unique_name_in_owner = true
@@ -294,14 +282,14 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 0
 offset_left = 48.0
-offset_top = 100.0
-offset_right = 668.0
-offset_bottom = 560.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="PriceInventoryList"]
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="PriceInventoryList/Content"]
 layout_mode = 2
@@ -341,14 +329,14 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 0
 offset_left = 48.0
-offset_top = 100.0
+offset_top = 80.0
 offset_right = 560.0
-offset_bottom = 520.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="PriceEditor"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="PriceTitle" type="Label" parent="PriceEditor/Content"]
 unique_name_in_owner = true
@@ -372,7 +360,7 @@ autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="PriceEditor/Content"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 16
 
 [node name="PriceCancelButton" type="Button" parent="PriceEditor/Content/Actions"]
 unique_name_in_owner = true
@@ -393,15 +381,15 @@ text = "Apply"
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 700.0
-offset_top = 100.0
-offset_right = 1232.0
-offset_bottom = 530.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="CustomerServe"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="CustomerTitle" type="Label" parent="CustomerServe/Content"]
 unique_name_in_owner = true
@@ -419,7 +407,7 @@ autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="CustomerServe/Content"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 16
 
 [node name="RefuseButton" type="Button" parent="CustomerServe/Content/Actions"]
 unique_name_in_owner = true
@@ -448,15 +436,15 @@ text = "Sell at list"
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 330.0
-offset_top = 120.0
-offset_right = 950.0
-offset_bottom = 560.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 640.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="RentDecision"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="RentTitle" type="Label" parent="RentDecision/Content"]
 unique_name_in_owner = true
@@ -510,7 +498,7 @@ text = "Dismiss — rent still due at SETTLE"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="RentDecision/Content/RentLoanConfirm"]
 layout_mode = 2
@@ -525,7 +513,7 @@ autowrap_mode = 3
 
 [node name="Actions" type="HBoxContainer" parent="RentDecision/Content/RentLoanConfirm"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 16
 
 [node name="RentLoanBackButton" type="Button" parent="RentDecision/Content/RentLoanConfirm/Actions"]
 unique_name_in_owner = true
@@ -546,15 +534,15 @@ text = "Accept loan"
 unique_name_in_owner = true
 visible = false
 layout_mode = 0
-offset_left = 650.0
-offset_top = 140.0
-offset_right = 1232.0
-offset_bottom = 500.0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 440.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="ShowcaseChoice"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="ShowcaseTitle" type="Label" parent="ShowcaseChoice/Content"]
 unique_name_in_owner = true

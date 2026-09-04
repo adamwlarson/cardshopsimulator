@@ -107,22 +107,64 @@ static func price_label(context: PriceContext) -> String:
 	return ""
 
 
+static func band_chip(band: StringName) -> String:
+	var label := String(band).to_upper()
+	match String(band):
+		"cold":
+			return "○ %s" % label
+		"steady":
+			return "● %s" % label
+		"warm":
+			return "▲ %s" % label
+		"hot":
+			return "■ %s" % label
+	return "● %s" % label
+
+
+static func position_chip(position: StringName) -> String:
+	var label := String(position).replace("_", " ").capitalize()
+	match String(position):
+		"undercut":
+			return "▼ %s" % label
+		"competitive":
+			return "◆ %s" % label
+		"premium":
+			return "▲ %s" % label
+	return "◆ %s" % label
+
+
+static func move_feel_chip(move_feel: StringName) -> String:
+	var label := String(move_feel).replace("_", " ").capitalize()
+	match String(move_feel):
+		"likely_sits":
+			return "▢ %s" % label
+		"should_move":
+			return "→ %s" % label
+		"walk_risk":
+			return "! %s" % label
+	return "· %s" % label
+
+
 static func opportunity_row(dto: BuyConfirmSignal) -> String:
-	return "%s · %s · %s ×%d\nAsk %s · %s · %s confidence" % [
+	var name_text := dto.display_name
+	if name_text.strip_edges().is_empty():
+		name_text = String(dto.sku_id)
+	return "%s · %s ×%d\nAsk %s · %s · %s confidence" % [
 		String(dto.channel).capitalize(),
-		dto.display_name,
-		String(dto.sku_id),
+		name_text,
 		dto.quantity,
 		format_cents(dto.lot_total_cents),
-		String(dto.shown_demand_band).to_upper(),
+		band_chip(dto.shown_demand_band),
 		String(dto.confidence).capitalize(),
 	]
 
 
 static func priceable_stock_row(dto: PriceConfirmSignal) -> String:
-	return "%s · %s ×%d\nYour list %s · %s" % [
-		dto.display_name,
-		String(dto.sku_id),
+	var name_text := dto.display_name
+	if name_text.strip_edges().is_empty():
+		name_text = String(dto.sku_id)
+	return "%s ×%d\nYour list %s · %s" % [
+		name_text,
 		dto.quantity,
 		format_cents(dto.listed_price_cents),
 		dto.display_context,
@@ -141,7 +183,7 @@ static func buy_summary(dto: BuyConfirmSignal) -> String:
 			format_cents(dto.shown_comp_high_cents),
 		],
 		"Demand: %s · Confidence: %s" % [
-			String(dto.shown_demand_band).to_upper(),
+			band_chip(dto.shown_demand_band),
 			String(dto.confidence).capitalize(),
 		],
 		"Condition: %s" % dto.condition_cue,
@@ -166,7 +208,7 @@ static func buylist_seller_summary(dto: BuyConfirmSignal) -> String:
 			format_cents(dto.shown_comp_high_cents),
 		],
 		"Demand: %s · Confidence: %s" % [
-			String(dto.shown_demand_band).to_upper(),
+			band_chip(dto.shown_demand_band),
 			String(dto.confidence).capitalize(),
 		],
 		"Condition: %s" % dto.condition_cue,
@@ -182,11 +224,11 @@ static func price_summary(dto: PriceConfirmSignal) -> String:
 			percent,
 		],
 		"Position: %s · Demand: %s" % [
-			String(dto.position).capitalize(),
-			String(dto.shown_demand_band).to_upper(),
+			position_chip(dto.position),
+			band_chip(dto.shown_demand_band),
 		],
 		"Move feel: %s · %s" % [
-			String(dto.move_feel).replace("_", " ").capitalize(),
+			move_feel_chip(dto.move_feel),
 			dto.display_context,
 		],
 	])
