@@ -3394,6 +3394,12 @@ func _test_customer_npc_mvp_cast() -> void:
 		true,
 		"sell icon notes lock Accent_Amber"
 	)
+	c1.icon.ensure_built()
+	_expect_equal(
+		c1.icon.get_child_count() >= 3,
+		true,
+		"browse/buy/sell Art icons are instanced"
+	)
 	presenter.free()
 
 

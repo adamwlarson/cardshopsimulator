@@ -26,14 +26,22 @@ const COLOR_SELL := Color(0.92, 0.62, 0.22)
 
 var intent: Intent = Intent.BROWSE
 var _meshes: Dictionary = {}
+var _built: bool = false
 
 
 func _ready() -> void:
+	ensure_built()
+	apply_intent(intent)
+
+
+func ensure_built() -> void:
+	if _built:
+		return
 	_instance_icon(Intent.BROWSE, SCENE_BROWSE, COLOR_BROWSE)
 	_instance_icon(Intent.BUY, SCENE_BUY, COLOR_BUY)
 	_instance_icon(Intent.SELL, SCENE_SELL, COLOR_SELL)
+	_built = true
 	apply_intent(intent)
-	set_process(true)
 
 
 func apply_intent(next: Intent) -> void:
@@ -82,20 +90,6 @@ func has_truth_fields() -> bool:
 	return false
 
 
-func _process(_delta: float) -> void:
-	if not is_inside_tree():
-		return
-	var cam := get_viewport().get_camera_3d()
-	if cam == null:
-		return
-	var target := cam.global_position
-	target.y = global_position.y
-	if target.distance_squared_to(global_position) < 0.0001:
-		return
-	# Icon GLBs face +Z; yaw-only billboard keeps the disc upright.
-	look_at(target, Vector3.UP, true)
-
-
 func _instance_icon(which: Intent, path: String, fallback_color: Color) -> void:
 	var node := _load_art_icon(path)
 	if node == null:
@@ -103,7 +97,7 @@ func _instance_icon(which: Intent, path: String, fallback_color: Color) -> void:
 	node.visible = false
 	node.scale = Vector3.ONE
 	add_child(node)
-	_unshade_icon(node)
+	_prepare_icon_materials(node)
 	_meshes[which] = node
 
 
@@ -129,28 +123,28 @@ func _make_fallback_disc(color: Color) -> Node3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	body.material_override = mat
 	return body
 
 
-func _unshade_icon(root: Node) -> void:
+func _prepare_icon_materials(root: Node) -> void:
 	if root is MeshInstance3D:
 		var inst := root as MeshInstance3D
 		inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var surfaces := 1
 		if inst.mesh != null:
-			surfaces = inst.mesh.get_surface_count()
-		for i: int in range(surfaces):
-			var surface := inst.get_active_material(i)
-			if not (surface is StandardMaterial3D):
-				continue
-			var copy := (surface as StandardMaterial3D).duplicate() as StandardMaterial3D
-			copy.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			copy.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
-			inst.set_surface_override_material(i, copy)
+			for i: int in range(inst.mesh.get_surface_count()):
+				var surface := inst.get_active_material(i)
+				if not (surface is StandardMaterial3D):
+					continue
+				var copy := (surface as StandardMaterial3D).duplicate() as StandardMaterial3D
+				copy.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				copy.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+				copy.billboard_keep_scale = true
+				inst.set_surface_override_material(i, copy)
 	elif root is GeometryInstance3D:
 		(root as GeometryInstance3D).cast_shadow = (
 			GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		)
 	for child: Node in root.get_children():
-		_unshade_icon(child)
+		_prepare_icon_materials(child)

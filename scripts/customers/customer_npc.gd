@@ -38,6 +38,7 @@ func _build_visual(radius: float) -> void:
 	icon = CustomerIntentIcon.new()
 	icon.position = Vector3(0.0, body_height + ICON_HANG, 0.0)
 	add_child(icon)
+	icon.ensure_built()
 
 
 func _try_instance_hero() -> bool:
