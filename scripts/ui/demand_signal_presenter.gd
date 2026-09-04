@@ -92,6 +92,10 @@ static func _format_grade(grade: float) -> String:
 	return str(grade)
 
 
+static func inspect_action_label(attention_cost: int) -> String:
+	return "Inspect★ · Att %d" % attention_cost
+
+
 static func research_action_label(cash_cents: int, attention_cost: int) -> String:
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 
