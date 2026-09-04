@@ -17,7 +17,7 @@ enum State {
 @export var interest_tags: Array[StringName] = []
 @export var state: State = State.ARRIVED
 @export var target_sku: StringName = &""
-@export_range(0, 100_000_000, 1) var asking_price_cents: int = 0
+@export_range(0, 100_000_000, 1) var listed_price_cents: int = 0
 
 var waited_seconds: float = 0.0
 var has_negotiated: bool = false

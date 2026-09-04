@@ -34,6 +34,7 @@ func _initialize() -> void:
 	_test_stock_lot_unit_cost()
 	_test_inventory_mutations_and_capacity()
 	_test_balance_seed_inventory()
+	_test_buy_opportunity_picker_seed()
 	_test_demand_signal_dto_does_not_leak_truth()
 	_test_demand_fairness_contract()
 	_test_qa_instrumentation_payloads()
@@ -45,6 +46,7 @@ func _initialize() -> void:
 	_test_day_phase_transitions()
 	_test_negotiate_clamp()
 	_test_customer_service_actions()
+	_test_ui_price_labels()
 	_test_ui_helpers_do_not_read_hidden_values()
 
 	if _failures == 0:
@@ -163,6 +165,35 @@ func _test_balance_seed_inventory() -> void:
 		InventoryModel.new(NORMAL_CONFIG).get_sku(&"AA-SKIE-ETB") != null,
 		true,
 		"canon Skiefall ETB catalog SKU"
+	)
+
+
+func _test_buy_opportunity_picker_seed() -> void:
+	var inventory := InventoryModel.new(NORMAL_CONFIG)
+	var opportunities := BuyOpportunityCatalog.new().open_for_day(1, inventory.catalog)
+	var has_dustway := false
+	var has_distributor_moq := false
+	for opportunity: BuyOpportunity in opportunities:
+		if opportunity.sku_id == &"AA-DUST-ETB":
+			has_dustway = true
+		if (
+			opportunity.channel == DemandSignalService.Channel.DISTRIBUTOR
+			and opportunity.beat_id == &"distributor_moq"
+			and opportunity.quantity > 1
+		):
+			has_distributor_moq = true
+	_expect_equal(has_dustway, true, "Dustway buy opportunity available")
+	_expect_equal(has_distributor_moq, true, "distributor MOQ opportunity available")
+	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_source.contains("AA-SKIE-ETB"),
+		false,
+		"HUD does not hardcode sole Skiefall opportunity"
+	)
+	_expect_equal(
+		hud_source.contains("DemandSignals.open_buy_signals()"),
+		true,
+		"HUD binds demand signal opportunity list"
 	)
 
 
@@ -475,6 +506,30 @@ func _test_customer_service_actions() -> void:
 	inventory.free()
 
 
+func _test_ui_price_labels() -> void:
+	_expect_equal(
+		DemandSignalPresenter.price_label(
+			DemandSignalPresenter.PriceContext.CUSTOMER_BUYING_FROM_SHOP
+		),
+		"Your list",
+		"customer sale price label"
+	)
+	_expect_equal(
+		DemandSignalPresenter.price_label(
+			DemandSignalPresenter.PriceContext.CUSTOMER_SELLING_TO_SHOP
+		),
+		"You offer",
+		"buylist bid label"
+	)
+	_expect_equal(
+		DemandSignalPresenter.price_label(
+			DemandSignalPresenter.PriceContext.SHOP_BUYING_OPPORTUNITY
+		),
+		"Ask",
+		"buy opportunity ask label"
+	)
+
+
 func _test_ui_helpers_do_not_read_hidden_values() -> void:
 	for path: String in [
 		"res://scripts/ui/demand_signal_presenter.gd",
@@ -484,6 +539,11 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 		_expect_equal(source.contains("true_market"), false, "%s market truth access" % path)
 		_expect_equal(source.contains("p_buy"), false, "%s probability access" % path)
 		_expect_equal(source.contains("cert_valid"), false, "%s certificate access" % path)
+	_expect_equal(
+		bool(ProjectSettings.get_setting("debug/qa_instrumentation", true)),
+		false,
+		"QA instrumentation defaults off"
+	)
 
 
 func _expect_dto_has_no_truth_fields(dto: Resource, label: String) -> void:

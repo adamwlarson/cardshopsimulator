@@ -66,6 +66,49 @@ layout_mode = 2
 mouse_filter = 0
 text = "Price Dust ETB"
 
+[node name="BuyOpportunityList" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 90.0
+offset_top = 120.0
+offset_right = 690.0
+offset_bottom = 540.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="BuyOpportunityList"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="BuyOpportunityList/Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "BUY OPPORTUNITIES"
+
+[node name="Hint" type="Label" parent="BuyOpportunityList/Content"]
+layout_mode = 2
+text = "Select a deal to review its signals and seller ask."
+
+[node name="BuyOpportunityRows" type="VBoxContainer" parent="BuyOpportunityList/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="BuyOpportunityEmpty" type="Label" parent="BuyOpportunityList/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+text = "No deals today"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BuyListCancelButton" type="Button" parent="BuyOpportunityList/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Close"
+
 [node name="BuyOpportunityDetail" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false
@@ -79,10 +122,11 @@ mouse_filter = 0
 [node name="Content" type="VBoxContainer" parent="BuyOpportunityDetail"]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="BuyOpportunityDetail/Content"]
+[node name="BuyOpportunityTitle" type="Label" parent="BuyOpportunityDetail/Content"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
-text = "BUY · Marketplace lot\nSkiefall Ascension Explorer Box ×1"
+text = "BUY OPPORTUNITY"
 
 [node name="BuySummary" type="Label" parent="BuyOpportunityDetail/Content"]
 unique_name_in_owner = true

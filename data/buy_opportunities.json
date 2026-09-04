@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "opportunities": [
+    {
+      "id": "dustway-marketplace-day-1",
+      "sku": "AA-DUST-ETB",
+      "offer_label": "Marketplace lot",
+      "channel": "marketplace",
+      "unit_cost_cents": 2400,
+      "quantity": 2,
+      "space_required": 1,
+      "first_day": 1,
+      "last_day": 2,
+      "beat_id": "price_seed_etbs"
+    },
+    {
+      "id": "skiefall-distributor-moq-day-2",
+      "sku": "AA-SKIE-BLST",
+      "offer_label": "Weekly sealed MOQ",
+      "channel": "distributor",
+      "unit_cost_cents": 1800,
+      "quantity": 8,
+      "space_required": 1,
+      "first_day": 1,
+      "last_day": 2,
+      "beat_id": "distributor_moq"
+    }
+  ]
+}

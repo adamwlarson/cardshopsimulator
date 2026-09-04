@@ -1,6 +1,12 @@
 class_name DemandSignalPresenter
 extends RefCounted
 
+enum PriceContext {
+	CUSTOMER_BUYING_FROM_SHOP,
+	CUSTOMER_SELLING_TO_SHOP,
+	SHOP_BUYING_OPPORTUNITY,
+}
+
 
 static func format_cents(value: int) -> String:
 	var sign_text := "-" if value < 0 else ""
@@ -25,9 +31,33 @@ static func parse_cents(text: String) -> int:
 	return dollars * 100 + cents
 
 
+static func price_label(context: PriceContext) -> String:
+	match context:
+		PriceContext.CUSTOMER_BUYING_FROM_SHOP:
+			return "Your list"
+		PriceContext.CUSTOMER_SELLING_TO_SHOP:
+			return "You offer"
+		PriceContext.SHOP_BUYING_OPPORTUNITY:
+			return "Ask"
+	return ""
+
+
+static func opportunity_row(dto: BuyConfirmSignal) -> String:
+	return "%s · %s · %s ×%d\nAsk %s · %s · %s confidence" % [
+		String(dto.channel).capitalize(),
+		dto.display_name,
+		String(dto.sku_id),
+		dto.quantity,
+		format_cents(dto.lot_total_cents),
+		String(dto.shown_demand_band).to_upper(),
+		String(dto.confidence).capitalize(),
+	]
+
+
 static func buy_summary(dto: BuyConfirmSignal) -> String:
 	return "\n".join([
-		"Ask (exact): %s each · %s total" % [
+		"%s: %s each · %s total" % [
+			price_label(PriceContext.SHOP_BUYING_OPPORTUNITY),
 			format_cents(dto.unit_cost_cents),
 			format_cents(dto.lot_total_cents),
 		],

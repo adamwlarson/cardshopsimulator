@@ -2,10 +2,13 @@ extends Node
 
 var _market_state := MarketState.new()
 var _service: DemandSignalService
+var _opportunity_catalog := BuyOpportunityCatalog.new()
+var _closed_opportunity_ids: Dictionary = {}
 
 
 func reset() -> void:
 	_market_state = MarketState.new()
+	_closed_opportunity_ids.clear()
 	for value: Variant in InventoryService.model.catalog.values():
 		var sku := value as ProductSKU
 		if sku == null:
@@ -26,6 +29,35 @@ func reset() -> void:
 	)
 
 
+func open_buy_signals() -> Array[BuyConfirmSignal]:
+	var result: Array[BuyConfirmSignal] = []
+	for opportunity: BuyOpportunity in _open_opportunities():
+		result.append(_signal_for_opportunity(opportunity))
+	return result
+
+
+func confirm_buy(signal: BuyConfirmSignal) -> bool:
+	if signal == null or not signal.can_confirm:
+		return false
+	for opportunity: BuyOpportunity in _open_opportunities():
+		if opportunity.id != signal.opportunity_id:
+			continue
+		var shown_midpoint := (
+			signal.shown_comp_low_cents + signal.shown_comp_high_cents
+		) / 2
+		var purchased := InventoryService.confirm_stock_purchase(
+			opportunity.sku_id,
+			opportunity.quantity,
+			opportunity.unit_cost_cents,
+			shown_midpoint - opportunity.unit_cost_cents,
+			InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+		)
+		if purchased:
+			_closed_opportunity_ids[opportunity.id] = true
+		return purchased
+	return false
+
+
 func buy_signal(
 	sku_id: StringName,
 	channel: DemandSignalService.Channel,
@@ -43,6 +75,36 @@ func buy_signal(
 		space_required,
 		GameState.balance_config.backstock_bins - InventoryService.model.backstock_bins_used()
 	)
+
+
+func _open_opportunities() -> Array[BuyOpportunity]:
+	var result: Array[BuyOpportunity] = []
+	var opportunities := _opportunity_catalog.open_for_day(
+		GameState.current_day,
+		InventoryService.model.catalog
+	)
+	for opportunity: BuyOpportunity in opportunities:
+		if not _closed_opportunity_ids.has(opportunity.id):
+			result.append(opportunity)
+	return result
+
+
+func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
+	var signal := buy_signal(
+		opportunity.sku_id,
+		opportunity.channel,
+		opportunity.unit_cost_cents,
+		opportunity.quantity,
+		opportunity.space_required
+	)
+	signal.opportunity_id = opportunity.id
+	signal.display_name = opportunity.display_name
+	signal.offer_label = opportunity.offer_label
+	signal.channel = StringName(
+		DemandSignalService.Channel.keys()[opportunity.channel].to_lower()
+	)
+	signal.quantity = opportunity.quantity
+	return signal
 
 
 func price_signal(
