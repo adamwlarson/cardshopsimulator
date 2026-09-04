@@ -36,12 +36,12 @@ text = "Phase Prep"
 [node name="CashLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Cash $0.00"
+text = "Cash  $8000.00"
 
 [node name="AttentionLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Attention 100"
+text = "Attention  100"
 
 [node name="QueueLabel" type="Label" parent="TopBar/Stats"]
 unique_name_in_owner = true

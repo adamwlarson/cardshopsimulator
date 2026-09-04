@@ -5,6 +5,10 @@ var _ledger: Array[LedgerEntry] = []
 var _payday_loan_days_remaining: int = 0
 
 
+func _ready() -> void:
+	reset()
+
+
 func reset() -> void:
 	balance_cents = GameState.balance_config.start_cash_cents
 	_ledger.clear()

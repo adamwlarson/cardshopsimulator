@@ -14,7 +14,7 @@ var current_reputation: int = 0
 var is_game_active: bool = false
 var balance_config: BalanceConfig = NORMAL_BALANCE_CONFIG
 var current_phase: DayPhase = DayPhase.PREP
-var attention_remaining: int = 0
+var attention_remaining: int = NORMAL_BALANCE_CONFIG.attention_pool
 
 
 func set_balance_config(config: BalanceConfig) -> void:

@@ -1,6 +1,8 @@
 class_name DemandSignalPresenter
 extends RefCounted
 
+const UNDERCUT_FILL_FACTOR := 0.90
+
 enum PriceContext {
 	CUSTOMER_BUYING_FROM_SHOP,
 	CUSTOMER_SELLING_TO_SHOP,
@@ -12,6 +14,69 @@ static func format_cents(value: int) -> String:
 	var sign_text := "-" if value < 0 else ""
 	var absolute := absi(value)
 	return "%s$%d.%02d" % [sign_text, absolute / 100, absolute % 100]
+
+
+static func undercut_fill_cents(suggested_price_cents: int) -> int:
+	return maxi(1, floori(suggested_price_cents * UNDERCUT_FILL_FACTOR))
+
+
+static func wants_label(
+	display_name: String,
+	sku_id: StringName = &"",
+	condition: String = "",
+	grader: String = "",
+	grade: float = -1.0,
+	quantity: int = 1
+) -> String:
+	var name_text := display_name.strip_edges()
+	if name_text.is_empty() or _looks_like_raw_sku(name_text):
+		name_text = humanize_sku_id(
+			sku_id if not sku_id.is_empty() else StringName(display_name)
+		)
+	var detail := ""
+	if not grader.strip_edges().is_empty() and grade >= 0.0:
+		detail = "%s %s" % [grader.strip_edges(), _format_grade(grade)]
+	elif not condition.strip_edges().is_empty():
+		detail = condition.strip_edges()
+	var line := (
+		name_text if detail.is_empty() else "%s · %s" % [name_text, detail]
+	)
+	if quantity > 1:
+		line += " ×%d" % quantity
+	return line
+
+
+static func humanize_sku_id(sku_id: StringName) -> String:
+	var raw := String(sku_id)
+	if raw.is_empty():
+		push_warning("Wants label missing display name and SKU.")
+		return "Unknown card"
+	var parts := raw.split("-")
+	var start := 1 if parts.size() > 1 and (parts[0] == "AA" or parts[0] == "ACC") else 0
+	var words: PackedStringArray = []
+	for index: int in range(start, parts.size()):
+		var part := String(parts[index])
+		if part.is_empty():
+			continue
+		words.append(part.capitalize())
+	var result := " ".join(words)
+	if result.is_empty():
+		result = "Unknown card"
+	push_warning(
+		"Wants label missing display name for SKU %s; humanized to '%s'."
+		% [raw, result]
+	)
+	return result
+
+
+static func _looks_like_raw_sku(text: String) -> bool:
+	return text.begins_with("AA-") or text.begins_with("ACC-")
+
+
+static func _format_grade(grade: float) -> String:
+	if is_equal_approx(grade, roundf(grade)):
+		return str(int(roundf(grade)))
+	return str(grade)
 
 
 static func parse_cents(text: String) -> int:
