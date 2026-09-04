@@ -80,6 +80,21 @@ func get_all_stock() -> Array[StockLot]:
 	return model.stock_lots.duplicate()
 
 
+func get_priceable_stock() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for lot: StockLot in model.stock_lots:
+		if lot.qty <= 0:
+			continue
+		result.append({
+			"sku_id": lot.sku.id,
+			"display_name": lot.sku.display_name,
+			"quantity": lot.qty,
+			"listed_price_cents": lot.listed_price_cents,
+			"location": lot.location,
+		})
+	return result
+
+
 func find_listed_offer(
 	interest_tags: Array[StringName],
 	budget_cents: int

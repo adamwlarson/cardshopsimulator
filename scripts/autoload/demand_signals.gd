@@ -77,6 +77,56 @@ func buy_signal(
 	)
 
 
+func buylist_signal(sku_id: StringName, quantity: int = 1) -> BuyConfirmSignal:
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null:
+		return null
+	var unit_offer_cents := PricingService.suggested_buy_price_cents(
+		sku.base_market_cents
+	)
+	var dto := buy_signal(
+		sku_id,
+		DemandSignalService.Channel.BUYLIST,
+		unit_offer_cents,
+		quantity
+	)
+	dto.display_name = sku.display_name
+	dto.offer_label = "Walk-in seller"
+	dto.channel = &"buylist"
+	dto.quantity = quantity
+	return dto
+
+
+func priceable_stock_signals() -> Array[PriceConfirmSignal]:
+	var result: Array[PriceConfirmSignal] = []
+	for item: Dictionary in InventoryService.get_priceable_stock():
+		var dto := price_signal(
+			StringName(item["sku_id"]),
+			int(item["listed_price_cents"]),
+			item["location"] as InventoryLocation
+		)
+		dto.display_name = String(item["display_name"])
+		dto.quantity = int(item["quantity"])
+		result.append(dto)
+	return result
+
+
+func refresh_price_signal(
+	dto: PriceConfirmSignal,
+	listed_price_cents: int
+) -> PriceConfirmSignal:
+	if dto == null:
+		return null
+	var refreshed := price_signal(
+		dto.sku_id,
+		listed_price_cents,
+		InventoryService.location_for(dto.sku_id)
+	)
+	refreshed.display_name = dto.display_name
+	refreshed.quantity = dto.quantity
+	return refreshed
+
+
 func _open_opportunities() -> Array[BuyOpportunity]:
 	var result: Array[BuyOpportunity] = []
 	var opportunities := _opportunity_catalog.open_for_day(

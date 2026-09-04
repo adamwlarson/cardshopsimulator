@@ -54,6 +54,16 @@ static func opportunity_row(dto: BuyConfirmSignal) -> String:
 	]
 
 
+static func priceable_stock_row(dto: PriceConfirmSignal) -> String:
+	return "%s · %s ×%d\nYour list %s · %s" % [
+		dto.display_name,
+		String(dto.sku_id),
+		dto.quantity,
+		format_cents(dto.listed_price_cents),
+		dto.display_context,
+	]
+
+
 static func buy_summary(dto: BuyConfirmSignal) -> String:
 	return "\n".join([
 		"%s: %s each · %s total" % [
@@ -75,6 +85,26 @@ static func buy_summary(dto: BuyConfirmSignal) -> String:
 			dto.space_required,
 			dto.space_free,
 		],
+	])
+
+
+static func buylist_seller_summary(dto: BuyConfirmSignal) -> String:
+	return "\n".join([
+		"Selling: %s ×%d" % [dto.display_name, dto.quantity],
+		"%s: %s each · %s total" % [
+			price_label(PriceContext.CUSTOMER_SELLING_TO_SHOP),
+			format_cents(dto.unit_cost_cents),
+			format_cents(dto.lot_total_cents),
+		],
+		"Comp range: %s – %s" % [
+			format_cents(dto.shown_comp_low_cents),
+			format_cents(dto.shown_comp_high_cents),
+		],
+		"Demand: %s · Confidence: %s" % [
+			String(dto.shown_demand_band).to_upper(),
+			String(dto.confidence).capitalize(),
+		],
+		"Condition: %s" % dto.condition_cue,
 	])
 
 
