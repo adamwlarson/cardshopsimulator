@@ -1,6 +1,6 @@
 # Next Eng SoT Pick C v1 — post A+B decision pressure
 
-**Status:** Adopted — **C1 Market events pack shipped #26** @ `dd713c26` (QA PASS @ `8ccdcbfd`); Specialist Att-discount shipped #24; Medium shell #25; Medium lights densify #27 in review; C2/C3 parked  
+**Status:** Adopted — **C1 Market events pack shipped** (#26 @ dd713c26); Specialist #24; Medium shell #25; densify #27 Eng APPROVE / Art dual-clear pending; C2/C3 parked  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** systems §6 / §8 / §10, ui-wireflows §5.1, customer-npc-v1, next-eng-sot-pick-v1 (A+B shipped)  
@@ -116,11 +116,12 @@ Specialist Att-discount stays **out of pick** (already in flight).
 
 | Pick | Result |
 |------|--------|
-| C1 Market events | **In flight** — Eng spike launched (hype / soft rotation / fog per Option C1) |
+| C1 Market events | **Shipped** #26 → main @ `dd713c26` (QA PASS @ `8ccdcbfd`; hype / soft rotation / fog) |
 | C2 Hire vs owner | Parked |
 | C3 Optional #3/#10 | Parked |
 | Specialist Att-discount | **Shipped** #24 (`research_attention_specialist` 10 / `inspect_attention_specialist` 2) |
 | Medium shell swap | **Shipped** #25 |
+| Medium lights densify | Tip-frozen #27 (Eng/Art) |
 
 ---
 
@@ -132,6 +133,7 @@ Specialist Att-discount stays **out of pick** (already in flight).
 - [x] Sync Adopted status bump to main
 - [x] Specialist Att-discount shipped (#24)
 - [x] Eng C1 spike launched
-- [ ] Sync this in-flight status bump to main
-- [ ] C1 tip-freeze → Eng → QA → merge
+- [x] Sync in-flight status bump to main
+- [x] C1 tip-freeze → Eng → QA → merge (#26 @ `dd713c26`)
+- [ ] Sync this C1-shipped status bump to main (if box ahead of PM edit)
 
