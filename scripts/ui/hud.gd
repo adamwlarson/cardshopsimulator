@@ -504,8 +504,7 @@ func _customer_wants_label(customer: CustomerProfile) -> String:
 			sku_id,
 			"",
 			String(slab.grader),
-			slab.grade,
-			1
+			slab.grade
 		)
 	var card := InventoryService.get_card(sku_id)
 	var condition := ""
@@ -516,8 +515,4 @@ func _customer_wants_label(customer: CustomerProfile) -> String:
 		and sku.product_class == ProductSKU.ProductClass.SINGLE
 	):
 		condition = CardInstance.Condition.keys()[CardInstance.Condition.NM]
-	return DemandSignalPresenter.wants_label(
-		display_name,
-		sku_id,
-		condition
-	)
+	return DemandSignalPresenter.wants_label(display_name, sku_id, condition)

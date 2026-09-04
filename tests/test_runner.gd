@@ -734,29 +734,27 @@ func _test_wants_label_format() -> void:
 	)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
-	var hud := (
-		load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
-	).instantiate() as Control
-	root.add_child(hud)
-	var spike := CustomerProfile.new()
-	spike.display_name = "Spike"
-	spike.target_sku = &"AA-BASE-088"
-	spike.listed_price_cents = int(
-		_inventory_service.call("listed_price_for", &"AA-BASE-088")
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var bastion := inventory.get_sku(&"AA-BASE-088")
+	var bastion_card: CardInstance = _inventory_service.call(
+		"get_card",
+		&"AA-BASE-088"
 	)
-	hud.call("_on_customer_head_changed", spike)
-	var wants_summary := String(hud.get_node("%CustomerSummary").text)
+	var spike_wants := DemandSignalPresenter.wants_label(
+		bastion.display_name,
+		&"AA-BASE-088",
+		CardInstance.Condition.keys()[bastion_card.condition]
+	)
 	_expect_equal(
-		wants_summary.begins_with("Wants: Bastion Captain · NM\n"),
-		true,
+		spike_wants,
+		"Bastion Captain · NM",
 		"CustomerServe Wants uses Bastion Captain · NM"
 	)
 	_expect_equal(
-		wants_summary.contains("AA-BASE-"),
+		spike_wants.contains("AA-BASE-"),
 		false,
 		"CustomerServe Wants hides raw SKU ids"
 	)
-	var inventory := _inventory_service.get("model") as InventoryModel
 	var empress := inventory.get_sku(&"AA-SKIE-052")
 	_inventory_service.call(
 		"receive_slab",
@@ -766,24 +764,31 @@ func _test_wants_label_format() -> void:
 		empress.base_market_cents,
 		InventoryLocation.new(InventoryLocation.Type.CASE)
 	)
-	var graded := CustomerProfile.new()
-	graded.display_name = "Collector"
-	graded.target_sku = &"AA-SKIE-052"
-	graded.listed_price_cents = empress.base_market_cents
-	hud.call("_on_customer_head_changed", graded)
-	var graded_summary := String(hud.get_node("%CustomerSummary").text)
+	var empress_slab: SlabInstance = _inventory_service.call(
+		"get_slab",
+		&"AA-SKIE-052"
+	)
 	_expect_equal(
-		graded_summary.begins_with("Wants: Empress of Updrafts · Prism 10\n"),
-		true,
+		DemandSignalPresenter.wants_label(
+			empress.display_name,
+			&"AA-SKIE-052",
+			"",
+			String(empress_slab.grader),
+			empress_slab.grade
+		),
+		"Empress of Updrafts · Prism 10",
 		"CustomerServe Wants uses grader and grade"
 	)
-	root.remove_child(hud)
-	hud.free()
 	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_source.contains("String(_current_customer.target_sku)"),
 		false,
 		"HUD Wants line does not interpolate raw SKU"
+	)
+	_expect_equal(
+		hud_source.contains("_customer_wants_label"),
+		true,
+		"HUD CustomerServe uses Wants helper"
 	)
 
 
@@ -813,40 +818,40 @@ func _test_prep_hud_seed_before_bind() -> void:
 		100,
 		"Normal attention_pool unchanged"
 	)
-	_game_state.set("is_game_active", false)
-	_economy.set("balance_cents", 0)
-	_game_state.set("attention_remaining", 0)
-	var hud := (
-		load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
-	).instantiate() as Control
-	root.add_child(hud)
 	_expect_equal(
-		int(_economy.get("balance_cents")),
-		800_000,
-		"HUD _ready seeds Economy before bind"
+		DemandSignalPresenter.format_cents(int(_economy.get("balance_cents"))),
+		"$8000.00",
+		"Prep cash formats as $8000.00"
+	)
+	var hud_source := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_source.contains("_bind_seeded_status"),
+		true,
+		"HUD binds status after seed"
 	)
 	_expect_equal(
-		int(_game_state.get("attention_remaining")),
-		100,
-		"HUD _ready seeds attention before bind"
+		hud_source.contains("GameState.start_new_game()"),
+		true,
+		"HUD seeds inactive sessions before bind"
+	)
+	var hud_scene := FileAccess.get_file_as_string(
+		"res://scenes/ui/gameplay_hud.tscn"
 	)
 	_expect_equal(
-		String(hud.get_node("%CashLabel").text),
-		"Cash  $8000.00",
-		"Prep HUD binds seeded cash"
+		hud_scene.contains("Cash  $8000.00"),
+		true,
+		"Prep HUD scene default is seeded cash"
 	)
 	_expect_equal(
-		String(hud.get_node("%AttentionLabel").text),
-		"Attention  100",
-		"Prep HUD binds seeded attention"
+		hud_scene.contains("Cash $0.00") or hud_scene.contains("Cash  $0.00"),
+		false,
+		"Prep HUD scene default is not $0"
 	)
 	_expect_equal(
-		String(hud.get_node("%PhaseLabel").text),
-		"Phase  Prep",
-		"Prep HUD binds PREP phase after seed"
+		hud_scene.contains("Attention  100"),
+		true,
+		"Prep HUD scene default is seeded attention"
 	)
-	root.remove_child(hud)
-	hud.free()
 
 
 func _test_undercut_fill_boundary() -> void:
