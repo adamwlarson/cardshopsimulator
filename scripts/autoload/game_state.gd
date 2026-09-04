@@ -41,7 +41,7 @@ func start_new_game() -> void:
 
 
 func start_floor() -> bool:
-	if not is_game_active or current_phase != DayPhase.PREP:
+	if not is_game_active or not DayPhasePolicy.can_start_floor(current_phase):
 		return false
 	current_phase = DayPhase.FLOOR
 	EventBus.day_phase_changed.emit(current_phase)
@@ -49,7 +49,7 @@ func start_floor() -> bool:
 
 
 func start_settle() -> bool:
-	if not is_game_active or current_phase != DayPhase.FLOOR:
+	if not is_game_active or not DayPhasePolicy.can_start_settle(current_phase):
 		return false
 	current_phase = DayPhase.SETTLE
 	Economy.settle_day(current_day)
@@ -58,7 +58,7 @@ func start_settle() -> bool:
 
 
 func advance_day() -> bool:
-	if not is_game_active or current_phase != DayPhase.SETTLE:
+	if not is_game_active or not DayPhasePolicy.can_advance_day(current_phase):
 		return false
 	QaInstrumentation.end_day(current_day, Economy.balance_cents)
 	current_day += 1

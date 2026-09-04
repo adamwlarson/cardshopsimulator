@@ -35,7 +35,7 @@ func enqueue(customer: CustomerProfile) -> bool:
 		customer.state = CustomerProfile.State.LEFT
 		customer_finished.emit(customer, &"no_stock")
 		return false
-	customer.target_sku = offer["sku_id"] as StringName
+	customer.target_sku = StringName(offer["sku_id"])
 	customer.asking_price_cents = int(offer["listed_price_cents"])
 	customer.desired_skus = [customer.target_sku]
 	customer.begin_waiting()

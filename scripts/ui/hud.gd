@@ -12,7 +12,7 @@ extends Control
 @onready var buy_confirm_panel: PanelContainer = %BuyConfirm
 @onready var buy_confirm_summary: Label = %BuyConfirmSummary
 @onready var price_panel: PanelContainer = %PriceEditor
-@onready var price_input: SpinBox = %PriceInput
+@onready var price_input: LineEdit = %PriceInput
 @onready var price_summary: Label = %PriceSummary
 @onready var serve_panel: PanelContainer = %CustomerServe
 @onready var customer_title: Label = %CustomerTitle
@@ -20,7 +20,7 @@ extends Control
 
 var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
-var _customer_queue: CustomerQueue
+var _current_customer: CustomerProfile
 
 
 func _ready() -> void:
@@ -29,6 +29,7 @@ func _ready() -> void:
 	EventBus.day_phase_changed.connect(_update_phase)
 	EventBus.attention_changed.connect(_update_attention)
 	EventBus.customer_queue_changed.connect(_update_queue)
+	EventBus.customer_head_changed.connect(_on_customer_head_changed)
 	phase_button.pressed.connect(_on_phase_pressed)
 	%OpenBuyButton.pressed.connect(_open_buy_detail)
 	%BuyCancelButton.pressed.connect(_close_buy)
@@ -38,7 +39,7 @@ func _ready() -> void:
 	%OpenPriceButton.pressed.connect(_open_price_editor)
 	%PriceCancelButton.pressed.connect(_close_price)
 	%PriceApplyButton.pressed.connect(_apply_price)
-	price_input.value_changed.connect(_update_price_preview)
+	price_input.text_changed.connect(_update_price_preview)
 	%SellButton.pressed.connect(_sell_customer)
 	%NegotiateButton.pressed.connect(_negotiate_customer)
 	%RefuseButton.pressed.connect(_refuse_customer)
@@ -47,7 +48,6 @@ func _ready() -> void:
 	_update_phase(GameState.current_phase)
 	_update_attention(GameState.attention_remaining)
 	_update_queue(0)
-	call_deferred("_bind_customer_queue")
 
 
 func _update_cash(balance_cents: int) -> void:
@@ -59,7 +59,7 @@ func _update_day(day: int) -> void:
 
 
 func _update_phase(phase: int) -> void:
-	var phase_name := GameState.DayPhase.keys()[phase].capitalize()
+	var phase_name: String = String(GameState.DayPhase.keys()[phase]).capitalize()
 	phase_label.text = "Phase  %s" % phase_name
 	match phase:
 		GameState.DayPhase.PREP:
@@ -78,7 +78,6 @@ func _update_attention(remaining: int) -> void:
 
 func _update_queue(length: int) -> void:
 	queue_label.text = "Queue  %d" % length
-	_refresh_customer()
 
 
 func _on_phase_pressed() -> void:
@@ -152,27 +151,32 @@ func _close_buy() -> void:
 
 func _open_price_editor() -> void:
 	var current_price := InventoryService.listed_price_for(&"AA-DUST-ETB")
-	price_input.set_value_no_signal(current_price)
-	_update_price_preview(current_price)
+	price_input.text = DemandSignalPresenter.format_cents(current_price)
+	_update_price_preview(price_input.text)
 	price_panel.show()
 
 
-func _update_price_preview(value: float) -> void:
+func _update_price_preview(value: String) -> void:
 	var location := InventoryService.location_for(&"AA-DUST-ETB")
 	if location == null:
 		return
+	var listed_price_cents := DemandSignalPresenter.parse_cents(value)
 	_price_signal = DemandSignals.price_signal(
 		&"AA-DUST-ETB",
-		roundi(value),
+		listed_price_cents,
 		location
 	)
 	price_summary.text = DemandSignalPresenter.price_summary(_price_signal)
+	%PriceApplyButton.disabled = listed_price_cents <= 0
 
 
 func _apply_price() -> void:
 	if not _spend_for_floor(5):
 		return
-	InventoryService.set_listed_price(&"AA-DUST-ETB", roundi(price_input.value))
+	InventoryService.set_listed_price(
+		&"AA-DUST-ETB",
+		DemandSignalPresenter.parse_cents(price_input.text)
+	)
 	_close_price()
 
 
@@ -180,56 +184,39 @@ func _close_price() -> void:
 	price_panel.hide()
 
 
-func _bind_customer_queue() -> void:
-	var spawner := get_tree().get_first_node_in_group("customer_spawner") as CustomerSpawner
-	if spawner == null:
-		return
-	_customer_queue = spawner.get_queue()
-	_refresh_customer()
-
-
-func _refresh_customer() -> void:
-	if _customer_queue == null:
-		serve_panel.hide()
-		return
-	var customer := _customer_queue.queue_head()
-	if customer == null:
+func _on_customer_head_changed(customer: CustomerProfile) -> void:
+	_current_customer = customer
+	if _current_customer == null:
 		serve_panel.hide()
 		return
 	serve_panel.show()
-	customer_title.text = "CUSTOMER · %s" % customer.display_name
+	customer_title.text = "CUSTOMER · %s" % _current_customer.display_name
 	var signal_dto := DemandSignals.price_signal(
-		customer.target_sku,
-		customer.asking_price_cents,
-		InventoryService.location_for(customer.target_sku)
+		_current_customer.target_sku,
+		_current_customer.asking_price_cents,
+		InventoryService.location_for(_current_customer.target_sku)
 	)
 	customer_summary.text = (
 		"Wants: %s\nYour list: %s\n%s"
 		% [
-			String(customer.target_sku),
-			DemandSignalPresenter.format_cents(customer.asking_price_cents),
+			String(_current_customer.target_sku),
+			DemandSignalPresenter.format_cents(_current_customer.asking_price_cents),
 			DemandSignalPresenter.price_summary(signal_dto),
 		]
 	)
-	%NegotiateButton.disabled = customer.has_negotiated
+	%NegotiateButton.disabled = _current_customer.has_negotiated
 
 
 func _sell_customer() -> void:
-	if _customer_queue != null:
-		_customer_queue.sell_listed()
-		_refresh_customer()
+	EventBus.customer_action_requested.emit(&"sell_listed")
 
 
 func _negotiate_customer() -> void:
-	if _customer_queue != null:
-		_customer_queue.negotiate(-0.10)
-		_refresh_customer()
+	EventBus.customer_action_requested.emit(&"negotiate")
 
 
 func _refuse_customer() -> void:
-	if _customer_queue != null:
-		_customer_queue.refuse()
-		_refresh_customer()
+	EventBus.customer_action_requested.emit(&"refuse")
 
 
 func _spend_for_floor(cost: int) -> bool:

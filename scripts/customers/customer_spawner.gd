@@ -27,6 +27,7 @@ func _ready() -> void:
 	_timer.timeout.connect(spawn_customer)
 	add_child(_timer)
 	EventBus.day_phase_changed.connect(_on_phase_changed)
+	EventBus.customer_action_requested.connect(_on_customer_action_requested)
 	_on_phase_changed(GameState.current_phase)
 
 
@@ -55,7 +56,7 @@ func get_queue() -> CustomerQueue:
 
 
 static func can_spawn_for_phase(phase: int) -> bool:
-	return phase == GameState.DayPhase.FLOOR
+	return CustomerSpawnPolicy.can_spawn(phase)
 
 
 func _profile_from_archetype(archetype: Dictionary) -> CustomerProfile:
@@ -92,3 +93,15 @@ func _on_phase_changed(phase: int) -> void:
 
 func _on_queue_changed(length: int) -> void:
 	EventBus.customer_queue_changed.emit(length)
+	EventBus.customer_head_changed.emit(_queue.queue_head())
+
+
+func _on_customer_action_requested(action: StringName) -> void:
+	match action:
+		&"sell_listed":
+			_queue.sell_listed()
+		&"negotiate":
+			_queue.negotiate(-0.10)
+			EventBus.customer_head_changed.emit(_queue.queue_head())
+		&"refuse":
+			_queue.refuse()

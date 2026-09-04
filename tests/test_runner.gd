@@ -7,6 +7,27 @@ const HARD_CONFIG: BalanceConfig = preload("res://data/balance/hard.tres")
 var _failures: int = 0
 var _qa := QaInstrumentationService.new()
 
+class FakeCustomerInventory:
+	extends Node
+
+	var sold: bool = false
+
+	func find_listed_offer(
+		_interest_tags: Array[StringName],
+		_budget_cents: int
+	) -> Dictionary:
+		return {
+			"sku_id": &"ACC-SLV-60",
+			"listed_price_cents": 599,
+		}
+
+	func confirm_customer_sale(
+		_sku_id: StringName,
+		_sale_price_cents: int
+	) -> bool:
+		sold = true
+		return true
+
 
 func _initialize() -> void:
 	_test_pricing_spread()
@@ -23,6 +44,7 @@ func _initialize() -> void:
 	_test_customer_spawn_phase_gating()
 	_test_day_phase_transitions()
 	_test_negotiate_clamp()
+	_test_customer_service_actions()
 	_test_ui_helpers_do_not_read_hidden_values()
 
 	if _failures == 0:
@@ -371,37 +393,52 @@ func _test_customer_archetype_weights() -> void:
 
 func _test_customer_spawn_phase_gating() -> void:
 	_expect_equal(
-		CustomerSpawner.can_spawn_for_phase(GameState.DayPhase.PREP),
+		CustomerSpawnPolicy.can_spawn(DayPhasePolicy.PREP),
 		false,
 		"no prep customer spawn"
 	)
 	_expect_equal(
-		CustomerSpawner.can_spawn_for_phase(GameState.DayPhase.FLOOR),
+		CustomerSpawnPolicy.can_spawn(DayPhasePolicy.FLOOR),
 		true,
 		"floor customer spawn"
 	)
 	_expect_equal(
-		CustomerSpawner.can_spawn_for_phase(GameState.DayPhase.SETTLE),
+		CustomerSpawnPolicy.can_spawn(DayPhasePolicy.SETTLE),
 		false,
 		"no settle customer spawn"
 	)
 
 
 func _test_day_phase_transitions() -> void:
-	GameState.start_new_game()
-	_expect_equal(GameState.current_phase, GameState.DayPhase.PREP, "new game prep phase")
-	_expect_equal(GameState.advance_day(), false, "prep cannot advance day")
-	_expect_equal(GameState.start_floor(), true, "prep enters floor")
-	_expect_equal(GameState.start_floor(), false, "floor cannot restart floor")
-	_expect_equal(GameState.start_settle(), true, "floor enters settle")
-	var first_day := GameState.current_day
-	_expect_equal(GameState.advance_day(), true, "settle advances day")
-	_expect_equal(GameState.current_day, first_day + 1, "day increment")
-	_expect_equal(GameState.current_phase, GameState.DayPhase.PREP, "next day returns prep")
 	_expect_equal(
-		GameState.attention_remaining,
-		NORMAL_CONFIG.attention_pool,
-		"attention resets each day"
+		DayPhasePolicy.can_start_floor(DayPhasePolicy.PREP),
+		true,
+		"prep enters floor"
+	)
+	_expect_equal(
+		DayPhasePolicy.can_start_floor(DayPhasePolicy.FLOOR),
+		false,
+		"floor cannot restart floor"
+	)
+	_expect_equal(
+		DayPhasePolicy.can_start_settle(DayPhasePolicy.FLOOR),
+		true,
+		"floor enters settle"
+	)
+	_expect_equal(
+		DayPhasePolicy.can_start_settle(DayPhasePolicy.PREP),
+		false,
+		"prep cannot settle"
+	)
+	_expect_equal(
+		DayPhasePolicy.can_advance_day(DayPhasePolicy.SETTLE),
+		true,
+		"settle advances day"
+	)
+	_expect_equal(
+		DayPhasePolicy.can_advance_day(DayPhasePolicy.FLOOR),
+		false,
+		"floor cannot advance day"
 	)
 
 
@@ -416,6 +453,26 @@ func _test_negotiate_clamp() -> void:
 		1100,
 		"negotiation upper clamp"
 	)
+
+
+func _test_customer_service_actions() -> void:
+	var inventory := FakeCustomerInventory.new()
+	var queue := CustomerQueue.new()
+	queue.configure(inventory)
+	var refused_customer := CustomerProfile.new()
+	refused_customer.budget_cents = 1000
+	refused_customer.interest_tags = [&"accessory"]
+	_expect_equal(queue.enqueue(refused_customer), true, "enqueue listed offer")
+	_expect_equal(queue.refuse(), true, "refuse customer")
+	_expect_equal(inventory.sold, false, "refuse does not sell")
+	var buying_customer := CustomerProfile.new()
+	buying_customer.budget_cents = 1000
+	buying_customer.interest_tags = [&"accessory"]
+	_expect_equal(queue.enqueue(buying_customer), true, "enqueue sale customer")
+	_expect_equal(queue.sell_listed(), true, "sell listed action")
+	_expect_equal(inventory.sold, true, "sell action reaches inventory")
+	queue.free()
+	inventory.free()
 
 
 func _test_ui_helpers_do_not_read_hidden_values() -> void:

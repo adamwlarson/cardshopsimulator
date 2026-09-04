@@ -9,6 +9,8 @@ signal attention_changed(remaining: int)
 signal reputation_changed(reputation: int)
 signal customer_arrived(customer: CustomerProfile)
 signal customer_queue_changed(length: int)
+signal customer_head_changed(customer: CustomerProfile)
+signal customer_action_requested(action: StringName)
 
 func publish_cash_changed(balance_cents: int) -> void:
 	cash_changed.emit(balance_cents)
