@@ -18,6 +18,7 @@ var _captured_price_focus_count: int = 0
 var _captured_rent_decision: Dictionary = {}
 var _event_bus: Node
 var _game_state: Node
+var _economy: Node
 var _inventory_service: Node
 var _demand_signals: Node
 var _beat_director: Node
@@ -59,6 +60,7 @@ class FakeCustomerInventory:
 func _initialize() -> void:
 	_event_bus = root.get_node("EventBus")
 	_game_state = root.get_node("GameState")
+	_economy = root.get_node("Economy")
 	_inventory_service = root.get_node("InventoryService")
 	_demand_signals = root.get_node("DemandSignals")
 	_beat_director = root.get_node("BeatDirector")
@@ -781,21 +783,21 @@ func _test_rent_firesale_beat() -> void:
 	_game_state.set("current_day", 7)
 	_game_state.set("current_phase", DayPhasePolicy.PREP)
 	_beat_director.call("_start_day_beats", 7)
-	var cash_before_rent := int(Economy.balance_cents)
+	var cash_before_rent := int(_economy.get("balance_cents"))
 	_expect_equal(
 		_beat_director.call("choose_rent_path", &"dismissed"),
 		true,
 		"rent decision can explicitly dismiss"
 	)
 	_expect_equal(
-		Economy.get_ledger().is_empty(),
+		(_economy.call("get_ledger") as Array).is_empty(),
 		true,
 		"dismiss does not auto-pay rent"
 	)
 	_game_state.call("start_floor")
 	_game_state.call("start_settle")
 	_expect_equal(
-		Economy.balance_cents,
+		int(_economy.get("balance_cents")),
 		cash_before_rent - NORMAL_CONFIG.rent_small_weekly_cents,
 		"dismissed rent still collects at SETTLE"
 	)
