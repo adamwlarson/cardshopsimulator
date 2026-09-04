@@ -1,12 +1,12 @@
 # Shop fixture assets
 
-Art P0 + A13 + light P1 Godot-ready GLBs live here (Principled materials, 1u=1m, tile 0.9m).
+Art P0 + A13 + light P1 + light décor Godot-ready GLBs live here (Principled materials, 1u=1m, tile 0.9m).
 
 Each `prop_*` folder contains:
 - `<folder>.glb` — import-ready mesh
 - `IMPORT_NOTES.md` — provenance / import notes for Engineering
 
-## Props (20)
+## Props (24)
 
 | Folder | Priority notes |
 |--------|----------------|
@@ -19,16 +19,20 @@ Each `prop_*` folder contains:
 | `prop_proxy_booster_01` | P0 proxy |
 | `prop_proxy_box_01` | P0 proxy |
 | `prop_proxy_etb_01` | P0 proxy |
-| `prop_door_01` | A13 |
+| `prop_door_01` | A02 front door |
 | `prop_backstock_door_01` | A13 |
-| `prop_sealed_wall_01` | A13 |
-| `prop_sign_open_closed_01` | A13 |
-| `prop_light_overhead_01` | light P1 |
+| `prop_sealed_wall_01` | A05 |
+| `prop_sign_open_closed_01` | A02 |
+| `prop_light_overhead_01` | A11 |
 | `prop_poster_frame_sm_01` | light P1 |
 | `prop_poster_frame_md_01` | light P1 |
 | `prop_poster_frame_lg_01` | light P1 |
 | `prop_price_tag_01` | light P1 |
 | `prop_price_standee_01` | light P1 |
 | `prop_shelf_talker_01` | light P1 |
+| `prop_stool_01` | A10 light décor |
+| `prop_shipper_stack_01` | B04 light décor |
+| `prop_plant_01` | B05 light décor |
+| `prop_trash_bin_01` | B08 light décor |
 
-These assets are staged for a later placement PR; do not treat this branch as gameplay wiring.
+Placed on `shop_floor` via PR #4 (heroes) and PR #8 (light décor).
