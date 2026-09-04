@@ -25,6 +25,7 @@ enum TradeIntent {
 @export var target_sku: StringName = &""
 @export_range(0, 100_000_000, 1) var listed_price_cents: int = 0
 @export var buylist_signal: BuyConfirmSignal
+@export var beat_id: StringName = &""
 
 var waited_seconds: float = 0.0
 var has_negotiated: bool = false

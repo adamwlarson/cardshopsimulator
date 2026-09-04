@@ -28,6 +28,8 @@ func _ready() -> void:
 	add_child(_timer)
 	EventBus.day_phase_changed.connect(_on_phase_changed)
 	EventBus.customer_action_requested.connect(_on_customer_action_requested)
+	EventBus.scripted_customer_requested.connect(_on_scripted_customer_requested)
+	_queue.customer_finished.connect(_on_customer_finished)
 	_on_phase_changed(GameState.current_phase)
 
 
@@ -53,6 +55,13 @@ func spawn_customer() -> bool:
 
 func get_queue() -> CustomerQueue:
 	return _queue
+
+
+func enqueue_scripted_customer(customer: CustomerProfile) -> bool:
+	if not can_spawn_for_phase(GameState.current_phase):
+		return false
+	EventBus.customer_arrived.emit(customer)
+	return _queue.enqueue(customer)
 
 
 static func can_spawn_for_phase(phase: int) -> bool:
@@ -132,3 +141,14 @@ func _on_customer_action_requested(action: StringName) -> void:
 			EventBus.customer_head_changed.emit(_queue.queue_head())
 		&"refuse":
 			_queue.refuse()
+
+
+func _on_scripted_customer_requested(customer: CustomerProfile) -> void:
+	enqueue_scripted_customer(customer)
+
+
+func _on_customer_finished(
+	customer: CustomerProfile,
+	outcome: StringName
+) -> void:
+	EventBus.customer_resolved.emit(customer, outcome)

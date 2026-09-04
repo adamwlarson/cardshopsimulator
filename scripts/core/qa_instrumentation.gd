@@ -62,6 +62,25 @@ func record_buy_confirm(
 	})
 
 
+func record_beat_started(beat_id: StringName, day: int) -> void:
+	_emit(&"beat_started", {
+		"beat_id": String(beat_id),
+		"day": day,
+	})
+
+
+func record_beat_completed(
+	beat_id: StringName,
+	day: int,
+	outcome: StringName
+) -> void:
+	_emit(&"beat_completed", {
+		"beat_id": String(beat_id),
+		"day": day,
+		"outcome": String(outcome),
+	})
+
+
 func record_demand_signal_shown(
 	screen: StringName,
 	signal_dto: Resource,

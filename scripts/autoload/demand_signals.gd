@@ -29,6 +29,24 @@ func reset() -> void:
 	)
 
 
+func apply_hype_event(
+	sku_id: StringName,
+	through_day: int,
+	market_multiplier: float = 1.35
+) -> bool:
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null or _service == null:
+		return false
+	var current_market := _market_state.market_cents_for(sku_id)
+	_market_state.update_sku(
+		sku_id,
+		maxi(sku.base_market_cents, roundi(current_market * market_multiplier)),
+		0.95
+	)
+	_service.force_demand_band(sku_id, &"hot", through_day)
+	return true
+
+
 func open_buy_signals() -> Array[BuyConfirmSignal]:
 	var result: Array[BuyConfirmSignal] = []
 	for opportunity: BuyOpportunity in _open_opportunities():

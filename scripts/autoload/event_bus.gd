@@ -11,6 +11,13 @@ signal customer_arrived(customer: CustomerProfile)
 signal customer_queue_changed(length: int)
 signal customer_head_changed(customer: CustomerProfile)
 signal customer_action_requested(action: StringName)
+signal scripted_customer_requested(customer: CustomerProfile)
+signal customer_resolved(customer: CustomerProfile, outcome: StringName)
+signal price_focus_requested(sku_id: StringName, beat_id: StringName, message: String)
+signal showcase_choice_requested(payload: Dictionary)
+signal showcase_choice_selected(choice: StringName)
+signal showcase_choice_resolved(beat_id: StringName, choice: StringName)
+signal beat_ui_resolved(beat_id: StringName, outcome: StringName)
 
 func publish_cash_changed(balance_cents: int) -> void:
 	cash_changed.emit(balance_cents)

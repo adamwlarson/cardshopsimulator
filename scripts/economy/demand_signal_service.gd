@@ -15,6 +15,7 @@ var _config: BalanceConfig
 var _market_state: MarketState
 var _rng := RandomNumberGenerator.new()
 var _demand_cache: Dictionary = {}
+var _forced_band_by_sku: Dictionary = {}
 var _instrumentation: QaInstrumentationService
 
 
@@ -34,6 +35,20 @@ func _init(
 			_instrumentation = (main_loop as SceneTree).root.get_node_or_null(
 				"QaInstrumentation"
 			) as QaInstrumentationService
+
+
+func force_demand_band(
+	sku_id: StringName,
+	band: StringName,
+	through_day: int
+) -> void:
+	_forced_band_by_sku[sku_id] = {
+		"band": band,
+		"through_day": through_day,
+	}
+	for key: Variant in _demand_cache.keys():
+		if String(key).contains(":%s:" % sku_id):
+			_demand_cache.erase(key)
 
 
 func buy_confirm(
@@ -139,6 +154,9 @@ func _shown_demand_band(
 	true_demand: float,
 	informed: bool
 ) -> StringName:
+	var forced: Dictionary = _forced_band_by_sku.get(sku_id, {})
+	if day <= int(forced.get("through_day", -1)):
+		return StringName(forced.get("band", &""))
 	var key := "%d:%s:%s" % [day, sku_id, informed]
 	if _demand_cache.has(key):
 		return _demand_cache[key] as StringName

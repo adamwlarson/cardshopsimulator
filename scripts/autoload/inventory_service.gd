@@ -26,6 +26,54 @@ func receive_stock(
 	return received
 
 
+func receive_card(
+	sku_id: StringName,
+	acquired_cost_cents: int,
+	location: InventoryLocation,
+	listed_price_cents: int = 0
+) -> CardInstance:
+	var sku := model.get_sku(sku_id)
+	if sku == null or sku.product_class != ProductSKU.ProductClass.SINGLE:
+		return null
+	var card := CardInstance.new(sku_id, acquired_cost_cents, location)
+	card.condition = CardInstance.Condition.NM
+	card.listed_price_cents = (
+		listed_price_cents if listed_price_cents > 0 else sku.base_market_cents
+	)
+	if not model.add_card(card):
+		return null
+	EventBus.publish_inventory_changed(sku_id, total_owned(sku_id))
+	return card
+
+
+func receive_slab(
+	sku_id: StringName,
+	grader: StringName,
+	grade: float,
+	acquired_cost_cents: int,
+	location: InventoryLocation
+) -> SlabInstance:
+	var sku := model.get_sku(sku_id)
+	if sku == null or sku.product_class != ProductSKU.ProductClass.SINGLE:
+		return null
+	var card := CardInstance.new(sku_id, acquired_cost_cents)
+	card.condition = CardInstance.Condition.NM
+	card.listed_price_cents = sku.base_market_cents
+	var slab := SlabInstance.new(
+		card,
+		grader,
+		grade,
+		"BEAT-%s-%d" % [sku_id, model.slabs.size() + 1],
+		acquired_cost_cents,
+		location
+	)
+	slab.listed_price_cents = sku.base_market_cents
+	if not model.add_slab(slab):
+		return null
+	EventBus.publish_inventory_changed(sku_id, total_owned(sku_id))
+	return slab
+
+
 func confirm_stock_purchase(
 	sku_id: StringName,
 	quantity: int,
@@ -80,6 +128,63 @@ func get_all_stock() -> Array[StockLot]:
 	return model.stock_lots.duplicate()
 
 
+func get_card(
+	sku_id: StringName,
+	condition: CardInstance.Condition = CardInstance.Condition.NM
+) -> CardInstance:
+	for card: CardInstance in model.cards:
+		if card.sku_id == sku_id and card.condition == condition:
+			return card
+	return null
+
+
+func get_slab(sku_id: StringName) -> SlabInstance:
+	for slab: SlabInstance in model.slabs:
+		if slab.card_ref != null and slab.card_ref.sku_id == sku_id:
+			return slab
+	return null
+
+
+func card_count(
+	sku_id: StringName,
+	condition: CardInstance.Condition = CardInstance.Condition.NM
+) -> int:
+	var count := 0
+	for card: CardInstance in model.cards:
+		if card.sku_id == sku_id and card.condition == condition:
+			count += 1
+	return count
+
+
+func total_owned(sku_id: StringName) -> int:
+	var total := model.get_stock_quantity(sku_id)
+	for card: CardInstance in model.cards:
+		if card.sku_id == sku_id:
+			total += 1
+	for slab: SlabInstance in model.slabs:
+		if slab.card_ref != null and slab.card_ref.sku_id == sku_id:
+			total += 1
+	return total
+
+
+func case_free_slot_weight() -> int:
+	return GameState.balance_config.case_slots - model.case_slots_used()
+
+
+func move_card_to(card: CardInstance, destination: InventoryLocation) -> bool:
+	if not model.move_card(card, destination):
+		return false
+	EventBus.publish_inventory_changed(card.sku_id, total_owned(card.sku_id))
+	return true
+
+
+func move_slab_to(slab: SlabInstance, destination: InventoryLocation) -> bool:
+	if not model.move_slab(slab, destination):
+		return false
+	EventBus.publish_inventory_changed(slab.card_ref.sku_id, total_owned(slab.card_ref.sku_id))
+	return true
+
+
 func get_priceable_stock() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for lot: StockLot in model.stock_lots:
@@ -92,7 +197,48 @@ func get_priceable_stock() -> Array[Dictionary]:
 			"listed_price_cents": lot.listed_price_cents,
 			"location": lot.location,
 		})
+	for card: CardInstance in model.cards:
+		var sku := model.get_sku(card.sku_id)
+		if sku == null:
+			continue
+		result.append({
+			"sku_id": card.sku_id,
+			"display_name": sku.display_name,
+			"quantity": 1,
+			"listed_price_cents": card.listed_price_cents,
+			"location": card.location,
+		})
+	for slab: SlabInstance in model.slabs:
+		if slab.card_ref == null:
+			continue
+		var sku := model.get_sku(slab.card_ref.sku_id)
+		if sku == null:
+			continue
+		result.append({
+			"sku_id": slab.card_ref.sku_id,
+			"display_name": "%s (%s %.1f)" % [
+				sku.display_name, slab.grader, slab.grade,
+			],
+			"quantity": 1,
+			"listed_price_cents": slab.listed_price_cents,
+			"location": slab.location,
+		})
 	return result
+
+
+func find_listed_sku_offer(sku_id: StringName, budget_cents: int) -> Dictionary:
+	for card: CardInstance in model.cards:
+		if (
+			card.sku_id == sku_id
+			and card.listed_price_cents > 0
+			and card.listed_price_cents <= budget_cents
+		):
+			return _offer_for(
+				model.get_sku(card.sku_id),
+				card.listed_price_cents,
+				card.location
+			)
+	return {}
 
 
 func find_listed_offer(
@@ -169,6 +315,9 @@ func location_for(sku_id: StringName) -> InventoryLocation:
 	for card: CardInstance in model.cards:
 		if card.sku_id == sku_id:
 			return card.location
+	for slab: SlabInstance in model.slabs:
+		if slab.card_ref != null and slab.card_ref.sku_id == sku_id:
+			return slab.location
 	return null
 
 

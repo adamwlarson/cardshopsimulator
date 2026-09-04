@@ -6,6 +6,9 @@ const HARD_CONFIG: BalanceConfig = preload("res://data/balance/hard.tres")
 
 var _failures: int = 0
 var _qa := QaInstrumentationService.new()
+var _captured_scripted_customer: CustomerProfile
+var _captured_price_sku: StringName = &""
+var _captured_price_beat: StringName = &""
 
 class FakeCustomerInventory:
 	extends Node
@@ -41,6 +44,8 @@ class FakeCustomerInventory:
 
 
 func _initialize() -> void:
+	EventBus.scripted_customer_requested.connect(_capture_scripted_customer)
+	EventBus.price_focus_requested.connect(_capture_price_focus)
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
 	_test_inventory_mutations_and_capacity()
@@ -60,6 +65,9 @@ func _initialize() -> void:
 	_test_customer_service_actions()
 	_test_ui_price_labels()
 	_test_ui_helpers_do_not_read_hidden_values()
+	_test_spike_staple_beat()
+	_test_titan_hype_price_focus()
+	_test_showcase_slab_and_singles_preconditions()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -629,6 +637,153 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 		false,
 		"QA instrumentation defaults off"
 	)
+
+
+func _test_spike_staple_beat() -> void:
+	GameState.start_new_game()
+	for card: CardInstance in InventoryService.model.cards.duplicate():
+		if card.sku_id in [&"AA-BASE-088", &"AA-BASE-078"]:
+			InventoryService.model.remove_card(card)
+	GameState.current_day = 3
+	GameState.current_phase = GameState.DayPhase.FLOOR
+	_captured_scripted_customer = null
+	QaInstrumentation.set_force_enabled(true)
+	_expect_equal(
+		BeatDirector.trigger_qa_beat(BeatInjectionService.SPIKE_STAPLE_BEAT),
+		true,
+		"Spike staple QA trigger"
+	)
+	_expect_equal(
+		InventoryService.card_count(&"AA-BASE-088"),
+		1,
+		"Spike beat seeds exactly one missing NM staple"
+	)
+	_expect_equal(
+		_captured_scripted_customer != null,
+		true,
+		"Spike scripted customer emitted"
+	)
+	if _captured_scripted_customer != null:
+		_expect_equal(
+			_captured_scripted_customer.archetype_id,
+			&"spike",
+			"scripted customer archetype"
+		)
+		_expect_equal(
+			_captured_scripted_customer.desired_skus,
+			[&"AA-BASE-088"],
+			"Spike targets seeded staple"
+		)
+	QaInstrumentation.set_force_enabled(false)
+
+
+func _test_titan_hype_price_focus() -> void:
+	BeatDirector.reset()
+	for card: CardInstance in InventoryService.model.cards.duplicate():
+		if card.sku_id == &"AA-SKIE-047":
+			InventoryService.model.remove_card(card)
+	GameState.current_day = 8
+	GameState.current_phase = GameState.DayPhase.PREP
+	_captured_price_sku = &""
+	_captured_price_beat = &""
+	QaInstrumentation.set_force_enabled(true)
+	_expect_equal(
+		BeatDirector.trigger_qa_beat(BeatInjectionService.TITAN_HYPE_BEAT),
+		true,
+		"Titan hype QA trigger"
+	)
+	_expect_equal(
+		InventoryService.card_count(&"AA-SKIE-047") >= 1,
+		true,
+		"Titan hype ensures NM inventory"
+	)
+	var titan_signal := DemandSignals.price_signal(
+		&"AA-SKIE-047",
+		2200,
+		InventoryService.location_for(&"AA-SKIE-047")
+	)
+	_expect_equal(
+		titan_signal.shown_demand_band,
+		&"hot",
+		"Titan hype shows HOT noisy demand band"
+	)
+	_expect_equal(
+		titan_signal.suggested_price_cents > 2200,
+		true,
+		"Titan hype elevates noisy suggested comp"
+	)
+	_expect_equal(_captured_price_sku, &"AA-SKIE-047", "Titan price focus SKU")
+	_expect_equal(
+		_captured_price_beat,
+		BeatInjectionService.TITAN_HYPE_BEAT,
+		"Titan price focus beat tag"
+	)
+	EventBus.beat_ui_resolved.emit(
+		BeatInjectionService.TITAN_HYPE_BEAT,
+		&"cancelled"
+	)
+	_expect_equal(
+		BeatDirector.is_completed(BeatInjectionService.TITAN_HYPE_BEAT),
+		true,
+		"Titan cancel resolves beat"
+	)
+	QaInstrumentation.set_force_enabled(false)
+
+
+func _test_showcase_slab_and_singles_preconditions() -> void:
+	BeatDirector.reset()
+	for card: CardInstance in InventoryService.model.cards.duplicate():
+		if card.sku_id in [&"AA-SKIE-047", &"AA-SKIE-058"]:
+			InventoryService.model.remove_card(card)
+	for slab: SlabInstance in InventoryService.model.slabs.duplicate():
+		InventoryService.model.remove_slab(slab)
+	GameState.current_day = 10
+	GameState.current_phase = GameState.DayPhase.PREP
+	QaInstrumentation.set_force_enabled(true)
+	_expect_equal(
+		BeatDirector.trigger_qa_beat(BeatInjectionService.SHOWCASE_BEAT),
+		true,
+		"showcase QA trigger"
+	)
+	var empress_slab := InventoryService.get_slab(&"AA-SKIE-052")
+	var titan := InventoryService.get_card(&"AA-SKIE-047")
+	var paragon := InventoryService.get_card(&"AA-SKIE-058")
+	_expect_equal(empress_slab != null, true, "showcase ensures Empress slab")
+	_expect_equal(titan != null, true, "showcase ensures Titan single")
+	_expect_equal(paragon != null, true, "showcase ensures Paragon single")
+	_expect_equal(
+		InventoryService.case_free_slot_weight() >= 2,
+		true,
+		"showcase starts with two free slot-weights"
+	)
+	_expect_equal(BeatDirector.choose_showcase(&"slab"), true, "choose slab")
+	_expect_equal(
+		empress_slab.location.type,
+		InventoryLocation.Type.CASE,
+		"slab moves through case API"
+	)
+	_expect_equal(BeatDirector.choose_showcase(&"singles"), true, "switch to singles")
+	_expect_equal(
+		empress_slab.location.type,
+		InventoryLocation.Type.ONLINE_HOLD,
+		"singles choice removes slab from case"
+	)
+	_expect_equal(titan.location.type, InventoryLocation.Type.CASE, "Titan in case")
+	_expect_equal(paragon.location.type, InventoryLocation.Type.CASE, "Paragon in case")
+	QaInstrumentation.set_force_enabled(false)
+
+
+func _capture_scripted_customer(customer: CustomerProfile) -> void:
+	_captured_scripted_customer = customer
+
+
+func _capture_price_focus(
+	sku_id: StringName,
+	beat_id: StringName,
+	_message: String
+) -> void:
+	_captured_price_sku = sku_id
+	_captured_price_beat = beat_id
 
 
 func _expect_dto_has_no_truth_fields(dto: Resource, label: String) -> void:

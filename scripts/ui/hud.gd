@@ -25,10 +25,18 @@ extends Control
 @onready var serve_panel: PanelContainer = %CustomerServe
 @onready var customer_title: Label = %CustomerTitle
 @onready var customer_summary: Label = %CustomerSummary
+@onready var beat_toast: Label = %BeatToast
+@onready var showcase_panel: PanelContainer = %ShowcaseChoice
+@onready var showcase_title: Label = %ShowcaseTitle
+@onready var showcase_summary: Label = %ShowcaseSummary
+@onready var showcase_slab_button: Button = %ShowcaseSlabButton
+@onready var showcase_singles_button: Button = %ShowcaseSinglesButton
 
 var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
 var _current_customer: CustomerProfile
+var _active_price_beat_id: StringName = &""
+var _showcase_beat_id: StringName = &""
 
 
 func _ready() -> void:
@@ -38,6 +46,9 @@ func _ready() -> void:
 	EventBus.attention_changed.connect(_update_attention)
 	EventBus.customer_queue_changed.connect(_update_queue)
 	EventBus.customer_head_changed.connect(_on_customer_head_changed)
+	EventBus.price_focus_requested.connect(_on_price_focus_requested)
+	EventBus.showcase_choice_requested.connect(_on_showcase_choice_requested)
+	EventBus.showcase_choice_resolved.connect(_on_showcase_choice_resolved)
 	phase_button.pressed.connect(_on_phase_pressed)
 	%OpenBuyButton.pressed.connect(_open_buy_list)
 	%BuyListCancelButton.pressed.connect(_close_buy)
@@ -47,12 +58,14 @@ func _ready() -> void:
 	%BuyConfirmButton.pressed.connect(_confirm_buy)
 	%OpenPriceButton.pressed.connect(_open_price_list)
 	%PriceListCancelButton.pressed.connect(_close_price)
-	%PriceCancelButton.pressed.connect(_close_price)
+	%PriceCancelButton.pressed.connect(_cancel_price)
 	%PriceApplyButton.pressed.connect(_apply_price)
 	price_input.text_changed.connect(_update_price_preview)
 	%SellButton.pressed.connect(_sell_customer)
 	%NegotiateButton.pressed.connect(_negotiate_customer)
 	%RefuseButton.pressed.connect(_refuse_customer)
+	showcase_slab_button.pressed.connect(_select_showcase_choice.bind(&"slab"))
+	showcase_singles_button.pressed.connect(_select_showcase_choice.bind(&"singles"))
 	_update_cash(Economy.balance_cents)
 	_update_day(GameState.current_day)
 	_update_phase(GameState.current_phase)
@@ -80,6 +93,7 @@ func _update_phase(phase: int) -> void:
 			phase_button.text = "Next day"
 	_close_buy()
 	_close_price()
+	showcase_panel.hide()
 
 
 func _update_attention(remaining: int) -> void:
@@ -227,6 +241,14 @@ func _apply_price() -> void:
 		_price_signal.sku_id,
 		DemandSignalPresenter.parse_cents(price_input.text)
 	)
+	if not _active_price_beat_id.is_empty():
+		EventBus.beat_ui_resolved.emit(_active_price_beat_id, &"applied")
+	_close_price()
+
+
+func _cancel_price() -> void:
+	if not _active_price_beat_id.is_empty():
+		EventBus.beat_ui_resolved.emit(_active_price_beat_id, &"cancelled")
 	_close_price()
 
 
@@ -234,6 +256,53 @@ func _close_price() -> void:
 	price_list_panel.hide()
 	price_panel.hide()
 	_price_signal = null
+	_active_price_beat_id = &""
+
+
+func _on_price_focus_requested(
+	sku_id: StringName,
+	beat_id: StringName,
+	message: String
+) -> void:
+	beat_toast.text = message
+	beat_toast.show()
+	for dto: PriceConfirmSignal in DemandSignals.priceable_stock_signals():
+		if dto.sku_id != sku_id:
+			continue
+		_active_price_beat_id = beat_id
+		_select_price_stock(dto)
+		price_input.grab_focus()
+		return
+
+
+func _on_showcase_choice_requested(payload: Dictionary) -> void:
+	_showcase_beat_id = StringName(payload.get("beat_id", &""))
+	showcase_title.text = String(payload.get("title", "Showcase choice"))
+	showcase_summary.text = (
+		"Case space: %d slot-weights free\nSlab costs 2; each single costs 1."
+		% int(payload.get("free_slot_weight", 0))
+	)
+	showcase_slab_button.text = "Display slab\n%s" % payload.get("slab_label", "")
+	showcase_singles_button.text = (
+		"Display chase singles\n%s" % payload.get("singles_label", "")
+	)
+	showcase_panel.show()
+
+
+func _select_showcase_choice(choice: StringName) -> void:
+	EventBus.showcase_choice_selected.emit(choice)
+
+
+func _on_showcase_choice_resolved(
+	beat_id: StringName,
+	choice: StringName
+) -> void:
+	if beat_id != _showcase_beat_id:
+		return
+	showcase_summary.text = (
+		"Displaying %s. You can switch this choice until the day ends."
+		% ("the Empress slab" if choice == &"slab" else "both chase singles")
+	)
 
 
 func _on_customer_head_changed(customer: CustomerProfile) -> void:

@@ -37,6 +37,8 @@ func enqueue(customer: CustomerProfile) -> bool:
 		queue_changed.emit(_customers.size())
 		customer_ready.emit(customer)
 		return true
+	if not customer.desired_skus.is_empty():
+		return enqueue_targeted(customer, customer.desired_skus[0])
 	var offer: Dictionary = _inventory_service.call(
 		"find_listed_offer",
 		customer.interest_tags,
@@ -49,6 +51,28 @@ func enqueue(customer: CustomerProfile) -> bool:
 	customer.target_sku = StringName(offer["sku_id"])
 	customer.listed_price_cents = int(offer["listed_price_cents"])
 	customer.desired_skus = [customer.target_sku]
+	customer.begin_waiting()
+	_customers.append(customer)
+	queue_changed.emit(_customers.size())
+	customer_ready.emit(customer)
+	return true
+
+
+func enqueue_targeted(customer: CustomerProfile, sku_id: StringName) -> bool:
+	if customer == null or _inventory_service == null or sku_id.is_empty():
+		return false
+	var offer: Dictionary = _inventory_service.call(
+		"find_listed_sku_offer",
+		sku_id,
+		customer.budget_cents
+	)
+	if offer.is_empty():
+		customer.state = CustomerProfile.State.LEFT
+		customer_finished.emit(customer, &"no_stock")
+		return false
+	customer.target_sku = sku_id
+	customer.listed_price_cents = int(offer["listed_price_cents"])
+	customer.desired_skus = [sku_id]
 	customer.begin_waiting()
 	_customers.append(customer)
 	queue_changed.emit(_customers.size())
