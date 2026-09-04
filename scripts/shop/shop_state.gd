@@ -46,10 +46,19 @@ func reset(config: BalanceConfig) -> void:
 		trainee.display_name = "Trainee cashier"
 		trainee.free_days_remaining = maxi(0, config.trainee_free_days)
 		staff.append(trainee)
+	_emit_staff_changed()
 
 
 func hired_count() -> int:
 	return staff.size()
+
+
+func cashier_count() -> int:
+	var count := 0
+	for member: StaffMember in staff:
+		if member.is_cashier():
+			count += 1
+	return count
 
 
 func staff_cap() -> int:
@@ -123,6 +132,7 @@ func hire_cashier(cheap: bool) -> StaffMember:
 		return null
 	var member := _make_cashier(cheap)
 	staff.append(member)
+	_emit_staff_changed()
 	return member
 
 
@@ -216,6 +226,7 @@ func apply_save(data: Dictionary, config: BalanceConfig) -> void:
 	for row: Variant in staff_rows:
 		if row is Dictionary:
 			staff.append(StaffMember.from_save(row as Dictionary))
+	_emit_staff_changed()
 
 
 func weekly_rent_cents(day: int) -> int:
@@ -242,6 +253,15 @@ func take_due_wages() -> Array[Dictionary]:
 			"memo": "%s wage" % member.display_name,
 		})
 	return due
+
+
+func _emit_staff_changed() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var bus := tree.root.get_node_or_null("EventBus")
+	if bus != null:
+		bus.emit_signal("staff_changed")
 
 
 func _make_cashier(cheap: bool) -> StaffMember:
