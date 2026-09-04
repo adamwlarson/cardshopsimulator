@@ -63,6 +63,12 @@ class FakeCustomerInventory:
 		bought = true
 		return true
 
+	func has_backstock(_sku_id: StringName) -> bool:
+		return false
+
+	func pull_from_backstock(_sku_id: StringName) -> bool:
+		return false
+
 
 func _initialize() -> void:
 	_event_bus = root.get_node("EventBus")
@@ -132,6 +138,10 @@ func _initialize() -> void:
 	_test_customer_npc_mvp_cast()
 	_test_customer_npc_locomotion_clips()
 	_test_cashier_silhouette_on_floor()
+	_test_c2_hire_beat_paths()
+	_test_c2_unreliable_ten_day_stress()
+	_test_c2_att_zero_owner_verbs()
+	_test_c2_specialist_attention_assert()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -4501,6 +4511,297 @@ func _test_day_ten_beat_serialization() -> void:
 		&"cancelled"
 	)
 	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_c2_hire_beat_paths() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 5)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 5)
+	_expect_equal(
+		_beat_director.call("is_started", HIRE_CASHIER_BEAT),
+		true,
+		"C2 gate 1: day-5 hire beat starts on Normal PREP"
+	)
+	var ids := _choice_ids(_captured_beat_decision)
+	_expect_equal(&"hire_cashier" in ids, true, "C2 gate 1: Hire reachable")
+	_expect_equal(&"keep_solo" in ids, true, "C2 gate 1: Solo reachable")
+	_expect_equal(&"hire_cheap" in ids, true, "C2 gate 1: Unreliable reachable")
+	var confirms: Dictionary = _captured_beat_decision.get("confirms", {})
+	_expect_equal(
+		String((confirms.get("hire_cheap", {}) as Dictionary).get("body", "")).contains(
+			"Reliability"
+		),
+		true,
+		"C2 gate 1: cheap path warns Reliability"
+	)
+	_assert_payload_has_no_truth(_captured_beat_decision, "C2 hire decision")
+
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"hire_cashier"),
+		true,
+		"C2 gate 1: Hire Cashier commits"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hired_count(), 1, "C2 gate 1: Hire uses one staff_cap slot")
+	_expect_equal(shop.hired_count() <= shop.staff_cap(), true, "C2 gate 1: hire respects cap")
+	_expect_equal(shop.staff[0].wage_cents, ShopState.CASHIER_WAGE_CENTS, "C2 gate 1: $80 wage")
+	_expect_equal(shop.can_hire(), false, "C2 gate 1: Small cap filled after Hire")
+	var cash_before := int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - ShopState.CASHIER_WAGE_CENTS,
+		"C2 gate 1: Hire wage posts at SETTLE"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 5)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 5)
+	_beat_director.call("choose_beat_path", &"keep_solo")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hired_count(), 0, "C2 gate 1: Solo leaves roster empty")
+	_expect_equal(shop.is_owner_only(), true, "C2 gate 1: Solo stays owner-only")
+	cash_before = int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"C2 gate 1: Solo posts no wage"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 5)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 5)
+	_beat_director.call("choose_beat_path", &"hire_cheap")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hired_count(), 1, "C2 gate 1: Unreliable hire uses staff_cap")
+	_expect_equal(shop.staff[0].theft_bias, true, "C2 gate 1: cheap theft/no-show bias")
+	_expect_equal(
+		shop.staff[0].reliability <= 0.55,
+		true,
+		"C2 gate 1: cheap Reliability ≤ 0.55"
+	)
+
+
+func _test_c2_unreliable_ten_day_stress() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_qa_autoload.call("set_force_enabled", true)
+	var hit := false
+	var noshows := 0
+	var shrink_up := false
+	var locked := false
+	var seeds: Array[int] = [ShopState.STAFF_ATTENDANCE_SEED]
+	for extra: int in range(1, 16):
+		seeds.append(ShopState.STAFF_ATTENDANCE_SEED + extra * 17)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		var shop := _game_state.get("shop") as ShopState
+		_expect_equal(shop.hire_cashier(true) != null, true, "C2 gate 2: hire cheap")
+		var cheap_rate := shop.shrink_rate()
+		_expect_equal(
+			cheap_rate > NORMAL_CONFIG.shrink_daily_base,
+			true,
+			"C2 gate 2: cheap theft bias raises shrink vs base"
+		)
+		shop.seed_attendance_rng(rng_seed)
+		_qa_autoload.call("clear")
+		noshows = 0
+		var shrink_loss := 0
+		var max_rate := 0.0
+		locked = false
+		for _day_index: int in range(10):
+			if not bool(_game_state.call("start_floor")):
+				locked = true
+				break
+			if shop.is_floor_understaffed():
+				noshows += 1
+			if not bool(_game_state.call("start_settle")):
+				locked = true
+				break
+			max_rate = maxf(max_rate, shop.last_shrink_rate)
+			if int(_game_state.get("current_day")) < 10:
+				if not bool(_game_state.call("advance_day")):
+					locked = true
+					break
+		for event: Dictionary in _qa_autoload.call("get_events"):
+			var name := String(event.get("event", ""))
+			var payload: Dictionary = event.get("payload", {})
+			_assert_payload_has_no_truth(payload, "C2 %s" % name)
+			if name == "staff_noshow":
+				noshows = maxi(noshows, int(payload.get("noshow_count", 1)))
+			elif name == "shrink_applied":
+				shrink_loss += int(payload.get("loss_cents", 0))
+				max_rate = maxf(max_rate, float(payload.get("rate", 0.0)))
+		shrink_up = (
+			max_rate > NORMAL_CONFIG.shrink_daily_base
+			or shrink_loss > 0
+		)
+		_expect_equal(locked, false, "C2 gate 2: 10-day cheap run does not soft-lock")
+		_expect_equal(
+			bool(_game_state.get("is_game_active")),
+			true,
+			"C2 gate 2: game stays active after 10 days"
+		)
+		if noshows >= 1 or shrink_up:
+			hit = true
+			break
+	_expect_equal(
+		hit,
+		true,
+		"C2 gate 2: ≥1 no-show or shrink↑ in 10-day cheap stress"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_c2_att_zero_owner_verbs() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "C2 gate 3: hire cashier")
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"C2 gate 3: open FLOOR with cashier"
+	)
+	if shop.staff.size() > 0:
+		shop.staff[0].on_duty_today = true
+	_expect_equal(shop.has_cashier_on_duty(), true, "C2 gate 3: cashier on duty")
+	_game_state.set("attention_remaining", 0)
+	_event_bus.emit_signal("attention_changed", 0)
+
+	_expect_equal(_game_state.call("can_inspect"), false, "C2 gate 3: Inspect blocked at Att 0")
+	_expect_equal(_game_state.call("can_negotiate"), false, "C2 gate 3: Negotiate blocked at Att 0")
+	_expect_equal(_game_state.call("can_pull"), false, "C2 gate 3: Pull blocked at Att 0")
+	var research := _demand_signals.call("research_set", &"AA-BASE") as Dictionary
+	_expect_equal(bool(research.get("ok", false)), false, "C2 gate 3: Research blocked at Att 0")
+	_expect_equal(
+		StringName(research.get("reason", &"")),
+		&"insufficient_attention",
+		"C2 gate 3: Research reason is insufficient_attention"
+	)
+
+	var inspect_dto: BuyConfirmSignal = null
+	for dto: BuyConfirmSignal in _demand_signals.call("open_buy_signals"):
+		if DemandSignalService.recommends_inspect(dto.channel):
+			inspect_dto = dto
+			break
+	_expect_equal(inspect_dto != null, true, "C2 gate 3: inspectable lot exists")
+	if inspect_dto != null:
+		_expect_equal(
+			_demand_signals.call("can_inspect", inspect_dto),
+			false,
+			"C2 gate 3: DemandSignals.can_inspect false at Att 0"
+		)
+		_expect_equal(
+			_demand_signals.call("inspect_buy", inspect_dto),
+			false,
+			"C2 gate 3: inspect_buy refuses at Att 0"
+		)
+
+	_inventory_service.call(
+		"receive_stock",
+		&"ACC-SLV-60",
+		1,
+		250,
+		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+	)
+	var queue := CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		Callable(_game_state, "adjust_reputation"),
+		Callable(_game_state, "spend_attention")
+	)
+	var buyer := CustomerProfile.new()
+	buyer.budget_cents = 5_000
+	buyer.interest_tags = [&"accessory"]
+	_expect_equal(queue.enqueue(buyer), true, "C2 gate 3: enqueue routine sale")
+	_expect_equal(queue.negotiate(-0.10), false, "C2 gate 3: negotiate fails at Att 0")
+	_expect_equal(buyer.has_negotiated, false, "C2 gate 3: negotiate does not mark customer")
+	_expect_equal(queue.pull_from_backstock(), false, "C2 gate 3: pull fails at Att 0")
+	_expect_equal(queue.sell_listed(), true, "C2 gate 3: cashier still routine-sells")
+	queue.free()
+
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "C2 gate 3: HUD loads")
+	if hud == null:
+		return
+	Callable(hud, "_update_attention").call(0)
+	var open_research := hud.get_node_or_null("%OpenResearchButton") as Button
+	var inspect_button := hud.get_node_or_null("%InspectButton") as Button
+	_expect_equal(
+		open_research != null and open_research.disabled,
+		true,
+		"C2 gate 3: HUD Research disabled at Att 0"
+	)
+	var customer := CustomerProfile.new()
+	customer.display_name = "Tester"
+	customer.target_sku = &"ACC-SLV-60"
+	customer.listed_price_cents = 599
+	customer.budget_cents = 5_000
+	Callable(hud, "_on_customer_head_changed").call(customer)
+	Callable(hud, "_on_customer_desk_ready").call(customer, true)
+	var negotiate := hud.get_node_or_null("%NegotiateButton") as Button
+	var pull := hud.get_node_or_null("%PullButton") as Button
+	var sell := hud.get_node_or_null("%SellButton") as Button
+	_expect_equal(
+		negotiate != null and negotiate.disabled,
+		true,
+		"C2 gate 3: HUD Negotiate disabled at Att 0"
+	)
+	_expect_equal(
+		pull != null and pull.disabled,
+		true,
+		"C2 gate 3: HUD Pull disabled at Att 0"
+	)
+	_expect_equal(
+		sell != null and not sell.disabled,
+		true,
+		"C2 gate 3: HUD Sell stays enabled with cashier on duty"
+	)
+	if inspect_button != null and inspect_button.visible:
+		_expect_equal(inspect_button.disabled, true, "C2 gate 3: HUD Inspect disabled at Att 0")
+	root.remove_child(hud)
+	hud.free()
+
+
+func _test_c2_specialist_attention_assert() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(NORMAL_CONFIG.inspect_attention_specialist, 2, "C2 gate 4: BalanceConfig Inspect 2")
+	_expect_equal(NORMAL_CONFIG.research_attention_specialist, 10, "C2 gate 4: BalanceConfig Research 10")
+	_expect_equal(shop.inspect_attention_cost(), 5, "C2 gate 4: owner Inspect 5")
+	_expect_equal(shop.research_attention_cost(), 15, "C2 gate 4: owner Research 15")
+	_expect_equal(shop.hire_specialist() != null, true, "C2 gate 4: hire Specialist")
+	_expect_equal(shop.has_specialist_on_duty(), true, "C2 gate 4: Specialist on duty")
+	_expect_equal(shop.inspect_attention_cost(), 2, "C2 gate 4: Inspect Att = 2")
+	_expect_equal(shop.research_attention_cost(), 10, "C2 gate 4: Research Att = 10")
+
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "C2 gate 4: HUD loads")
+	if hud == null:
+		return
+	var open_research := hud.get_node_or_null("%OpenResearchButton") as Button
+	var inspect_button := hud.get_node_or_null("%InspectButton") as Button
+	_expect_equal(
+		open_research != null and open_research.text.contains("Att 10"),
+		true,
+		"C2 gate 4: HUD Research shows Att 10"
+	)
+	_expect_equal(
+		inspect_button != null and inspect_button.text.contains("Att 2"),
+		true,
+		"C2 gate 4: HUD Inspect★ shows Att 2"
+	)
+	root.remove_child(hud)
+	hud.free()
 
 
 func _capture_scripted_customer(customer: CustomerProfile) -> void:

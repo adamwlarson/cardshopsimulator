@@ -10,6 +10,7 @@ const CASHIER_WAGE_CENTS := 8_000
 const CHEAP_CASHIER_WAGE_CENTS := 4_500
 const CASHIER_RELIABILITY := 0.85
 const CHEAP_CASHIER_RELIABILITY := 0.50
+const STAFF_ATTENDANCE_SEED := 90_407
 const SMALL_GRID_WIDTH := 10
 const SMALL_GRID_HEIGHT := 8
 ## Option B lock: 14×10 = 140 tiles @ 0.9 m → ~1,221 sq ft usable
@@ -26,9 +27,12 @@ var grid_width: int = SMALL_GRID_WIDTH
 var grid_height: int = SMALL_GRID_HEIGHT
 var medium_lease_signed_day: int = -1
 var specialist_on_duty: bool = false
+var last_noshow_count: int = 0
+var last_shrink_rate: float = 0.0
 var layout := ShopLayout.new()
 var floor_grid: ShopGrid = ShopGrid.small_default()
 var _config: BalanceConfig
+var _attendance_rng := RandomNumberGenerator.new()
 
 
 func reset(config: BalanceConfig) -> void:
@@ -39,6 +43,9 @@ func reset(config: BalanceConfig) -> void:
 	grid_height = SMALL_GRID_HEIGHT
 	medium_lease_signed_day = -1
 	specialist_on_duty = false
+	last_noshow_count = 0
+	last_shrink_rate = 0.0
+	_attendance_rng.seed = STAFF_ATTENDANCE_SEED
 	layout.reset_small()
 	floor_grid = ShopGrid.small_default()
 	if config != null and config.start_with_trainee_cashier:
@@ -59,6 +66,85 @@ func cashier_count() -> int:
 		if member.is_cashier():
 			count += 1
 	return count
+
+
+func cashiers_on_duty_count() -> int:
+	var count := 0
+	for member: StaffMember in staff:
+		if member.is_cashier() and member.on_duty_today:
+			count += 1
+	return count
+
+
+func has_cashier_on_duty() -> bool:
+	return cashiers_on_duty_count() > 0
+
+
+func is_floor_understaffed() -> bool:
+	return cashier_count() > 0 and cashiers_on_duty_count() == 0
+
+
+func seed_attendance_rng(rng_seed: int) -> void:
+	_attendance_rng.seed = rng_seed
+
+
+func noshow_chance(member: StaffMember) -> float:
+	if member == null or not member.is_cashier():
+		return 0.0
+	var scale := 0.4
+	if _config != null:
+		scale = _config.staff_noshow_mult
+	return clampf((1.0 - member.clamped_reliability()) * scale, 0.0, 0.95)
+
+
+func reset_daily_attendance() -> void:
+	last_noshow_count = 0
+	for member: StaffMember in staff:
+		member.on_duty_today = true
+
+
+func roll_floor_attendance() -> int:
+	last_noshow_count = 0
+	var noshows := 0
+	for member: StaffMember in staff:
+		if not member.is_cashier():
+			member.on_duty_today = true
+			continue
+		var chance := noshow_chance(member)
+		var absent := chance > 0.0 and _attendance_rng.randf() < chance
+		member.on_duty_today = not absent
+		if absent:
+			noshows += 1
+	last_noshow_count = noshows
+	_emit_staff_changed()
+	return noshows
+
+
+func shrink_rate() -> float:
+	var base := 0.002
+	var unstaffed := 0.005
+	if _config != null:
+		base = _config.shrink_daily_base
+		unstaffed = _config.shrink_unstaffed_add
+	var rate := base
+	if not has_cashier_on_duty():
+		rate += unstaffed
+	else:
+		for member: StaffMember in staff:
+			if (
+				member.is_cashier()
+				and member.on_duty_today
+				and member.theft_bias
+			):
+				rate += unstaffed * (1.0 - member.clamped_reliability())
+	last_shrink_rate = rate
+	return rate
+
+
+func pull_attention_cost() -> int:
+	if _config != null:
+		return maxi(1, _config.pull_attention)
+	return 5
 
 
 func specialist_count() -> int:

@@ -343,6 +343,48 @@ func listed_price_for(sku_id: StringName) -> int:
 	return 0
 
 
+func inventory_cogs_cents() -> int:
+	if model == null:
+		return 0
+	return model.inventory_cogs_cents()
+
+
+func apply_daily_shrink(rate: float) -> Dictionary:
+	if model == null:
+		return {
+			"rate": rate,
+			"cogs_cents": 0,
+			"loss_cents": 0,
+			"units_removed": 0,
+		}
+	var cogs := model.inventory_cogs_cents()
+	var loss := maxi(0, roundi(float(cogs) * rate))
+	if loss == 0 and rate > 0.0:
+		loss = 1
+	var applied := model.apply_shrink_loss(loss)
+	var loss_cents := int(applied.get("loss_cents", 0))
+	var units := int(applied.get("units_removed", 0))
+	if units > 0:
+		EventBus.publish_inventory_changed(&"shrink", model.unit_count())
+	return {
+		"rate": rate,
+		"cogs_cents": cogs,
+		"loss_cents": loss_cents,
+		"units_removed": units,
+	}
+
+
+func has_backstock(sku_id: StringName) -> bool:
+	return model != null and model.has_backstock(sku_id)
+
+
+func pull_from_backstock(sku_id: StringName) -> bool:
+	if model == null or not model.pull_from_backstock(sku_id):
+		return false
+	EventBus.publish_inventory_changed(sku_id, total_owned(sku_id))
+	return true
+
+
 func location_for(sku_id: StringName) -> InventoryLocation:
 	var lot := get_lot(sku_id)
 	if lot != null:

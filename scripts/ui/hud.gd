@@ -133,6 +133,9 @@ func _ready() -> void:
 	%SellButton.pressed.connect(_sell_customer)
 	%NegotiateButton.pressed.connect(_negotiate_customer)
 	%RefuseButton.pressed.connect(_refuse_customer)
+	var pull_button := get_node_or_null("%PullButton") as Button
+	if pull_button != null:
+		pull_button.pressed.connect(_pull_customer)
 	rent_fire_sale_button.pressed.connect(_select_rent_path.bind(&"fire_sale"))
 	rent_accessories_button.pressed.connect(
 		_select_rent_path.bind(&"cut_accessories")
@@ -221,6 +224,13 @@ func _update_phase(phase: int) -> void:
 	if phase == GameState.DayPhase.SETTLE and _showcase_choice_made:
 		showcase_panel.hide()
 	_sync_prep_action_buttons()
+	_sync_serve_owner_verbs()
+	if (
+		phase == GameState.DayPhase.FLOOR
+		and GameState.shop.is_floor_understaffed()
+	):
+		beat_toast.text = "Cashier no-show — floor understaffed"
+		beat_toast.show()
 	_sync_modal_veil()
 
 
@@ -231,6 +241,7 @@ func _update_attention(remaining: int) -> void:
 	]
 	_sync_inspect_button()
 	_sync_prep_action_buttons()
+	_sync_serve_owner_verbs()
 
 
 func _update_queue(length: int) -> void:
@@ -322,6 +333,9 @@ func _inspect_buy() -> void:
 	if not DemandSignals.can_inspect(_buy_signal):
 		_sync_inspect_button()
 		return
+	if not GameState.can_inspect():
+		_sync_inspect_button()
+		return
 	var cost := GameState.shop.inspect_attention_cost()
 	if GameState.attention_remaining < cost:
 		_sync_inspect_button()
@@ -348,6 +362,7 @@ func _sync_inspect_button() -> void:
 		return
 	inspect_button.disabled = (
 		_buy_signal.inspected
+		or not GameState.can_inspect()
 		or GameState.attention_remaining < cost
 	)
 
@@ -764,6 +779,9 @@ func _sync_customer_serve() -> void:
 			_current_customer.buylist_signal
 		)
 		%NegotiateButton.hide()
+		var pull_hide := get_node_or_null("%PullButton") as Button
+		if pull_hide != null:
+			pull_hide.hide()
 		%SellButton.text = "Buy at offer"
 		%SellButton.disabled = (
 			_current_customer.buylist_signal == null
@@ -788,9 +806,16 @@ func _sync_customer_serve() -> void:
 		]
 	)
 	%NegotiateButton.show()
-	%NegotiateButton.disabled = _current_customer.has_negotiated
+	var pull_show := get_node_or_null("%PullButton") as Button
+	if pull_show != null:
+		pull_show.show()
+	%NegotiateButton.disabled = (
+		_current_customer.has_negotiated
+		or not GameState.can_negotiate()
+	)
 	%SellButton.text = "Sell at list"
 	%SellButton.disabled = false
+	_sync_serve_owner_verbs()
 
 
 func _sell_customer() -> void:
@@ -805,7 +830,40 @@ func _sell_customer() -> void:
 
 
 func _negotiate_customer() -> void:
+	if not GameState.can_negotiate():
+		_sync_serve_owner_verbs()
+		return
 	EventBus.customer_action_requested.emit(&"negotiate")
+
+
+func _pull_customer() -> void:
+	if not GameState.can_pull():
+		_sync_serve_owner_verbs()
+		return
+	EventBus.customer_action_requested.emit(&"pull")
+	_sync_serve_owner_verbs()
+
+
+func _sync_serve_owner_verbs() -> void:
+	var negotiate := get_node_or_null("%NegotiateButton") as Button
+	if negotiate != null:
+		var negotiated := (
+			_current_customer != null and _current_customer.has_negotiated
+		)
+		negotiate.disabled = negotiated or not GameState.can_negotiate()
+	var pull := get_node_or_null("%PullButton") as Button
+	if pull != null:
+		var sku := (
+			_current_customer.target_sku
+			if _current_customer != null
+			else &""
+		)
+		pull.disabled = (
+			not GameState.can_pull()
+			or sku.is_empty()
+			or not InventoryService.has_backstock(sku)
+		)
+		pull.text = "Pull backstock · Att %d" % GameState.shop.pull_attention_cost()
 
 
 func _refuse_customer() -> void:
@@ -894,6 +952,7 @@ func _sync_prep_action_buttons() -> void:
 	var research_ok := (
 		GameState.can_research()
 		and GameState.attention_remaining >= research_att
+		and GameState.attention_remaining > 0
 		and Economy.can_afford(research_cash)
 	)
 	if GameState.current_phase == GameState.DayPhase.FLOOR and _queue_length > 0:
@@ -1268,9 +1327,18 @@ func _sync_staff_panel() -> void:
 		var label := Label.new()
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.text = "%s · %s/day" % [
+		var duty := ""
+		if (
+			GameState.current_phase == GameState.DayPhase.FLOOR
+			and member.is_cashier()
+			and not member.on_duty_today
+		):
+			duty = " · no-show"
+		label.text = "%s · %s/day · Rel %.2f%s" % [
 			member.display_name,
 			DemandSignalPresenter.format_cents(member.wage_cents),
+			member.clamped_reliability(),
+			duty,
 		]
 		var fire := Button.new()
 		fire.text = "Fire"

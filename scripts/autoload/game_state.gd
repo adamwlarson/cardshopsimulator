@@ -49,6 +49,15 @@ func start_new_game() -> void:
 func start_floor() -> bool:
 	if not is_game_active or not DayPhasePolicy.can_start_floor(current_phase):
 		return false
+	var noshows := shop.roll_floor_attendance()
+	if noshows > 0:
+		QaInstrumentation.record_staff_noshow({
+			"day": current_day,
+			"noshow_count": noshows,
+			"cashier_count": shop.cashier_count(),
+			"on_duty": shop.cashiers_on_duty_count(),
+			"understaffed": shop.is_floor_understaffed(),
+		})
 	current_phase = DayPhase.FLOOR
 	EventBus.day_phase_changed.emit(current_phase)
 	return true
@@ -70,6 +79,7 @@ func advance_day() -> bool:
 	current_day += 1
 	current_phase = DayPhase.PREP
 	attention_remaining = balance_config.attention_pool
+	shop.reset_daily_attendance()
 	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
 	EventBus.attention_changed.emit(attention_remaining)
@@ -93,6 +103,29 @@ func consume_attention(amount: int) -> bool:
 
 func can_research() -> bool:
 	return is_game_active and current_phase in [DayPhase.PREP, DayPhase.FLOOR]
+
+
+func can_inspect() -> bool:
+	return (
+		is_game_active
+		and attention_remaining >= shop.inspect_attention_cost()
+	)
+
+
+func can_negotiate() -> bool:
+	return (
+		is_game_active
+		and current_phase == DayPhase.FLOOR
+		and attention_remaining >= CustomerQueue.NEGOTIATE_ATTENTION_COST
+	)
+
+
+func can_pull() -> bool:
+	return (
+		is_game_active
+		and current_phase == DayPhase.FLOOR
+		and attention_remaining >= shop.pull_attention_cost()
+	)
 
 
 func can_rearrange() -> bool:
