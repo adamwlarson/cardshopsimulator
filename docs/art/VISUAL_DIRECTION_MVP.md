@@ -51,6 +51,10 @@ Counter, case, register, and tray cannot collapse into one undifferentiated bloc
 
 Glass must remain readable against the shop background without becoming opaque blue plastic. Prefer restrained roughness/reflection and strong frame silhouettes. Transparent case performance is part of the gate.
 
+`prop_display_case_01` exists in the project art pipeline as the first display-case prop. Its production GLB may land in a later art PR at `res://assets/props/shop/fixtures/prop_display_case_01.glb`; this scaffold PR intentionally does not block on or carry a large binary export. The current primitive case remains the runtime placeholder until that asset passes scale, material, transparency, collision, and license/provenance checks.
+
+Moodboard references belong under `docs/art/moodboards/`. Keep source attribution and usage notes beside each reference; do not commit unlicensed source images merely as inspiration.
+
 ## Fictional products and AI policy
 
 All visible card products use the fictional **Aether Arc TCG** bible and `AA-*`/`ACC-*` identifiers. No real-game trade dress, logos, card frames, set symbols, grading brands, or recognizable characters.
