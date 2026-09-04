@@ -1,119 +1,223 @@
-# Card Shop Simulator — UI Wireflows v1
+# UI Wireflows v1 — Card Shop Simulator
 
-Status: Adopted (PM lock 2026-09-04)
+**Status:** Draft for PM / Eng / QA / Art  
+**Author:** CSS Designer  
+**Date:** 2026-09-04  
+**Depends on:** `systems-design-v1.md` §4.5, `fictional-set-bible-v1.md`  
+**Scope:** MVP screens for buy confirm, price confirm, and serve/negotiate. Desktop/gamepad; 3D shop remains visible behind modal dim.
 
-## 1. Interaction principles
+---
 
-- The 3D shop remains the primary context; management surfaces open as focused overlays.
-- Every consequential action shows cash, capacity, Attention, and timing effects before confirmation.
-- Currency is formatted from integer cents. Destructive actions require explicit confirmation.
-- Market UI displays noisy comps and confidence, never `true_market_cents`.
-- Keyboard/mouse is the MVP input baseline. Focus order and readable text are required from the first implementation.
+## 0. Global UI rules
 
-Persistent HUD: current phase/day, clock, cash, next major bill and days remaining, Attention, selected tool, and alerts. The cash/day foundation HUD is an interim subset.
+1. **Never** show `true_market`, exact `p_buy`, `cert_valid`, or true condition until Inspect resolves (§4.5).
+2. Money in **integer cents** in data; UI formats `$12.34`.
+3. Confirm CTAs stay enabled on bad “feel” chips — warn, don’t soft-lock.
+4. Escape / B = cancel without mutation; Enter / A = primary confirm when focused.
+5. Every confirm emits QA instrumentation payloads (buy-confirm / demand_signal_shown) behind flag.
 
-## 2. Boot and new game
+**Shared chrome:** title, close (X), primary (confirm), secondary (cancel). Dim 3D shop 40%.
 
-`Boot → Main Menu → New Game → Difficulty → Scenario briefing → Prep`
+---
 
-Difficulty cards summarize starting cash, weekly rent, capacity, Attention, event pressure, and recovery options from `BalanceConfig`. The confirmation screen names the first rent due date. Continue is disabled when no compatible save exists.
+## 1. Buy opportunity → demand-signal → confirm
 
-## 3. Daily shell
+### 1.1 Entry
 
-### Prep
+| From | Trigger |
+|------|---------|
+| Prep phase “Opportunities” list | Select row |
+| Floor — seller walk-in | Talk → “Review lot” |
+| Rare shady/auction beat | Event modal → “Inspect deal” |
 
-HUD emphasizes cash forecast, incoming shipments, unresolved events, and opening checklist.
+### 1.2 Screen: `BuyOpportunityDetail`
 
-`Prep dashboard → [Buy | Inventory | Pricing | Layout | Staff | Events] → Open Shop confirmation → Floor`
+```
+┌─────────────────────────────────────────────┐
+│  BUY · Marketplace lot              [X]     │
+│  Dustway Explorer Box ×2                    │
+├──────────────────┬──────────────────────────┤
+│  [product proxy] │  Ask (exact)   $48.00    │
+│                  │  Comp range    $52–$68   │
+│                  │  Demand        WARM      │
+│                  │  Confidence    LOW       │
+│                  │  Condition     Photo only│
+│                  │                Inspect★  │
+├──────────────────┴──────────────────────────┤
+│  After buy: Cash $7,952 → $7,904            │
+│  Space: need 4 shelf · free 6  ✓            │
+│  Last similar in-shop: $31 · 4d ago         │
+├─────────────────────────────────────────────┤
+│  [ Haggle ]     [ Cancel ]     [ Buy ]      │
+└─────────────────────────────────────────────┘
+```
 
-Open Shop confirmation lists unpriced intake, blocked paths, unstaffed critical tasks, and low cash. Warnings inform; only invalid navigation or corrupted required state blocks opening.
+**Field → §4.5:** ask exact; comp range; demand band; confidence; condition cue; cash/space; optional last sale.  
+**Haggle:** opens one-shot counter field; on reject, opportunity dismissed.  
+**Inspect★:** spends Attention; updates condition cue only (not comps).
 
-### Floor
+### 1.3 Screen: `BuyConfirm` (second step if Buy pressed)
 
-HUD emphasizes time, queue, customer requests, and remaining Attention.
+```
+┌──────────────────────────────────────┐
+│  Confirm purchase?                   │
+│  Dustway ETB ×2 @ $24.00             │
+│  Total                               │
+│  Signals snapshot (read-only strip): │
+│    Comp $52–$68 · WARM · LOW         │
+│  [ Back ]              [ Confirm ]   │
+└──────────────────────────────────────┘
+```
 
-`Customer/fixture selection → contextual action → preview cost/time → execute → world feedback`
+On Confirm → inventory + cash mutation → close → toast “Lot added to backstock/shelf”.
 
-Critical alerts stack by urgency without covering the register or selected customer. Repricing and stock movement show their Attention cost.
+### 1.4 Flow
 
-### Settle
+```mermaid
+flowchart LR
+  List[Opportunity list] --> Detail[BuyOpportunityDetail]
+  Detail -->|Haggle| Hag[One counter]
+  Hag -->|Accept| Detail
+  Hag -->|Reject| Gone[Opportunity gone]
+  Detail -->|Inspect| Detail
+  Detail -->|Buy| Confirm[BuyConfirm]
+  Confirm -->|Back| Detail
+  Confirm -->|Confirm| Commit[Mutate inventory/cash]
+```
 
-`Close doors → transaction reconciliation → operating summary → bills/rent → event outcomes → insolvency check → Next Day`
+---
 
-The summary separates revenue, cost of goods, fees, payroll accrual, shrink, rent, and net cash movement. On every seventh day, weekly rent is a distinct ledger line.
+## 2. Price tag → §4.5 chips → confirm
 
-## 4. Inventory flows
+### 2.1 Entry
 
-### Receive and locate
+| From | Trigger |
+|------|---------|
+| Case/binder/shelf interact | “Set price” |
+| Inventory panel row | Price pencil |
+| Decision beats #1/#7/#8 | Scripted focus |
 
-`Delivery/offer accepted → Intake list → verify quantity/condition → create StockLot → choose Location → available`
+### 2.2 Screen: `PriceEditor`
 
-Mismatch sends the item to a review state. Canceling before confirmation leaves cash and inventory unchanged.
+```
+┌─────────────────────────────────────────────┐
+│  PRICE · Skiefall Titan (NM)         [X]    │
+│  Location: Showcase case · Case boost       │
+├─────────────────────────────────────────────┤
+│  Suggested (noisy)        $21.40            │
+│  Your price     [  $24.00  ]   (−/+ $1)     │
+│  vs suggest     +$2.60  (+12%)              │
+│  Position       PREMIUM                     │
+│  Demand         HOT                         │
+│  Move feel      Walk risk                   │
+├─────────────────────────────────────────────┤
+│  [ Cancel ]                    [ Apply ]    │
+└─────────────────────────────────────────────┘
+```
 
-### Move stock
+**Chips:** Position = Undercut / Competitive / Premium; Move feel = Likely sits / Should move / Walk risk.  
+Live-update chips as price field changes (debounced 100ms) using **noisy** market only.
 
-`Select lot/instance → Move → valid locations highlighted → capacity preview → confirm`
+### 2.3 Screen: `PriceConfirm` (optional if delta from prior list >15% or first list)
 
-Case slots, shelf facings, backstock bins, and intake are visually distinct. Instance-tracked Singles/Graded show condition and provenance before movement.
+```
+┌──────────────────────────────────────┐
+│  Apply price $24.00?                 │
+│  PREMIUM · HOT · Walk risk           │
+│  [ Back ]              [ Confirm ]   │
+└──────────────────────────────────────┘
+```
 
-### Sell or liquidate
+Skip confirm when reopening editor and change <15% (Apply commits directly) — keeps UX snappy; big swings still gate.
 
-Normal checkout relieves the configured lot and records revenue/cost basis. Liquidation previews discount, cash raised, and stock lost. Bulk liquidation requires a second confirmation.
+### 2.4 Flow
 
-## 5. Buying flows
+```mermaid
+flowchart LR
+  Inv[Inventory / prop] --> Edit[PriceEditor]
+  Edit -->|chips live| Edit
+  Edit -->|Apply small Δ| Commit[Set listed_price]
+  Edit -->|Apply large Δ| PC[PriceConfirm]
+  PC --> Commit
+```
 
-Unified opportunity cards identify Distributor, buylist, marketplace, auction, trade, or shady source. They show known price, estimated landed cost, timing, required Attention, visible comps, confidence, capacity impact, and risk tags.
+---
 
-`Opportunity → inspect evidence → quantity/offer → forecast → confirm → cash reserve/ledger → incoming or intake`
+## 3. Serve customer → negotiate
 
-Auction bids expose maximum commitment. Trades preview both sides and resulting cash/capacity. Shady offers state authenticity/reputation uncertainty without revealing a hidden outcome.
+### 3.1 Entry
 
-## 6. Pricing and demand signals
+Customer at counter / interacted in queue → `CustomerServe`.
 
-`SKU/instance → Pricing drawer → cost basis + comp range + age/confidence + current ask → new ask → projected margin/velocity language → apply`
+### 3.2 Screen: `CustomerServe`
 
-Comp rows show source class, observed sale price, condition, and age. A range and confidence indicator summarize them. No UI field, tooltip, accessibility label, analytics payload intended for players, or customer speech may expose true market.
+```
+┌─────────────────────────────────────────────┐
+│  CUSTOMER · Spike · Patience ████░░         │
+│  Wants: Bastion Captain (NM)                │
+├──────────────────┬──────────────────────────┤
+│  [portrait]      │  Your list     $5.00     │
+│                  │  Demand        STEADY    │
+│                  │  Position      Compet.   │
+│                  │  Move feel     Should…   │
+│                  │  (same §4.5 chips; no %) │
+├──────────────────┴──────────────────────────┤
+│  [ Pull backstock ]  [ Refuse ]             │
+│  [ Negotiate −10% ]  [ Sell at list ]       │
+└─────────────────────────────────────────────┘
+```
 
-Bulk pricing is a later feature; MVP prices one SKU/instance at a time to keep consequences legible.
+**Negotiate:** one step ±10% (owner Attention cost); Spike may refuse → walk.  
+**Refuse / walkout:** soft Rep tick per systems.  
+**Buylist sellers:** reuse BuyOpportunityDetail layout with “You offer” instead of Ask.
 
-## 7. Customer and staff flows
+### 3.3 Flow
 
-Customer cards show request, patience, budget language, and service state—not exact hidden willingness to pay. Selecting a request presents satisfy, substitute, assist, or defer actions.
+```mermaid
+flowchart TD
+  Q[Queue] --> Serve[CustomerServe]
+  Serve -->|Sell| Done[Cash + stock out]
+  Serve -->|Negotiate| Serve
+  Serve -->|Pull| Serve
+  Serve -->|Refuse / timeout| Leave[Leave + Rep]
+```
 
-`Task appears → assign owner/staff → Attention/time preview → task active → outcome`
+---
 
-The staff panel shows shift, role, current task, queue, skill modifiers, morale, and wage. Overcommitting Attention is disallowed; reprioritizing warns about abandoned work.
+## 4. Art / Eng notes
 
-## 8. Layout flow
+| Element | Art | Eng |
+|---------|-----|-----|
+| Product proxy | Pack/ETB/card plane from bible | Bind SKU mesh + label |
+| Band chips | Color: Cold blue → Hot amber; never rely on color alone (icon+text) | Enum → chip theme |
+| Confidence | High shield / Med / Low eye icons | Channel → confidence |
+| Modal dim | Keep P0a counter/case readable | UI layer above shop |
 
-`Prep → Layout mode → 10×8 grid → choose P0a prop → rotate/place → validate path/capacity → save`
+---
 
-Grid tiles represent 0.9 m. Overlay states: valid, collision, blocked customer path, blocked staff path, and inaccessible interaction face. P0a props are counter, glass cases, register, intake tray, shelves, backstock bins, and entrance.
+## 5. §10 beat ↔ bible card alignment
 
-Exiting with invalid mandatory paths offers return to edit or discard changes. Decorative props never silently add simulation capacity.
+| Beat | Wireflow | Canon SKU / card (set bible) |
+|------|----------|------------------------------|
+| #1 Price seed ETBs | PriceEditor | `AA-DUST-ETB` (Dustway Explorer Box) |
+| #2 Distributor MOQ | BuyOpportunityDetail | `AA-SKIE-BLST` / `AA-SKIE-ETB` mix |
+| #4 Spike wants last staple | CustomerServe | **Bastion Captain** (`AA-BASE-088`) or **Arcbolt Adept** (`AA-BASE-078`) |
+| #6 First rent + soft shelf | PriceEditor + BuyConfirm fire-sale | Dustway sealed (`AA-DUST-*`) |
+| #7 Hype spike | PriceEditor | **Skiefall Titan** (`AA-SKIE-047`) |
+| #8 Case slab vs singles | PriceEditor / inventory | **Empress of Updrafts** slab vs two chase singles (e.g. Titan + Paragon Glider) |
 
-## 9. Events and tough decisions
+Scripted focus must use these names — no placeholders.
 
-Event modal structure: telegraph/evidence, decision deadline, 2–3 options, known immediate effects, uncertain-risk language, and confirm. Delayed consequences reference the originating choice in the settle log.
+---
 
-The ten playtest decisions in systems design §10 use the same comparison pattern: alternatives side-by-side, constrained resources visible, no false precision, and a post-decision audit event.
+## 6. QA hooks
 
-## 10. Insolvency and run end
+- Beats #1/#2/#4/#6/#7/#8 must open these flows with §4.5 fields visible **before** commit.
+- Probe: player ranks deal quality above chance using only on-screen signals.
+- Forbidden if UI shows exact true_market or sell-through %.
 
-Forecast warning appears before an obligation is due.
+---
 
-`Warning → cash plan → [liquidate | cancel orders | eligible financing | continue]`
+## 7. Out of MVP
 
-On missed payment:
-
-`Default notice → grace period + cure amount → recovery action → cured OR closure`
-
-Easy/Normal may offer fictional high-risk financing; Hard does not. Closure explains the uncured obligation and preserves a run summary. Restart and return-to-menu are separate actions.
-
-## 11. Error, save, and QA states
-
-- Commands display a stable error code and plain-language recovery.
-- Autosave occurs at phase boundaries and after confirmed major transactions.
-- Loading validates save schema before entering the shop.
-- Debug builds can overlay IDs, seeds, task queues, and true market only under a clearly marked QA mode.
-- QA events include screen/flow, command, result, day/phase, selected difficulty, and relevant resource deltas.
+- Multi-line price charts, live “N customers want this”, batch price tools, full buylist spreadsheet.
