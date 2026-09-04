@@ -36,7 +36,7 @@ func enqueue(customer: CustomerProfile) -> bool:
 		customer_finished.emit(customer, &"no_stock")
 		return false
 	customer.target_sku = StringName(offer["sku_id"])
-	customer.asking_price_cents = int(offer["listed_price_cents"])
+	customer.listed_price_cents = int(offer["listed_price_cents"])
 	customer.desired_skus = [customer.target_sku]
 	customer.begin_waiting()
 	_customers.append(customer)
@@ -76,20 +76,20 @@ func sell_listed() -> bool:
 	var customer := begin_serving_head()
 	if customer == null or not customer.can_afford(
 		customer.target_sku,
-		customer.asking_price_cents
+		customer.listed_price_cents
 	):
 		return false
 	if not bool(_inventory_service.call(
 		"confirm_customer_sale",
 		customer.target_sku,
-		customer.asking_price_cents
+		customer.listed_price_cents
 	)):
 		return false
 	_complete(customer, &"sold")
 	return true
 
 
-func negotiate(percent_from_ask: float = -0.10) -> bool:
+func negotiate(percent_from_list: float = -0.10) -> bool:
 	var customer := begin_serving_head()
 	if customer == null or customer.has_negotiated:
 		return false
@@ -99,12 +99,12 @@ func negotiate(percent_from_ask: float = -0.10) -> bool:
 		return false
 	customer.has_negotiated = true
 	var negotiated := negotiated_price_cents(
-		customer.asking_price_cents,
-		percent_from_ask
+		customer.listed_price_cents,
+		percent_from_list
 	)
 	if not customer.can_afford(customer.target_sku, negotiated):
 		return false
-	customer.asking_price_cents = negotiated
+	customer.listed_price_cents = negotiated
 	return true
 
 
@@ -129,11 +129,11 @@ func size() -> int:
 
 
 static func negotiated_price_cents(
-	ask_cents: int,
-	percent_from_ask: float
+	listed_price_cents: int,
+	percent_from_list: float
 ) -> int:
-	var clamped_percent := clampf(percent_from_ask, -0.10, 0.10)
-	return maxi(1, roundi(ask_cents * (1.0 + clamped_percent)))
+	var clamped_percent := clampf(percent_from_list, -0.10, 0.10)
+	return maxi(1, roundi(listed_price_cents * (1.0 + clamped_percent)))
 
 
 func _complete(customer: CustomerProfile, outcome: StringName) -> void:

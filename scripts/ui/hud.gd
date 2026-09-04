@@ -6,7 +6,11 @@ extends Control
 @onready var attention_label: Label = %AttentionLabel
 @onready var queue_label: Label = %QueueLabel
 @onready var phase_button: Button = %PhaseButton
+@onready var buy_list_panel: PanelContainer = %BuyOpportunityList
+@onready var buy_rows: VBoxContainer = %BuyOpportunityRows
+@onready var buy_empty_label: Label = %BuyOpportunityEmpty
 @onready var buy_panel: PanelContainer = %BuyOpportunityDetail
+@onready var buy_title: Label = %BuyOpportunityTitle
 @onready var buy_summary: Label = %BuySummary
 @onready var buy_button: Button = %BuyButton
 @onready var buy_confirm_panel: PanelContainer = %BuyConfirm
@@ -31,7 +35,8 @@ func _ready() -> void:
 	EventBus.customer_queue_changed.connect(_update_queue)
 	EventBus.customer_head_changed.connect(_on_customer_head_changed)
 	phase_button.pressed.connect(_on_phase_pressed)
-	%OpenBuyButton.pressed.connect(_open_buy_detail)
+	%OpenBuyButton.pressed.connect(_open_buy_list)
+	%BuyListCancelButton.pressed.connect(_close_buy)
 	%BuyCancelButton.pressed.connect(_close_buy)
 	buy_button.pressed.connect(_open_buy_confirm)
 	%BuyBackButton.pressed.connect(_back_to_buy_detail)
@@ -90,15 +95,34 @@ func _on_phase_pressed() -> void:
 			GameState.advance_day()
 
 
-func _open_buy_detail() -> void:
-	_buy_signal = DemandSignals.buy_signal(
-		&"AA-SKIE-ETB",
-		DemandSignalService.Channel.MARKETPLACE,
-		3200,
-		1
-	)
+func _open_buy_list() -> void:
+	_close_buy()
+	for child: Node in buy_rows.get_children():
+		buy_rows.remove_child(child)
+		child.queue_free()
+	var signals := DemandSignals.open_buy_signals()
+	buy_empty_label.visible = signals.is_empty()
+	for dto: BuyConfirmSignal in signals:
+		var row := Button.new()
+		row.text = DemandSignalPresenter.opportunity_row(dto)
+		row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		row.custom_minimum_size = Vector2(0.0, 64.0)
+		row.pressed.connect(_select_buy_opportunity.bind(dto))
+		buy_rows.add_child(row)
+	buy_list_panel.show()
+
+
+func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
+	_buy_signal = dto
+	buy_title.text = "BUY · %s · %s\n%s ×%d" % [
+		String(_buy_signal.channel).capitalize(),
+		_buy_signal.offer_label,
+		_buy_signal.display_name,
+		_buy_signal.quantity,
+	]
 	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
 	buy_button.disabled = not _buy_signal.can_confirm
+	buy_list_panel.hide()
 	buy_panel.show()
 	buy_confirm_panel.hide()
 
@@ -107,8 +131,11 @@ func _open_buy_confirm() -> void:
 	if _buy_signal == null:
 		return
 	buy_confirm_summary.text = (
-		"Skiefall Ascension Explorer Box ×1\nTotal %s\n%s–%s · %s · %s"
+		"%s ×%d @ %s\nTotal %s\n%s–%s · %s · %s"
 		% [
+			_buy_signal.display_name,
+			_buy_signal.quantity,
+			DemandSignalPresenter.format_cents(_buy_signal.unit_cost_cents),
 			DemandSignalPresenter.format_cents(_buy_signal.lot_total_cents),
 			DemandSignalPresenter.format_cents(_buy_signal.shown_comp_low_cents),
 			DemandSignalPresenter.format_cents(_buy_signal.shown_comp_high_cents),
@@ -125,18 +152,8 @@ func _confirm_buy() -> void:
 		return
 	if not _spend_for_floor(8):
 		return
-	var shown_midpoint := (
-		_buy_signal.shown_comp_low_cents
-		+ _buy_signal.shown_comp_high_cents
-	) / 2
-	InventoryService.confirm_stock_purchase(
-		_buy_signal.sku_id,
-		1,
-		_buy_signal.unit_cost_cents,
-		shown_midpoint - _buy_signal.unit_cost_cents,
-		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
-	)
-	_close_buy()
+	if DemandSignals.confirm_buy(_buy_signal):
+		_close_buy()
 
 
 func _back_to_buy_detail() -> void:
@@ -145,8 +162,10 @@ func _back_to_buy_detail() -> void:
 
 
 func _close_buy() -> void:
+	buy_list_panel.hide()
 	buy_panel.hide()
 	buy_confirm_panel.hide()
+	_buy_signal = null
 
 
 func _open_price_editor() -> void:
@@ -193,14 +212,17 @@ func _on_customer_head_changed(customer: CustomerProfile) -> void:
 	customer_title.text = "CUSTOMER · %s" % _current_customer.display_name
 	var signal_dto := DemandSignals.price_signal(
 		_current_customer.target_sku,
-		_current_customer.asking_price_cents,
+		_current_customer.listed_price_cents,
 		InventoryService.location_for(_current_customer.target_sku)
 	)
 	customer_summary.text = (
-		"Wants: %s\nYour list: %s\n%s"
+		"Wants: %s\n%s: %s\n%s"
 		% [
 			String(_current_customer.target_sku),
-			DemandSignalPresenter.format_cents(_current_customer.asking_price_cents),
+			DemandSignalPresenter.price_label(
+				DemandSignalPresenter.PriceContext.CUSTOMER_BUYING_FROM_SHOP
+			),
+			DemandSignalPresenter.format_cents(_current_customer.listed_price_cents),
 			DemandSignalPresenter.price_summary(signal_dto),
 		]
 	)

@@ -1,7 +1,12 @@
 class_name BuyConfirmSignal
 extends Resource
 
+@export var opportunity_id: StringName
 @export var sku_id: StringName
+@export var display_name: String
+@export var offer_label: String
+@export var channel: StringName
+@export var quantity: int
 @export var unit_cost_cents: int
 @export var lot_total_cents: int
 @export var shown_comp_low_cents: int
