@@ -210,11 +210,13 @@ func _test_buy_opportunity_picker_seed() -> void:
 
 
 func _test_price_editor_inventory_picker() -> void:
-	var inventory_service := load(
+	var inventory_service_script := load(
 		"res://scripts/autoload/inventory_service.gd"
-	).new()
-	inventory_service.model = InventoryModel.new(NORMAL_CONFIG)
-	inventory_service.model.reset_and_seed()
+	) as Script
+	var inventory_service := inventory_service_script.new() as Node
+	var inventory_model := InventoryModel.new(NORMAL_CONFIG)
+	inventory_model.reset_and_seed()
+	inventory_service.set("model", inventory_model)
 	var priceable_stock: Array = inventory_service.call("get_priceable_stock")
 	var priceable_skus: Array[StringName] = []
 	var has_non_dustway_sku := false
