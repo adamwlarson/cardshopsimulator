@@ -32,6 +32,16 @@ func get_ledger() -> Array[LedgerEntry]:
 	return _ledger.duplicate()
 
 
+func settle_weekly_obligations(day: int) -> bool:
+	if day <= GameState.FIRST_DAY or day % 7 != 0:
+		return false
+	return record_expense(
+		GameState.balance_config.weekly_rent_cents,
+		&"rent",
+		"Weekly rent"
+	)
+
+
 func _record(kind: LedgerEntry.Kind, amount_cents: int, category: StringName, memo: String) -> bool:
 	if amount_cents <= 0:
 		push_warning("Transactions must have a positive amount.")
@@ -48,9 +58,4 @@ func _record(kind: LedgerEntry.Kind, amount_cents: int, category: StringName, me
 
 func _on_day_started(day: int) -> void:
 	# TODO: Move this boundary to an explicit weekly settle phase.
-	if day > GameState.FIRST_DAY and day % 7 == 0:
-		record_expense(
-			GameState.balance_config.weekly_rent_cents,
-			&"rent",
-			"Weekly rent"
-		)
+	settle_weekly_obligations(day)

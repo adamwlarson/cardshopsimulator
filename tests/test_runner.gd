@@ -12,6 +12,7 @@ func _initialize() -> void:
 	_test_stock_lot_unit_cost()
 	_test_difficulty_balance_ordering()
 	_test_normal_shop_capacity()
+	_test_weekly_rent_schedule()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -51,6 +52,20 @@ func _test_normal_shop_capacity() -> void:
 	var capacity := ShopCapacity.new()
 	_expect_equal(capacity.display_slots, NORMAL_CONFIG.case_slots, "normal case slots")
 	_expect_equal(capacity.storage_units, NORMAL_CONFIG.backstock_bins, "normal backstock bins")
+
+
+func _test_weekly_rent_schedule() -> void:
+	GameState.set_balance_config(NORMAL_CONFIG)
+	Economy.reset()
+	var starting_cash := Economy.balance_cents
+	_expect_equal(Economy.settle_weekly_obligations(6), false, "no rent before weekly settle")
+	_expect_equal(Economy.balance_cents, starting_cash, "pre-settle cash unchanged")
+	_expect_equal(Economy.settle_weekly_obligations(7), true, "rent charged on weekly settle")
+	_expect_equal(
+		Economy.balance_cents,
+		starting_cash - NORMAL_CONFIG.weekly_rent_cents,
+		"weekly rent amount"
+	)
 
 
 func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:
