@@ -1,6 +1,6 @@
 # Next Eng SoT Pick C v1 — post A+B decision pressure
 
-**Status:** Ready for PM choice  
+**Status:** Adopted — **C1 Market events pack** locked (synced main @ 735a9f53); C2/C3 parked; Specialist Att-discount out of pick  
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** systems §6 / §8 / §10, ui-wireflows §5.1, customer-npc-v1, next-eng-sot-pick-v1 (A+B shipped)  
@@ -110,10 +110,22 @@ Specialist Att-discount stays **out of pick** (already in flight).
 
 ---
 
+## Decision log
+
+| Pick | Result |
+|------|--------|
+| C1 Market events | **Locked** — next eng spike after Specialist Att-discount tip (or parallel if Eng clear) |
+| C2 Hire vs owner | Parked |
+| C3 Optional #3/#10 | Parked |
+| Specialist Att-discount | Out of pick — already in flight (`research_attention_specialist` 10 / `inspect_attention_specialist` 2) |
+
+---
+
 ## PM checklist
 
-- [ ] Choose **C1** / **C2** / **C3**
-- [ ] Confirm Specialist Att-discount tip merges before C2 QA asserts 10/2
-- [ ] Sync this file to main before cloud agent
-- [ ] Losers park for the following spike
+- [x] Choose **C1** / **C2** / **C3** → **C1**
+- [x] Sync this file to main (@ 735a9f53)
+- [x] Losers park (C2/C3)
+- [ ] Sync this Adopted status bump to main
+- [ ] Eng C1 tip after Specialist Att-discount freezes (or parallel if Eng clear)
 
