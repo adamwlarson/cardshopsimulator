@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "cards": [
+    {
+      "catalog_id": "demo-001",
+      "name": "Founder's Dragon",
+      "set_code": "DEMO",
+      "rarity": "rare"
+    }
+  ]
+}

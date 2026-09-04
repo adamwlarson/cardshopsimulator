@@ -1,17 +1,27 @@
-# Godot 4+ specific ignores
+# Godot 4 editor and import caches
 .godot/
-.nomedia
-
-# Godot-specific ignores
 .import/
+
+# Local/export output
 export.cfg
 export_credentials.cfg
+build/
+dist/
 *.tmp
+.nomedia
 
-# Imported translations (automatically generated from CSV files)
+# Generated localization
 *.translation
 
-# Mono-specific ignores
+# C# / Mono output (if introduced later)
 .mono/
 data_*/
 mono_crash.*.json
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/

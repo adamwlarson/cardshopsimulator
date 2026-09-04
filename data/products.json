@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "products": [
+    {
+      "sku": "starter-booster",
+      "display_name": "Starter Set Booster",
+      "product_type": "sealed",
+      "default_condition": "sealed",
+      "market_price_cents": 499
+    },
+    {
+      "sku": "soft-sleeves-100",
+      "display_name": "Soft Sleeves (100)",
+      "product_type": "accessory",
+      "default_condition": "sealed",
+      "market_price_cents": 299
+    }
+  ]
+}

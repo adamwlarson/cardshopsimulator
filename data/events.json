@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "events": [
+    {
+      "id": "demo-set-rumor",
+      "type": "market",
+      "title": "Reprint Rumor",
+      "description": "Placeholder for a future event that changes demand and market prices."
+    }
+  ]
+}
