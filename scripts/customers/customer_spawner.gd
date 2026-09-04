@@ -8,7 +8,7 @@ var _timer: Timer
 
 func _ready() -> void:
 	_timer = Timer.new()
-	_timer.wait_time = spawn_interval_seconds / GameState.balance_config.customer_spawn_rate_scalar
+	_timer.wait_time = spawn_interval_seconds / GameState.balance_config.customer_spawn_mult
 	_timer.timeout.connect(_spawn_customer_stub)
 	add_child(_timer)
 	_timer.start()

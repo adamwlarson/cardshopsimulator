@@ -94,7 +94,7 @@ The player never sees `true_market_cents` in UI, tooltips, exports intended for 
 - customer requests and sell offers;
 - release, reprint, tournament, and social-hype events.
 
-`comp_noise_scalar` controls observation error by difficulty. Comps may be stale or sparse but may not lie in ways the simulation cannot explain. Debug tooling can expose true market only behind a QA/developer flag and must visually label it.
+`comp_noise_width_mult`, `demand_band_sigma`, and class-specific comp MAE caps control observation uncertainty by difficulty. Comps may be stale or sparse but may not lie in ways the simulation cannot explain. Debug tooling can expose true market only behind a QA/developer flag and must visually label it.
 
 ## 5. Customers
 
@@ -187,17 +187,22 @@ All tunable difficulty values live in typed `BalanceConfig` resources. Runtime s
 
 | Field | Easy | Normal | Hard |
 | --- | ---: | ---: | ---: |
-| Starting cash | $10,000 | $8,000 | $6,500 |
-| Weekly rent | $900 | $1,200 | $1,500 |
-| Tile size | 0.9 m | 0.9 m | 0.9 m |
-| Case slots | 28 | 24 | 20 |
-| Backstock bins | 48 | 40 | 32 |
-| Attention pool | 120 | 100 | 85 |
-| Event chance | 0.12 | 0.18 | 0.24 |
-| Loan shark | enabled | enabled | disabled |
-| Customer spawn-rate scalar | 1.15 | 1.00 | 0.85 |
-| Shrink-rate scalar | 0.60 | 1.00 | 1.50 |
-| Comp-noise scalar | 0.08 | 0.15 | 0.24 |
+| `start_cash_cents` | $10,000 | $8,000 | $6,500 |
+| `start_reputation` | 50 | 40 | 30 |
+| `rent_small_weekly_cents` | $900 | $1,200 | $1,500 |
+| `first_rent_due_day` | 7 | 7 | 7 |
+| `tile_size_m` | 0.9 m | 0.9 m | 0.9 m |
+| `case_slots` | 28 | 24 | 20 |
+| `backstock_bins` | 48 | 40 | 32 |
+| `attention_pool` | 120 | 100 | 85 |
+| `event_chance_settle` | 0.12 | 0.18 | 0.24 |
+| `loan_shark_enabled` | enabled | enabled | disabled |
+| `customer_spawn_mult` | 1.15 | 1.00 | 0.85 |
+| `whale_spawn_mult` | 0.85 | 1.00 | 1.20 |
+| `flipper_spawn_mult` | 0.75 | 1.00 | 1.35 |
+| `shrink_mult` | 0.60 | 1.00 | 1.50 |
+| `comp_noise_width_mult` | 0.70 | 1.00 | 1.50 |
+| `demand_band_sigma` | 0.75 | 1.00 | 1.25 |
 
 The curve values are initial locks, not claims of final balance. Changes require playtest evidence and an update to `difficulty-curves-v1.md`.
 

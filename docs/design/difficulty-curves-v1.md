@@ -10,17 +10,25 @@ Difficulty changes pressure and information quality, not basic rules. All runtim
 
 | Field | Easy | Normal | Hard |
 | --- | ---: | ---: | ---: |
-| `starting_cash_cents` | 1,000,000 ($10,000) | 800,000 ($8,000) | 650,000 ($6,500) |
-| `weekly_rent_cents` | 90,000 ($900) | 120,000 ($1,200) | 150,000 ($1,500) |
-| `tile_size_m` | 0.9 | 0.9 | 0.9 |
+| `start_cash_cents` | 1,000,000 ($10,000) | 800,000 ($8,000) | 650,000 ($6,500) |
+| `start_reputation` | 50 | 40 | 30 |
 | `case_slots` | 28 | 24 | 20 |
 | `backstock_bins` | 48 | 40 | 32 |
+| `rent_small_weekly_cents` | 90,000 ($900) | 120,000 ($1,200) | 150,000 ($1,500) |
+| `first_rent_due_day` | 7 | 7 | 7 |
 | `attention_pool` | 120 | 100 | 85 |
-| `event_chance` | 0.12 | 0.18 | 0.24 |
+| `event_chance_settle` | 0.12 | 0.18 | 0.24 |
 | `loan_shark_enabled` | true | true | false |
-| `customer_spawn_rate_scalar` | 1.15 | 1.00 | 0.85 |
-| `shrink_rate_scalar` | 0.60 | 1.00 | 1.50 |
-| `comp_noise_scalar` | 0.08 | 0.15 | 0.24 |
+| `tile_size_m` | 0.9 | 0.9 | 0.9 |
+| `customer_spawn_mult` | 1.15 | 1.00 | 0.85 |
+| `whale_spawn_mult` | 0.85 | 1.00 | 1.20 |
+| `flipper_spawn_mult` | 0.75 | 1.00 | 1.35 |
+| `shrink_mult` | 0.60 | 1.00 | 1.50 |
+| `comp_noise_width_mult` | 0.70 | 1.00 | 1.50 |
+| `demand_band_sigma` | 0.75 | 1.00 | 1.25 |
+| `comp_mae_cap_sealed` | 0.08 | 0.12 | 0.18 |
+| `comp_mae_cap_singles` | 0.10 | 0.16 | 0.24 |
+| `comp_mae_cap_graded` | 0.14 | 0.20 | 0.30 |
 
 Normal is the authored experience and balance reference. Easy gives more liquidity, labor tolerance, reliable information, and recovery capacity. Hard reduces slack and information quality; it must remain learnable and deterministic under a fixed seed.
 
@@ -28,15 +36,15 @@ Normal is the authored experience and balance reference. Easy gives more liquidi
 
 ### Customer spawn rate
 
-Multiply the owning customer system's baseline arrival rate by `customer_spawn_rate_scalar`. It changes opportunity volume, not customers' available money. Queue capacity and service demand can still make more traffic costly.
+Multiply the owning customer system's baseline arrival rate by `customer_spawn_mult`. `whale_spawn_mult` and `flipper_spawn_mult` adjust those archetypes' eligible weights after the base arrival roll. These values change opportunity mix, not customers' available money. Queue capacity and service demand can still make more traffic costly.
 
 ### Shrink rate
 
-Multiply eligible fixture/location shrink risk by `shrink_rate_scalar` after security, visibility, crowd, and event modifiers. Never remove inventory without a logged settle event and source context. Initial implementation may be a deterministic stub.
+Multiply eligible fixture/location shrink risk by `shrink_mult` after security, visibility, crowd, and event modifiers. Never remove inventory without a logged settle event and source context. Initial implementation may be a deterministic stub.
 
 ### Comp noise
 
-`comp_noise_scalar` is the target relative observation-error scale applied while generating visible comparable sales. It is not a direct price multiplier and never changes hidden true market. Source quality, sample age, sample size, and condition should shape the final distribution.
+`comp_noise_width_mult` scales the width of observation noise while generating visible comparable sales. `demand_band_sigma` controls overlap between customer demand bands. The class-specific MAE caps bound mean absolute error for Sealed, Singles, and Graded comp summaries. None of these fields changes hidden true market. Source quality, sample age, sample size, and condition shape the final distribution.
 
 At zero noise, UI still shows observed comps rather than labeling truth. At higher noise, widen ranges and reduce confidence before adding extreme outliers.
 
@@ -58,7 +66,7 @@ Physical grid dimensions remain 10×8 at 0.9 m across difficulty. Difficulty cha
 
 ## 6. Event pressure
 
-`event_chance` is evaluated only at documented event checks, not every frame. Eligibility and cooldown run before chance. A failed roll has no hidden penalty. Event selection and rolls are seeded and included in QA logs.
+`event_chance_settle` is evaluated once at eligible Settle checks, not every frame. Eligibility and cooldown run before chance. A failed roll has no hidden penalty. Event selection and rolls are seeded and included in QA logs.
 
 Higher difficulty may increase event frequency but cannot select events whose counterplay systems are unavailable. Critical obligations must be telegraphed independently of event chance.
 
@@ -66,7 +74,41 @@ Higher difficulty may increase event frequency but cannot select events whose co
 
 The pool refreshes at the defined day boundary. Scheduled staff and upgrades can modify available Attention after the base config is read. Tasks expose final cost and modifiers before commitment. Difficulty should not secretly alter a task cost if the UI cannot explain it.
 
-## 8. Balance change process
+## 8. BalanceConfig resource shape
+
+Engineering treats these exported names as the ratified serialization/API contract:
+
+```gdscript
+class_name BalanceConfig
+extends Resource
+
+enum Difficulty { EASY, NORMAL, HARD }
+
+@export var difficulty: Difficulty = Difficulty.NORMAL
+@export var start_cash_cents: int = 800_000
+@export var start_reputation: int = 40
+@export var case_slots: int = 24
+@export var backstock_bins: int = 40
+@export var rent_small_weekly_cents: int = 120_000
+@export var first_rent_due_day: int = 7
+@export var attention_pool: int = 100
+@export var event_chance_settle: float = 0.18
+@export var loan_shark_enabled: bool = true
+@export var tile_size_m: float = 0.9
+@export var customer_spawn_mult: float = 1.0
+@export var whale_spawn_mult: float = 1.0
+@export var flipper_spawn_mult: float = 1.0
+@export var shrink_mult: float = 1.0
+@export var comp_noise_width_mult: float = 1.0
+@export var demand_band_sigma: float = 1.0
+@export var comp_mae_cap_sealed: float = 0.12
+@export var comp_mae_cap_singles: float = 0.16
+@export var comp_mae_cap_graded: float = 0.20
+```
+
+Canonical assets are `balance_easy.tres`, `balance_normal.tres`, and `balance_hard.tres`. Renaming a serialized field or asset requires an explicit migration.
+
+## 9. Balance change process
 
 Every adjustment records:
 

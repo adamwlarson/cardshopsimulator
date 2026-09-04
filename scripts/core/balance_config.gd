@@ -8,20 +8,31 @@ enum Difficulty {
 }
 
 @export var difficulty: Difficulty = Difficulty.NORMAL
-@export_range(0, 100_000_000, 1) var starting_cash_cents: int = 800_000
-@export_range(0, 10_000_000, 1) var weekly_rent_cents: int = 120_000
-@export_range(0.1, 10.0, 0.1) var tile_size_m: float = 0.9
-@export_range(1, 1_000, 1) var case_slots: int = 24
-@export_range(1, 10_000, 1) var backstock_bins: int = 40
-@export_range(1, 1_000, 1) var attention_pool: int = 100
-@export_range(0.0, 1.0, 0.01) var event_chance: float = 0.18
+@export var start_cash_cents: int = 800_000
+@export var start_reputation: int = 40
+@export var case_slots: int = 24
+@export var backstock_bins: int = 40
+@export var rent_small_weekly_cents: int = 120_000
+@export var first_rent_due_day: int = 7
+@export var attention_pool: int = 100
+@export var event_chance_settle: float = 0.18
 @export var loan_shark_enabled: bool = true
+@export var tile_size_m: float = 0.9
 
-# Difficulty-curve hooks. Their exact impact belongs to the owning systems.
-@export_range(0.1, 3.0, 0.05) var customer_spawn_rate_scalar: float = 1.0
-@export_range(0.0, 3.0, 0.05) var shrink_rate_scalar: float = 1.0
-@export_range(0.0, 1.0, 0.01) var comp_noise_scalar: float = 0.15
+# §8 difficulty-curve scalars. Owning systems apply them exactly once.
+@export var customer_spawn_mult: float = 1.0
+@export var whale_spawn_mult: float = 1.0
+@export var flipper_spawn_mult: float = 1.0
+@export var shrink_mult: float = 1.0
+@export var comp_noise_width_mult: float = 1.0
+@export var demand_band_sigma: float = 1.0
+@export var comp_mae_cap_sealed: float = 0.12
+@export var comp_mae_cap_singles: float = 0.16
+@export var comp_mae_cap_graded: float = 0.20
 
 
-static func is_weekly_settle_day(day: int) -> bool:
-	return day > 1 and day % 7 == 0
+func is_rent_due_day(day: int) -> bool:
+	return (
+		day >= first_rent_due_day
+		and (day - first_rent_due_day) % 7 == 0
+	)

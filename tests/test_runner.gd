@@ -1,8 +1,8 @@
 extends SceneTree
 
-const EASY_CONFIG: BalanceConfig = preload("res://data/balance/easy.tres")
-const NORMAL_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
-const HARD_CONFIG: BalanceConfig = preload("res://data/balance/hard.tres")
+const EASY_CONFIG: BalanceConfig = preload("res://data/balance/balance_easy.tres")
+const NORMAL_CONFIG: BalanceConfig = preload("res://data/balance/balance_normal.tres")
+const HARD_CONFIG: BalanceConfig = preload("res://data/balance/balance_hard.tres")
 
 var _failures: int = 0
 
@@ -37,15 +37,19 @@ func _test_stock_lot_unit_cost() -> void:
 
 func _test_difficulty_balance_ordering() -> void:
 	var cash_is_ordered := (
-		EASY_CONFIG.starting_cash_cents
-		> NORMAL_CONFIG.starting_cash_cents
-		and NORMAL_CONFIG.starting_cash_cents
-		> HARD_CONFIG.starting_cash_cents
+		EASY_CONFIG.start_cash_cents
+		> NORMAL_CONFIG.start_cash_cents
+		and NORMAL_CONFIG.start_cash_cents
+		> HARD_CONFIG.start_cash_cents
 	)
 	_expect_equal(cash_is_ordered, true, "starting cash difficulty ordering")
 	_expect_equal(HARD_CONFIG.loan_shark_enabled, false, "hard loan shark access")
-	_expect_equal(NORMAL_CONFIG.starting_cash_cents, 800_000, "normal starting cash")
-	_expect_equal(NORMAL_CONFIG.weekly_rent_cents, 120_000, "normal weekly rent")
+	_expect_equal(NORMAL_CONFIG.start_cash_cents, 800_000, "normal starting cash")
+	_expect_equal(NORMAL_CONFIG.start_reputation, 40, "normal starting reputation")
+	_expect_equal(NORMAL_CONFIG.rent_small_weekly_cents, 120_000, "normal weekly rent")
+	_expect_equal(NORMAL_CONFIG.first_rent_due_day, 7, "normal first rent due day")
+	_expect_equal(NORMAL_CONFIG.event_chance_settle, 0.18, "normal settle event chance")
+	_expect_equal(NORMAL_CONFIG.comp_noise_width_mult, 1.0, "normal comp noise width")
 
 
 func _test_normal_shop_capacity() -> void:
@@ -55,10 +59,10 @@ func _test_normal_shop_capacity() -> void:
 
 
 func _test_weekly_rent_schedule() -> void:
-	_expect_equal(BalanceConfig.is_weekly_settle_day(6), false, "no rent before weekly settle")
-	_expect_equal(BalanceConfig.is_weekly_settle_day(7), true, "day seven weekly settle")
-	_expect_equal(BalanceConfig.is_weekly_settle_day(14), true, "recurring weekly settle")
-	_expect_equal(NORMAL_CONFIG.weekly_rent_cents, 120_000, "weekly rent amount")
+	_expect_equal(NORMAL_CONFIG.is_rent_due_day(6), false, "no rent before weekly settle")
+	_expect_equal(NORMAL_CONFIG.is_rent_due_day(7), true, "day seven weekly settle")
+	_expect_equal(NORMAL_CONFIG.is_rent_due_day(14), true, "recurring weekly settle")
+	_expect_equal(NORMAL_CONFIG.rent_small_weekly_cents, 120_000, "weekly rent amount")
 
 
 func _expect_equal(actual: Variant, expected: Variant, label: String) -> void:

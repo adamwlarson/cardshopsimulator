@@ -9,7 +9,7 @@ func _ready() -> void:
 
 
 func reset() -> void:
-	balance_cents = GameState.balance_config.starting_cash_cents
+	balance_cents = GameState.balance_config.start_cash_cents
 	_ledger.clear()
 	EventBus.publish_cash_changed(balance_cents)
 
@@ -33,10 +33,10 @@ func get_ledger() -> Array[LedgerEntry]:
 
 
 func settle_weekly_obligations(day: int) -> bool:
-	if not BalanceConfig.is_weekly_settle_day(day):
+	if not GameState.balance_config.is_rent_due_day(day):
 		return false
 	return record_expense(
-		GameState.balance_config.weekly_rent_cents,
+		GameState.balance_config.rent_small_weekly_cents,
 		&"rent",
 		"Weekly rent"
 	)

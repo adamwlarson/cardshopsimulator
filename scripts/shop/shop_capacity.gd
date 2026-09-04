@@ -1,7 +1,7 @@
 class_name ShopCapacity
 extends Resource
 
-const DEFAULT_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
+const DEFAULT_CONFIG: BalanceConfig = preload("res://data/balance/balance_normal.tres")
 
 @export_range(1, 1_000, 1) var display_slots: int
 @export_range(1, 100_000, 1) var storage_units: int
