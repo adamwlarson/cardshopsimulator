@@ -1,0 +1,9 @@
+width=0.4000
+depth=0.4000
+height=0.4500
+min_z=0.000000
+verts=168
+polys=182
+tris=308
+materials=Wood_Seat,Metal
+pivot=bottom_center

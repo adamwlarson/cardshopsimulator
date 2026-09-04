@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3]
+[gd_scene load_steps=29 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
@@ -23,6 +23,10 @@
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_price_tag_01/prop_price_tag_01.glb" id="21_price_tag"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_price_standee_01/prop_price_standee_01.glb" id="22_standee"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_shelf_talker_01/prop_shelf_talker_01.glb" id="23_talker"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_stool_01/prop_stool_01.glb" id="24_stool"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_shipper_stack_01/prop_shipper_stack_01.glb" id="25_shipper"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_plant_01/prop_plant_01.glb" id="26_plant"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_trash_bin_01/prop_trash_bin_01.glb" id="27_trash"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -104,6 +108,18 @@ rotation_degrees = Vector3(0, 0, 0)
 [node name="ShelfTalker" parent="Fixtures" instance=ExtResource("23_talker")]
 position = Vector3(8.1, 1.35, -5.4)
 rotation_degrees = Vector3(0, 90, 0)
+
+[node name="CounterStool" parent="Fixtures" instance=ExtResource("24_stool")]
+position = Vector3(8.1, 0, -0.45)
+
+[node name="BackstockShipperStack" parent="Fixtures" instance=ExtResource("25_shipper")]
+position = Vector3(3.6, 0, -6.75)
+
+[node name="CornerPlant" parent="Fixtures" instance=ExtResource("26_plant")]
+position = Vector3(0.45, 0, -6.75)
+
+[node name="CounterTrashBin" parent="Fixtures" instance=ExtResource("27_trash")]
+position = Vector3(8.55, 0, -2.25)
 
 [node name="PosterLarge" parent="Fixtures" instance=ExtResource("20_poster_lg")]
 position = Vector3(6.3, 1.62, -7.2)
