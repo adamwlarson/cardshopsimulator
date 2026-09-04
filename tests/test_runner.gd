@@ -210,7 +210,12 @@ func _test_buy_opportunity_picker_seed() -> void:
 
 
 func _test_price_editor_inventory_picker() -> void:
-	var priceable_stock := InventoryService.get_priceable_stock()
+	var inventory_service := load(
+		"res://scripts/autoload/inventory_service.gd"
+	).new()
+	inventory_service.model = InventoryModel.new(NORMAL_CONFIG)
+	inventory_service.model.reset_and_seed()
+	var priceable_stock: Array = inventory_service.call("get_priceable_stock")
 	var priceable_skus: Array[StringName] = []
 	var has_non_dustway_sku := false
 	for item: Dictionary in priceable_stock:
@@ -239,6 +244,7 @@ func _test_price_editor_inventory_picker() -> void:
 		false,
 		"HUD does not hardcode Dustway price target"
 	)
+	inventory_service.free()
 
 
 func _test_demand_signal_dto_does_not_leak_truth() -> void:
