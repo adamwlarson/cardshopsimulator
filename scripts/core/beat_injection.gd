@@ -123,20 +123,40 @@ func _start_day_beats(day: int) -> void:
 		return
 	if day >= 8 and day <= 10 and not _started.has(TITAN_HYPE_BEAT):
 		_start_titan_hype()
+		return
+	if _is_titan_pending():
+		_refocus_pending_titan()
+		return
 	if day >= 10 and day <= 12 and not _started.has(SHOWCASE_BEAT):
 		_start_showcase_choice()
 
 
 func _on_day_phase_changed(phase: int) -> void:
 	if (
-		not _is_normal_game()
-		or phase != GameState.DayPhase.FLOOR
-		or GameState.current_day < 3
-		or GameState.current_day > 5
-		or _started.has(SPIKE_STAPLE_BEAT)
+		_is_normal_game()
+		and phase == GameState.DayPhase.FLOOR
+		and GameState.current_day >= 3
+		and GameState.current_day <= 5
+		and not _started.has(SPIKE_STAPLE_BEAT)
 	):
+		_start_spike_staple()
+	if not _is_titan_pending():
 		return
-	_start_spike_staple()
+	if phase == GameState.DayPhase.FLOOR:
+		call_deferred(
+			"_refocus_titan_after_phase_change",
+			GameState.current_day
+		)
+	elif phase == GameState.DayPhase.SETTLE:
+		_mark_completed(TITAN_HYPE_BEAT, &"ignored")
+
+
+func _refocus_titan_after_phase_change(day: int) -> void:
+	if (
+		GameState.current_day == day
+		and GameState.current_phase == GameState.DayPhase.FLOOR
+	):
+		_refocus_pending_titan()
 
 
 func _start_spike_staple() -> bool:
@@ -203,6 +223,20 @@ func _start_titan_hype() -> bool:
 		"Hype: Skiefall Titan"
 	)
 	return true
+
+
+func _refocus_pending_titan() -> void:
+	if not _is_titan_pending():
+		return
+	DemandSignals.apply_hype_event(
+		TITAN_SKU,
+		GameState.current_day + 1
+	)
+	EventBus.price_focus_requested.emit(
+		TITAN_SKU,
+		TITAN_HYPE_BEAT,
+		"Hype: Skiefall Titan"
+	)
 
 
 func _start_showcase_choice() -> bool:
@@ -276,8 +310,15 @@ func _on_beat_ui_resolved(
 	beat_id: StringName,
 	outcome: StringName
 ) -> void:
-	if beat_id == TITAN_HYPE_BEAT:
+	if beat_id == TITAN_HYPE_BEAT and _is_titan_pending():
 		_mark_completed(beat_id, outcome)
+		if (
+			GameState.current_phase == GameState.DayPhase.PREP
+			and GameState.current_day >= 10
+			and GameState.current_day <= 12
+			and not _started.has(SHOWCASE_BEAT)
+		):
+			call_deferred("_start_showcase_choice")
 
 
 func _on_showcase_choice_resolved(
@@ -301,6 +342,13 @@ func _mark_completed(beat_id: StringName, outcome: StringName) -> void:
 		beat_id,
 		GameState.current_day,
 		outcome
+	)
+
+
+func _is_titan_pending() -> bool:
+	return (
+		_started.has(TITAN_HYPE_BEAT)
+		and not _completed.has(TITAN_HYPE_BEAT)
 	)
 
 

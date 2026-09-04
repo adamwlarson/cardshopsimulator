@@ -37,6 +37,7 @@ var _price_signal: PriceConfirmSignal
 var _current_customer: CustomerProfile
 var _active_price_beat_id: StringName = &""
 var _showcase_beat_id: StringName = &""
+var _showcase_choice_made: bool = false
 
 
 func _ready() -> void:
@@ -94,7 +95,7 @@ func _update_phase(phase: int) -> void:
 			phase_button.text = "Next day"
 	_close_buy()
 	_close_price()
-	if phase == GameState.DayPhase.SETTLE:
+	if phase == GameState.DayPhase.SETTLE and _showcase_choice_made:
 		showcase_panel.hide()
 
 
@@ -279,6 +280,7 @@ func _on_price_focus_requested(
 
 func _on_showcase_choice_requested(payload: Dictionary) -> void:
 	_showcase_beat_id = StringName(payload.get("beat_id", &""))
+	_showcase_choice_made = false
 	showcase_title.text = String(payload.get("title", "Showcase choice"))
 	showcase_summary.text = (
 		"Case space: %d slot-weights free\nSlab costs 2; each single costs 1."
@@ -301,6 +303,7 @@ func _on_showcase_choice_resolved(
 ) -> void:
 	if beat_id != _showcase_beat_id:
 		return
+	_showcase_choice_made = true
 	showcase_summary.text = (
 		"Displaying %s. You can switch this choice until the day ends."
 		% ("the Empress slab" if choice == &"slab" else "both chase singles")

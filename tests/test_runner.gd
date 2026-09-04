@@ -12,6 +12,7 @@ var _qa := QaInstrumentationService.new()
 var _captured_scripted_customer: CustomerProfile
 var _captured_price_sku: StringName = &""
 var _captured_price_beat: StringName = &""
+var _captured_price_focus_count: int = 0
 var _event_bus: Node
 var _game_state: Node
 var _inventory_service: Node
@@ -85,6 +86,7 @@ func _initialize() -> void:
 	_test_ui_helpers_do_not_read_hidden_values()
 	_test_spike_staple_beat()
 	_test_titan_hype_price_focus()
+	_test_day_ten_beat_serialization()
 	_test_showcase_slab_and_singles_preconditions()
 
 	if _failures == 0:
@@ -709,6 +711,7 @@ func _test_titan_hype_price_focus() -> void:
 	_game_state.set("current_phase", DayPhasePolicy.PREP)
 	_captured_price_sku = &""
 	_captured_price_beat = &""
+	_captured_price_focus_count = 0
 	_qa_autoload.call("set_force_enabled", true)
 	_expect_equal(
 		_beat_director.call(
@@ -745,6 +748,19 @@ func _test_titan_hype_price_focus() -> void:
 		TITAN_HYPE_BEAT,
 		"Titan price focus beat tag"
 	)
+	_expect_equal(_captured_price_focus_count, 1, "Titan initial PREP focus")
+	_game_state.set("current_phase", DayPhasePolicy.FLOOR)
+	_beat_director.call("_refocus_titan_after_phase_change", 8)
+	_expect_equal(
+		_captured_price_focus_count,
+		2,
+		"Titan refocuses after PREP to FLOOR UI settles"
+	)
+	_expect_equal(
+		_beat_director.call("is_completed", TITAN_HYPE_BEAT),
+		false,
+		"Titan remains pending for Apply or Cancel on FLOOR"
+	)
 	_beat_director.call(
 		"_on_beat_ui_resolved",
 		TITAN_HYPE_BEAT,
@@ -756,7 +772,21 @@ func _test_titan_hype_price_focus() -> void:
 			TITAN_HYPE_BEAT
 		),
 		true,
-		"Titan cancel resolves beat"
+		"Titan cancel resolves restored FLOOR editor"
+	)
+	_beat_director.call("reset")
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_expect_equal(
+		_beat_director.call("trigger_qa_beat", TITAN_HYPE_BEAT),
+		true,
+		"Titan can start again in isolated lifecycle"
+	)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_beat_director.call("_on_day_phase_changed", DayPhasePolicy.SETTLE)
+	_expect_equal(
+		_beat_director.call("is_completed", TITAN_HYPE_BEAT),
+		true,
+		"ignored Titan completes at SETTLE instead of staying stuck"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 
@@ -822,6 +852,30 @@ func _test_showcase_slab_and_singles_preconditions() -> void:
 	_qa_autoload.call("set_force_enabled", false)
 
 
+func _test_day_ten_beat_serialization() -> void:
+	_beat_director.call("reset")
+	_game_state.set("current_day", 10)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_qa_autoload.call("set_force_enabled", true)
+	_expect_equal(
+		_beat_director.call("trigger_qa_beat", TITAN_HYPE_BEAT),
+		true,
+		"day-ten Titan trigger"
+	)
+	_beat_director.call("_start_day_beats", 10)
+	_expect_equal(
+		_beat_director.call("is_started", SHOWCASE_BEAT),
+		false,
+		"showcase waits while Titan editor is unresolved"
+	)
+	_beat_director.call(
+		"_on_beat_ui_resolved",
+		TITAN_HYPE_BEAT,
+		&"cancelled"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+
+
 func _capture_scripted_customer(customer: CustomerProfile) -> void:
 	_captured_scripted_customer = customer
 
@@ -833,6 +887,7 @@ func _capture_price_focus(
 ) -> void:
 	_captured_price_sku = sku_id
 	_captured_price_beat = beat_id
+	_captured_price_focus_count += 1
 
 
 func _expect_dto_has_no_truth_fields(dto: Resource, label: String) -> void:
