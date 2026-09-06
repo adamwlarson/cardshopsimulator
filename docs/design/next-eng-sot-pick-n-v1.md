@@ -1,6 +1,6 @@
 # Next Eng SoT Pick N v1 — post M1/M2
 
-**Status:** Adopted **N1 GO** (Convention weekend) — Eng spike launching. Park N2 Theft ring / N3 Soft hygiene / N4 Flagship STOP. Softs parked.
+**Status:** **N1 SHIPPED** — PR #43 merged @ `73ac9daee5df81d68950f12e883c47e9dabd3bcd` (tip `1ab9983f`). Soft Fri spill OK for MVP. Park N2/N3/N4. Softs parked. Awaiting next Eng SoT pick (O).
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §8 / §6 / §9, pick-m (M1 shipped #42; M2 PASS)  
