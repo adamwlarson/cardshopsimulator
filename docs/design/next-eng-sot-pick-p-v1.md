@@ -1,6 +1,6 @@
 # Next Eng SoT Pick P v1 — post O1
 
-**Status:** Adopted **P1 GO** (Recession week) — Eng spike launching. Park P2 Supply glut / P3 Soft-cameras / P4 Flagship STOP. Softs parked (EventBanner rumor Soft OK MVP stands).
+**Status:** **P1 SHIPPED** — PR #45 merged @ `748c1c04e80c439e46d94c5b4247d7fb7e96b6c4` (tip `93bc2d27`). Soft flipper-weight buylist Soft OK MVP. Park P2/P3/P4. Softs parked. Awaiting next Eng SoT pick (Q).
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §8 / §9, pick-o (O1 shipped #44)  
