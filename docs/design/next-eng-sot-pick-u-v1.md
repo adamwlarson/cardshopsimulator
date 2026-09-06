@@ -73,7 +73,7 @@ No Soft closeout; optional Sandbox PB polish only.
 ## PM checklist
 
 - [x] Choose **U1**
-- [x] If U1: Design Soft table ready (`soft-hygiene-u1-v1.md`) → awaiting Eng ACK  *(Design in flight)*
+- [x] If U1: Soft table Eng ACK + SH8 rename shipped #50  *(Design in flight)*
 - [x] Sync this file to main before kick
 - [x] No new economy verbs on U1
 
@@ -84,3 +84,4 @@ No Soft closeout; optional Sandbox PB polish only.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **U1 GO** (park U2/U3/U4). Soft disposition table required; Eng ACK after Design. |
+| 2026-09-06 | **U1 SHIPPED #50** Soft hygiene @ `b7f31955`. Soft catalog closed. Queue → pick-v. |
