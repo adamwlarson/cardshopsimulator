@@ -1,6 +1,6 @@
 # Next Eng SoT Pick L v1 — post K2
 
-**Status:** **L1 SHIPPED** — PR #39 merged @ `f43958ae47c6743f9a859afe646ad77b2b669a12` (tip-freeze `49f0153a`); Art Large shell #40 already on main @ `dd20a701`. Soft `apply_medium_capacity` naming parked. Eng Large shell stub-swap next. L2/L3/L4 still parked.
+**Status:** **L1 economy SHIPPED** — PR #39 @ `f43958ae` (tip `49f0153a`); Art shell #40 on main; Eng stub-swap `bc-131c43f0` in flight. Softs parked. Park L2→pick-m M1.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §7.3 / §8 / §9, pick-k (K2 shipped @ `b94c1f51`)  
@@ -98,3 +98,4 @@ No new systems. Eng/Art polish backlog only; QA spot-checks. Soft stay parked.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **L1 GO** (park L2/L3/L4). Synced main @ `f28a1078`. Eng Large gates+rent spike launching. Soft seeds parked. Art shell dual-track invited. |
+| 2026-09-06 | **L1 economy SHIPPED** #39 @ `f43958ae`. Art #40 on main. Eng stub-swap `bc-131c43f0` launched. Softs parked. Queue → pick-m. |
