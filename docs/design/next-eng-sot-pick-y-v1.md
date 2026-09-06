@@ -1,6 +1,6 @@
 # Next Eng SoT Pick Y v1 — post X1
 
-**Status:** Adopted **Y1 STOP** cool-down — no new systems. Park Y2 Ironman / Y4 Sandbox PB. **Hard-park Y3** camera off-switch (Soft catalog). Soft catalog stays CLOSED.
+**Status:** **Y1 STOP locked** — cool-down; no Eng spike. Soft catalog CLOSED. Park Y2/Y4; hard-park Y3.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** pick-x (X1 Soft far crest SHIPPED #55 @ `0a3bcaef`); Soft catalog CLOSED  
@@ -19,7 +19,7 @@
 
 ---
 
-## Option Y1 — STOP cool-down / polish backlog — **LEAN GO**
+## Option Y1 — STOP cool-down / polish backlog — **GO (locked)**
 
 No new systems. Eng/Art polish + optional campaign smoke only.
 
@@ -52,7 +52,7 @@ systems §9.1 optional ironman: cash < $500 **and** inventory COGS < $500 → lo
 
 ---
 
-## Option Y3 — Camera off-switch Soft (ex-X3) — **PARK Soft**
+## Option Y3 — Camera off-switch Soft (ex-X3) — **HARD PARK Soft**
 
 Soft: active≡owned → optional disable/sell cameras.
 
@@ -76,9 +76,9 @@ Sandbox mode: track net worth / days survived highs (systems §9.2); no win awar
 
 ## PM checklist
 
-- [x] Choose **Y1** (Y3 Soft = do not pick)
-- [x] If Y1: no Eng spike required; optional QA smoke / Art polish only
-- [x] Sync this file to main before any kick
+- [x] Choose **Y1**
+- [x] No Eng spike; optional QA smoke / Art polish only
+- [x] Sync this file to main
 - [x] Soft catalog stays closed
 
 ---
@@ -88,4 +88,4 @@ Sandbox mode: track net worth / days survived highs (systems §9.2); no win awar
 | When | Decision |
 |------|----------|
 | 2026-09-06 | Drafted post X1 SHIPPED. Lean **Y1 STOP**. Soft reopeners parked. |
-| 2026-09-06 | PM adopted **Y1 STOP** cool-down. Park Y2/Y4. Hard-park Y3 Soft. |
+| 2026-09-06 | PM locked **Y1 STOP** (cool-down). Park Y2 Ironman / Y4 Sandbox PB. Hard-park Y3 camera off-switch Soft. Soft catalog CLOSED. No Eng spike. |
