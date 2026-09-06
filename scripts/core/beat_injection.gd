@@ -524,7 +524,7 @@ func _start_hire_cashier() -> bool:
 			{
 				"id": &"hire_specialist",
 				"label": (
-					"Hire Specialist\n%s/day · Inspect/Research cheaper"
+					"Hire Specialist\n%s/day · narrower comps · Inspect/Research cheaper"
 					% DemandSignalPresenter.format_cents(
 						GameState.shop.specialist_wage_cents()
 					)

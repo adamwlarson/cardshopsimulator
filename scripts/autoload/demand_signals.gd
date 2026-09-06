@@ -354,7 +354,7 @@ func buy_signal(
 		Economy.balance_cents,
 		space_required,
 		InventoryService.backstock_free_bins(),
-		_informed_for_sku(sku_id)
+		is_skill_informed(sku_id)
 	)
 
 
@@ -519,7 +519,7 @@ func price_signal(
 		listed_price_cents,
 		location,
 		DemandSignalService.Channel.BUYLIST,
-		_informed_for_sku(sku_id)
+		is_skill_informed(sku_id)
 	)
 
 
@@ -549,7 +549,7 @@ func list_confirm_signal(
 		sku_id,
 		listed_price_cents,
 		location,
-		_informed_for_sku(sku_id)
+		is_skill_informed(sku_id)
 	)
 
 
@@ -668,12 +668,27 @@ func research_set(set_id: StringName) -> Dictionary:
 		"sample_comp_width_after": width_after,
 		"rotation_watch": rotation_watch_text(),
 		"condition_cue": condition_cue,
+		"skill_channel": String(skill_channel_for(sample) if not sample.is_empty() else &"research"),
 	}
 	QaInstrumentation.record_research_applied(payload)
 	return payload
 
 
-func _informed_for_sku(sku_id: StringName) -> bool:
+func is_skill_informed(sku_id: StringName) -> bool:
+	if GameState.shop != null and GameState.shop.has_specialist_on_duty():
+		return true
+	return _is_set_researched_for_sku(sku_id)
+
+
+func skill_channel_for(sku_id: StringName) -> StringName:
+	if GameState.shop != null and GameState.shop.has_specialist_on_duty():
+		return &"specialist"
+	if _is_set_researched_for_sku(sku_id):
+		return &"research"
+	return &""
+
+
+func _is_set_researched_for_sku(sku_id: StringName) -> bool:
 	if _service == null:
 		return false
 	var sku := InventoryService.model.get_sku(sku_id)
