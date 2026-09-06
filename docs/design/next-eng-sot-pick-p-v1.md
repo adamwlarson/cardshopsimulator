@@ -80,3 +80,10 @@ QA asserts Flagship (Large + Rep ≥ 80 + cash ≥ $50k); Eng S2+ only.
 - [x] Sync this file to main before cloud agent
 - [x] Softs stay parked unless P3 Soft path
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **P1 GO** (park P2/P3/P4). Softs parked. Eng Recession spike `bc-ce037ab6` launching. No Art. |
