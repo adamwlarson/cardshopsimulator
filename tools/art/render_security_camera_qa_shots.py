@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pbr_glb import LoadedTri, load_glb_tris, xform_tris  # noqa: E402
 from render_j2_qa_shots import add_back_wall, add_ground, rasterize  # noqa: E402
+from render_large_shell_qa_shots import subdivide  # noqa: E402
 
 FIXTURES = ROOT / "assets" / "props" / "shop" / "fixtures"
 QA = ROOT / "docs" / "art" / "qa-shots"
@@ -146,10 +147,11 @@ def main() -> None:
     cam_pos = (4.50, 2.80, -4.20)
     scene: list[LoadedTri] = []
     add_ground(scene, 8.0)
-    add_back_wall(scene, z=0.55, half=8.0, h=2.82)
+    add_back_wall(scene, z=-7.15, half=8.0, h=2.82)
     add_ceiling(scene, y=2.80, x0=1.4, x1=8.2, z0=-7.4, z1=0.15)
     add_oak_case(scene, (4.50, 0.0, -5.55))
     scene.extend(xform_tris(cam, cam_pos, yaw_deg=0.0))
+    scene = subdivide(scene, max_edge=1.15)
 
     shots = (
         (
@@ -179,6 +181,7 @@ def main() -> None:
     add_wood_wall(wall, z=0.0, x0=-1.6, x1=1.6, y0=0.0, y1=2.80)
     add_ceiling(wall, y=2.80, x0=-1.8, x1=1.8, z0=0.0, z1=2.4)
     wall.extend(xform_yaw_pitch(cam, (0.0, 2.40, 0.0), yaw_deg=180.0, pitch_deg=-90.0))
+    wall = subdivide(wall, max_edge=1.15)
     img = rasterize(
         wall,
         (0.55, 1.85, 1.45),
