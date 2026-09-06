@@ -1,6 +1,6 @@
 # Next Eng SoT Pick S v1 — post R1
 
-**Status:** Adopted **S1 GO** (Survive Y1 + Liquidity king win-wire) — Eng spike CLEAR TO KICK. Park S2 Soft hygiene / S3 cameras / S4 idle-far crest. Softs parked.
+**Status:** **S1 SHIPPED** — Survive Y1 + Liquidity king PR #48 @ 7bbbd508; QA PASS-with-notes; Soft no mode-picker Soft OK MVP; Softs parked.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §9, pick-r (R1 Flagship win-wire shipped #47)  
