@@ -1018,6 +1018,8 @@ func _opportunity_from_open_id(opportunity_id: StringName) -> BuyOpportunity:
 	opportunity.channel = DemandSignalService.Channel.MARKETPLACE
 	if dto.channel == &"shady":
 		opportunity.channel = DemandSignalService.Channel.SHADY
+	elif dto.channel == &"auction":
+		opportunity.channel = DemandSignalService.Channel.AUCTION
 	opportunity.unit_cost_cents = dto.unit_cost_cents
 	opportunity.quantity = dto.quantity
 	opportunity.space_required = dto.space_required

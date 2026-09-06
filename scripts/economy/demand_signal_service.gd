@@ -29,6 +29,7 @@ var _rng := RandomNumberGenerator.new()
 var _demand_cache: Dictionary = {}
 var _forced_band_by_sku: Dictionary = {}
 var _true_grade_by_key: Dictionary = {}
+var _true_cert_by_key: Dictionary = {}
 var _inspect_cue_by_key: Dictionary = {}
 var _research_by_set: Dictionary = {}
 var _fog_flag: bool = false
@@ -115,6 +116,8 @@ func buy_confirm(
 	dto.channel = StringName(Channel.keys()[channel].to_lower())
 	dto.condition_cue = _condition_cue(channel)
 	dto.inspected = false
+	dto.grader = &""
+	dto.grade = 0.0
 	dto.remaining_cash_cents = current_cash_cents - dto.lot_total_cents
 	dto.space_required = space_required
 	dto.space_free = space_free
@@ -136,7 +139,17 @@ func buy_confirm(
 
 static func recommends_inspect(channel: Variant) -> bool:
 	var resolved := channel_from(channel)
-	return resolved in [Channel.MARKETPLACE, Channel.SHADY, Channel.BUYLIST]
+	return resolved in [
+		Channel.MARKETPLACE,
+		Channel.SHADY,
+		Channel.BUYLIST,
+		Channel.AUCTION,
+	]
+
+
+static func is_risky_slab_channel(channel: Variant) -> bool:
+	var resolved := channel_from(channel)
+	return resolved in [Channel.SHADY, Channel.AUCTION]
 
 
 static func channel_from(channel: Variant) -> Channel:
@@ -261,19 +274,69 @@ func inspect_condition(dto: BuyConfirmSignal) -> bool:
 	if _inspect_cue_by_key.has(key):
 		apply_inspect_state(dto)
 		return true
-	var true_index := _true_grade_index(dto)
-	var accuracy := 0.85
-	if _config != null:
-		accuracy = _config.inspect_accuracy
-	var success := _rng.randf() < accuracy
-	var shown_index := true_index
-	if not success:
-		shown_index = _misleading_grade_index(true_index)
-	var cue := CONDITION_GRADE_CUES[shown_index]
+	var cue := ""
+	if _is_graded_signal(dto):
+		cue = _inspect_cert_cue(dto)
+	else:
+		var true_index := _true_grade_index(dto)
+		var shown_index := true_index
+		if not _inspect_hits():
+			shown_index = _misleading_grade_index(true_index)
+		cue = CONDITION_GRADE_CUES[shown_index]
 	dto.condition_cue = cue
 	dto.inspected = true
 	_inspect_cue_by_key[key] = cue
 	return true
+
+
+func inspect_slab_instance(slab: SlabInstance) -> bool:
+	if slab == null or slab.inspected:
+		return false
+	var revealed_valid := slab.cert_valid
+	if not _inspect_hits():
+		revealed_valid = not slab.cert_valid
+	slab.apply_inspect_cue(revealed_valid)
+	return true
+
+
+func bind_graded_signal(
+	dto: BuyConfirmSignal,
+	grader: StringName,
+	grade: float,
+	seeded_cert_state: int = -1
+) -> void:
+	if dto == null or grader.is_empty() or grade <= 0.0:
+		return
+	dto.grader = grader
+	dto.grade = grade
+	if not dto.inspected:
+		dto.condition_cue = _graded_fog_cue(channel_from(dto.channel))
+	if seeded_cert_state >= 0:
+		_true_cert_by_key[_inspect_key(dto)] = seeded_cert_state == 1
+	true_cert_valid(dto)
+
+
+func true_cert_valid(dto: BuyConfirmSignal) -> bool:
+	var key := _inspect_key(dto)
+	if _true_cert_by_key.has(key):
+		return bool(_true_cert_by_key[key])
+	var valid := true
+	if is_risky_slab_channel(dto.channel):
+		valid = _rng.randf() >= _fake_slab_rate()
+	_true_cert_by_key[key] = valid
+	return valid
+
+
+func apply_inspect_to_slab(dto: BuyConfirmSignal, slab: SlabInstance) -> void:
+	if dto == null or slab == null:
+		return
+	slab.cert_valid = true_cert_valid(dto)
+	slab.source_channel = dto.channel
+	if dto.inspected:
+		slab.inspected = true
+		slab.shown_cert_cue = dto.condition_cue
+	else:
+		slab.shown_cert_cue = SlabInstance.CERT_FOG_CUE
 
 
 func price_confirm(
@@ -423,7 +486,46 @@ func _condition_cue(channel: Channel) -> String:
 		return "Photo only — inspect strongly recommended"
 	if channel == Channel.MARKETPLACE:
 		return "Photo only — inspect recommended"
+	if channel == Channel.AUCTION:
+		return "Mixed lot"
 	return "Mixed lot"
+
+
+func _graded_fog_cue(channel: Channel) -> String:
+	if channel == Channel.SHADY:
+		return "Photo only — inspect strongly recommended"
+	if channel == Channel.AUCTION:
+		return "Slab — inspect recommended"
+	return SlabInstance.CERT_FOG_CUE
+
+
+func _is_graded_signal(dto: BuyConfirmSignal) -> bool:
+	return dto != null and not dto.grader.is_empty() and dto.grade > 0.0
+
+
+func _inspect_hits() -> bool:
+	var accuracy := 0.85
+	if _config != null:
+		accuracy = _config.inspect_accuracy
+	return _rng.randf() < accuracy
+
+
+func _inspect_cert_cue(dto: BuyConfirmSignal) -> String:
+	var authentic := true_cert_valid(dto)
+	var revealed := authentic
+	if not _inspect_hits():
+		revealed = not authentic
+	return SlabInstance.cue_for_revealed(revealed)
+
+
+func _fake_slab_rate() -> float:
+	if _config != null:
+		return _config.shady_fake_slab_rate
+	return 0.08
+
+
+func roll_risky_slab_cert() -> bool:
+	return _rng.randf() >= _fake_slab_rate()
 
 
 func _inspect_key(dto: BuyConfirmSignal) -> String:

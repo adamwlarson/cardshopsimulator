@@ -215,7 +215,7 @@ static func buy_summary(dto: BuyConfirmSignal) -> String:
 			band_chip(dto.shown_demand_band),
 			String(dto.confidence).capitalize(),
 		],
-		"Condition: %s" % dto.condition_cue,
+		condition_line(dto.condition_cue, dto.grader, dto.grade),
 		"After buy: %s %s · Space: %s %d needed / %d free" % [
 			"✓" if dto.remaining_cash_cents >= 0 else "✗",
 			format_cents(dto.remaining_cash_cents),
@@ -242,7 +242,7 @@ static func buylist_seller_summary(dto: BuyConfirmSignal) -> String:
 			band_chip(dto.shown_demand_band),
 			String(dto.confidence).capitalize(),
 		],
-		"Condition: %s" % dto.condition_cue,
+		condition_line(dto.condition_cue, dto.grader, dto.grade),
 	])
 
 
@@ -273,4 +273,34 @@ static func price_summary(
 		)
 	elif not dto.display_context.strip_edges().is_empty():
 		lines.append(dto.display_context)
+	if not dto.condition_cue.strip_edges().is_empty():
+		lines.append(condition_line(dto.condition_cue, dto.grader, dto.grade))
 	return "\n".join(lines)
+
+
+static func condition_line(
+	cue: String,
+	grader: StringName = &"",
+	grade: float = 0.0
+) -> String:
+	if not grader.is_empty() and grade > 0.0:
+		return "Slab: %s" % cue
+	return "Condition: %s" % cue
+
+
+static func buy_confirm_snapshot(dto: BuyConfirmSignal) -> String:
+	return "\n".join([
+		"%s ×%d @ %s" % [
+			dto.display_name,
+			dto.quantity,
+			format_cents(dto.unit_cost_cents),
+		],
+		"Total %s" % format_cents(dto.lot_total_cents),
+		"%s–%s · %s · %s" % [
+			format_cents(dto.shown_comp_low_cents),
+			format_cents(dto.shown_comp_high_cents),
+			band_chip(dto.shown_demand_band),
+			String(dto.confidence).to_upper(),
+		],
+		condition_line(dto.condition_cue, dto.grader, dto.grade),
+	])

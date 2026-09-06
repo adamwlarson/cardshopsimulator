@@ -158,6 +158,7 @@ func _initialize() -> void:
 	_test_sec10_6_rent_firesale()
 	_test_sec10_7_titan_hype()
 	_test_sec10_8_slab_vs_singles()
+	_test_g1_graded_authenticity()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1181,6 +1182,32 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(NORMAL_CONFIG.inspect_accuracy, 0.85, "normal inspect accuracy")
 	_expect_equal(EASY_CONFIG.inspect_accuracy, 0.92, "easy inspect accuracy unchanged")
 	_expect_equal(HARD_CONFIG.inspect_accuracy, 0.75, "hard inspect accuracy unchanged")
+	_expect_equal(NORMAL_CONFIG.shady_fake_slab_rate, 0.08, "normal fake-slab rate")
+	_expect_equal(EASY_CONFIG.shady_fake_slab_rate, 0.04, "easy fake-slab rate")
+	_expect_equal(HARD_CONFIG.shady_fake_slab_rate, 0.14, "hard fake-slab rate")
+	_expect_equal(NORMAL_CONFIG.fake_slab_sale_rep_hit, 15, "normal fake-slab sale Rep hit")
+	_expect_equal(EASY_CONFIG.fake_slab_sale_rep_hit, 15, "easy fake-slab sale Rep inherits")
+	_expect_equal(HARD_CONFIG.fake_slab_sale_rep_hit, 15, "hard fake-slab sale Rep inherits")
+	_expect_equal(
+		DemandSignalService.recommends_inspect(&"auction"),
+		true,
+		"auction recommends inspect for graded authenticity"
+	)
+	_expect_equal(
+		DemandSignalService.is_risky_slab_channel(&"shady"),
+		true,
+		"shady is a risky slab channel"
+	)
+	_expect_equal(
+		DemandSignalService.is_risky_slab_channel(&"auction"),
+		true,
+		"auction is a risky slab channel"
+	)
+	_expect_equal(
+		DemandSignalService.is_risky_slab_channel(&"distributor"),
+		false,
+		"distributor is not a risky slab channel"
+	)
 	_expect_equal(NORMAL_CONFIG.staff_noshow_mult, 0.4, "normal staff_noshow_mult")
 	_expect_equal(EASY_CONFIG.staff_noshow_mult, 0.4, "easy staff_noshow_mult inherits")
 	_expect_equal(HARD_CONFIG.staff_noshow_mult, 0.4, "hard staff_noshow_mult inherits")
@@ -6202,6 +6229,463 @@ func _test_sec10_8_slab_vs_singles() -> void:
 		hud.free()
 	_qa_autoload.call("set_force_enabled", false)
 	_game_state.call("start_new_game")
+
+
+func _test_g1_graded_authenticity() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_g1_channel_cert_roll()
+	_test_g1_fake_slab_sell_fail_without_inspect()
+	_test_g1_inspect_clears_cert_fog()
+	_test_g1_confirm_screens_hide_cert()
+	_test_g1_empress_path_still_works()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("start_new_game")
+
+
+func _test_g1_channel_cert_roll() -> void:
+	var always_fake := NORMAL_CONFIG.duplicate() as BalanceConfig
+	always_fake.shady_fake_slab_rate = 1.0
+	_game_state.call("set_balance_config", always_fake)
+	_game_state.call("start_new_game")
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var empress := inventory.get_sku(&"AA-SKIE-052")
+	_expect_equal(empress != null, true, "G1: Empress SKU exists")
+	var shady_fake: SlabInstance = _inventory_service.call(
+		"receive_slab",
+		&"AA-SKIE-052",
+		&"Prism",
+		10.0,
+		empress.base_market_cents if empress != null else 7_500,
+		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK),
+		&"shady",
+		-1
+	)
+	_expect_equal(shady_fake != null, true, "G1: shady roll creates a slab")
+	if shady_fake != null:
+		_expect_equal(shady_fake.cert_valid, false, "G1: 100% shady rate is fake")
+		_expect_equal(shady_fake.inspected, false, "G1: rolled slab starts uninspected")
+		_expect_equal(
+			shady_fake.shown_cert_cue,
+			SlabInstance.CERT_FOG_CUE,
+			"G1: rolled slab starts fogged"
+		)
+		_assert_text_has_no_truth(shady_fake.shown_cert_cue, "G1 shady fog cue")
+	var always_valid := NORMAL_CONFIG.duplicate() as BalanceConfig
+	always_valid.shady_fake_slab_rate = 0.0
+	_game_state.call("set_balance_config", always_valid)
+	_game_state.call("start_new_game")
+	empress = (
+		_inventory_service.get("model") as InventoryModel
+	).get_sku(&"AA-SKIE-052")
+	var auction_valid: SlabInstance = _inventory_service.call(
+		"receive_slab",
+		&"AA-SKIE-052",
+		&"Prism",
+		10.0,
+		empress.base_market_cents if empress != null else 7_500,
+		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK),
+		&"auction",
+		-1
+	)
+	_expect_equal(auction_valid != null, true, "G1: auction roll creates a slab")
+	if auction_valid != null:
+		_expect_equal(auction_valid.cert_valid, true, "G1: 0% auction rate is valid")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	empress = (
+		_inventory_service.get("model") as InventoryModel
+	).get_sku(&"AA-SKIE-052")
+	var beat_slab: SlabInstance = _inventory_service.call(
+		"receive_slab",
+		&"AA-SKIE-052",
+		&"Prism",
+		10.0,
+		empress.base_market_cents if empress != null else 7_500,
+		InventoryLocation.new(InventoryLocation.Type.ONLINE_HOLD)
+	)
+	_expect_equal(beat_slab != null, true, "G1: beat-style receive_slab still works")
+	if beat_slab != null:
+		_expect_equal(
+			beat_slab.cert_valid,
+			true,
+			"G1: #8-style seed stays authentic"
+		)
+
+
+func _test_g1_fake_slab_sell_fail_without_inspect() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_qa_autoload.call("clear")
+	_qa_autoload.call("set_force_enabled", true)
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var empress := inventory.get_sku(&"AA-SKIE-052")
+	var case_location := InventoryLocation.new(InventoryLocation.Type.CASE)
+	var fake: SlabInstance = _inventory_service.call(
+		"seed_fake_slab",
+		&"AA-SKIE-052",
+		&"Prism",
+		10.0,
+		empress.base_market_cents,
+		case_location,
+		&"shady"
+	)
+	_expect_equal(fake != null, true, "G1: seeded fake slab exists")
+	if fake == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	_expect_equal(fake.cert_valid, false, "G1: seeded slab is a fail-slab")
+	_expect_equal(fake.inspected, false, "G1: seeded fake is uninspected")
+	fake.listed_price_cents = 12_000
+	var cash_before := int(_economy.get("balance_cents"))
+	var rep_before := int(_game_state.get("current_reputation"))
+	var sold := bool(
+		_inventory_service.call("confirm_customer_sale", &"AA-SKIE-052", 12_000)
+	)
+	_expect_equal(sold, true, "G1: fake sale resolves as a fail transaction")
+	_expect_equal(
+		_inventory_service.call("get_slab", &"AA-SKIE-052") == null,
+		true,
+		"G1: fail-slab is removed on sale fail"
+	)
+	var cash_after := int(_economy.get("balance_cents"))
+	var rep_after := int(_game_state.get("current_reputation"))
+	_expect_equal(cash_after < cash_before, true, "G1: sale fail hits cash")
+	_expect_equal(
+		cash_after,
+		cash_before - 12_000,
+		"G1: sale fail cash penalty equals listed price"
+	)
+	_expect_equal(
+		rep_after,
+		rep_before - NORMAL_CONFIG.fake_slab_sale_rep_hit,
+		"G1: sale fail hits Rep"
+	)
+	var fail_event := _qa_event(&"slab_sale_failed")
+	_expect_equal(fail_event.is_empty(), false, "G1: QA records slab_sale_failed")
+	if not fail_event.is_empty():
+		var payload: Dictionary = fail_event.get("payload", {})
+		_expect_equal(
+			String(payload.get("outcome", "")),
+			"sale_fail",
+			"G1: QA outcome is sale_fail"
+		)
+		_expect_equal(
+			bool(payload.get("inspected", true)),
+			false,
+			"G1: QA records uninspected fail"
+		)
+		_expect_equal(
+			int(payload.get("cash_penalty_cents", 0)),
+			12_000,
+			"G1: QA records cash penalty"
+		)
+		_expect_equal(
+			int(payload.get("rep_delta", 0)),
+			-NORMAL_CONFIG.fake_slab_sale_rep_hit,
+			"G1: QA records Rep delta"
+		)
+		_assert_payload_has_no_truth(payload, "G1 sale-fail QA")
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_g1_inspect_clears_cert_fog() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var empress := inventory.get_sku(&"AA-SKIE-052")
+	var slab: SlabInstance = _inventory_service.call(
+		"seed_fake_slab",
+		&"AA-SKIE-052",
+		&"Prism",
+		10.0,
+		empress.base_market_cents,
+		InventoryLocation.new(InventoryLocation.Type.CASE),
+		&"shady"
+	)
+	_expect_equal(slab != null, true, "G1: inspect test slab exists")
+	if slab == null:
+		return
+	var fog := slab.shown_cert_cue
+	var listed := slab.listed_price_cents
+	var price_before: PriceConfirmSignal = _demand_signals.call(
+		"price_signal",
+		&"AA-SKIE-052",
+		listed,
+		slab.location
+	)
+	_demand_signals.call("apply_owned_slab_cue", price_before)
+	var comp_low := price_before.shown_comp_low_cents
+	var comp_high := price_before.shown_comp_high_cents
+	var band := price_before.shown_demand_band
+	_expect_equal(price_before.inspected, false, "G1: price confirm starts fogged")
+	_assert_text_has_no_truth(price_before.condition_cue, "G1 pre-inspect price cue")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_before),
+		"G1 pre-inspect price summary"
+	)
+	_expect_dto_has_no_truth_fields(price_before, "G1 price confirm DTO")
+	var accurate := DemandSignalService.new(
+		NORMAL_CONFIG,
+		MarketState.new(),
+		7,
+		_qa
+	)
+	accurate._config = accurate._config.duplicate()
+	accurate._config.inspect_accuracy = 1.0
+	_expect_equal(
+		accurate.inspect_slab_instance(slab),
+		true,
+		"G1: inspect spend resolves the instance"
+	)
+	_expect_equal(slab.inspected, true, "G1: inspect marks the instance")
+	_expect_equal(
+		slab.shown_cert_cue != fog,
+		true,
+		"G1: inspect updates cert cue"
+	)
+	_expect_equal(
+		slab.shown_cert_cue,
+		SlabInstance.CERT_OFF_CUE,
+		"G1: accurate inspect reveals fail hologram"
+	)
+	_assert_text_has_no_truth(slab.shown_cert_cue, "G1 inspected slab cue")
+	_demand_signals.call("apply_owned_slab_cue", price_before)
+	_expect_equal(
+		price_before.shown_comp_low_cents,
+		comp_low,
+		"G1: inspect does not change comp low"
+	)
+	_expect_equal(
+		price_before.shown_comp_high_cents,
+		comp_high,
+		"G1: inspect does not change comp high"
+	)
+	_expect_equal(
+		price_before.shown_demand_band,
+		band,
+		"G1: inspect does not change demand band"
+	)
+	_expect_equal(price_before.inspected, true, "G1: price confirm shows inspected")
+	_expect_equal(
+		price_before.condition_cue,
+		slab.shown_cert_cue,
+		"G1: price confirm uses inspected cue"
+	)
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_before),
+		"G1 inspected price summary"
+	)
+	var att_before := int(_game_state.get("attention_remaining"))
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "G1: HUD loads for price inspect")
+	var valid_slab: SlabInstance = _inventory_service.call(
+		"receive_slab",
+		&"AA-SKIE-047",
+		&"Vaultmark",
+		9.5,
+		1_200,
+		InventoryLocation.new(InventoryLocation.Type.CASE),
+		&"auction",
+		1
+	)
+	_expect_equal(valid_slab != null, true, "G1: second slab for HUD inspect")
+	if hud != null and valid_slab != null:
+		var price_dto: PriceConfirmSignal = _demand_signals.call(
+			"price_signal",
+			&"AA-SKIE-047",
+			valid_slab.listed_price_cents,
+			valid_slab.location
+		)
+		_demand_signals.call("apply_owned_slab_cue", price_dto)
+		Callable(hud, "_select_price_stock").call(price_dto)
+		var price_inspect := hud.get_node_or_null("%PriceInspectButton") as Button
+		_expect_equal(price_inspect != null, true, "G1: PriceEditor Inspect★ present")
+		if price_inspect != null:
+			_expect_equal(
+				price_inspect.visible,
+				true,
+				"G1: Inspect★ shown on slab PriceEditor"
+			)
+			_expect_equal(
+				price_inspect.disabled,
+				false,
+				"G1: Inspect★ enabled before spend"
+			)
+			price_inspect.pressed.emit()
+			_expect_equal(valid_slab.inspected, true, "G1: HUD inspect clears fog")
+			var shop := _game_state.get("shop") as ShopState
+			_expect_equal(
+				int(_game_state.get("attention_remaining")),
+				att_before - shop.inspect_attention_cost(),
+				"G1: HUD inspect spends Attention"
+			)
+			_assert_text_has_no_truth(
+				(hud.get_node_or_null("%PriceSummary") as Label).text,
+				"G1 HUD price summary after inspect"
+			)
+			_expect_equal(price_inspect.disabled, true, "G1: Inspect★ disables after")
+		root.remove_child(hud)
+		hud.free()
+
+
+func _test_g1_confirm_screens_hide_cert() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var empress := inventory.get_sku(&"AA-SKIE-052")
+	var lot: BuyOpportunity = _demand_signals.call(
+		"inject_graded_opportunity",
+		&"g1-shady-slab",
+		&"AA-SKIE-052",
+		DemandSignalService.Channel.SHADY,
+		4_200,
+		&"Prism",
+		10.0,
+		"Trunk slab",
+		0
+	)
+	_expect_equal(lot != null, true, "G1: thin shady graded seed injects")
+	var dto: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		&"g1-shady-slab"
+	)
+	_expect_equal(dto != null, true, "G1: shady slab buy signal exists")
+	if dto != null:
+		_expect_equal(dto.channel, &"shady", "G1: seeded lot is shady")
+		_expect_equal(dto.grader, &"Prism", "G1: seeded lot is graded")
+		_expect_equal(dto.inspected, false, "G1: buy signal starts uninspected")
+		_expect_dto_has_no_truth_fields(dto, "G1 shady slab DTO")
+		_assert_text_has_no_truth(dto.condition_cue, "G1 shady slab cue")
+		_assert_text_has_no_truth(
+			DemandSignalPresenter.buy_summary(dto),
+			"G1 shady slab buy summary"
+		)
+		_assert_text_has_no_truth(
+			DemandSignalPresenter.buy_confirm_snapshot(dto),
+			"G1 shady slab confirm snapshot"
+		)
+		_expect_equal(
+			dto.condition_cue.to_lower().contains("inspect"),
+			true,
+			"G1: graded shady starts with inspect fog"
+		)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "G1: HUD loads for confirm fog")
+	if hud != null and dto != null:
+		_select_buy_on_hud(hud, dto)
+		var buy_summary := hud.get_node_or_null("%BuySummary") as Label
+		var inspect_button := hud.get_node_or_null("%InspectButton") as Button
+		_expect_equal(
+			inspect_button != null and inspect_button.visible,
+			true,
+			"G1: Inspect★ on graded shady detail"
+		)
+		if buy_summary != null:
+			_assert_text_has_no_truth(buy_summary.text, "G1 buy detail")
+			_expect_equal(
+				buy_summary.text.to_lower().contains("inspect"),
+				true,
+				"G1: buy detail shows inspect fog"
+			)
+		Callable(hud, "_open_buy_confirm").call()
+		var confirm_summary := hud.get_node_or_null("%BuyConfirmSummary") as Label
+		if confirm_summary != null:
+			_assert_text_has_no_truth(confirm_summary.text, "G1 buy confirm")
+			_expect_equal(
+				confirm_summary.text.to_lower().contains("cert_valid"),
+				false,
+				"G1: confirm hides cert_valid"
+			)
+		if inspect_button != null:
+			Callable(hud, "_back_to_buy_detail").call()
+			inspect_button.pressed.emit()
+			_expect_equal(dto.inspected, true, "G1: buy Inspect★ clears fog")
+			_assert_text_has_no_truth(dto.condition_cue, "G1 post-inspect buy cue")
+			_assert_text_has_no_truth(
+				DemandSignalPresenter.buy_summary(dto),
+				"G1 post-inspect buy summary"
+			)
+			Callable(hud, "_open_buy_confirm").call()
+			if confirm_summary != null:
+				_assert_text_has_no_truth(
+					confirm_summary.text,
+					"G1 post-inspect confirm"
+				)
+		root.remove_child(hud)
+		hud.free()
+	var auction_lot: BuyOpportunity = _demand_signals.call(
+		"inject_graded_opportunity",
+		&"g1-auction-slab",
+		&"AA-SKIE-052",
+		DemandSignalService.Channel.AUCTION,
+		5_600,
+		&"Prism",
+		10.0,
+		"Auction slab",
+		1
+	)
+	_expect_equal(auction_lot != null, true, "G1: thin auction graded seed injects")
+	var auction_dto: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		&"g1-auction-slab"
+	)
+	_expect_equal(auction_dto != null, true, "G1: auction slab signal exists")
+	if auction_dto != null:
+		_expect_equal(auction_dto.channel, &"auction", "G1: auction channel")
+		_expect_equal(
+			DemandSignalService.recommends_inspect(auction_dto.channel),
+			true,
+			"G1: auction slab can Inspect★"
+		)
+		_expect_dto_has_no_truth_fields(auction_dto, "G1 auction slab DTO")
+		_assert_text_has_no_truth(auction_dto.condition_cue, "G1 auction slab cue")
+	_expect_equal(empress != null, true, "G1: Empress remains catalogued")
+
+
+func _test_g1_empress_path_still_works() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 11)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_showcase_decision = {}
+	_beat_director.call("_start_day_beats", 11)
+	_expect_equal(
+		_beat_director.call("is_started", SHOWCASE_BEAT),
+		true,
+		"G1: #8 Empress path still starts"
+	)
+	var slab: SlabInstance = _inventory_service.call("get_slab", &"AA-SKIE-052")
+	_expect_equal(slab != null, true, "G1: #8 still seeds Empress slab")
+	if slab != null:
+		_expect_equal(slab.cert_valid, true, "G1: #8 Empress slab stays authentic")
+		_expect_equal(
+			String(slab.grader),
+			"Prism",
+			"G1: #8 Empress grader unchanged"
+		)
+		_assert_text_has_no_truth(slab.shown_cert_cue, "G1 #8 slab cue")
+	_expect_equal(
+		_beat_director.call("choose_showcase", &"slab"),
+		true,
+		"G1: #8 slab choice still works"
+	)
+	if slab != null:
+		_expect_equal(
+			slab.location.type,
+			InventoryLocation.Type.CASE,
+			"G1: #8 still displays Empress"
+		)
+
+
+func _qa_event(event_name: StringName) -> Dictionary:
+	for event: Dictionary in _qa_autoload.call("get_events"):
+		if String(event.get("event", "")) == String(event_name):
+			return event
+	return {}
 
 
 func _assert_hold_inherit_scalars(config: BalanceConfig, label: String) -> void:

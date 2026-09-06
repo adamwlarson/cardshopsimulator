@@ -468,6 +468,14 @@ autowrap_mode = 3
 layout_mode = 2
 theme_override_constants/separation = 16
 
+[node name="PriceInspectButton" type="Button" parent="PriceEditor/Content/Actions"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Inspect★ · Att 5"
+
 [node name="PriceCancelButton" type="Button" parent="PriceEditor/Content/Actions"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 40)

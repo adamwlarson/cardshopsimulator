@@ -136,6 +136,12 @@ func record_shrink_applied(payload: Dictionary) -> void:
 	_emit(&"shrink_applied", payload)
 
 
+func record_slab_sale_failed(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"slab_sale_failed", payload.duplicate(true))
+
+
 func record_save_pre_write(serialized_save: PackedByteArray) -> void:
 	if is_enabled():
 		_emit(&"save_hash_pre_write", {"hash": _sha256(serialized_save)})

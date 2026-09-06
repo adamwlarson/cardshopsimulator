@@ -10,6 +10,14 @@ extends Resource
 @export var quantity: int
 @export var space_required: int = 1
 @export var beat_id: StringName
+@export var grader: StringName
+@export_range(0.0, 10.0, 0.5) var grade: float = 0.0
+## Test/QA seed only. -1 = roll from channel rate; 0 = fake; 1 = valid.
+var seeded_cert_state: int = -1
+
+
+func is_graded() -> bool:
+	return not grader.is_empty() and grade > 0.0
 
 
 func is_valid() -> bool:

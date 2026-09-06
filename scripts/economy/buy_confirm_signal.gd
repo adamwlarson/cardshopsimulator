@@ -15,6 +15,8 @@ extends Resource
 @export var confidence: StringName
 @export var condition_cue: String
 @export var inspected: bool = false
+@export var grader: StringName
+@export_range(0.0, 10.0, 0.5) var grade: float = 0.0
 @export var remaining_cash_cents: int
 @export var space_required: int
 @export var space_free: int

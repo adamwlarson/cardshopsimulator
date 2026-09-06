@@ -31,6 +31,8 @@ func open_for_day(day: int, products: Dictionary) -> Array[BuyOpportunity]:
 		opportunity.quantity = int(entry.get("quantity", 0))
 		opportunity.space_required = int(entry.get("space_required", 1))
 		opportunity.beat_id = StringName(entry.get("beat_id", ""))
+		opportunity.grader = StringName(entry.get("grader", ""))
+		opportunity.grade = float(entry.get("grade", 0.0))
 		if opportunity.is_valid():
 			result.append(opportunity)
 	return result
