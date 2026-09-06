@@ -86,3 +86,4 @@ Art-owned crest thin on J2 badge. No Eng SoT.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **R1 GO** (park R2/R3/R4). Softs parked. QA Flagship formal CLEAR TO KICK; Eng S2+ standby. Main @ `7ef4ef11`. |
+| 2026-09-06 | **R1 SHIPPED #47** Flagship win-wire @ `522e5825`. Softs parked; no R2. Queue → pick-s. |
