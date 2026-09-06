@@ -158,6 +158,7 @@ func choose_showcase(choice: StringName) -> bool:
 	if not applied:
 		return false
 	EventBus.showcase_choice_resolved.emit(SHOWCASE_BEAT, choice)
+	_mark_completed(SHOWCASE_BEAT, choice)
 	return true
 
 

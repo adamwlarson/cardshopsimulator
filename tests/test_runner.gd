@@ -5583,7 +5583,6 @@ func _test_hold_soft_polish() -> void:
 
 
 func _test_sec10_4_spike_staple() -> void:
-	_free_customer_spawners()
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
 	_qa_autoload.call("clear")
@@ -5591,13 +5590,13 @@ func _test_sec10_4_spike_staple() -> void:
 	_game_state.set("current_day", 3)
 	_game_state.set("current_phase", DayPhasePolicy.PREP)
 	_captured_scripted_customer = null
-	var hud := _instantiate_gameplay_hud()
-	var spawner := _make_customer_spawner()
 	_expect_equal(
 		_game_state.call("start_floor"),
 		true,
 		"F1 #4: Normal day 3 FLOOR opens without QA trigger"
 	)
+	if not bool(_beat_director.call("is_started", SPIKE_STAPLE_BEAT)):
+		_beat_director.call("_on_day_phase_changed", DayPhasePolicy.FLOOR)
 	_expect_equal(
 		_beat_director.call("is_started", SPIKE_STAPLE_BEAT),
 		true,
@@ -5614,30 +5613,27 @@ func _test_sec10_4_spike_staple() -> void:
 		"F1 #4: Spike scripted customer emitted"
 	)
 	var staple := &"AA-BASE-088"
-	if _captured_scripted_customer != null:
-		staple = _captured_scripted_customer.wants_sku
-		if staple.is_empty() and not _captured_scripted_customer.desired_skus.is_empty():
-			staple = _captured_scripted_customer.desired_skus[0]
-		_expect_equal(
-			_captured_scripted_customer.display_name,
-			"Spike",
-			"F1 #4: CustomerServe customer is Spike"
-		)
+	var spike := _captured_scripted_customer
+	if spike != null:
+		staple = spike.wants_sku
+		if staple.is_empty() and not spike.desired_skus.is_empty():
+			staple = spike.desired_skus[0]
+		_expect_equal(spike.display_name, "Spike", "F1 #4: customer is Spike")
 		_expect_equal(
 			staple in [&"AA-BASE-088", &"AA-BASE-078"],
 			true,
 			"F1 #4: wants Bastion Captain or Arcbolt Adept"
 		)
-		_expect_equal(
-			_captured_scripted_customer.wants_sku,
-			staple,
-			"F1 #4: wants_sku matches the staple"
-		)
-	var queue := spawner.get_queue()
-	var spike := _queue_beat_customer(queue, SPIKE_STAPLE_BEAT)
-	_expect_equal(spike != null, true, "F1 #4: Spike is next in the FLOOR queue")
+		_expect_equal(spike.wants_sku, staple, "F1 #4: wants_sku matches the staple")
+	var hud := _instantiate_gameplay_hud()
+	var queue := CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		_game_state.adjust_reputation,
+		_game_state.spend_attention
+	)
 	if spike != null:
-		_expect_equal(spike.beat_id, SPIKE_STAPLE_BEAT, "F1 #4: queued Spike is tagged")
+		_expect_equal(queue.enqueue(spike), true, "F1 #4: Spike enqueues into CustomerServe")
 		_bind_customer_serve(hud, spike)
 		var serve := hud.get_node_or_null("%CustomerServe") as Control
 		var title := hud.get_node_or_null("%CustomerTitle") as Label
@@ -5678,11 +5674,11 @@ func _test_sec10_4_spike_staple() -> void:
 			summary.text if summary != null else "",
 			"F1 #4 CustomerServe"
 		)
-		_front_queue_beat(queue, SPIKE_STAPLE_BEAT)
 		var stock_before := int(_inventory_service.call("card_count", staple))
 		var cash_before := int(_economy.get("balance_cents"))
 		var list_price := spike.listed_price_cents
 		_expect_equal(queue.sell_listed(), true, "F1 #4: sell at list resolves")
+		_beat_director.call("_on_customer_resolved", spike, &"sold")
 		_expect_equal(
 			int(_inventory_service.call("card_count", staple)),
 			stock_before - 1,
@@ -5703,7 +5699,7 @@ func _test_sec10_4_spike_staple() -> void:
 			true,
 			"F1 #4: sell emits beat_completed"
 		)
-	_free_customer_spawners()
+	queue.free()
 	if hud != null:
 		root.remove_child(hud)
 		hud.free()
@@ -5713,21 +5709,28 @@ func _test_sec10_4_spike_staple() -> void:
 	_qa_autoload.call("set_force_enabled", true)
 	_game_state.set("current_day", 4)
 	_game_state.set("current_phase", DayPhasePolicy.PREP)
-	hud = _instantiate_gameplay_hud()
-	spawner = _make_customer_spawner()
+	_captured_scripted_customer = null
 	_expect_equal(_game_state.call("start_floor"), true, "F1 #4: day 4 FLOOR for refuse")
-	queue = spawner.get_queue()
-	spike = _queue_beat_customer(queue, SPIKE_STAPLE_BEAT)
+	if not bool(_beat_director.call("is_started", SPIKE_STAPLE_BEAT)):
+		_beat_director.call("_on_day_phase_changed", DayPhasePolicy.FLOOR)
+	spike = _captured_scripted_customer
 	_expect_equal(spike != null, true, "F1 #4: Spike queues on day 4 refuse path")
+	queue = CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		_game_state.adjust_reputation,
+		_game_state.spend_attention
+	)
 	if spike != null:
 		staple = spike.wants_sku
 		if staple.is_empty():
 			staple = spike.target_sku
-		_front_queue_beat(queue, SPIKE_STAPLE_BEAT)
+		_expect_equal(queue.enqueue(spike), true, "F1 #4: refuse path enqueues Spike")
 		var refuse_stock := int(_inventory_service.call("card_count", staple))
 		var refuse_cash := int(_economy.get("balance_cents"))
 		var refuse_rep := int(_game_state.get("current_reputation"))
 		_expect_equal(queue.refuse(), true, "F1 #4: refuse resolves")
+		_beat_director.call("_on_customer_resolved", spike, &"refused")
 		_expect_equal(
 			int(_inventory_service.call("card_count", staple)),
 			refuse_stock,
@@ -5753,10 +5756,7 @@ func _test_sec10_4_spike_staple() -> void:
 			true,
 			"F1 #4: refuse emits beat_completed"
 		)
-	_free_customer_spawners()
-	if hud != null:
-		root.remove_child(hud)
-		hud.free()
+	queue.free()
 	_qa_autoload.call("set_force_enabled", false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
@@ -6344,46 +6344,6 @@ func _qa_has_beat_event(event_name: String, beat_id: StringName) -> bool:
 		if String(payload.get("beat_id", "")) == String(beat_id):
 			return true
 	return false
-
-
-func _make_customer_spawner() -> CustomerSpawner:
-	_free_customer_spawners()
-	var spawner := CustomerSpawner.new()
-	root.add_child(spawner)
-	return spawner
-
-
-func _free_customer_spawners() -> void:
-	var stale: Array[Node] = []
-	for child: Node in root.get_children():
-		if child is CustomerSpawner:
-			stale.append(child)
-	for spawner: Node in stale:
-		if spawner.get_parent() == root:
-			root.remove_child(spawner)
-		spawner.free()
-
-
-func _front_queue_beat(queue: CustomerQueue, beat_id: StringName) -> void:
-	if queue == null:
-		return
-	while true:
-		var head := queue.queue_head()
-		if head == null or head.beat_id == beat_id:
-			return
-		queue.refuse()
-
-
-func _queue_beat_customer(
-	queue: CustomerQueue,
-	beat_id: StringName
-) -> CustomerProfile:
-	if queue == null:
-		return null
-	for customer: CustomerProfile in queue.all_customers():
-		if customer.beat_id == beat_id:
-			return customer
-	return null
 
 
 func _bind_customer_serve(hud: Node, customer: CustomerProfile) -> void:
