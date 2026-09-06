@@ -1,6 +1,6 @@
 # Next Eng SoT Pick X v1 — post W1
 
-**Status:** Adopted **X1 GO** (Soft far crest Art polish) — Art CLEAR TO KICK; Eng thin ACK only if mesh swap. Park X2 STOP / X3 camera off-switch / X4 ironman. Soft catalog stays closed.
+**Status:** **X1 SHIPPED** #55 @ `0a3bcaef9f757e5e4e58fe01fee4170c86079e57` (tip `d7f5b7af`) — Soft far crest CLOSED (SH7). Soft catalog CLOSED. Park X2/X3/X4.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** pick-w (W1 Loan shark shipped #54); Soft catalog CLOSED  
@@ -13,7 +13,7 @@
 | Pack | Result |
 |------|--------|
 | A–W1 | Full loop + Soft hygiene + cameras + loan shark |
-| Soft | Catalog CLOSED; Soft far crest still **Art later** (SH7) |
+| Soft | Catalog CLOSED; Soft far crest **CLOSED** (SH7 via #55) |
 
 **Gap:** Soft far crest Art polish. Camera off-switch Soft. Ironman optional lose. STOP cool-down after a long systems day.
 
@@ -80,3 +80,4 @@ systems §9.1 optional ironman cash+COGS floor.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **X1 GO** (park X2/X3/X4). Soft catalog closed. Art CLEAR TO KICK Soft far crest (SH7). Main @ `f99c205b`. |
+| 2026-09-06 | **X1 SHIPPED** #55 @ `0a3bcaef9f757e5e4e58fe01fee4170c86079e57` — Soft far crest PASS/CLOSED (SH7). Soft catalog closed. |
