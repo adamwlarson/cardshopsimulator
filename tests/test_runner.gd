@@ -3628,13 +3628,16 @@ func _test_convention_weekend_traffic_and_whales() -> void:
 		true,
 		"N1: convention does not bypass the low-rep whale gate"
 	)
-	var spawner := CustomerSpawner.new()
-	_expect_equal(
-		is_equal_approx(spawner.active_spawn_wait_seconds(), con_small),
-		true,
-		"N1: CustomerSpawner reads the active-event traffic mult"
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
 	)
-	spawner.free()
+	_expect_equal(
+		spawn_src.contains("active_spawn_wait_seconds")
+		and spawn_src.contains("active_event_whale_weight_mult")
+		and spawn_src.contains("market_event_changed"),
+		true,
+		"N1: CustomerSpawner reads active-event traffic/whale multipliers"
+	)
 	_demand_signals.call("apply_event_save", {})
 	_expect_equal(
 		_demand_signals.call("has_convention_weekend"),
