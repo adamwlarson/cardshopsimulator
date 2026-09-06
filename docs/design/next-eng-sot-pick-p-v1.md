@@ -87,3 +87,4 @@ QA asserts Flagship (Large + Rep ≥ 80 + cash ≥ $50k); Eng S2+ only.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **P1 GO** (park P2/P3/P4). Softs parked. Eng Recession spike `bc-ce037ab6` launching. No Art. |
+| 2026-09-06 | **P1 SHIPPED #45** @ `748c1c04`. Soft flipper-weight Soft OK MVP. Softs parked. Queue → pick-q. |
