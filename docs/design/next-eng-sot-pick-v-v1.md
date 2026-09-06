@@ -78,3 +78,10 @@ No new systems.
 - [x] Sync this file to main before cloud agent
 - [x] Soft catalog stays closed
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **V1 GO** (park V2/V3/V4). Soft catalog closed. Eng Camera unlock spike `bc-7e59087b` launching. Main @ `a2e84b1b`. |
