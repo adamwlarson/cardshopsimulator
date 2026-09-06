@@ -1,6 +1,6 @@
 # Next Eng SoT Pick I v1 — post H2
 
-**Status:** Adopted **I1 GO** — synced main @ `4160b14a`; Eng spike launching (online listings). Park I2/I3/I4. Soft seeds parked. No Art.  
+**Status:** Adopted — **I1 shipped #36** @ `7c40f3b8` (2026-09-06); park I2/I3/I4
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §4.4 / §4.5, pick-h (H2 shipped @ `8a7f7a73`)  
