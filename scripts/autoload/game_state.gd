@@ -147,6 +147,57 @@ func can_research() -> bool:
 	)
 
 
+func can_install_cameras() -> bool:
+	return (
+		is_game_active
+		and current_phase in [DayPhase.PREP, DayPhase.FLOOR]
+		and not shop.has_cameras()
+		and attention_remaining >= shop.camera_attention_cost()
+		and Economy.can_afford(shop.camera_cash_cost_cents())
+	)
+
+
+func install_cameras() -> Dictionary:
+	var cash_cost := shop.camera_cash_cost_cents()
+	var attention_cost := shop.camera_attention_cost()
+	if shop.has_cameras():
+		return _camera_result(false, &"already_owned", 0, 0)
+	if not is_game_active or current_phase not in [DayPhase.PREP, DayPhase.FLOOR]:
+		return _camera_result(false, &"wrong_phase", 0, 0)
+	if attention_remaining < attention_cost:
+		return _camera_result(false, &"insufficient_attention", 0, 0)
+	if not Economy.can_afford(cash_cost):
+		return _camera_result(false, &"insufficient_cash", 0, 0)
+	if not consume_attention(attention_cost):
+		return _camera_result(false, &"insufficient_attention", 0, 0)
+	if not Economy.record_expense(cash_cost, &"cameras", "Security cameras"):
+		attention_remaining += attention_cost
+		EventBus.attention_changed.emit(attention_remaining)
+		return _camera_result(false, &"insufficient_cash", 0, 0)
+	if not shop.install_cameras():
+		return _camera_result(false, &"already_owned", attention_cost, cash_cost)
+	var applied := _camera_result(true, &"ok", attention_cost, cash_cost)
+	QaInstrumentation.record_cameras_installed(applied)
+	return applied
+
+
+func _camera_result(
+	ok: bool,
+	reason: StringName,
+	attention_spent: int,
+	cash_spent_cents: int
+) -> Dictionary:
+	return {
+		"ok": ok,
+		"reason": reason,
+		"attention_spent": attention_spent,
+		"cash_spent_cents": cash_spent_cents,
+		"attention_remaining": attention_remaining,
+		"cameras_owned": shop.has_cameras(),
+		"cameras_active": shop.has_active_cameras(),
+	}
+
+
 func can_inspect() -> bool:
 	return (
 		is_game_active

@@ -56,6 +56,11 @@ extends Control
 @onready var beat_choice_c_button: Button = %BeatChoiceCButton
 @onready var beat_choice_d_button: Button = %BeatChoiceDButton
 @onready var open_staff_button: Button = %OpenStaffButton
+@onready var open_cameras_button: Button = get_node_or_null("%OpenCamerasButton") as Button
+@onready var camera_confirm_panel: PanelContainer = get_node_or_null("%CameraConfirm") as PanelContainer
+@onready var camera_confirm_title: Label = get_node_or_null("%CameraConfirmTitle") as Label
+@onready var camera_confirm_body: Label = get_node_or_null("%CameraConfirmBody") as Label
+@onready var camera_confirm_button: Button = get_node_or_null("%CameraConfirmButton") as Button
 @onready var staff_panel: PanelContainer = %StaffPanel
 @onready var staff_hint: Label = %StaffHint
 @onready var staff_rows: VBoxContainer = %StaffRows
@@ -137,6 +142,8 @@ func _ready() -> void:
 	EventBus.beat_decision_resolved.connect(_on_beat_decision_resolved)
 	EventBus.buy_focus_requested.connect(_on_buy_focus_requested)
 	EventBus.staff_changed.connect(_on_staff_changed)
+	if EventBus.has_signal("cameras_changed"):
+		EventBus.cameras_changed.connect(_on_cameras_changed)
 	EventBus.market_event_changed.connect(_on_market_event_changed)
 	EventBus.reputation_changed.connect(_on_reputation_changed)
 	EventBus.campaign_won.connect(_on_campaign_won)
@@ -192,6 +199,13 @@ func _ready() -> void:
 		hire_cashier_button.pressed.connect(_hire_from_panel.bind(&"cashier"))
 	if hire_specialist_button != null:
 		hire_specialist_button.pressed.connect(_hire_from_panel.bind(&"specialist"))
+	if open_cameras_button != null:
+		open_cameras_button.pressed.connect(_open_cameras_confirm)
+	var camera_back := get_node_or_null("%CameraConfirmBackButton") as Button
+	if camera_back != null:
+		camera_back.pressed.connect(_close_cameras)
+	if camera_confirm_button != null:
+		camera_confirm_button.pressed.connect(_confirm_cameras)
 	%BeatConfirmBackButton.pressed.connect(_close_beat_confirm)
 	%BeatConfirmButton.pressed.connect(_confirm_beat_choice)
 	open_research_button.pressed.connect(_open_research_list)
@@ -265,6 +279,7 @@ func _update_phase(phase: int) -> void:
 	_close_research()
 	_close_rearrange()
 	_close_staff()
+	_close_cameras()
 	if phase == GameState.DayPhase.SETTLE and _showcase_choice_made:
 		showcase_panel.hide()
 	_sync_prep_action_buttons()
@@ -306,6 +321,7 @@ func _on_phase_pressed() -> void:
 
 
 func _open_buy_list() -> void:
+	_close_cameras()
 	_close_buy()
 	for child: Node in buy_rows.get_children():
 		buy_rows.remove_child(child)
@@ -584,6 +600,7 @@ func _sync_online_button() -> void:
 func _open_online_list() -> void:
 	if open_online_button == null or open_online_button.disabled:
 		return
+	_close_cameras()
 	_close_online()
 	if online_rows != null:
 		for child: Node in online_rows.get_children():
@@ -1231,6 +1248,7 @@ func _sync_patience_bar(customer: CustomerProfile) -> void:
 func _sync_prep_action_buttons() -> void:
 	_sync_staff_panel()
 	_sync_online_button()
+	_sync_cameras_button()
 	if open_research_button == null or open_rearrange_button == null:
 		return
 	var research_att := GameState.shop.research_attention_cost()
@@ -1300,6 +1318,7 @@ func _sync_prep_action_buttons() -> void:
 func _open_research_list() -> void:
 	if open_research_button.disabled:
 		return
+	_close_cameras()
 	_close_research()
 	for child: Node in research_rows.get_children():
 		research_rows.remove_child(child)
@@ -1440,6 +1459,7 @@ func _sync_event_banner() -> void:
 func _open_rearrange() -> void:
 	if open_rearrange_button.disabled:
 		return
+	_close_cameras()
 	_selected_rearrange_fixture = &""
 	_selected_rearrange_origin = Vector2i(-1, -1)
 	_rebuild_rearrange_fixtures()
@@ -1582,11 +1602,98 @@ func _on_staff_changed() -> void:
 	_sync_prep_action_buttons()
 
 
+func _on_cameras_changed() -> void:
+	_sync_prep_action_buttons()
+
+
+func _sync_cameras_button() -> void:
+	if open_cameras_button == null:
+		return
+	var cash_cost := GameState.shop.camera_cash_cost_cents()
+	var att_cost := GameState.shop.camera_attention_cost()
+	if GameState.shop.has_cameras():
+		open_cameras_button.text = DemandSignalPresenter.cameras_owned_label()
+		open_cameras_button.disabled = true
+	else:
+		open_cameras_button.text = DemandSignalPresenter.cameras_action_label(
+			cash_cost,
+			att_cost
+		)
+		open_cameras_button.disabled = not GameState.can_install_cameras()
+	if camera_confirm_button != null:
+		if GameState.shop.has_cameras():
+			camera_confirm_button.text = DemandSignalPresenter.cameras_owned_label()
+			camera_confirm_button.disabled = true
+		else:
+			camera_confirm_button.text = DemandSignalPresenter.cameras_action_label(
+				cash_cost,
+				att_cost
+			)
+			camera_confirm_button.disabled = not GameState.can_install_cameras()
+	if camera_confirm_body != null and (
+		camera_confirm_panel == null or camera_confirm_panel.visible
+	):
+		camera_confirm_body.text = _camera_confirm_copy(cash_cost, att_cost)
+
+
+func _camera_confirm_copy(cash_cost: int, att_cost: int) -> String:
+	return "\n".join([
+		DemandSignalPresenter.cameras_action_label(cash_cost, att_cost),
+		"One-time install. Cuts extra loss during a theft rumor.",
+		"Staff coverage still helps. Wait it out still works.",
+		"Condition grade and certification stay hidden.",
+	])
+
+
+func _open_cameras_confirm() -> void:
+	if open_cameras_button == null or open_cameras_button.disabled:
+		return
+	if GameState.shop.has_cameras():
+		return
+	_close_research()
+	_close_rearrange()
+	_close_staff()
+	_close_online()
+	var cash_cost := GameState.shop.camera_cash_cost_cents()
+	var att_cost := GameState.shop.camera_attention_cost()
+	if camera_confirm_title != null:
+		camera_confirm_title.text = "INSTALL CAMERAS"
+	if camera_confirm_body != null:
+		camera_confirm_body.text = _camera_confirm_copy(cash_cost, att_cost)
+	_sync_cameras_button()
+	if camera_confirm_panel != null:
+		camera_confirm_panel.show()
+	_sync_modal_veil()
+
+
+func _confirm_cameras() -> void:
+	if not GameState.can_install_cameras():
+		_sync_prep_action_buttons()
+		return
+	var result := GameState.install_cameras()
+	if not bool(result.get("ok", false)):
+		beat_toast.text = "Cameras blocked"
+		beat_toast.show()
+		_sync_prep_action_buttons()
+		return
+	beat_toast.text = "Cameras on — theft losses drop"
+	beat_toast.show()
+	_close_cameras()
+	_sync_prep_action_buttons()
+
+
+func _close_cameras() -> void:
+	if camera_confirm_panel != null:
+		camera_confirm_panel.hide()
+	_sync_modal_veil()
+
+
 func _open_staff() -> void:
 	if open_staff_button == null or open_staff_button.disabled:
 		return
 	_close_research()
 	_close_rearrange()
+	_close_cameras()
 	_sync_staff_panel()
 	if staff_panel != null:
 		staff_panel.show()
@@ -1724,6 +1831,7 @@ func _sync_modal_veil() -> void:
 		or (staff_panel != null and staff_panel.visible)
 		or (online_list_panel != null and online_list_panel.visible)
 		or (online_confirm_panel != null and online_confirm_panel.visible)
+		or (camera_confirm_panel != null and camera_confirm_panel.visible)
 		or (campaign_win_panel != null and campaign_win_panel.visible)
 	)
 

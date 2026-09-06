@@ -116,6 +116,12 @@ func record_research_applied(payload: Dictionary) -> void:
 	_emit(&"research_applied", payload)
 
 
+func record_cameras_installed(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"cameras_installed", payload.duplicate(true))
+
+
 func record_market_event_rolled(payload: Dictionary) -> void:
 	if not is_enabled():
 		return

@@ -154,6 +154,14 @@ size_flags_vertical = 4
 mouse_filter = 0
 text = "Staff"
 
+[node name="OpenCamerasButton" type="Button" parent="TopBar/Stats"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(188, 40)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 0
+text = "Cameras · $2,500.00 · Att 8"
+
 [node name="EventBannerLabel" type="Label" parent="."]
 unique_name_in_owner = true
 visible = false
@@ -741,6 +749,53 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"PrimaryButton"
 text = "Research · $50.00 · Att 15"
+
+[node name="CameraConfirm" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 520.0
+offset_bottom = 320.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="CameraConfirm"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="CameraConfirmTitle" type="Label" parent="CameraConfirm/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "INSTALL CAMERAS"
+autowrap_mode = 3
+
+[node name="CameraConfirmBody" type="Label" parent="CameraConfirm/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+text = "Cameras · $2,500.00 · Att 8. One-time install. Cuts extra loss during a theft rumor."
+autowrap_mode = 3
+
+[node name="Actions" type="HBoxContainer" parent="CameraConfirm/Content"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="CameraConfirmBackButton" type="Button" parent="CameraConfirm/Content/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Back"
+
+[node name="CameraConfirmButton" type="Button" parent="CameraConfirm/Content/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "Cameras · $2,500.00 · Att 8"
 
 [node name="RearrangePanel" type="PanelContainer" parent="."]
 unique_name_in_owner = true
