@@ -5011,6 +5011,7 @@ func _test_security_camera_prop_stub_swap() -> void:
 		att_before - NORMAL_CONFIG.camera_attention,
 		"V1 art: install Att gate unchanged"
 	)
+	rig.sync_from_shop()
 	_expect_equal(rig.owned_cameras_visible(), true, "V1 art: owned shows Medium cams")
 	_expect_equal(rig.large_camera_visible(), false, "V1 art: Small hides Large extra")
 	_expect_equal(rig.visible_camera_count(), 2, "V1 art: Small owned shows two ceiling cams")
