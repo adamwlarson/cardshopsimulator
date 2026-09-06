@@ -40,9 +40,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -260.0
-offset_top = -170.0
+offset_top = -200.0
 offset_right = 260.0
-offset_bottom = 170.0
+offset_bottom = 200.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StylePanel")
@@ -71,6 +71,23 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.7, 0.68, 1)
 theme_override_font_sizes/font_size = 16
 text = "Build the shop. Read the market. Stay solvent."
+horizontal_alignment = 1
+
+[node name="CampaignLabel" type="Label" parent="Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.82, 0.78, 1)
+theme_override_font_sizes/font_size = 15
+text = "Campaign: Flagship"
+horizontal_alignment = 1
+
+[node name="PrestigeLabel" type="Label" parent="Panel/Margin/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.86, 0.62, 1)
+theme_override_font_sizes/font_size = 14
+text = "Last prestige: Flagship"
 horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="Panel/Margin/Content"]

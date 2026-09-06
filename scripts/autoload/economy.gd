@@ -149,6 +149,8 @@ func _record(kind: LedgerEntry.Kind, amount_cents: int, category: StringName, me
 	_ledger.append(entry)
 	EventBus.publish_transaction(entry)
 	EventBus.publish_cash_changed(balance_cents)
+	if GameState.current_phase != GameState.DayPhase.SETTLE:
+		GameState.evaluate_campaign_win()
 	return true
 
 

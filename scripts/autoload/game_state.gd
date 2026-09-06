@@ -2,11 +2,19 @@ extends Node
 
 const FIRST_DAY := 1
 const NORMAL_BALANCE_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
+const FLAGSHIP_MODE := &"flagship"
 
 enum DayPhase {
 	PREP,
 	FLOOR,
 	SETTLE,
+}
+
+enum CampaignMode {
+	FLAGSHIP,
+	SURVIVE_Y1,
+	LIQUIDITY_KING,
+	SANDBOX,
 }
 
 var current_day: int = FIRST_DAY
@@ -17,6 +25,24 @@ var current_phase: DayPhase = DayPhase.PREP
 var attention_remaining: int = NORMAL_BALANCE_CONFIG.attention_pool
 var shop := ShopState.new()
 var pending_floor_skip_seconds: float = 0.0
+var campaign_mode: CampaignMode = CampaignMode.FLAGSHIP
+var campaign_complete: bool = false
+var last_prestige: StringName = &""
+var _win_signals_bound: bool = false
+
+
+func _ready() -> void:
+	_ensure_win_signals()
+
+
+func _ensure_win_signals() -> void:
+	if _win_signals_bound:
+		return
+	if not EventBus.cash_changed.is_connected(_on_cash_changed_maybe_win):
+		EventBus.cash_changed.connect(_on_cash_changed_maybe_win)
+	if not EventBus.shop_layout_changed.is_connected(_on_layout_changed_maybe_win):
+		EventBus.shop_layout_changed.connect(_on_layout_changed_maybe_win)
+	_win_signals_bound = true
 
 
 func set_balance_config(config: BalanceConfig) -> void:
@@ -27,11 +53,13 @@ func set_balance_config(config: BalanceConfig) -> void:
 
 
 func start_new_game() -> void:
+	_ensure_win_signals()
 	current_day = FIRST_DAY
 	current_reputation = balance_config.start_reputation
 	current_phase = DayPhase.PREP
 	attention_remaining = balance_config.attention_pool
 	pending_floor_skip_seconds = 0.0
+	campaign_complete = false
 	is_game_active = true
 	shop.reset(balance_config)
 	Economy.reset()
@@ -69,6 +97,7 @@ func start_settle() -> bool:
 	current_phase = DayPhase.SETTLE
 	Economy.settle_day(current_day)
 	EventBus.day_phase_changed.emit(current_phase)
+	evaluate_campaign_win()
 	return true
 
 
@@ -195,6 +224,61 @@ func consume_floor_skip() -> float:
 func adjust_reputation(delta: int) -> void:
 	current_reputation = clampi(current_reputation + delta, 0, 100)
 	EventBus.reputation_changed.emit(current_reputation)
+	evaluate_campaign_win()
+
+
+func meets_flagship() -> bool:
+	if shop == null or balance_config == null:
+		return false
+	return balance_config.meets_flagship(
+		int(shop.tier),
+		current_reputation,
+		Economy.balance_cents
+	)
+
+
+func campaign_win_payload() -> Dictionary:
+	var tier := 0
+	if shop != null:
+		tier = int(shop.tier)
+	return {
+		"mode": String(FLAGSHIP_MODE),
+		"day": current_day,
+		"cash_cents": Economy.balance_cents,
+		"reputation": current_reputation,
+		"shop_tier": tier,
+	}
+
+
+func evaluate_campaign_win() -> bool:
+	_ensure_win_signals()
+	if campaign_complete or not is_game_active:
+		return false
+	if campaign_mode != CampaignMode.FLAGSHIP:
+		return false
+	if not meets_flagship():
+		return false
+	return _award_flagship()
+
+
+func _award_flagship() -> bool:
+	campaign_complete = true
+	last_prestige = FLAGSHIP_MODE
+	is_game_active = false
+	var payload := campaign_win_payload()
+	QaInstrumentation.record_campaign_won(payload)
+	EventBus.campaign_won.emit(payload)
+	return true
+
+
+func _on_cash_changed_maybe_win(_balance_cents: int) -> void:
+	if current_phase == DayPhase.SETTLE:
+		return
+	evaluate_campaign_win()
+
+
+func _on_layout_changed_maybe_win() -> void:
+	evaluate_campaign_win()
 
 
 func return_to_menu() -> void:
@@ -218,6 +302,9 @@ func capture_save() -> Dictionary:
 		"phase": int(current_phase),
 		"attention_remaining": attention_remaining,
 		"pending_floor_skip_seconds": pending_floor_skip_seconds,
+		"campaign_mode": int(campaign_mode),
+		"campaign_complete": campaign_complete,
+		"last_prestige": String(last_prestige),
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
@@ -240,6 +327,11 @@ func restore_save(data: Dictionary) -> bool:
 		data.get("attention_remaining", balance_config.attention_pool)
 	)
 	pending_floor_skip_seconds = float(data.get("pending_floor_skip_seconds", 0.0))
+	campaign_mode = int(data.get("campaign_mode", CampaignMode.FLAGSHIP)) as CampaignMode
+	campaign_complete = bool(data.get("campaign_complete", false))
+	var saved_prestige := StringName(data.get("last_prestige", &""))
+	if not saved_prestige.is_empty():
+		last_prestige = saved_prestige
 	shop.apply_save(data.get("shop", {}), balance_config)
 	var inventory: Dictionary = data.get("inventory", {})
 	InventoryService.apply_medium_capacity(
@@ -257,4 +349,8 @@ func restore_save(data: Dictionary) -> bool:
 	EventBus.attention_changed.emit(attention_remaining)
 	EventBus.day_phase_changed.emit(current_phase)
 	EventBus.shop_layout_changed.emit()
+	if campaign_complete:
+		is_game_active = false
+	else:
+		evaluate_campaign_win()
 	return true

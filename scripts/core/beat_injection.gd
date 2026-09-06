@@ -881,6 +881,7 @@ func _choose_expand_large(choice: StringName) -> bool:
 				GameState.shop.backstock_bonus()
 			)
 			EventBus.shop_layout_changed.emit()
+			GameState.evaluate_campaign_win()
 		&"wait_for_cash_rep":
 			if GameState.shop.can_expand_large(
 				Economy.balance_cents,

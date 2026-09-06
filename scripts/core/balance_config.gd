@@ -109,6 +109,8 @@ enum Difficulty {
 
 @export var survive_y1_rep_floor: int = 40
 @export var flagship_cash_cents: int = 5_000_000
+## systems §9.2 Flagship Rep floor. Cash is the difficulty scalar.
+@export var flagship_rep: int = 80
 @export var liquidity_king_cash_cents: int = 10_000_000
 
 
@@ -133,3 +135,12 @@ func shop_traffic_mult(shop_tier: int) -> float:
 func customer_spawn_wait_seconds(base_interval: float, shop_tier: int) -> float:
 	var combined := customer_spawn_mult * shop_traffic_mult(shop_tier)
 	return base_interval / maxf(0.01, combined)
+
+
+func meets_flagship(shop_tier: int, reputation: int, cash_cents: int) -> bool:
+	# Integers match ShopState.Tier (SMALL=0, MEDIUM=1, LARGE=2).
+	return (
+		shop_tier >= 2
+		and reputation >= flagship_rep
+		and cash_cents >= flagship_cash_cents
+	)
