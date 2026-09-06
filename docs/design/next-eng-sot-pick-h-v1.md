@@ -1,6 +1,6 @@
 # Next Eng SoT Pick H v1 — post G1
 
-**Status:** Adopted **H2 GO** — STOP §10 Normal campaign smoke; park H1/H3; Soft seeds parked. Eng S2+ standby only.  
+**Status:** Adopted — **H2 shipped** (campaign smoke PASS 2026-09-06); park H1/H3; Soft keep parked; Eng S2+ not needed  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §4.4 / §4.5 / §10, pick-g (G1 shipped #35)  
