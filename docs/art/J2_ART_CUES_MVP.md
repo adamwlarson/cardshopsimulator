@@ -29,6 +29,8 @@ Far / approach / interact proof: `docs/art/qa-shots/J2_graded_case_{far,approach
 
 Proof: `docs/art/qa-shots/J2_online_hold_tag_{alone,shelf_approach,shelf_interact,case_lip_interact}.png`.
 
+**Yaw (fixture `IMPORT_NOTES` are SoT):** shelf customer face **−X** → **Y = −90°**; case customer face **−Z** → **Y = 180°**. Follow `prop_online_hold_tag_01/IMPORT_NOTES.md` if this note and a chat ping disagree.
+
 **Eng ACK (visibility only):** show `OnlineHoldTag` / `prop_online_hold_tag_01` when slot `location.type == ONLINE_HOLD`. Hide otherwise. No new economy API.
 
 ## Parked
