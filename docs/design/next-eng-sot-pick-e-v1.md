@@ -18,7 +18,7 @@
 
 **Parked soft (non-blocking):** MidCenter densify AABB, apron FOV, `can_research` / Easy-Hard inherit, icon 2× / sell-tint, etc.
 
-**Gap:** Optional §10 pressure beats (#3 outing, #10 shady) still dark; event→Price bridge (Option D) still optional polish.
+**Gap:** Option D event→Price bridge **in flight**. C3 + HOLD shipped.
 
 ---
 
@@ -45,15 +45,20 @@
 
 ---
 
-## Option D — Event → PriceEditor bridge
+## Option D — Event → PriceEditor bridge — **GO**
 
-**SoT:** `next-eng-sot-pick-d-v1.md` § Option D.
+**SoT:** `next-eng-sot-pick-d-v1.md` § Option D (do not fork).
 
-On active Hype/Fog: once force PriceEditor on affected SKU (§4.5 only); Cancel OK; no new event kinds.
+On active Hype/Fog: once force PriceEditor on affected SKU (§4.5 chips only); Cancel OK; no new event kinds (C1 bus only). May use §10 #7 Titan path as the seeded SKU.
 
-**Acceptance:** seeded Hype opens editor once; no truth leak; Cancel leaves event active.
+**Acceptance (confirmed 2026-09-06):**
 
-**Why park (lean):** Nice glue; thinner than two §10 beats after C2.
+1. Seeded Hype day opens PriceEditor on target SKU **once** without debug.
+2. No `true_market` / `cert_valid` (or other §4.5 forbidden) on that open.
+3. Cancel leaves event active; Apply persists list price.
+4. No new event kinds — uses existing C1 hype/fog bus only.
+
+**Out:** New event kinds; full news UI.
 
 ---
 
