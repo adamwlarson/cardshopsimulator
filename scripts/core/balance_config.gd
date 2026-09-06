@@ -106,6 +106,9 @@ enum Difficulty {
 @export var loan_shark_rep_hit: int = 10
 @export var missed_rent_weeks_to_lose: int = 2
 @export var ironman_destitution_default: bool = false
+## systems §9.1 optional ironman: cash < $500 and inventory COGS < $500.
+@export var ironman_cash_cents: int = 50_000
+@export var ironman_cogs_cents: int = 50_000
 
 @export var survive_y1_rep_floor: int = 40
 ## systems §9.2 Survive Year 1 day gate. Same day on Easy/Normal/Hard.
@@ -171,3 +174,21 @@ func is_month_end_day(day: int) -> bool:
 
 func meets_liquidity_king(day: int, cash_cents: int) -> bool:
 	return is_month_end_day(day) and cash_cents >= liquidity_king_cash_cents
+
+
+func loan_shark_terms() -> Dictionary:
+	return {
+		"enabled": loan_shark_enabled,
+		"cash_cents": loan_shark_cash_cents,
+		"daily_cents": loan_shark_daily_cents,
+		"days": loan_shark_days,
+		"rep_hit": loan_shark_rep_hit,
+	}
+
+
+func meets_ironman_destitution(cash_cents: int, cogs_cents: int) -> bool:
+	return (
+		ironman_destitution_default
+		and cash_cents < ironman_cash_cents
+		and cogs_cents < ironman_cogs_cents
+	)

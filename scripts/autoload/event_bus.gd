@@ -43,6 +43,9 @@ signal staff_changed()
 signal cameras_changed()
 signal market_event_changed(payload: Dictionary)
 signal campaign_won(payload: Dictionary)
+signal loan_shark_offered(payload: Dictionary)
+signal loan_shark_resolved(outcome: StringName)
+signal campaign_lost(payload: Dictionary)
 
 func publish_cash_changed(balance_cents: int) -> void:
 	cash_changed.emit(balance_cents)

@@ -32,6 +32,13 @@ var campaign_complete: bool = false
 var last_prestige: StringName = &""
 var sandbox_best_day: int = 0
 var sandbox_best_cash_cents: int = 0
+var campaign_lost: bool = false
+var last_lose_reason: StringName = &""
+var loan_shark_recovery_used: bool = false
+var loan_shark_offer_pending: bool = false
+var missed_rent_weeks: int = 0
+var _unpaid_wages_this_settle: bool = false
+var _suppress_lose_eval: bool = false
 var _win_signals_bound: bool = false
 
 
@@ -64,6 +71,13 @@ func start_new_game() -> void:
 	attention_remaining = balance_config.attention_pool
 	pending_floor_skip_seconds = 0.0
 	campaign_complete = false
+	campaign_lost = false
+	last_lose_reason = &""
+	loan_shark_recovery_used = false
+	loan_shark_offer_pending = false
+	missed_rent_weeks = 0
+	_unpaid_wages_this_settle = false
+	_suppress_lose_eval = false
 	is_game_active = true
 	shop.reset(balance_config)
 	Economy.reset()
@@ -80,7 +94,7 @@ func start_new_game() -> void:
 
 
 func start_floor() -> bool:
-	if not is_game_active or not DayPhasePolicy.can_start_floor(current_phase):
+	if not can_progress_day() or not DayPhasePolicy.can_start_floor(current_phase):
 		return false
 	var noshows := shop.roll_floor_attendance()
 	if noshows > 0:
@@ -97,17 +111,18 @@ func start_floor() -> bool:
 
 
 func start_settle() -> bool:
-	if not is_game_active or not DayPhasePolicy.can_start_settle(current_phase):
+	if not can_progress_day() or not DayPhasePolicy.can_start_settle(current_phase):
 		return false
 	current_phase = DayPhase.SETTLE
 	Economy.settle_day(current_day)
 	EventBus.day_phase_changed.emit(current_phase)
 	evaluate_campaign_win()
+	evaluate_campaign_lose()
 	return true
 
 
 func advance_day() -> bool:
-	if not is_game_active or not DayPhasePolicy.can_advance_day(current_phase):
+	if not can_progress_day() or not DayPhasePolicy.can_advance_day(current_phase):
 		return false
 	QaInstrumentation.end_day(current_day, Economy.balance_cents)
 	current_day += 1
@@ -279,10 +294,31 @@ func consume_floor_skip() -> float:
 	return skip
 
 
+func can_progress_day() -> bool:
+	return is_game_active and not loan_shark_offer_pending and not campaign_lost
+
+
+func begin_settle_obligations() -> void:
+	_unpaid_wages_this_settle = false
+
+
+func note_rent_paid() -> void:
+	missed_rent_weeks = 0
+
+
+func note_rent_missed() -> void:
+	missed_rent_weeks += 1
+
+
+func note_unpaid_wage() -> void:
+	_unpaid_wages_this_settle = true
+
+
 func adjust_reputation(delta: int) -> void:
 	current_reputation = clampi(current_reputation + delta, 0, 100)
 	EventBus.reputation_changed.emit(current_reputation)
 	evaluate_campaign_win()
+	evaluate_campaign_lose()
 
 
 func meets_flagship() -> bool:
@@ -423,10 +459,129 @@ func _award_flagship() -> bool:
 	return _award_campaign(FLAGSHIP_MODE)
 
 
+func can_offer_loan_shark() -> bool:
+	return (
+		balance_config != null
+		and balance_config.loan_shark_enabled
+		and not loan_shark_recovery_used
+		and not loan_shark_offer_pending
+	)
+
+
+func bankruptcy_reason() -> StringName:
+	if current_reputation <= 0:
+		return &"reputation"
+	if _unpaid_wages_this_settle:
+		return &"unpaid_wages"
+	if (
+		balance_config != null
+		and missed_rent_weeks >= maxi(1, balance_config.missed_rent_weeks_to_lose)
+	):
+		return &"missed_rent"
+	if (
+		balance_config != null
+		and balance_config.meets_ironman_destitution(
+			Economy.balance_cents,
+			InventoryService.inventory_cogs_cents()
+		)
+	):
+		return &"ironman"
+	return &""
+
+
+func loan_shark_offer_payload() -> Dictionary:
+	var terms := {}
+	if balance_config != null:
+		terms = balance_config.loan_shark_terms()
+	return {
+		"reason": String(last_lose_reason),
+		"cash_cents": int(terms.get("cash_cents", 0)),
+		"daily_cents": int(terms.get("daily_cents", 0)),
+		"days": int(terms.get("days", 0)),
+		"rep_hit": int(terms.get("rep_hit", 0)),
+	}
+
+
+func campaign_lose_payload() -> Dictionary:
+	return {
+		"reason": String(last_lose_reason),
+		"day": current_day,
+		"cash_cents": Economy.balance_cents,
+		"reputation": current_reputation,
+		"loan_offered": loan_shark_recovery_used,
+	}
+
+
+func evaluate_campaign_lose() -> bool:
+	if _suppress_lose_eval or campaign_complete or campaign_lost:
+		return false
+	if not is_game_active or loan_shark_offer_pending:
+		return false
+	var reason := bankruptcy_reason()
+	if reason == &"":
+		return false
+	if can_offer_loan_shark():
+		return _offer_loan_shark(reason)
+	return _award_loss(reason)
+
+
+func accept_loan_shark() -> bool:
+	if not loan_shark_offer_pending or campaign_lost or campaign_complete:
+		return false
+	_suppress_lose_eval = true
+	if not Economy.apply_loan_shark_terms():
+		_suppress_lose_eval = false
+		return false
+	loan_shark_recovery_used = true
+	loan_shark_offer_pending = false
+	missed_rent_weeks = 0
+	_unpaid_wages_this_settle = false
+	_suppress_lose_eval = false
+	var payload := loan_shark_offer_payload()
+	payload["outcome"] = "accept"
+	QaInstrumentation.record_loan_shark_resolved(payload)
+	EventBus.loan_shark_resolved.emit(&"accept")
+	return true
+
+
+func refuse_loan_shark() -> bool:
+	# Refuse is game over (systems §9.3 / W1). There is no continue-without-loan path.
+	if not loan_shark_offer_pending or campaign_lost or campaign_complete:
+		return false
+	loan_shark_offer_pending = false
+	loan_shark_recovery_used = true
+	var payload := loan_shark_offer_payload()
+	payload["outcome"] = "refuse"
+	QaInstrumentation.record_loan_shark_resolved(payload)
+	EventBus.loan_shark_resolved.emit(&"refuse")
+	return _award_loss(&"refused_loan_shark")
+
+
+func _offer_loan_shark(reason: StringName) -> bool:
+	last_lose_reason = reason
+	loan_shark_offer_pending = true
+	var payload := loan_shark_offer_payload()
+	QaInstrumentation.record_loan_shark_offered(payload)
+	EventBus.loan_shark_offered.emit(payload)
+	return true
+
+
+func _award_loss(reason: StringName) -> bool:
+	campaign_lost = true
+	last_lose_reason = reason
+	is_game_active = false
+	loan_shark_offer_pending = false
+	var payload := campaign_lose_payload()
+	QaInstrumentation.record_campaign_lost(payload)
+	EventBus.campaign_lost.emit(payload)
+	return true
+
+
 func _on_cash_changed_maybe_win(_balance_cents: int) -> void:
 	if current_phase == DayPhase.SETTLE:
 		return
 	evaluate_campaign_win()
+	evaluate_campaign_lose()
 
 
 func _on_layout_changed_maybe_win() -> void:
@@ -459,6 +614,11 @@ func capture_save() -> Dictionary:
 		"last_prestige": String(last_prestige),
 		"sandbox_best_day": sandbox_best_day,
 		"sandbox_best_cash_cents": sandbox_best_cash_cents,
+		"campaign_lost": campaign_lost,
+		"last_lose_reason": String(last_lose_reason),
+		"loan_shark_recovery_used": loan_shark_recovery_used,
+		"missed_rent_weeks": missed_rent_weeks,
+		"payday_loan_days_remaining": Economy.payday_loan_days_remaining(),
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
@@ -483,8 +643,15 @@ func restore_save(data: Dictionary) -> bool:
 	pending_floor_skip_seconds = float(data.get("pending_floor_skip_seconds", 0.0))
 	campaign_mode = int(data.get("campaign_mode", CampaignMode.FLAGSHIP)) as CampaignMode
 	campaign_complete = bool(data.get("campaign_complete", false))
+	campaign_lost = bool(data.get("campaign_lost", false))
+	last_lose_reason = StringName(data.get("last_lose_reason", &""))
+	loan_shark_recovery_used = bool(data.get("loan_shark_recovery_used", false))
+	loan_shark_offer_pending = false
+	missed_rent_weeks = int(data.get("missed_rent_weeks", 0))
+	_unpaid_wages_this_settle = false
 	sandbox_best_day = int(data.get("sandbox_best_day", sandbox_best_day))
 	sandbox_best_cash_cents = int(data.get("sandbox_best_cash_cents", sandbox_best_cash_cents))
+	Economy.restore_payday_loan_days(int(data.get("payday_loan_days_remaining", 0)))
 	var saved_prestige := StringName(data.get("last_prestige", &""))
 	if not saved_prestige.is_empty():
 		last_prestige = saved_prestige
@@ -505,8 +672,9 @@ func restore_save(data: Dictionary) -> bool:
 	EventBus.attention_changed.emit(attention_remaining)
 	EventBus.day_phase_changed.emit(current_phase)
 	EventBus.shop_layout_changed.emit()
-	if campaign_complete:
+	if campaign_complete or campaign_lost:
 		is_game_active = false
 	else:
 		evaluate_campaign_win()
+		evaluate_campaign_lose()
 	return true

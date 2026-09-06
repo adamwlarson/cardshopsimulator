@@ -63,10 +63,17 @@ func take_payday_loan() -> bool:
 	var config := GameState.balance_config
 	if not config.loan_shark_enabled or _payday_loan_days_remaining > 0:
 		return false
+	return apply_loan_shark_terms()
+
+
+func apply_loan_shark_terms() -> bool:
+	var config := GameState.balance_config
+	if not config.loan_shark_enabled:
+		return false
 	if not record_income(
 		config.loan_shark_cash_cents,
 		&"payday_loan",
-		"Payday loan principal"
+		"Loan shark principal"
 	):
 		return false
 	_payday_loan_days_remaining = config.loan_shark_days
@@ -78,28 +85,39 @@ func has_active_payday_loan() -> bool:
 	return _payday_loan_days_remaining > 0
 
 
+func payday_loan_days_remaining() -> int:
+	return _payday_loan_days_remaining
+
+
+func restore_payday_loan_days(days: int) -> void:
+	_payday_loan_days_remaining = maxi(0, days)
+
+
 func settle_payday_loan() -> bool:
 	if _payday_loan_days_remaining <= 0:
 		return false
-	if not record_expense(
-		GameState.balance_config.loan_shark_daily_cents,
-		&"payday_loan",
-		"Payday loan payment"
-	):
-		return false
+	var daily := GameState.balance_config.loan_shark_daily_cents
+	if daily > 0:
+		record_forced_expense(daily, &"payday_loan", "Loan shark daily")
 	_payday_loan_days_remaining -= 1
 	return true
 
 
 func settle_day(day: int) -> void:
 	# Wage and utility services can attach here without changing phase ownership.
-	settle_weekly_obligations(day)
+	GameState.begin_settle_obligations()
+	if GameState.balance_config.is_rent_due_day(day):
+		if settle_weekly_obligations(day):
+			GameState.note_rent_paid()
+		else:
+			GameState.note_rent_missed()
 	for wage: Dictionary in GameState.shop.take_due_wages():
-		record_expense(
+		if not record_expense(
 			int(wage.get("amount_cents", 0)),
 			&"wages",
 			String(wage.get("memo", "Staff wage"))
-		)
+		):
+			GameState.note_unpaid_wage()
 	settle_payday_loan()
 	online_listings.tick_shipping()
 	_settle_shrink()

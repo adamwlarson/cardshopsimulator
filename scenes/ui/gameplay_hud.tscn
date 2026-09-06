@@ -1291,3 +1291,101 @@ custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 text = "Return to menu"
+
+[node name="LoanShark" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -190.0
+offset_right = 300.0
+offset_bottom = 190.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="LoanShark"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="LoanSharkTitle" type="Label" parent="LoanShark/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "Loan shark"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="LoanSharkBody" type="Label" parent="LoanShark/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "First bankruptcy. Take the shark loan or fold."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Actions" type="HBoxContainer" parent="LoanShark/Content"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="LoanSharkRefuseButton" type="Button" parent="LoanShark/Content/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Refuse"
+
+[node name="LoanSharkAcceptButton" type="Button" parent="LoanShark/Content/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "Accept"
+
+[node name="GameOver" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -280.0
+offset_top = -170.0
+offset_right = 280.0
+offset_bottom = 170.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="GameOver"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="GameOverTitle" type="Label" parent="GameOver/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "Game over"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="GameOverBody" type="Label" parent="GameOver/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "The shop went bankrupt."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="GameOverMenuButton" type="Button" parent="GameOver/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Return to menu"

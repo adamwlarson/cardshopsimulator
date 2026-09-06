@@ -103,6 +103,15 @@ extends Control
 @onready var campaign_win_title: Label = get_node_or_null("%CampaignWinTitle") as Label
 @onready var campaign_win_body: Label = get_node_or_null("%CampaignWinBody") as Label
 @onready var campaign_win_menu_button: Button = get_node_or_null("%CampaignWinMenuButton") as Button
+@onready var loan_shark_panel: PanelContainer = get_node_or_null("%LoanShark") as PanelContainer
+@onready var loan_shark_title: Label = get_node_or_null("%LoanSharkTitle") as Label
+@onready var loan_shark_body: Label = get_node_or_null("%LoanSharkBody") as Label
+@onready var loan_shark_accept_button: Button = get_node_or_null("%LoanSharkAcceptButton") as Button
+@onready var loan_shark_refuse_button: Button = get_node_or_null("%LoanSharkRefuseButton") as Button
+@onready var game_over_panel: PanelContainer = get_node_or_null("%GameOver") as PanelContainer
+@onready var game_over_title: Label = get_node_or_null("%GameOverTitle") as Label
+@onready var game_over_body: Label = get_node_or_null("%GameOverBody") as Label
+@onready var game_over_menu_button: Button = get_node_or_null("%GameOverMenuButton") as Button
 
 var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
@@ -147,9 +156,18 @@ func _ready() -> void:
 	EventBus.market_event_changed.connect(_on_market_event_changed)
 	EventBus.reputation_changed.connect(_on_reputation_changed)
 	EventBus.campaign_won.connect(_on_campaign_won)
+	EventBus.loan_shark_offered.connect(_on_loan_shark_offered)
+	EventBus.loan_shark_resolved.connect(_on_loan_shark_resolved)
+	EventBus.campaign_lost.connect(_on_campaign_lost)
 	phase_button.pressed.connect(_on_phase_pressed)
 	if campaign_win_menu_button != null:
 		campaign_win_menu_button.pressed.connect(_on_campaign_win_menu)
+	if loan_shark_accept_button != null:
+		loan_shark_accept_button.pressed.connect(_on_loan_shark_accept)
+	if loan_shark_refuse_button != null:
+		loan_shark_refuse_button.pressed.connect(_on_loan_shark_refuse)
+	if game_over_menu_button != null:
+		game_over_menu_button.pressed.connect(_on_game_over_menu)
 	%OpenBuyButton.pressed.connect(_open_buy_list)
 	%BuyListCancelButton.pressed.connect(_close_buy)
 	%BuyCancelButton.pressed.connect(_close_buy)
@@ -233,7 +251,11 @@ func _ready() -> void:
 
 
 func _bind_seeded_status() -> void:
-	if not GameState.is_game_active and not GameState.campaign_complete:
+	if (
+		not GameState.is_game_active
+		and not GameState.campaign_complete
+		and not GameState.campaign_lost
+	):
 		GameState.start_new_game()
 	_update_cash(Economy.balance_cents)
 	_update_day(GameState.current_day)
@@ -242,6 +264,8 @@ func _bind_seeded_status() -> void:
 	_sync_rotation_watch()
 	_sync_event_banner()
 	_sync_campaign_win()
+	_sync_loan_shark()
+	_sync_game_over()
 	_maybe_open_event_price_editor()
 
 
@@ -272,7 +296,7 @@ func _update_phase(phase: int) -> void:
 			phase_chip.theme_type_variation = &"PhaseChipSettle"
 			phase_label.theme_type_variation = &"ChipLabel"
 			phase_button.text = "Next day"
-	phase_button.disabled = not GameState.is_game_active
+	phase_button.disabled = not GameState.can_progress_day()
 	_close_buy()
 	_close_price()
 	_close_online()
@@ -865,7 +889,7 @@ func _on_rent_decision_resolved(
 		return
 	rent_panel.hide()
 	_rent_beat_id = &""
-	phase_button.disabled = not GameState.is_game_active
+	phase_button.disabled = not GameState.can_progress_day()
 	_sync_modal_veil()
 	if outcome == &"dismissed":
 		beat_toast.text = "Rent still due at SETTLE"
@@ -994,7 +1018,7 @@ func _on_beat_decision_resolved(
 	_beat_decision_id = &""
 	_beat_confirms = {}
 	_pending_confirm_choice = &""
-	phase_button.disabled = not GameState.is_game_active
+	phase_button.disabled = not GameState.can_progress_day()
 	_sync_modal_veil()
 	match outcome:
 		&"drive_out":
@@ -1833,6 +1857,8 @@ func _sync_modal_veil() -> void:
 		or (online_confirm_panel != null and online_confirm_panel.visible)
 		or (camera_confirm_panel != null and camera_confirm_panel.visible)
 		or (campaign_win_panel != null and campaign_win_panel.visible)
+		or (loan_shark_panel != null and loan_shark_panel.visible)
+		or (game_over_panel != null and game_over_panel.visible)
 	)
 
 
@@ -1887,5 +1913,81 @@ func _campaign_win_body(mode: StringName, payload: Dictionary) -> String:
 
 
 func _on_campaign_win_menu() -> void:
+	GameState.return_to_menu()
+	get_tree().change_scene_to_file("res://scenes/boot/boot.tscn")
+
+
+func _on_loan_shark_offered(payload: Dictionary) -> void:
+	_show_loan_shark(payload)
+
+
+func _on_loan_shark_resolved(outcome: StringName) -> void:
+	if loan_shark_panel != null:
+		loan_shark_panel.hide()
+	if outcome == &"accept":
+		phase_button.disabled = not GameState.can_progress_day()
+		_sync_prep_action_buttons()
+	_sync_modal_veil()
+
+
+func _sync_loan_shark() -> void:
+	if GameState.loan_shark_offer_pending:
+		_show_loan_shark(GameState.loan_shark_offer_payload())
+	elif loan_shark_panel != null:
+		loan_shark_panel.hide()
+		_sync_modal_veil()
+
+
+func _show_loan_shark(payload: Dictionary) -> void:
+	if loan_shark_panel == null:
+		return
+	if loan_shark_title != null:
+		loan_shark_title.text = DemandSignalPresenter.loan_shark_title()
+	if loan_shark_body != null:
+		loan_shark_body.text = DemandSignalPresenter.loan_shark_body(payload)
+	if game_over_panel != null:
+		game_over_panel.hide()
+	loan_shark_panel.show()
+	phase_button.disabled = true
+	_sync_prep_action_buttons()
+	_sync_modal_veil()
+
+
+func _on_loan_shark_accept() -> void:
+	GameState.accept_loan_shark()
+
+
+func _on_loan_shark_refuse() -> void:
+	GameState.refuse_loan_shark()
+
+
+func _on_campaign_lost(payload: Dictionary) -> void:
+	if loan_shark_panel != null:
+		loan_shark_panel.hide()
+	_show_game_over(payload)
+
+
+func _sync_game_over() -> void:
+	if GameState.campaign_lost:
+		_show_game_over(GameState.campaign_lose_payload())
+	elif game_over_panel != null:
+		game_over_panel.hide()
+		_sync_modal_veil()
+
+
+func _show_game_over(payload: Dictionary) -> void:
+	if game_over_panel == null:
+		return
+	if game_over_title != null:
+		game_over_title.text = DemandSignalPresenter.game_over_title()
+	if game_over_body != null:
+		game_over_body.text = DemandSignalPresenter.game_over_body(payload)
+	game_over_panel.show()
+	phase_button.disabled = true
+	_sync_prep_action_buttons()
+	_sync_modal_veil()
+
+
+func _on_game_over_menu() -> void:
 	GameState.return_to_menu()
 	get_tree().change_scene_to_file("res://scenes/boot/boot.tscn")
