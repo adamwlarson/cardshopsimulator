@@ -28,11 +28,21 @@ var pending_floor_skip_seconds: float = 0.0
 var campaign_mode: CampaignMode = CampaignMode.FLAGSHIP
 var campaign_complete: bool = false
 var last_prestige: StringName = &""
+var _win_signals_bound: bool = false
 
 
 func _ready() -> void:
-	EventBus.cash_changed.connect(_on_cash_changed_maybe_win)
-	EventBus.shop_layout_changed.connect(_on_layout_changed_maybe_win)
+	_ensure_win_signals()
+
+
+func _ensure_win_signals() -> void:
+	if _win_signals_bound:
+		return
+	if not EventBus.cash_changed.is_connected(_on_cash_changed_maybe_win):
+		EventBus.cash_changed.connect(_on_cash_changed_maybe_win)
+	if not EventBus.shop_layout_changed.is_connected(_on_layout_changed_maybe_win):
+		EventBus.shop_layout_changed.connect(_on_layout_changed_maybe_win)
+	_win_signals_bound = true
 
 
 func set_balance_config(config: BalanceConfig) -> void:
@@ -43,6 +53,7 @@ func set_balance_config(config: BalanceConfig) -> void:
 
 
 func start_new_game() -> void:
+	_ensure_win_signals()
 	current_day = FIRST_DAY
 	current_reputation = balance_config.start_reputation
 	current_phase = DayPhase.PREP
@@ -240,6 +251,7 @@ func campaign_win_payload() -> Dictionary:
 
 
 func evaluate_campaign_win() -> bool:
+	_ensure_win_signals()
 	if campaign_complete or not is_game_active:
 		return false
 	if campaign_mode != CampaignMode.FLAGSHIP:
