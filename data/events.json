@@ -31,6 +31,16 @@
       "fog_flag": true,
       "duration_days_min": 1,
       "duration_days_max": 1
+    },
+    {
+      "id": "counterfeit_scare",
+      "type": "counterfeit_scare",
+      "title": "Counterfeit scare",
+      "description": "News flash — graded trust drops; Inspect is mandatory on slabs; shady lots look worse.",
+      "weight": 1.0,
+      "negative": true,
+      "duration_days_min": 1,
+      "duration_days_max": 3
     }
   ]
 }

@@ -34,6 +34,10 @@ var _inspect_cue_by_key: Dictionary = {}
 var _research_by_set: Dictionary = {}
 var _fog_flag: bool = false
 var _fog_sigma_mult: float = 1.0
+var _counterfeit_scare: bool = false
+var _scare_trust_mult: float = 1.0
+var _scare_shady_fake_mult: float = 1.0
+var _scare_shady_width_mult: float = 1.0
 var _instrumentation: QaInstrumentationService
 
 
@@ -63,6 +67,66 @@ func set_fog_event(active: bool, sigma_mult: float = 1.5) -> void:
 
 func has_fog_flag() -> bool:
 	return _fog_flag
+
+
+func set_counterfeit_scare(
+	active: bool,
+	trust_mult: float = 0.55,
+	shady_fake_mult: float = 2.5,
+	shady_width_mult: float = 1.35
+) -> void:
+	_counterfeit_scare = active
+	_scare_trust_mult = trust_mult if active else 1.0
+	_scare_shady_fake_mult = shady_fake_mult if active else 1.0
+	_scare_shady_width_mult = shady_width_mult if active else 1.0
+	_demand_cache.clear()
+
+
+func has_counterfeit_scare() -> bool:
+	return _counterfeit_scare
+
+
+func graded_trust_mult() -> float:
+	return _scare_trust_mult if _counterfeit_scare else 1.0
+
+
+func requires_owned_slab_inspect() -> bool:
+	return _counterfeit_scare
+
+
+func is_inspect_mandatory(dto: BuyConfirmSignal) -> bool:
+	return _counterfeit_scare and _is_graded_signal(dto)
+
+
+func recommends_inspect_for(dto: BuyConfirmSignal) -> bool:
+	if dto == null:
+		return false
+	if recommends_inspect(dto.channel):
+		return true
+	return is_inspect_mandatory(dto)
+
+
+func active_fake_slab_rate(channel: Variant = Channel.SHADY) -> float:
+	return _fake_slab_rate(channel)
+
+
+func shady_width_mult() -> float:
+	return _scare_shady_width_mult if _counterfeit_scare else 1.0
+
+
+func refresh_confirm_gate(dto: BuyConfirmSignal) -> void:
+	if dto == null:
+		return
+	var qty_ok := dto.quantity > 0 or dto.lot_total_cents > 0
+	var affordable := (
+		qty_ok
+		and dto.remaining_cash_cents >= 0
+		and dto.space_required <= dto.space_free
+	)
+	dto.can_confirm = (
+		affordable
+		and not (is_inspect_mandatory(dto) and not dto.inspected)
+	)
 
 
 func active_demand_band_sigma(informed: bool = false) -> float:
@@ -136,6 +200,7 @@ func buy_confirm(
 			_skill_instrumentation(informed)
 		)
 	apply_inspect_state(dto)
+	refresh_confirm_gate(dto)
 	return dto
 
 
@@ -173,7 +238,7 @@ func can_inspect(dto: BuyConfirmSignal) -> bool:
 	return (
 		dto != null
 		and not dto.inspected
-		and recommends_inspect(dto.channel)
+		and recommends_inspect_for(dto)
 	)
 
 
@@ -185,6 +250,7 @@ func apply_inspect_state(dto: BuyConfirmSignal) -> void:
 		return
 	dto.condition_cue = String(_inspect_cue_by_key[key])
 	dto.inspected = true
+	refresh_confirm_gate(dto)
 
 
 func display_name_for_set(set_id: StringName) -> String:
@@ -296,6 +362,7 @@ func inspect_condition(dto: BuyConfirmSignal) -> bool:
 	dto.condition_cue = cue
 	dto.inspected = true
 	_inspect_cue_by_key[key] = cue
+	refresh_confirm_gate(dto)
 	return true
 
 
@@ -324,6 +391,9 @@ func bind_graded_signal(
 	if seeded_cert_state >= 0:
 		_true_cert_by_key[_inspect_key(dto)] = seeded_cert_state == 1
 	true_cert_valid(dto)
+	if _counterfeit_scare:
+		dto.confidence = _downgrade_confidence(dto.confidence)
+	refresh_confirm_gate(dto)
 
 
 func true_cert_valid(dto: BuyConfirmSignal) -> bool:
@@ -332,7 +402,7 @@ func true_cert_valid(dto: BuyConfirmSignal) -> bool:
 		return bool(_true_cert_by_key[key])
 	var valid := true
 	if is_risky_slab_channel(dto.channel):
-		valid = _rng.randf() >= _fake_slab_rate()
+		valid = _rng.randf() >= _fake_slab_rate(dto.channel)
 	_true_cert_by_key[key] = valid
 	return valid
 
@@ -545,7 +615,7 @@ func _channel_width(channel: Channel) -> float:
 		Channel.MARKETPLACE:
 			return 0.15
 		Channel.SHADY:
-			return 0.22
+			return 0.22 * _active_shady_width_mult()
 	return 0.15
 
 
@@ -561,6 +631,8 @@ func _condition_cue(channel: Channel) -> String:
 	if channel == Channel.DISTRIBUTOR:
 		return "NM assumed"
 	if channel == Channel.SHADY:
+		if _counterfeit_scare:
+			return "Photo only — counterfeit scare · inspect strongly recommended"
 		return "Photo only — inspect strongly recommended"
 	if channel == Channel.MARKETPLACE:
 		return "Photo only — inspect recommended"
@@ -571,7 +643,11 @@ func _condition_cue(channel: Channel) -> String:
 
 func _graded_fog_cue(channel: Channel) -> String:
 	if channel == Channel.SHADY:
+		if _counterfeit_scare:
+			return "Photo only — counterfeit scare · inspect strongly recommended"
 		return "Photo only — inspect strongly recommended"
+	if _counterfeit_scare:
+		return "Slab — inspect mandatory"
 	if channel == Channel.AUCTION:
 		return "Slab — inspect recommended"
 	return SlabInstance.CERT_FOG_CUE
@@ -596,14 +672,30 @@ func _inspect_cert_cue(dto: BuyConfirmSignal) -> String:
 	return SlabInstance.cue_for_revealed(revealed)
 
 
-func _fake_slab_rate() -> float:
+func _fake_slab_rate(channel: Variant = Channel.SHADY) -> float:
+	var rate := 0.08
 	if _config != null:
-		return _config.shady_fake_slab_rate
-	return 0.08
+		rate = _config.shady_fake_slab_rate
+	if _counterfeit_scare and channel_from(channel) == Channel.SHADY:
+		rate = minf(1.0, rate * _scare_shady_fake_mult)
+	return rate
 
 
-func roll_risky_slab_cert() -> bool:
-	return _rng.randf() >= _fake_slab_rate()
+func roll_risky_slab_cert(channel: Variant = Channel.SHADY) -> bool:
+	return _rng.randf() >= _fake_slab_rate(channel)
+
+
+func _downgrade_confidence(confidence: StringName) -> StringName:
+	match confidence:
+		&"high":
+			return &"medium"
+		&"medium":
+			return &"low"
+	return &"low"
+
+
+func _active_shady_width_mult() -> float:
+	return _scare_shady_width_mult if _counterfeit_scare else 1.0
 
 
 func _inspect_key(dto: BuyConfirmSignal) -> String:

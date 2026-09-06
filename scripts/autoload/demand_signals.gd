@@ -115,6 +115,44 @@ func has_fog_flag() -> bool:
 	return _service != null and _service.has_fog_flag()
 
 
+func has_counterfeit_scare() -> bool:
+	return _service != null and _service.has_counterfeit_scare()
+
+
+func graded_trust_mult() -> float:
+	if _service == null:
+		return 1.0
+	return _service.graded_trust_mult()
+
+
+func requires_owned_slab_inspect() -> bool:
+	return _service != null and _service.requires_owned_slab_inspect()
+
+
+func is_inspect_mandatory(dto: BuyConfirmSignal) -> bool:
+	return _service != null and _service.is_inspect_mandatory(dto)
+
+
+func recommends_inspect(dto: BuyConfirmSignal) -> bool:
+	if _service == null:
+		if dto == null:
+			return false
+		return DemandSignalService.recommends_inspect(dto.channel)
+	return _service.recommends_inspect_for(dto)
+
+
+func active_fake_slab_rate(channel: Variant = DemandSignalService.Channel.SHADY) -> float:
+	if _service == null:
+		return GameState.balance_config.shady_fake_slab_rate
+	return _service.active_fake_slab_rate(channel)
+
+
+func shady_width_mult() -> float:
+	if _service == null:
+		return 1.0
+	return _service.shady_width_mult()
+
+
 func active_demand_band_sigma(informed: bool = false) -> float:
 	if _service == null:
 		return GameState.balance_config.demand_band_sigma
@@ -178,6 +216,8 @@ func event_banner_text() -> String:
 			return "Hype: %s · HOT" % name_text
 		MarketEvent.KIND_FOG:
 			return "Fog day — demand signals noisier"
+		MarketEvent.KIND_COUNTERFEIT:
+			return "Counterfeit scare — Inspect mandatory · shady risk up"
 		MarketEvent.KIND_ROTATION:
 			if not _can_see_rotation_leak(event):
 				return ""
@@ -223,6 +263,8 @@ func open_buy_signals() -> Array[BuyConfirmSignal]:
 
 func confirm_buy(dto: BuyConfirmSignal) -> bool:
 	if dto == null or not dto.can_confirm:
+		return false
+	if is_inspect_mandatory(dto) and not dto.inspected:
 		return false
 	for opportunity: BuyOpportunity in _open_opportunities():
 		if opportunity.id != dto.opportunity_id:
@@ -287,6 +329,8 @@ func apply_owned_slab_cue(dto: PriceConfirmSignal) -> void:
 		return
 	dto.condition_cue = slab.shown_cert_cue
 	dto.inspected = slab.inspected
+	if has_counterfeit_scare() and not slab.inspected:
+		dto.condition_cue = "Slab — inspect mandatory"
 	dto.grader = slab.grader
 	dto.grade = slab.grade
 
@@ -311,7 +355,7 @@ func roll_channel_slab_cert(channel: Variant) -> bool:
 		return true
 	if not DemandSignalService.is_risky_slab_channel(channel):
 		return true
-	return _service.roll_risky_slab_cert()
+	return _service.roll_risky_slab_cert(channel)
 
 
 func inject_buy_opportunity(opportunity: BuyOpportunity) -> bool:
@@ -491,6 +535,7 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 			opportunity.seeded_cert_state
 		)
 	_service.apply_inspect_state(dto)
+	_service.refresh_confirm_gate(dto)
 	return dto
 
 
@@ -728,6 +773,8 @@ func _bind_event_targets(event: MarketEvent) -> bool:
 		MarketEvent.KIND_FOG:
 			event.fog_flag = true
 			return true
+		MarketEvent.KIND_COUNTERFEIT:
+			return true
 	return false
 
 
@@ -742,6 +789,14 @@ func _apply_event_effects(event: MarketEvent) -> bool:
 			return true
 		MarketEvent.KIND_FOG:
 			_service.set_fog_event(true, MarketEventService.FOG_SIGMA_MULT)
+			return true
+		MarketEvent.KIND_COUNTERFEIT:
+			_service.set_counterfeit_scare(
+				true,
+				MarketEventService.COUNTERFEIT_TRUST_MULT,
+				MarketEventService.COUNTERFEIT_SHADY_FAKE_MULT,
+				MarketEventService.COUNTERFEIT_SHADY_WIDTH_MULT
+			)
 			return true
 	return false
 
@@ -769,6 +824,8 @@ func _revert_event_effects(event: MarketEvent) -> void:
 			)
 		MarketEvent.KIND_FOG:
 			_service.set_fog_event(false)
+		MarketEvent.KIND_COUNTERFEIT:
+			_service.set_counterfeit_scare(false)
 		MarketEvent.KIND_ROTATION:
 			pass
 
@@ -812,6 +869,11 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		"set_id": String(event.set_id) if event != null else "",
 		"fog_flag": event.fog_flag if event != null else false,
 		"demand_band_sigma": active_demand_band_sigma(),
+		"inspect_mandatory": (
+			event != null and event.kind == MarketEvent.KIND_COUNTERFEIT
+		),
+		"graded_trust_mult": graded_trust_mult(),
+		"shady_width_mult": shady_width_mult(),
 	}
 	QaInstrumentation.record_market_event_rolled(payload)
 	return payload
