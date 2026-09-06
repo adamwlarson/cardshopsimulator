@@ -86,3 +86,4 @@ No Eng systems. Art crest / polish backlog only.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **T1 GO** (park T2/T3/T4). Softs parked. Eng campaign mode picker spike `bc-62301c7e` launching. Main @ `9d7baabe`. |
+| 2026-09-06 | **T1 SHIPPED #49** @ `d22ae0d3`. Soft no mode-picker CLOSED. Softs parked. Queue → pick-u. |
