@@ -126,6 +126,7 @@ func _initialize() -> void:
 	_test_option_d_seeded_hype_opens_price_editor_once()
 	_test_option_d_price_editor_has_no_truth()
 	_test_option_d_cancel_keeps_event_apply_persists()
+	_test_counterfeit_scare_event()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -2406,9 +2407,10 @@ func _test_market_events_seven_day_seeded_run() -> void:
 	_expect_equal(
 		FileAccess.get_file_as_string("res://data/events.json").contains("hype_spike")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("soft_rotation_leak")
-		and FileAccess.get_file_as_string("res://data/events.json").contains("fog_day"),
+		and FileAccess.get_file_as_string("res://data/events.json").contains("fog_day")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("counterfeit_scare"),
 		true,
-		"C1 pack catalogs hype, rotation leak, and fog"
+		"C1 pack catalogs hype, rotation leak, fog, and counterfeit scare"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 
@@ -2882,6 +2884,541 @@ func _test_option_d_cancel_keeps_event_apply_persists() -> void:
 	_expect_equal(after_apply.kind, MarketEvent.KIND_HYPE, "D gate 3: Apply keeps hype")
 	root.remove_child(hud)
 	hud.free()
+
+
+func _test_counterfeit_scare_event() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_counterfeit_scare_can_fire()
+	_test_counterfeit_scare_trust_and_inspect_gate()
+	_test_counterfeit_scare_shady_riskier()
+	_test_counterfeit_scare_section_45_and_banner()
+	_test_counterfeit_scare_g1_coherence()
+	_test_counterfeit_scare_save_load()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_counterfeit_scare_can_fire() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(started != null, true, "M1: formal start_pack_event fires scare")
+	_expect_equal(started.kind, MarketEvent.KIND_COUNTERFEIT, "M1: kind is counterfeit_scare")
+	_expect_equal(started.remaining_days, 2, "M1: remaining_days tracks duration")
+	_expect_equal(
+		_demand_signals.call("has_counterfeit_scare"),
+		true,
+		"M1: pack exposes counterfeit scare flag"
+	)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"M1: scare does not open Option D PriceEditor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var fired := false
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 64):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		_qa_autoload.call("clear")
+		for _day_index: int in range(10):
+			_game_state.call("start_floor")
+			_game_state.call("start_settle")
+			var rolled: MarketEvent = _demand_signals.call("active_event")
+			if rolled != null and rolled.kind == MarketEvent.KIND_COUNTERFEIT:
+				fired = true
+				break
+			if int(_game_state.get("current_day")) < 10:
+				_game_state.call("advance_day")
+		if fired:
+			break
+	_expect_equal(fired, true, "M1: seeded settle run can roll counterfeit_scare")
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_counterfeit_scare_trust_and_inspect_gate() -> void:
+	var accurate := NORMAL_CONFIG.duplicate() as BalanceConfig
+	accurate.inspect_accuracy = 1.0
+	_game_state.call("set_balance_config", accurate)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("graded_trust_mult")), 1.0),
+		true,
+		"M1: graded trust is 1.0 with event off"
+	)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("graded_trust_mult")),
+			MarketEventService.COUNTERFEIT_TRUST_MULT
+		),
+		true,
+		"M1: graded trust drops while scare is active"
+	)
+	var lot: BuyOpportunity = _demand_signals.call(
+		"inject_graded_opportunity",
+		&"m1-auction-slab",
+		&"AA-SKIE-052",
+		DemandSignalService.Channel.AUCTION,
+		5_600,
+		&"Prism",
+		10.0,
+		"Auction slab",
+		1
+	)
+	_expect_equal(lot != null, true, "M1: graded auction injects during scare")
+	var dto: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		&"m1-auction-slab"
+	)
+	_expect_equal(dto != null, true, "M1: graded buy signal exists")
+	if dto != null:
+		_expect_equal(
+			_demand_signals.call("is_inspect_mandatory", dto),
+			true,
+			"M1: inspect is mandatory on graded path"
+		)
+		_expect_equal(dto.inspected, false, "M1: graded lot starts uninspected")
+		_expect_equal(dto.can_confirm, false, "M1: uninspected graded confirm is gated")
+		_expect_equal(dto.confidence, &"low", "M1: graded trust drop is visible as low confidence")
+		_expect_equal(
+			dto.condition_cue.to_lower().contains("inspect mandatory"),
+			true,
+			"M1: graded fog telegraphs inspect mandatory"
+		)
+		_expect_equal(
+			_demand_signals.call("confirm_buy", dto),
+			false,
+			"M1: domain rejects uninspected graded confirm"
+		)
+		_expect_dto_has_no_truth_fields(dto, "M1 gated graded DTO")
+		_assert_text_has_no_truth(dto.condition_cue, "M1 gated graded cue")
+		_assert_text_has_no_truth(
+			DemandSignalPresenter.buy_summary(dto),
+			"M1 gated buy summary"
+		)
+		_assert_text_has_no_truth(
+			DemandSignalPresenter.buy_confirm_snapshot(dto),
+			"M1 gated confirm snapshot"
+		)
+		_expect_equal(
+			_demand_signals.call("inspect_buy", dto),
+			true,
+			"M1: Inspect★ still spends on the gated path"
+		)
+		_expect_equal(dto.inspected, true, "M1: inspect clears the gate")
+		_expect_equal(dto.can_confirm, true, "M1: inspected graded confirm is allowed")
+		_assert_text_has_no_truth(dto.condition_cue, "M1 inspected graded cue")
+		_expect_equal(
+			_demand_signals.call("confirm_buy", dto),
+			true,
+			"M1: inspected graded confirm goes through"
+		)
+	_demand_signals.call("apply_event_save", {})
+	_expect_equal(
+		_demand_signals.call("has_counterfeit_scare"),
+		false,
+		"M1: clearing scare drops the flag"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("graded_trust_mult")), 1.0),
+		true,
+		"M1: graded trust returns to 1.0 after scare"
+	)
+
+
+func _test_counterfeit_scare_shady_riskier() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var base_shady_rate: float = _demand_signals.call(
+		"active_fake_slab_rate",
+		DemandSignalService.Channel.SHADY
+	)
+	var base_auction_rate: float = _demand_signals.call(
+		"active_fake_slab_rate",
+		DemandSignalService.Channel.AUCTION
+	)
+	_expect_equal(
+		is_equal_approx(base_shady_rate, NORMAL_CONFIG.shady_fake_slab_rate),
+		true,
+		"M1: shady fake rate is the BalanceConfig default off-event"
+	)
+	var quiet_lot: BuyOpportunity = _demand_signals.call(
+		"inject_graded_opportunity",
+		&"m1-shady-quiet",
+		&"AA-SKIE-052",
+		DemandSignalService.Channel.SHADY,
+		4_200,
+		&"Prism",
+		10.0,
+		"Quiet trunk slab",
+		0
+	)
+	_expect_equal(quiet_lot != null, true, "M1: off-event shady injects")
+	var quiet: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		&"m1-shady-quiet"
+	)
+	_expect_equal(quiet != null, true, "M1: off-event shady signal exists")
+	if quiet != null:
+		_expect_equal(
+			quiet.condition_cue.to_lower().contains("counterfeit scare"),
+			false,
+			"M1: off-event shady cue has no scare telegraph"
+		)
+		_expect_equal(
+			quiet.condition_cue.to_lower().contains("strongly recommended"),
+			true,
+			"M1: off-event shady still uses G1 inspect fog"
+		)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	var scare_shady_rate: float = _demand_signals.call(
+		"active_fake_slab_rate",
+		DemandSignalService.Channel.SHADY
+	)
+	var scare_auction_rate: float = _demand_signals.call(
+		"active_fake_slab_rate",
+		DemandSignalService.Channel.AUCTION
+	)
+	_expect_equal(
+		scare_shady_rate > base_shady_rate,
+		true,
+		"M1: shady fake rate rises during scare"
+	)
+	_expect_equal(
+		is_equal_approx(
+			scare_shady_rate,
+			NORMAL_CONFIG.shady_fake_slab_rate
+			* MarketEventService.COUNTERFEIT_SHADY_FAKE_MULT
+		),
+		true,
+		"M1: shady fake rate uses pack mult, not a BalanceConfig knob"
+	)
+	_expect_equal(
+		is_equal_approx(scare_auction_rate, base_auction_rate),
+		true,
+		"M1: auction fake rate is unchanged (shady-only amp)"
+	)
+	_expect_equal(
+		float(_demand_signals.call("shady_width_mult"))
+		> 1.0,
+		true,
+		"M1: shady comp width widens during scare"
+	)
+	var hot_lot: BuyOpportunity = _demand_signals.call(
+		"inject_graded_opportunity",
+		&"m1-shady-hot",
+		&"AA-SKIE-052",
+		DemandSignalService.Channel.SHADY,
+		4_200,
+		&"Prism",
+		10.0,
+		"Hot trunk slab",
+		0
+	)
+	_expect_equal(hot_lot != null, true, "M1: scare shady injects")
+	var hot: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		&"m1-shady-hot"
+	)
+	_expect_equal(hot != null, true, "M1: scare shady signal exists")
+	if hot != null:
+		_expect_equal(
+			hot.condition_cue.to_lower().contains("counterfeit scare"),
+			true,
+			"M1: shady cue telegraphs the scare"
+		)
+		_expect_equal(hot.can_confirm, false, "M1: shady graded still inspect-gated")
+		_expect_equal(hot.confidence, &"low", "M1: shady stays low confidence")
+		_expect_dto_has_no_truth_fields(hot, "M1 scare shady DTO")
+		_assert_text_has_no_truth(hot.condition_cue, "M1 scare shady cue")
+		_assert_text_has_no_truth(
+			DemandSignalPresenter.buy_summary(hot),
+			"M1 scare shady summary"
+		)
+
+
+func _test_counterfeit_scare_section_45_and_banner() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Counterfeit"), true, "M1: banner names the scare")
+	_expect_equal(banner.contains("Inspect"), true, "M1: banner telegraphs inspect mandatory")
+	_expect_equal(banner.to_lower().contains("shady"), true, "M1: banner telegraphs shady risk")
+	_assert_text_has_no_truth(banner, "M1 scare banner")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "M1: HUD loads for scare telegraph")
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		_expect_equal(banner_label != null, true, "M1: thin event banner exists")
+		_expect_equal(
+			banner_label != null
+			and banner_label.visible
+			and banner_label.text.contains("Counterfeit")
+			and banner_label.text.contains("Inspect"),
+			true,
+			"M1: HUD banner shows scare without a new screen"
+		)
+		_assert_text_has_no_truth(
+			banner_label.text if banner_label != null else "",
+			"M1 HUD scare banner"
+		)
+		var lot: BuyOpportunity = _demand_signals.call(
+			"inject_graded_opportunity",
+			&"m1-hud-slab",
+			&"AA-SKIE-052",
+			DemandSignalService.Channel.AUCTION,
+			5_600,
+			&"Prism",
+			10.0,
+			"HUD slab",
+			1
+		)
+		_expect_equal(lot != null, true, "M1: HUD graded injects")
+		var dto: BuyConfirmSignal = _demand_signals.call(
+			"buy_signal_for_id",
+			&"m1-hud-slab"
+		)
+		if dto != null:
+			_select_buy_on_hud(hud, dto)
+			var buy_button := hud.get_node_or_null("%BuyButton") as Button
+			var inspect_button := hud.get_node_or_null("%InspectButton") as Button
+			var buy_summary := hud.get_node_or_null("%BuySummary") as Label
+			_expect_equal(
+				inspect_button != null and inspect_button.visible,
+				true,
+				"M1: Inspect★ shown on gated graded detail"
+			)
+			_expect_equal(
+				buy_button != null and buy_button.disabled,
+				true,
+				"M1: Buy stays disabled until Inspect★"
+			)
+			if buy_summary != null:
+				_assert_text_has_no_truth(buy_summary.text, "M1 HUD buy detail")
+				_expect_equal(
+					buy_summary.text.to_lower().contains("inspect"),
+					true,
+					"M1: buy detail shows inspect mandatory fog"
+				)
+			Callable(hud, "_open_buy_confirm").call()
+			var confirm_summary := hud.get_node_or_null("%BuyConfirmSummary") as Label
+			if confirm_summary != null:
+				_assert_text_has_no_truth(confirm_summary.text, "M1 HUD confirm")
+				_expect_equal(
+					confirm_summary.text.to_lower().contains("cert_valid"),
+					false,
+					"M1: confirm hides cert_valid"
+				)
+			Callable(hud, "_back_to_buy_detail").call()
+			if inspect_button != null:
+				inspect_button.pressed.emit()
+				_expect_equal(dto.inspected, true, "M1: HUD Inspect★ clears the gate")
+				_expect_equal(
+					buy_button != null and not buy_button.disabled,
+					true,
+					"M1: Buy enables after Inspect★"
+				)
+				_assert_text_has_no_truth(dto.condition_cue, "M1 HUD inspected cue")
+		root.remove_child(hud)
+		hud.free()
+
+
+func _test_counterfeit_scare_g1_coherence() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var empress := inventory.get_sku(&"AA-SKIE-052")
+	var off_slab: SlabInstance = _inventory_service.call(
+		"seed_fake_slab",
+		&"AA-SKIE-052",
+		&"Prism",
+		10.0,
+		empress.base_market_cents,
+		InventoryLocation.new(InventoryLocation.Type.CASE),
+		&"shady"
+	)
+	_expect_equal(off_slab != null, true, "M1 G1-off: fake slab seeds")
+	if off_slab != null:
+		_expect_equal(off_slab.cert_valid, false, "M1 G1-off: seeded fail-slab")
+		_expect_equal(off_slab.inspected, false, "M1 G1-off: starts uninspected")
+		off_slab.listed_price_cents = 12_000
+		var cash_before := int(_economy.get("balance_cents"))
+		var sold := bool(
+			_inventory_service.call("confirm_customer_sale", &"AA-SKIE-052", 12_000)
+		)
+		_expect_equal(sold, true, "M1 G1-off: uninspected fake sale still resolves")
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before - 12_000,
+			"M1 G1-off: fake sale cash penalty unchanged"
+		)
+	_game_state.call("start_new_game")
+	_qa_autoload.call("clear")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	inventory = _inventory_service.get("model") as InventoryModel
+	empress = inventory.get_sku(&"AA-SKIE-052")
+	var on_slab: SlabInstance = _inventory_service.call(
+		"seed_fake_slab",
+		&"AA-SKIE-047",
+		&"Vaultmark",
+		9.5,
+		1_200,
+		InventoryLocation.new(InventoryLocation.Type.CASE),
+		&"shady"
+	)
+	_expect_equal(on_slab != null, true, "M1 G1-on: fake slab seeds during scare")
+	if on_slab != null:
+		_expect_equal(on_slab.cert_valid, false, "M1 G1-on: seeded fail-slab")
+		_expect_equal(on_slab.inspected, false, "M1 G1-on: starts uninspected")
+		on_slab.listed_price_cents = 9_000
+		var blocked := bool(
+			_inventory_service.call("confirm_customer_sale", &"AA-SKIE-047", 9_000)
+		)
+		_expect_equal(blocked, false, "M1 G1-on: uninspected slab sale is gated")
+		_expect_equal(
+			_inventory_service.call("get_slab", &"AA-SKIE-047") != null,
+			true,
+			"M1 G1-on: gated sale leaves the slab"
+		)
+		var accurate := DemandSignalService.new(
+			NORMAL_CONFIG,
+			MarketState.new(),
+			7,
+			_qa
+		)
+		accurate._config = accurate._config.duplicate()
+		accurate._config.inspect_accuracy = 1.0
+		_expect_equal(
+			accurate.inspect_slab_instance(on_slab),
+			true,
+			"M1 G1-on: Inspect★ still resolves the instance"
+		)
+		_expect_equal(on_slab.inspected, true, "M1 G1-on: inspect marks the instance")
+		_expect_equal(
+			on_slab.shown_cert_cue,
+			SlabInstance.CERT_OFF_CUE,
+			"M1 G1-on: accurate inspect still reveals fail hologram"
+		)
+		_assert_text_has_no_truth(on_slab.shown_cert_cue, "M1 G1-on inspected cue")
+		var cash_before_fail := int(_economy.get("balance_cents"))
+		var rep_before := int(_game_state.get("current_reputation"))
+		var failed := bool(
+			_inventory_service.call("confirm_customer_sale", &"AA-SKIE-047", 9_000)
+		)
+		_expect_equal(failed, true, "M1 G1-on: inspected fake sale still fail-resolves")
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before_fail - 9_000,
+			"M1 G1-on: fake sale cash penalty still applies"
+		)
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			rep_before - NORMAL_CONFIG.fake_slab_sale_rep_hit,
+			"M1 G1-on: fake sale Rep hit still applies"
+		)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_counterfeit_scare_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(started != null, true, "M1 save: scare starts")
+	_game_state.set("current_day", 6)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "M1 scare save")
+	var stored: Dictionary = saved.get("market_event", {})
+	_expect_equal(String(stored.get("id", "")), "counterfeit_scare", "M1 save writes event id")
+	_expect_equal(int(stored.get("remaining_days", 0)), 3, "M1 save writes remaining days")
+	_expect_equal(
+		String(stored.get("kind", "")),
+		"counterfeit_scare",
+		"M1 save writes kind"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_demand_signals.call("has_counterfeit_scare"),
+		false,
+		"M1: new game clears scare"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"M1: restore_save accepts scare snapshot"
+	)
+	var restored: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(restored != null, true, "M1: save/load restores scare")
+	_expect_equal(restored.kind, MarketEvent.KIND_COUNTERFEIT, "M1: restored kind")
+	_expect_equal(restored.remaining_days, 3, "M1: save/load restores remaining days")
+	_expect_equal(
+		_demand_signals.call("has_counterfeit_scare"),
+		true,
+		"M1: restored scare re-applies modifiers"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("graded_trust_mult")),
+			MarketEventService.COUNTERFEIT_TRUST_MULT
+		),
+		true,
+		"M1: restored scare still drops graded trust"
+	)
+	var restored_lot: BuyOpportunity = _demand_signals.call(
+		"inject_graded_opportunity",
+		&"m1-restored-slab",
+		&"AA-SKIE-052",
+		DemandSignalService.Channel.AUCTION,
+		5_600,
+		&"Prism",
+		10.0,
+		"Restored slab",
+		1
+	)
+	_expect_equal(restored_lot != null, true, "M1: restored scare still gates graded")
+	var restored_dto: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		&"m1-restored-slab"
+	)
+	if restored_dto != null:
+		_expect_equal(restored_dto.can_confirm, false, "M1: restored inspect gate holds")
+		_expect_dto_has_no_truth_fields(restored_dto, "M1 restored graded DTO")
 
 
 func _assert_option_d_editor_open(

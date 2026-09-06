@@ -6,6 +6,9 @@ const EVENT_RNG_SEED := 20260904
 const FOG_SIGMA_MULT := 1.5
 const HYPE_MARKET_MULT := 1.35
 const HYPE_DEMAND_SCORE := 0.95
+const COUNTERFEIT_TRUST_MULT := 0.55
+const COUNTERFEIT_SHADY_FAKE_MULT := 2.5
+const COUNTERFEIT_SHADY_WIDTH_MULT := 1.35
 const TITAN_SKU := &"AA-SKIE-047"
 const ROTATION_SET_ID := &"AA-DUST"
 
@@ -83,12 +86,13 @@ func _load_catalog() -> void:
 		for entry_value: Variant in (parsed as Dictionary).get("events", []):
 			if entry_value is Dictionary:
 				defs.append(entry_value as Dictionary)
-	if defs.size() >= 3:
+	if defs.size() >= 4:
 		return
 	defs = [
 		_fallback_def(&"hype_spike", "Hype spike", false, 1, 3),
 		_fallback_def(&"soft_rotation_leak", "Soft rotation leak", true, 1, 3),
 		_fallback_def(&"fog_day", "Fog day", true, 1, 1),
+		_fallback_def(&"counterfeit_scare", "Counterfeit scare", true, 1, 3),
 	]
 
 

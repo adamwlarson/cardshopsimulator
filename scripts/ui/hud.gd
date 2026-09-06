@@ -324,7 +324,7 @@ func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
 		_buy_signal.quantity,
 	]
 	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
-	buy_button.disabled = not _buy_signal.can_confirm
+	_sync_buy_confirm_gate()
 	_sync_inspect_button()
 	buy_list_panel.hide()
 	buy_panel.show()
@@ -371,6 +371,7 @@ func _inspect_buy() -> void:
 		return
 	DemandSignals.inspect_buy(_buy_signal)
 	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
+	_sync_buy_confirm_gate()
 	_sync_inspect_button()
 
 
@@ -415,6 +416,19 @@ func _sync_price_inspect_button() -> void:
 	)
 
 
+func _sync_buy_confirm_gate() -> void:
+	if buy_button == null:
+		return
+	buy_button.disabled = _buy_signal == null or not _buy_signal.can_confirm
+
+
+func _owned_slab_needs_inspect() -> bool:
+	if _price_signal == null or not DemandSignals.requires_owned_slab_inspect():
+		return false
+	var slab := InventoryService.get_slab(_price_signal.sku_id)
+	return slab != null and not slab.inspected
+
+
 func _sync_inspect_button() -> void:
 	if inspect_button == null:
 		return
@@ -422,7 +436,7 @@ func _sync_inspect_button() -> void:
 	inspect_button.text = DemandSignalPresenter.inspect_action_label(cost)
 	var recommended := (
 		_buy_signal != null
-		and DemandSignalService.recommends_inspect(_buy_signal.channel)
+		and DemandSignals.recommends_inspect(_buy_signal)
 	)
 	inspect_button.visible = recommended
 	if not recommended:
@@ -500,12 +514,16 @@ func _update_price_preview(value: String) -> void:
 		false
 	)
 	_bind_price_chips(_price_signal)
-	%PriceApplyButton.disabled = listed_price_cents <= 0
+	%PriceApplyButton.disabled = (
+		listed_price_cents <= 0 or _owned_slab_needs_inspect()
+	)
 	_sync_price_inspect_button()
 
 
 func _apply_price() -> void:
 	if _price_signal == null:
+		return
+	if _owned_slab_needs_inspect():
 		return
 	if not _spend_for_floor(5):
 		return

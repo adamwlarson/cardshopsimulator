@@ -612,6 +612,8 @@ func _roll_slab_cert_valid(source_channel: StringName, seeded_cert_state: int) -
 func _resolve_slab_sale(slab: SlabInstance, sale_price_cents: int) -> bool:
 	if slab == null or slab.card_ref == null:
 		return false
+	if DemandSignals.requires_owned_slab_inspect() and not slab.inspected:
+		return false
 	var sku_id := slab.card_ref.sku_id
 	if slab.cert_valid:
 		if not model.remove_slab(slab):
