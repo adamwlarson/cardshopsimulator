@@ -1743,22 +1743,39 @@ func _sync_campaign_win() -> void:
 func _show_campaign_win(payload: Dictionary) -> void:
 	if campaign_win_panel == null:
 		return
+	var mode := StringName(payload.get("mode", GameState.FLAGSHIP_MODE))
 	if campaign_win_title != null:
-		campaign_win_title.text = "Flagship"
+		campaign_win_title.text = GameState.campaign_title(mode)
 	if campaign_win_body != null:
-		campaign_win_body.text = (
-			"You own a Large shop.\nReputation %d. Cash %s.\nCampaign complete."
-			% [
-				int(payload.get("reputation", GameState.current_reputation)),
-				DemandSignalPresenter.format_cents(
-					int(payload.get("cash_cents", Economy.balance_cents))
-				),
-			]
-		)
+		campaign_win_body.text = _campaign_win_body(mode, payload)
 	campaign_win_panel.show()
 	phase_button.disabled = true
 	_sync_prep_action_buttons()
 	_sync_modal_veil()
+
+
+func _campaign_win_body(mode: StringName, payload: Dictionary) -> String:
+	var cash := DemandSignalPresenter.format_cents(
+		int(payload.get("cash_cents", Economy.balance_cents))
+	)
+	var rep := int(payload.get("reputation", GameState.current_reputation))
+	var day := int(payload.get("day", GameState.current_day))
+	match mode:
+		GameState.SURVIVE_Y1_MODE:
+			return (
+				"You reached day %d with cash on hand.\nReputation %d. Cash %s.\nCampaign complete."
+				% [day, rep, cash]
+			)
+		GameState.LIQUIDITY_KING_MODE:
+			return (
+				"You closed the month at the cash mark.\nCash %s.\nCampaign complete."
+				% cash
+			)
+		_:
+			return (
+				"You own a Large shop.\nReputation %d. Cash %s.\nCampaign complete."
+				% [rep, cash]
+			)
 
 
 func _on_campaign_win_menu() -> void:
