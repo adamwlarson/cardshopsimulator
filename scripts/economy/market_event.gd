@@ -8,6 +8,7 @@ const KIND_COUNTERFEIT := &"counterfeit_scare"
 const KIND_CONVENTION := &"convention_weekend"
 const KIND_THEFT_RING := &"theft_ring"
 const KIND_RECESSION := &"recession_week"
+const KIND_SUPPLY_GLUT := &"supply_glut"
 
 var id: StringName = &""
 var kind: StringName = &""

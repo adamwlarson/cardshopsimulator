@@ -19,6 +19,10 @@ const THEFT_RING_SHRINK_MULT := 3.0
 ## multi-week depression arc is out. Loan-shark stays bankruptcy-only.
 const RECESSION_DEMAND_MULT := 0.65
 const RECESSION_BUYLIST_MULT := 2.0
+## systems §8 Supply glut: sealed wholesale ↓, retail race. Short window only —
+## multi-distributor war and long glut seasons are out.
+const SUPPLY_GLUT_WHOLESALE_MULT := 0.75
+const SUPPLY_GLUT_SEALED_RACE_MULT := 0.90
 const TITAN_SKU := &"AA-SKIE-047"
 const ROTATION_SET_ID := &"AA-DUST"
 
@@ -113,7 +117,7 @@ func _load_catalog() -> void:
 		for entry_value: Variant in (parsed as Dictionary).get("events", []):
 			if entry_value is Dictionary:
 				defs.append(entry_value as Dictionary)
-	if defs.size() >= 7:
+	if defs.size() >= 8:
 		return
 	defs = [
 		_fallback_def(&"hype_spike", "Hype spike", false, 1, 3),
@@ -123,6 +127,7 @@ func _load_catalog() -> void:
 		_fallback_def(&"convention_weekend", "Convention weekend", false, 2, 2),
 		_fallback_def(&"theft_ring", "Theft ring", true, 3, 3),
 		_fallback_def(&"recession_week", "Recession week", true, 7, 7),
+		_fallback_def(&"supply_glut", "Supply glut", false, 3, 3),
 	]
 
 

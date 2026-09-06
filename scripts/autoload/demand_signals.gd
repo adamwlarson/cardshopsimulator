@@ -134,6 +134,11 @@ func has_recession_week() -> bool:
 	return event != null and event.kind == MarketEvent.KIND_RECESSION
 
 
+func has_supply_glut() -> bool:
+	var event := active_event()
+	return event != null and event.kind == MarketEvent.KIND_SUPPLY_GLUT
+
+
 func active_event_demand_mult() -> float:
 	if not has_recession_week():
 		return 1.0
@@ -148,6 +153,38 @@ func active_event_buylist_mult() -> float:
 	if not has_recession_week():
 		return 1.0
 	return MarketEventService.RECESSION_BUYLIST_MULT
+
+
+func active_sealed_wholesale_mult() -> float:
+	if not has_supply_glut():
+		return 1.0
+	return MarketEventService.SUPPLY_GLUT_WHOLESALE_MULT
+
+
+func active_sealed_race_mult() -> float:
+	if not has_supply_glut():
+		return 1.0
+	return MarketEventService.SUPPLY_GLUT_SEALED_RACE_MULT
+
+
+func sealed_wholesale_cents(
+	sku_id: StringName,
+	baseline_cents: int,
+	channel: Variant = DemandSignalService.Channel.DISTRIBUTOR
+) -> int:
+	if baseline_cents <= 0:
+		return baseline_cents
+	if DemandSignalService.channel_from(channel) != DemandSignalService.Channel.DISTRIBUTOR:
+		return baseline_cents
+	if not has_supply_glut() or not _is_sealed_sku(sku_id):
+		return baseline_cents
+	return maxi(1, roundi(float(baseline_cents) * active_sealed_wholesale_mult()))
+
+
+func sealed_retail_comp_cents(sku_id: StringName, baseline_cents: int) -> int:
+	if baseline_cents <= 0 or not has_supply_glut() or not _is_sealed_sku(sku_id):
+		return baseline_cents
+	return maxi(1, roundi(float(baseline_cents) * active_sealed_race_mult()))
 
 
 func effective_demand_score(sku_id: StringName) -> float:
@@ -293,6 +330,8 @@ func event_banner_text() -> String:
 			return "Rumor: extra loss on the floor — staff up or wait it out"
 		MarketEvent.KIND_RECESSION:
 			return "Macro: Recession week — demand soft · sellers inbound"
+		MarketEvent.KIND_SUPPLY_GLUT:
+			return "Distributor: Supply glut — sealed cheap · retail race"
 		MarketEvent.KIND_ROTATION:
 			if not _can_see_rotation_leak(event):
 				return ""
@@ -360,11 +399,12 @@ func confirm_buy(dto: BuyConfirmSignal) -> bool:
 		if opportunity.is_graded():
 			purchased = _confirm_graded_purchase(dto, opportunity, shown_midpoint)
 		else:
+			var unit_cost := _effective_unit_cost_cents(opportunity)
 			purchased = InventoryService.confirm_stock_purchase(
 				opportunity.sku_id,
 				opportunity.quantity,
-				opportunity.unit_cost_cents,
-				shown_midpoint - opportunity.unit_cost_cents,
+				unit_cost,
+				shown_midpoint - unit_cost,
 				InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
 			)
 		if purchased:
@@ -477,7 +517,7 @@ func buy_signal(
 		GameState.current_day,
 		sku_id,
 		channel,
-		unit_cost_cents,
+		sealed_wholesale_cents(sku_id, unit_cost_cents, channel),
 		quantity,
 		Economy.balance_cents,
 		space_required,
@@ -589,6 +629,7 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 		InventoryService.model.catalog
 	)
 	opportunities.append_array(_scripted_opportunities)
+	opportunities.append_array(_supply_glut_restock_lots())
 	for opportunity: BuyOpportunity in opportunities:
 		if not _closed_opportunity_ids.has(opportunity.id):
 			result.append(opportunity)
@@ -834,6 +875,72 @@ func _sample_sku_for_set(set_id: StringName) -> StringName:
 	return &""
 
 
+func _is_sealed_sku(sku_id: StringName) -> bool:
+	if sku_id.is_empty():
+		return false
+	var sku := InventoryService.model.get_sku(sku_id)
+	return sku != null and sku.product_class == ProductSKU.ProductClass.SEALED
+
+
+func _effective_unit_cost_cents(opportunity: BuyOpportunity) -> int:
+	if opportunity == null:
+		return 0
+	return sealed_wholesale_cents(
+		opportunity.sku_id,
+		opportunity.unit_cost_cents,
+		opportunity.channel
+	)
+
+
+func _supply_glut_restock_lots() -> Array[BuyOpportunity]:
+	var lots: Array[BuyOpportunity] = []
+	if not has_supply_glut():
+		return lots
+	var deep := _make_glut_lot(
+		&"supply-glut-deep-skie-blst",
+		&"AA-SKIE-BLST",
+		"Glut restock — deep",
+		8
+	)
+	var skim := _make_glut_lot(
+		&"supply-glut-skim-dust-etb",
+		&"AA-DUST-ETB",
+		"Glut restock — skim",
+		2
+	)
+	if deep != null:
+		lots.append(deep)
+	if skim != null:
+		lots.append(skim)
+	return lots
+
+
+func _make_glut_lot(
+	opportunity_id: StringName,
+	sku_id: StringName,
+	offer_label: String,
+	quantity: int
+) -> BuyOpportunity:
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null or sku.product_class != ProductSKU.ProductClass.SEALED:
+		return null
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = opportunity_id
+	opportunity.sku_id = sku_id
+	opportunity.display_name = sku.display_name
+	opportunity.offer_label = offer_label
+	opportunity.channel = DemandSignalService.Channel.DISTRIBUTOR
+	opportunity.unit_cost_cents = PricingService.distributor_wholesale_cents(
+		sku.base_market_cents,
+		GameState.balance_config
+	)
+	opportunity.quantity = quantity
+	opportunity.space_required = 1
+	if not opportunity.is_valid():
+		return null
+	return opportunity
+
+
 func _default_demand_score(sku: ProductSKU) -> float:
 	if &"staple" in sku.tags:
 		return 0.68
@@ -864,6 +971,8 @@ func _bind_event_targets(event: MarketEvent) -> bool:
 		MarketEvent.KIND_THEFT_RING:
 			return true
 		MarketEvent.KIND_RECESSION:
+			return true
+		MarketEvent.KIND_SUPPLY_GLUT:
 			return true
 	return false
 
@@ -896,6 +1005,12 @@ func _apply_event_effects(event: MarketEvent) -> bool:
 			_service.set_recession_week(
 				true,
 				MarketEventService.RECESSION_DEMAND_MULT
+			)
+			return true
+		MarketEvent.KIND_SUPPLY_GLUT:
+			_service.set_supply_glut(
+				true,
+				MarketEventService.SUPPLY_GLUT_SEALED_RACE_MULT
 			)
 			return true
 	return false
@@ -932,6 +1047,8 @@ func _revert_event_effects(event: MarketEvent) -> void:
 			pass
 		MarketEvent.KIND_RECESSION:
 			_service.set_recession_week(false)
+		MarketEvent.KIND_SUPPLY_GLUT:
+			_service.set_supply_glut(false)
 		MarketEvent.KIND_ROTATION:
 			pass
 
@@ -991,6 +1108,9 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		"sell_through_mult": active_event_sell_through_mult(),
 		"buylist_mult": active_event_buylist_mult(),
 		"recession_week": has_recession_week(),
+		"sealed_wholesale_mult": active_sealed_wholesale_mult(),
+		"sealed_race_mult": active_sealed_race_mult(),
+		"supply_glut": has_supply_glut(),
 	}
 	QaInstrumentation.record_market_event_rolled(payload)
 	return payload

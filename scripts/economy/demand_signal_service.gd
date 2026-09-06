@@ -40,6 +40,8 @@ var _scare_shady_fake_mult: float = 1.0
 var _scare_shady_width_mult: float = 1.0
 var _recession_week: bool = false
 var _recession_demand_mult: float = 1.0
+var _supply_glut: bool = false
+var _glut_race_mult: float = 1.0
 var _instrumentation: QaInstrumentationService
 
 
@@ -96,6 +98,20 @@ func set_recession_week(active: bool, demand_mult: float = 0.65) -> void:
 
 func has_recession_week() -> bool:
 	return _recession_week
+
+
+func set_supply_glut(active: bool, race_mult: float = 0.90) -> void:
+	_supply_glut = active
+	_glut_race_mult = race_mult if active else 1.0
+	_demand_cache.clear()
+
+
+func has_supply_glut() -> bool:
+	return _supply_glut
+
+
+func sealed_race_mult() -> float:
+	return _glut_race_mult if _supply_glut else 1.0
 
 
 func demand_mult() -> float:
@@ -520,7 +536,7 @@ func _populate_price_fields(
 	informed: bool,
 	screen: StringName
 ) -> void:
-	var true_market_cents := _market_state.market_cents_for(sku_id)
+	var true_market_cents := _retail_market_cents(sku_id)
 	var true_demand := _effective_demand(_market_state.demand_score_for(sku_id))
 	var comp := _comp_range(true_market_cents, channel, informed)
 	var midpoint: int = (comp.x + comp.y) / 2
@@ -616,6 +632,22 @@ func _should_forbid_hot_cold_invert() -> bool:
 	if _config == null:
 		return not _fog_flag
 	return _config.fair_forbid_hot_cold_invert and not _fog_flag
+
+
+func _retail_market_cents(sku_id: StringName) -> int:
+	var true_market_cents := _market_state.market_cents_for(sku_id)
+	if true_market_cents <= 0 or not _supply_glut:
+		return true_market_cents
+	if not _is_sealed_sku(sku_id):
+		return true_market_cents
+	return maxi(1, roundi(float(true_market_cents) * sealed_race_mult()))
+
+
+func _is_sealed_sku(sku_id: StringName) -> bool:
+	if sku_id.is_empty():
+		return false
+	var sku := InventoryService.model.get_sku(sku_id)
+	return sku != null and sku.product_class == ProductSKU.ProductClass.SEALED
 
 
 func _effective_demand(score: float) -> float:
