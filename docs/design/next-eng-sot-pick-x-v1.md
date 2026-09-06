@@ -73,3 +73,10 @@ systems §9.1 optional ironman cash+COGS floor.
 - [x] Sync this file to main before kick
 - [x] Soft catalog stays closed
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **X1 GO** (park X2/X3/X4). Soft catalog closed. Art CLEAR TO KICK Soft far crest (SH7). Main @ `f99c205b`. |
