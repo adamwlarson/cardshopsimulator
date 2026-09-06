@@ -1,0 +1,17 @@
+width=0.5200
+depth=0.0240
+height=0.2600
+min_x=-0.260000
+min_y=-0.092000
+min_z=-0.024000
+max_x=0.260000
+max_y=0.168000
+max_z=0.000000
+verts=672
+tris=224
+materials=Metal,Metal_Slab,Plaque,Felt,Paper
+pivot=back_center_mount
+face=-Z
+parent=prop_display_case_slab_01
+suggested_local=0.0,1.06,-0.452
+variant=graded_showcase_badge
