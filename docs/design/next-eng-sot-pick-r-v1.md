@@ -1,6 +1,6 @@
 # Next Eng SoT Pick R v1 — post Q1
 
-**Status:** Adopted **R1 GO** (STOP Flagship win assert) — QA formal CLEAR TO KICK; Eng S2+ standby. Park R2 Soft hygiene (fold into R1 report) / R3 cameras / R4 far crest Art. Softs parked.
+**Status:** **R1 SHIPPED** — Flagship win-wire PR #47 @ 97521506; QA PASS-with-notes; Soft dual cash-eval Soft OK; Softs parked; no R2.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §9, pick-q (Q1 shipped #46; §8 suite largely closed)  
