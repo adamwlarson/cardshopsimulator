@@ -18,7 +18,7 @@
 
 **Parked soft (non-blocking):** MidCenter densify AABB, apron FOV, `can_research` / Easy-Hard inherit, icon 2× / sell-tint, etc.
 
-**Gap:** Option D #33 + F1 #34 shipped. Queue empty — Design next SoT TBD.
+**Gap:** Option D #33 + F1 #34 shipped. Next: pick-g **G1** (graded authenticity) in flight.
 
 ---
 
