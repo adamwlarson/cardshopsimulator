@@ -1,6 +1,6 @@
 # Next Eng SoT Pick Q v1 — post P1
 
-**Status:** Adopted **Q1 GO** (Supply glut) — Eng spike launching. Park Q2 Soft-cameras / Q3 Flagship STOP / Q4 idle polish. Softs parked.
+**Status:** **Q1 SHIPPED** — PR #46 merged @ `116ad889ce9ed5017d8f7eef31e57b9ff4188192` (tip `b727a84a`). Softs parked. Park Q2/Q3/Q4. Awaiting next Eng SoT pick (R).
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §8 / §9, pick-p (P1 shipped #45)  
