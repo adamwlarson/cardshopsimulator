@@ -1,6 +1,6 @@
 # Next Eng SoT Pick G v1 — post F1
 
-**Status:** Adopted — **G1 shipped #35** @ `8a7f7a73` (2026-09-06); park G2; G3 STOP not chosen  
+**Status:** **G1 shipped #35** @ `8a7f7a73` (docs tip `8ba17790`); Softs parked. Park G2→pick-h H1; G3→pick-h H2.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §2.2 / §4.5 / §3 (online), ui-wireflows Inspect★, pick-f (F1 shipped #34)  
@@ -93,3 +93,4 @@ No new systems spike. QA runs required+optional §10 arc on Normal; Eng only S2+
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **G1 GO** (park G2/G3). Synced main @ `c9cc3b4b`. Eng graded-authenticity / fake-slab spike launching. Soft seeds parked. |
+| 2026-09-06 | **G1 shipped #35** merged main @ `8a7f7a73` (docs tip `8ba17790`). Softs parked. Queue → pick-h. |
