@@ -4677,13 +4677,17 @@ func _test_recession_week_levers_and_no_soft_lock() -> void:
 	_expect_equal(inventory.sold, true, "P1: liquidate reaches a sale")
 	var seller := CustomerProfile.new()
 	seller.trade_intent = CustomerProfile.TradeIntent.SELLING_TO_SHOP
-	seller.buylist_signal = _demand_signals.call("buylist_signal", &"AA-DUST-ETB", 1)
+	seller.buylist_signal = _demand_signals.call(
+		"buylist_signal",
+		&"AA-DUST-ETB",
+		1
+	) as BuyConfirmSignal
 	_expect_equal(queue.enqueue(seller), true, "P1: buylist seller still queues")
 	_expect_equal(queue.refuse(), true, "P1: refuse-buy lever works")
 	_expect_equal(inventory.bought, false, "P1: refuse-buy does not purchase")
 	queue.free()
 	inventory.free()
-	var opportunity := _demand_signals.call(
+	var opportunity: bool = _demand_signals.call(
 		"inject_buy_opportunity",
 		_scripted_buy_opportunity()
 	)
