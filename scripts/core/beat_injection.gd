@@ -764,7 +764,7 @@ func _choose_expand_medium(choice: StringName) -> bool:
 				GameState.current_reputation
 			):
 				return false
-			InventoryService.apply_medium_capacity(
+			InventoryService.apply_shop_capacity_bonuses(
 				ShopState.MEDIUM_CASE_SLOT_BONUS,
 				ShopState.MEDIUM_BACKSTOCK_BONUS
 			)
@@ -876,7 +876,7 @@ func _choose_expand_large(choice: StringName) -> bool:
 				GameState.current_reputation
 			):
 				return false
-			InventoryService.apply_medium_capacity(
+			InventoryService.apply_shop_capacity_bonuses(
 				GameState.shop.case_slot_bonus(),
 				GameState.shop.backstock_bonus()
 			)

@@ -439,7 +439,7 @@ func restore_save(data: Dictionary) -> bool:
 		last_prestige = saved_prestige
 	shop.apply_save(data.get("shop", {}), balance_config)
 	var inventory: Dictionary = data.get("inventory", {})
-	InventoryService.apply_medium_capacity(
+	InventoryService.apply_shop_capacity_bonuses(
 		int(inventory.get("case_slot_bonus", 0)),
 		int(inventory.get("backstock_bin_bonus", 0))
 	)
