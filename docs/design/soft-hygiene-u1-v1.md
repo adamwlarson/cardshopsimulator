@@ -1,6 +1,6 @@
 # Soft Hygiene U1 v1 — disposition table
 
-**Status:** Eng ACK locked — SH1–SH6 Won’t-Fix MVP; SH7 Art later; **SH8 Eng rename in flight**; Soft no mode-picker CLOSED. QA spot after SH8 tip.
+**Status:** **U1 SHIPPED** — SH8 rename #50 @ eb5e1a5a; SH1–SH6 Won’t-Fix MVP; SH7 Art later; Soft no mode-picker CLOSED; QA PASS-with-notes.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** pick-u Adopted **U1 GO**; Soft no mode-picker CLOSED (#49)  
@@ -37,9 +37,9 @@
 - [x] SH1: **Won’t-Fix** (Hype/Fog empty-SKU bridge still calls it)
 - [x] SH2–SH6: **Won’t-Fix** MVP (Eng ACK)
 - [x] SH7: Art ACK “later” (no Eng code) — **Art later** locked
-- [ ] SH8: **Eng rename** in flight → `apply_shop_capacity_bonuses` (preferred)
-- [ ] No new economy verbs; §4.5 clean
-- [ ] Foundation suite still green if code touched
+- [x] SH8: **Eng rename DONE** → `apply_shop_capacity_bonuses` (#50)
+- [x] No new economy verbs; §4.5 clean
+- [x] Foundation suite still green if code touched
 
 ---
 
@@ -56,3 +56,4 @@ Spot-check only if SH1 Delete or SH8 rename lands — S3 smoke PriceEditor / Lar
 | 2026-09-06 | Design Soft table ready for Eng ACK (U1). |
 | 2026-09-06 | Eng ACK: SH1 Won’t-Fix; SH2–SH6 Won’t-Fix MVP; SH7 Art later; SH8 rename preferred (`apply_shop_capacity_bonuses`). |
 | 2026-09-06 | Art ACK SH7 Soft far crest → Art later (dual-track). |
+| 2026-09-06 | U1 SHIPPED — #50 SH8 rename merged path; Soft catalog closed. |
