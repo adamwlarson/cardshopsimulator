@@ -38,7 +38,7 @@ Each `prop_*` folder contains:
 | `prop_trash_bin_01` | B08 light décor |
 | `prop_play_table_01` | B09 heavier décor |
 | `prop_display_case_slab_01` | B01 heavier décor |
-| `prop_graded_case_badge_01` | J2 additive graded-path crest (parent to slab case) |
+| `prop_graded_case_badge_01` | J2 + X1 additive graded-path crest (parent to slab case; far-read diamond) |
 | `prop_online_hold_tag_01` | J2 ONLINE_HOLD shelf/case-lip tag (Accent_Amber) |
 | `prop_security_camera_01` | V1 Art dual-track ceiling/wall camera (Camera unlock) |
 | `prop_window_01` | B06 heavier décor |
