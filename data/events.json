@@ -72,6 +72,16 @@
       "negative": true,
       "duration_days_min": 7,
       "duration_days_max": 7
+    },
+    {
+      "id": "supply_glut",
+      "type": "supply_glut",
+      "title": "Supply glut",
+      "description": "Distributor email — sealed wholesale drops and the floor races. Buy deep cheap, skim, or skip; cut price or hold margin.",
+      "weight": 1.0,
+      "negative": false,
+      "duration_days_min": 3,
+      "duration_days_max": 3
     }
   ]
 }

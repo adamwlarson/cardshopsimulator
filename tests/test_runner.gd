@@ -130,6 +130,7 @@ func _initialize() -> void:
 	_test_convention_weekend_event()
 	_test_theft_ring_event()
 	_test_recession_week_event()
+	_test_supply_glut_event()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -2414,9 +2415,10 @@ func _test_market_events_seven_day_seeded_run() -> void:
 		and FileAccess.get_file_as_string("res://data/events.json").contains("counterfeit_scare")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("convention_weekend")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("theft_ring")
-		and FileAccess.get_file_as_string("res://data/events.json").contains("recession_week"),
+		and FileAccess.get_file_as_string("res://data/events.json").contains("recession_week")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("supply_glut"),
 		true,
-		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, theft ring, and recession"
+		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, theft ring, recession, and supply glut"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 
@@ -4983,6 +4985,665 @@ func _test_recession_week_save_load() -> void:
 		"P1: restored banner still uses macro ticker copy"
 	)
 	_assert_text_has_no_truth(restored_banner, "P1 restored recession banner")
+
+
+func _test_supply_glut_event() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_supply_glut_can_fire()
+	_test_supply_glut_wholesale_and_race()
+	_test_supply_glut_levers_and_no_soft_lock()
+	_test_supply_glut_section_45_and_banner()
+	_test_supply_glut_pack_coherence()
+	_test_supply_glut_save_load()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_supply_glut_can_fire() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(started != null, true, "Q1: formal start_pack_event fires supply glut")
+	_expect_equal(started.kind, MarketEvent.KIND_SUPPLY_GLUT, "Q1: kind is supply_glut")
+	_expect_equal(started.duration_days, 3, "Q1: duration is 3 days")
+	_expect_equal(started.remaining_days, 3, "Q1: remaining_days tracks the window")
+	_expect_equal(
+		_demand_signals.call("has_supply_glut"),
+		true,
+		"Q1: pack exposes supply glut flag"
+	)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"Q1: supply glut does not open Option D PriceEditor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var fired := false
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 64):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		_qa_autoload.call("clear")
+		for _day_index: int in range(14):
+			_game_state.call("start_floor")
+			_game_state.call("start_settle")
+			var rolled: MarketEvent = _demand_signals.call("active_event")
+			if rolled != null and rolled.kind == MarketEvent.KIND_SUPPLY_GLUT:
+				fired = true
+				break
+			if int(_game_state.get("current_day")) < 14:
+				_game_state.call("advance_day")
+		if fired:
+			break
+	_expect_equal(fired, true, "Q1: seeded settle run can roll supply_glut")
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_supply_glut_wholesale_and_race() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var sealed := &"AA-SKIE-BLST"
+	var staple := &"AA-BASE-088"
+	var moq_id := &"skiefall-distributor-moq-day-2"
+	var baseline_moq := _demand_signals.call("buy_signal_for_id", moq_id) as BuyConfirmSignal
+	_expect_equal(baseline_moq != null, true, "Q1: catalog distributor MOQ exists")
+	var baseline_cost := baseline_moq.unit_cost_cents
+	_expect_equal(baseline_cost > 0, true, "Q1: catalog MOQ has a baseline wholesale")
+	var sealed_sku := (_inventory_service.get("model") as InventoryModel).get_sku(sealed)
+	var restock_baseline := PricingService.distributor_wholesale_cents(
+		sealed_sku.base_market_cents if sealed_sku != null else 0,
+		NORMAL_CONFIG
+	)
+	_expect_equal(restock_baseline > 0, true, "Q1: restock formula prices sealed wholesale")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_sealed_wholesale_mult")), 1.0),
+		true,
+		"Q1: wholesale mult is 1.0 with event off"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_sealed_race_mult")), 1.0),
+		true,
+		"Q1: sealed race mult is 1.0 with event off"
+	)
+	_expect_equal(
+		int(_demand_signals.call(
+			"sealed_wholesale_cents",
+			sealed,
+			baseline_cost,
+			DemandSignalService.Channel.DISTRIBUTOR
+		)),
+		baseline_cost,
+		"Q1: sealed wholesale helper is identity off-event"
+	)
+	_expect_equal(
+		int(_demand_signals.call("sealed_retail_comp_cents", sealed, 1000)),
+		1000,
+		"Q1: sealed retail helper is identity off-event"
+	)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_sealed_wholesale_mult")),
+			MarketEventService.SUPPLY_GLUT_WHOLESALE_MULT
+		),
+		true,
+		"Q1: glut wholesale mult is 0.75"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_sealed_race_mult")),
+			MarketEventService.SUPPLY_GLUT_SEALED_RACE_MULT
+		),
+		true,
+		"Q1: glut sealed race mult is 0.90"
+	)
+	var glut_moq := _demand_signals.call("buy_signal_for_id", moq_id) as BuyConfirmSignal
+	_expect_equal(glut_moq != null, true, "Q1: catalog MOQ still offered during glut")
+	_expect_equal(
+		glut_moq.unit_cost_cents < baseline_cost,
+		true,
+		"Q1: sealed distributor/wholesale cost ↓ vs baseline"
+	)
+	_expect_equal(
+		glut_moq.unit_cost_cents,
+		int(_demand_signals.call(
+			"sealed_wholesale_cents",
+			sealed,
+			baseline_cost,
+			DemandSignalService.Channel.DISTRIBUTOR
+		)),
+		"Q1: catalog MOQ uses existing restock ledger × glut mult"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(glut_moq.unit_cost_cents),
+			float(baseline_cost) * MarketEventService.SUPPLY_GLUT_WHOLESALE_MULT
+		),
+		true,
+		"Q1: wholesale uses pack mult, not a second ledger"
+	)
+	var deep := _demand_signals.call(
+		"buy_signal_for_id",
+		&"supply-glut-deep-skie-blst"
+	) as BuyConfirmSignal
+	var skim := _demand_signals.call(
+		"buy_signal_for_id",
+		&"supply-glut-skim-dust-etb"
+	) as BuyConfirmSignal
+	_expect_equal(deep != null, true, "Q1: deep sealed restock lot is offered")
+	_expect_equal(skim != null, true, "Q1: skim sealed restock lot is offered")
+	_expect_equal(deep.quantity >= 6, true, "Q1: deep lot is a cash-lock quantity")
+	_expect_equal(skim.quantity < deep.quantity, true, "Q1: skim lot is lighter than deep")
+	_expect_equal(
+		deep.unit_cost_cents,
+		int(_demand_signals.call(
+			"sealed_wholesale_cents",
+			sealed,
+			restock_baseline,
+			DemandSignalService.Channel.DISTRIBUTOR
+		)),
+		"Q1: deep lot is current restock wholesale × glut"
+	)
+	var staple_cost := int(
+		_demand_signals.call(
+			"sealed_wholesale_cents",
+			staple,
+			1800,
+			DemandSignalService.Channel.DISTRIBUTOR
+		)
+	)
+	_expect_equal(staple_cost, 1800, "Q1: singles stay off the sealed wholesale discount")
+	var market_sealed := int(
+		_demand_signals.call(
+			"sealed_wholesale_cents",
+			sealed,
+			1800,
+			DemandSignalService.Channel.MARKETPLACE
+		)
+	)
+	_expect_equal(market_sealed, 1800, "Q1: marketplace sealed stays off wholesale glut")
+	_expect_equal(
+		int(_demand_signals.call("sealed_retail_comp_cents", sealed, 1000)),
+		900,
+		"Q1: sealed retail race pressure is ×0.90"
+	)
+	_expect_equal(
+		int(_demand_signals.call("sealed_retail_comp_cents", staple, 1000)),
+		1000,
+		"Q1: singles stay off the sealed retail race"
+	)
+	var wait: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(wait != null, true, "Q1: glut window is active")
+	_demand_signals.call("roll_settle_events")
+	var after_one: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		after_one != null and after_one.kind == MarketEvent.KIND_SUPPLY_GLUT,
+		true,
+		"Q1: day 1 wait-out keeps supply glut active"
+	)
+	_expect_equal(after_one.remaining_days, 2, "Q1: remaining_days ticks 3→2")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_sealed_wholesale_mult")),
+			MarketEventService.SUPPLY_GLUT_WHOLESALE_MULT
+		),
+		true,
+		"Q1: wholesale stays down while remaining_days > 0"
+	)
+	_demand_signals.call("apply_event_save", {})
+	_expect_equal(
+		_demand_signals.call("has_supply_glut"),
+		false,
+		"Q1: clearing glut drops the flag"
+	)
+	var restored_moq := _demand_signals.call("buy_signal_for_id", moq_id) as BuyConfirmSignal
+	_expect_equal(restored_moq != null, true, "Q1: catalog MOQ returns after glut")
+	_expect_equal(
+		restored_moq.unit_cost_cents,
+		baseline_cost,
+		"Q1: event ends → wholesale restores"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"supply-glut-deep-skie-blst") == null,
+		true,
+		"Q1: glut restock lots leave when the event ends"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_sealed_wholesale_mult")), 1.0),
+		true,
+		"Q1: wholesale mult restores after glut ends"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_sealed_race_mult")), 1.0),
+		true,
+		"Q1: sealed race mult restores after glut ends"
+	)
+	_expect_equal(
+		int(_demand_signals.call("sealed_retail_comp_cents", sealed, 1000)),
+		1000,
+		"Q1: sealed retail race restores after glut ends"
+	)
+
+
+func _test_supply_glut_levers_and_no_soft_lock() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var sealed_before := int(_inventory_service.call("total_owned", &"AA-SKIE-BLST"))
+	var dust_before := int(_inventory_service.call("total_owned", &"AA-DUST-ETB"))
+	var deep := _demand_signals.call(
+		"buy_signal_for_id",
+		&"supply-glut-deep-skie-blst"
+	) as BuyConfirmSignal
+	_expect_equal(deep != null and deep.can_confirm, true, "Q1: deep lot is confirmable")
+	_expect_dto_has_no_truth_fields(deep, "Q1 glut deep buy signal")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.buy_summary(deep),
+		"Q1 glut deep buy summary"
+	)
+	_expect_equal(
+		_demand_signals.call("confirm_buy", deep),
+		true,
+		"Q1: buy-deep lever works during glut"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-SKIE-BLST")),
+		sealed_before + deep.quantity,
+		"Q1: deep buy lands sealed stock"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - deep.lot_total_cents,
+		"Q1: deep buy charges the discounted wholesale"
+	)
+	var skim := _demand_signals.call(
+		"buy_signal_for_id",
+		&"supply-glut-skim-dust-etb"
+	) as BuyConfirmSignal
+	_expect_equal(skim != null and skim.can_confirm, true, "Q1: skim lot is confirmable")
+	_expect_equal(
+		_demand_signals.call("confirm_buy", skim),
+		true,
+		"Q1: skim lever works during glut"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-DUST-ETB")),
+		dust_before + skim.quantity,
+		"Q1: skim buy lands a lighter sealed lot"
+	)
+	_expect_equal(
+		_demand_signals.call("dismiss_buy_opportunity", &"skiefall-distributor-moq-day-2"),
+		true,
+		"Q1: skip lever dismisses the leftover distributor lot"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"skiefall-distributor-moq-day-2") == null,
+		true,
+		"Q1: skipped lot stays closed — no soft-lock"
+	)
+	var sealed := &"AA-SKIE-BLST"
+	var listed_before := int(_inventory_service.call("listed_price_for", sealed))
+	var hold_dto := _demand_signals.call(
+		"price_signal",
+		sealed,
+		listed_before,
+		_inventory_service.call("location_for", sealed)
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(hold_dto, "Q1 glut hold-margin price signal")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(hold_dto),
+		"Q1 glut hold-margin PriceEditor summary"
+	)
+	var race_price := maxi(1, floori(float(listed_before) * 0.90))
+	_expect_equal(
+		_inventory_service.call("set_listed_price", sealed, race_price),
+		true,
+		"Q1: price-race lever works during glut"
+	)
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", sealed)),
+		race_price,
+		"Q1: raced listed price persists"
+	)
+	var race_dto := _demand_signals.call(
+		"price_signal",
+		sealed,
+		race_price,
+		_inventory_service.call("location_for", sealed)
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(race_dto, "Q1 glut price-race signal")
+	_expect_equal(
+		hold_dto.suggested_price_cents > 0,
+		true,
+		"Q1: hold-margin confirm stays usable"
+	)
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"Q1: supply glut can open FLOOR"
+	)
+	_expect_equal(
+		_game_state.call("start_settle"),
+		true,
+		"Q1: supply glut FLOOR can settle — no soft-lock"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "Q1: HUD loads during glut levers")
+	if hud != null:
+		var open_price := hud.get_node_or_null("%OpenPriceButton") as Button
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		_expect_equal(
+			open_price != null and not open_price.disabled,
+			true,
+			"Q1: player can still open PriceEditor to race or hold"
+		)
+		_expect_equal(
+			open_buy != null and not open_buy.disabled,
+			true,
+			"Q1: player can still open buys to deep / skim / skip"
+		)
+		hud.queue_free()
+
+
+func _test_supply_glut_section_45_and_banner() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Distributor"), true, "Q1: banner is a distributor email")
+	_expect_equal(banner.contains("glut") or banner.contains("Glut"), true, "Q1: banner names the glut")
+	_expect_equal(
+		banner.to_lower().contains("sealed") or banner.to_lower().contains("race"),
+		true,
+		"Q1: banner telegraphs sealed wholesale / retail race"
+	)
+	_expect_equal(banner.contains("true_market"), false, "Q1: email has no true_market")
+	_assert_text_has_no_truth(banner, "Q1 supply glut banner")
+	var buy_dto := _demand_signals.call(
+		"buy_signal_for_id",
+		&"supply-glut-deep-skie-blst"
+	) as BuyConfirmSignal
+	_expect_dto_has_no_truth_fields(buy_dto, "Q1 glut buy confirm")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.buy_summary(buy_dto),
+		"Q1 glut buy summary"
+	)
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.buy_confirm_snapshot(buy_dto),
+		"Q1 glut buy snapshot"
+	)
+	var price_dto := _demand_signals.call(
+		"price_signal",
+		&"AA-SKIE-BLST",
+		int(_inventory_service.call("listed_price_for", &"AA-SKIE-BLST")),
+		_inventory_service.call("location_for", &"AA-SKIE-BLST")
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(price_dto, "Q1 glut price confirm")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_dto),
+		"Q1 glut price summary"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var payload: Dictionary = _demand_signals.call("roll_settle_events")
+	_assert_payload_has_no_truth(payload, "Q1 glut market_event_rolled")
+	_expect_equal(
+		payload.has("sealed_wholesale_mult")
+		and payload.has("sealed_race_mult")
+		and payload.has("supply_glut"),
+		true,
+		"Q1: instrumentation records sealed wholesale and race multipliers"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"Q1: distributor banner does not open Option D PriceEditor"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "Q1: HUD loads for glut email")
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		_expect_equal(banner_label != null, true, "Q1: thin event banner exists")
+		_expect_equal(
+			banner_label != null
+			and banner_label.visible
+			and banner_label.text.contains("Distributor")
+			and (
+				banner_label.text.contains("glut")
+				or banner_label.text.contains("Glut")
+			),
+			true,
+			"Q1: HUD banner shows supply glut without a new screen"
+		)
+		_assert_text_has_no_truth(
+			banner_label.text if banner_label != null else "",
+			"Q1 HUD supply glut banner"
+		)
+		var price_panel := hud.get_node_or_null("%PriceEditor") as PanelContainer
+		_expect_equal(
+			price_panel == null or not price_panel.visible,
+			true,
+			"Q1: HUD does not force PriceEditor for supply glut"
+		)
+		hud.queue_free()
+
+
+func _test_supply_glut_pack_coherence() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var recession: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_RECESSION,
+		{"duration_days": 7, "remaining_days": 7}
+	)
+	_expect_equal(recession != null, true, "Q1: Recession week still starts")
+	_expect_equal(
+		_demand_signals.call("has_supply_glut"),
+		false,
+		"Q1: recession replaces glut on the shared pack bus"
+	)
+	_expect_equal(
+		_demand_signals.call("has_recession_week"),
+		true,
+		"Q1: Recession week modifiers still apply"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_sealed_wholesale_mult")), 1.0),
+		true,
+		"Q1: recession does not keep glut wholesale ↓"
+	)
+	var convention: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(convention != null, true, "Q1: Convention weekend still starts")
+	_expect_equal(
+		_demand_signals.call("has_convention_weekend"),
+		true,
+		"Q1: Convention weekend modifiers still apply"
+	)
+	var theft: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(theft != null, true, "Q1: Theft ring still starts")
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		true,
+		"Q1: Theft ring modifiers still apply"
+	)
+	var scare: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(scare != null, true, "Q1: Counterfeit scare still starts")
+	_expect_equal(
+		_demand_signals.call("has_counterfeit_scare"),
+		true,
+		"Q1: Counterfeit scare modifiers still apply"
+	)
+	var hype: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": &"AA-SKIE-047", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(hype != null, true, "Q1: Option D hype still starts")
+	_expect_equal(hype.sku_id, &"AA-SKIE-047", "Q1: hype still targets Titan")
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		true,
+		"Q1: Option D hype still wants the PriceEditor"
+	)
+	var fog: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_FOG,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(fog != null, true, "Q1: fog day still starts")
+	_expect_equal(_demand_signals.call("has_fog_flag"), true, "Q1: fog flag still applies")
+	_expect_equal(
+		_demand_signals.call("has_supply_glut"),
+		false,
+		"Q1: fog does not leak glut wholesale"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"Q1: Soft _ensure_priceable_sku stays parked"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/customers/customer_spawner.gd"
+		).contains("_ensure_priceable_sku"),
+		false,
+		"Q1: spawner does not call parked Soft helper"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/inventory_service.gd"
+		).contains("func apply_medium_capacity"),
+		true,
+		"Q1: Soft apply_medium_capacity naming stays untouched"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/customers/customer_archetype_catalog.gd"
+		).contains("flipper_weight_mult"),
+		true,
+		"Q1: Soft flipper-weight stays parked"
+	)
+
+
+func _test_supply_glut_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(started != null, true, "Q1 save: supply glut starts")
+	_game_state.set("current_day", 11)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "Q1 supply glut save")
+	var stored: Dictionary = saved.get("market_event", {})
+	_expect_equal(String(stored.get("id", "")), "supply_glut", "Q1 save writes event id")
+	_expect_equal(int(stored.get("remaining_days", 0)), 3, "Q1 save writes remaining days")
+	_expect_equal(String(stored.get("kind", "")), "supply_glut", "Q1 save writes kind")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_demand_signals.call("has_supply_glut"),
+		false,
+		"Q1: new game clears supply glut"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"Q1: restore_save accepts supply glut snapshot"
+	)
+	var restored: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(restored != null, true, "Q1: save/load restores supply glut")
+	_expect_equal(restored.kind, MarketEvent.KIND_SUPPLY_GLUT, "Q1: restored kind")
+	_expect_equal(restored.remaining_days, 3, "Q1: save/load restores remaining days")
+	_expect_equal(
+		_demand_signals.call("has_supply_glut"),
+		true,
+		"Q1: restored glut re-applies wholesale ↓ / retail race"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_sealed_wholesale_mult")),
+			MarketEventService.SUPPLY_GLUT_WHOLESALE_MULT
+		),
+		true,
+		"Q1: restored glut still multiplies sealed wholesale"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_sealed_race_mult")),
+			MarketEventService.SUPPLY_GLUT_SEALED_RACE_MULT
+		),
+		true,
+		"Q1: restored glut still applies sealed race pressure"
+	)
+	_expect_equal(
+		int(_demand_signals.call(
+			"sealed_wholesale_cents",
+			&"AA-SKIE-BLST",
+			1800,
+			DemandSignalService.Channel.DISTRIBUTOR
+		)),
+		1350,
+		"Q1: restored glut still discounts sealed distributor cost"
+	)
+	var restored_banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(
+		restored_banner.contains("Distributor")
+		and (
+			restored_banner.contains("glut")
+			or restored_banner.contains("Glut")
+		),
+		true,
+		"Q1: restored banner still uses distributor email copy"
+	)
+	_assert_text_has_no_truth(restored_banner, "Q1 restored supply glut banner")
 
 
 func _last_shrink_applied() -> Dictionary:
