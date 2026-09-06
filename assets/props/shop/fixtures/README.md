@@ -6,12 +6,13 @@ Each `prop_*` folder contains:
 - `<folder>.glb` — import-ready mesh
 - `IMPORT_NOTES.md` — provenance / import notes for Engineering
 
-## Props (31)
+## Props (32)
 
 | Folder | Priority notes |
 |--------|----------------|
 | `prop_shop_shell_01` | P0 Small shell (Stay Small / pre-Sign) |
 | `prop_shop_shell_medium_01` | Medium shell after Sign (14×10 @ 0.9 m) |
+| `prop_shop_shell_large_01` | Large shell after Large lease (18×13 @ 0.9 m) |
 | `prop_counter_01` | P0 |
 | `prop_display_case_01` | P0 |
 | `prop_shelf_01` | P0 |
