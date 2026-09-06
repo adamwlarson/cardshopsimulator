@@ -25,6 +25,7 @@ func _ready() -> void:
 	add_child(_timer)
 	EventBus.day_phase_changed.connect(_on_phase_changed)
 	EventBus.shop_layout_changed.connect(_on_shop_layout_changed)
+	EventBus.market_event_changed.connect(_on_market_event_changed)
 	EventBus.customer_action_requested.connect(_on_customer_action_requested)
 	EventBus.scripted_customer_requested.connect(_on_scripted_customer_requested)
 	_queue.customer_finished.connect(_on_customer_finished)
@@ -42,7 +43,8 @@ func spawn_customer() -> bool:
 	var archetype := _catalog.pick_weighted(
 		GameState.current_reputation,
 		GameState.balance_config,
-		_rng
+		_rng,
+		DemandSignals.active_event_whale_weight_mult()
 	)
 	if archetype.is_empty():
 		return false
@@ -113,16 +115,24 @@ func _create_buylist_signal(
 	return DemandSignals.buylist_signal(selected.id)
 
 
-func _refresh_spawn_interval() -> void:
-	if _timer == null:
-		return
-	_timer.wait_time = GameState.balance_config.customer_spawn_wait_seconds(
+func active_spawn_wait_seconds() -> float:
+	return DemandSignals.customer_spawn_wait_seconds(
 		spawn_interval_seconds,
 		int(GameState.shop.tier)
 	)
 
 
+func _refresh_spawn_interval() -> void:
+	if _timer == null:
+		return
+	_timer.wait_time = active_spawn_wait_seconds()
+
+
 func _on_shop_layout_changed() -> void:
+	_refresh_spawn_interval()
+
+
+func _on_market_event_changed(_payload: Dictionary) -> void:
 	_refresh_spawn_interval()
 
 

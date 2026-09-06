@@ -5,6 +5,7 @@ const KIND_HYPE := &"hype_spike"
 const KIND_ROTATION := &"soft_rotation_leak"
 const KIND_FOG := &"fog_day"
 const KIND_COUNTERFEIT := &"counterfeit_scare"
+const KIND_CONVENTION := &"convention_weekend"
 
 var id: StringName = &""
 var kind: StringName = &""

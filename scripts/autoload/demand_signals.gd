@@ -68,7 +68,7 @@ func roll_settle_events() -> Dictionary:
 	var config := GameState.balance_config
 	if not _event_service.should_roll(config):
 		return _record_roll(null, true)
-	var def := _event_service.roll_definition(config)
+	var def := _event_service.roll_definition(config, GameState.current_day)
 	if def.is_empty():
 		return _record_roll(null, true)
 	var started := start_pack_event(
@@ -117,6 +117,31 @@ func has_fog_flag() -> bool:
 
 func has_counterfeit_scare() -> bool:
 	return _service != null and _service.has_counterfeit_scare()
+
+
+func has_convention_weekend() -> bool:
+	var event := active_event()
+	return event != null and event.kind == MarketEvent.KIND_CONVENTION
+
+
+func active_event_traffic_mult() -> float:
+	if has_convention_weekend():
+		return MarketEventService.CONVENTION_TRAFFIC_MULT
+	return 1.0
+
+
+func active_event_whale_weight_mult() -> float:
+	if has_convention_weekend():
+		return MarketEventService.CONVENTION_WHALE_WEIGHT_MULT
+	return 1.0
+
+
+func customer_spawn_wait_seconds(base_interval: float, shop_tier: int) -> float:
+	var wait := GameState.balance_config.customer_spawn_wait_seconds(
+		base_interval,
+		shop_tier
+	)
+	return wait / maxf(0.01, active_event_traffic_mult())
 
 
 func graded_trust_mult() -> float:
@@ -218,11 +243,22 @@ func event_banner_text() -> String:
 			return "Fog day — demand signals noisier"
 		MarketEvent.KIND_COUNTERFEIT:
 			return "Counterfeit scare — Inspect mandatory · shady risk up"
+		MarketEvent.KIND_CONVENTION:
+			return "Calendar: Convention weekend — busier floor · whales inbound"
 		MarketEvent.KIND_ROTATION:
 			if not _can_see_rotation_leak(event):
 				return ""
 			return "Rotation watch: %s" % _service.display_name_for_set(event.set_id)
 	return event.title
+
+
+func calendar_telegraph_text() -> String:
+	var active := event_banner_text()
+	if not active.is_empty():
+		return active
+	if MarketEventService.is_convention_telegraph_day(GameState.current_day):
+		return "Calendar: Convention weekend incoming"
+	return ""
 
 
 func event_to_save() -> Dictionary:
@@ -775,6 +811,8 @@ func _bind_event_targets(event: MarketEvent) -> bool:
 			return true
 		MarketEvent.KIND_COUNTERFEIT:
 			return true
+		MarketEvent.KIND_CONVENTION:
+			return true
 	return false
 
 
@@ -797,6 +835,8 @@ func _apply_event_effects(event: MarketEvent) -> bool:
 				MarketEventService.COUNTERFEIT_SHADY_FAKE_MULT,
 				MarketEventService.COUNTERFEIT_SHADY_WIDTH_MULT
 			)
+			return true
+		MarketEvent.KIND_CONVENTION:
 			return true
 	return false
 
@@ -826,6 +866,8 @@ func _revert_event_effects(event: MarketEvent) -> void:
 			_service.set_fog_event(false)
 		MarketEvent.KIND_COUNTERFEIT:
 			_service.set_counterfeit_scare(false)
+		MarketEvent.KIND_CONVENTION:
+			pass
 		MarketEvent.KIND_ROTATION:
 			pass
 
@@ -874,6 +916,11 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		),
 		"graded_trust_mult": graded_trust_mult(),
 		"shady_width_mult": shady_width_mult(),
+		"traffic_mult": active_event_traffic_mult(),
+		"whale_weight_mult": active_event_whale_weight_mult(),
+		"calendar_day": MarketEventService.is_convention_calendar_day(
+			GameState.current_day
+		),
 	}
 	QaInstrumentation.record_market_event_rolled(payload)
 	return payload

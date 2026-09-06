@@ -1421,7 +1421,9 @@ func _sync_rotation_watch() -> void:
 func _sync_event_banner() -> void:
 	if event_banner_label == null:
 		return
-	var text := DemandSignalPresenter.event_banner(DemandSignals.event_banner_text())
+	var text := DemandSignalPresenter.event_banner(
+		DemandSignals.calendar_telegraph_text()
+	)
 	event_banner_label.text = text
 	event_banner_label.visible = not text.is_empty()
 

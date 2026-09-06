@@ -127,6 +127,7 @@ func _initialize() -> void:
 	_test_option_d_price_editor_has_no_truth()
 	_test_option_d_cancel_keeps_event_apply_persists()
 	_test_counterfeit_scare_event()
+	_test_convention_weekend_event()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -2408,9 +2409,10 @@ func _test_market_events_seven_day_seeded_run() -> void:
 		FileAccess.get_file_as_string("res://data/events.json").contains("hype_spike")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("soft_rotation_leak")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("fog_day")
-		and FileAccess.get_file_as_string("res://data/events.json").contains("counterfeit_scare"),
+		and FileAccess.get_file_as_string("res://data/events.json").contains("counterfeit_scare")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("convention_weekend"),
 		true,
-		"C1 pack catalogs hype, rotation leak, fog, and counterfeit scare"
+		"C1 pack catalogs hype, rotation leak, fog, counterfeit scare, and convention"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 
@@ -3419,6 +3421,524 @@ func _test_counterfeit_scare_save_load() -> void:
 	if restored_dto != null:
 		_expect_equal(restored_dto.can_confirm, false, "M1: restored inspect gate holds")
 		_expect_dto_has_no_truth_fields(restored_dto, "M1 restored graded DTO")
+
+
+func _test_convention_weekend_event() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_convention_weekend_can_fire()
+	_test_convention_weekend_traffic_and_whales()
+	_test_convention_weekend_levers_and_no_soft_lock()
+	_test_convention_weekend_section_45_and_banner()
+	_test_convention_weekend_pack_coherence()
+	_test_convention_weekend_save_load()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_convention_weekend_can_fire() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		MarketEventService.is_convention_telegraph_day(5),
+		true,
+		"N1: Friday is the calendar telegraph day"
+	)
+	_expect_equal(
+		MarketEventService.is_convention_calendar_day(6)
+		and MarketEventService.is_convention_calendar_day(7),
+		true,
+		"N1: Sat/Sun are convention calendar days"
+	)
+	_expect_equal(
+		MarketEventService.is_convention_calendar_day(3),
+		false,
+		"N1: mid-week is not a convention calendar day"
+	)
+	_expect_equal(
+		MarketEventService.convention_calendar_weight_mult(5)
+		> MarketEventService.convention_calendar_weight_mult(3),
+		true,
+		"N1: Friday telegraph boosts convention settle weight"
+	)
+	_expect_equal(
+		is_equal_approx(MarketEventService.convention_calendar_weight_mult(3), 1.0),
+		true,
+		"N1: weekday convention weight stays 1.0"
+	)
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(started != null, true, "N1: formal start_pack_event fires convention")
+	_expect_equal(started.kind, MarketEvent.KIND_CONVENTION, "N1: kind is convention_weekend")
+	_expect_equal(started.remaining_days, 2, "N1: weekend remaining_days is 2")
+	_expect_equal(
+		_demand_signals.call("has_convention_weekend"),
+		true,
+		"N1: pack exposes convention weekend flag"
+	)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"N1: convention does not open Option D PriceEditor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var fired := false
+	var calendar_fired := false
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 64):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		_qa_autoload.call("clear")
+		for _day_index: int in range(14):
+			_game_state.call("start_floor")
+			_game_state.call("start_settle")
+			var rolled: MarketEvent = _demand_signals.call("active_event")
+			if rolled != null and rolled.kind == MarketEvent.KIND_CONVENTION:
+				fired = true
+				if MarketEventService.is_convention_calendar_day(
+					int(_game_state.get("current_day"))
+				) or MarketEventService.is_convention_telegraph_day(
+					int(_game_state.get("current_day"))
+				):
+					calendar_fired = true
+				break
+			if int(_game_state.get("current_day")) < 14:
+				_game_state.call("advance_day")
+		if fired:
+			break
+	_expect_equal(fired, true, "N1: seeded settle run can roll convention_weekend")
+	_expect_equal(
+		calendar_fired or fired,
+		true,
+		"N1: seeded/calendar convention can fire"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_convention_weekend_traffic_and_whales() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale: Dictionary = {}
+	for archetype: Dictionary in catalog.archetypes:
+		if StringName(archetype.get("id", "")) == &"whale":
+			whale = archetype
+			break
+	var baseline_small := float(
+		_demand_signals.call(
+			"customer_spawn_wait_seconds",
+			12.0,
+			ShopState.Tier.SMALL
+		)
+	)
+	var baseline_large := float(
+		_demand_signals.call(
+			"customer_spawn_wait_seconds",
+			12.0,
+			ShopState.Tier.LARGE
+		)
+	)
+	var baseline_whale := catalog.weight_for(whale, 80, NORMAL_CONFIG)
+	_expect_equal(
+		is_equal_approx(baseline_small, 12.0),
+		true,
+		"N1: Small baseline spawn wait is 12s"
+	)
+	_expect_equal(
+		is_equal_approx(baseline_large, 9.6),
+		true,
+		"N1: Large baseline spawn wait stays 12s / 1.25"
+	)
+	_expect_equal(baseline_whale > 0.0, true, "N1: high-rep whale weight is positive")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_traffic_mult")), 1.0),
+		true,
+		"N1: traffic mult is 1.0 with event off"
+	)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_traffic_mult")),
+			MarketEventService.CONVENTION_TRAFFIC_MULT
+		),
+		true,
+		"N1: convention traffic mult is ×2"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_whale_weight_mult")),
+			MarketEventService.CONVENTION_WHALE_WEIGHT_MULT
+		),
+		true,
+		"N1: convention whale weight mult is raised"
+	)
+	var con_small := float(
+		_demand_signals.call(
+			"customer_spawn_wait_seconds",
+			12.0,
+			ShopState.Tier.SMALL
+		)
+	)
+	var con_large := float(
+		_demand_signals.call(
+			"customer_spawn_wait_seconds",
+			12.0,
+			ShopState.Tier.LARGE
+		)
+	)
+	_expect_equal(
+		is_equal_approx(con_small, baseline_small / 2.0),
+		true,
+		"N1: Small spawn interval halves during convention"
+	)
+	_expect_equal(
+		is_equal_approx(con_large, baseline_large / 2.0),
+		true,
+		"N1: Large spawn interval halves on top of the 1.25× tier scalar"
+	)
+	_expect_equal(
+		con_large < con_small,
+		true,
+		"N1: Large convention wait stays faster than Small convention wait"
+	)
+	var whale_mult := float(_demand_signals.call("active_event_whale_weight_mult"))
+	var con_whale := catalog.weight_for(whale, 80, NORMAL_CONFIG, whale_mult)
+	_expect_equal(con_whale > baseline_whale, true, "N1: whale weight rises during convention")
+	_expect_equal(
+		is_equal_approx(con_whale, baseline_whale * MarketEventService.CONVENTION_WHALE_WEIGHT_MULT),
+		true,
+		"N1: whale weight uses pack mult, not a BalanceConfig rewrite"
+	)
+	_expect_equal(
+		is_equal_approx(catalog.weight_for(whale, 10, NORMAL_CONFIG, whale_mult), 0.0),
+		true,
+		"N1: convention does not bypass the low-rep whale gate"
+	)
+	var spawner := CustomerSpawner.new()
+	_expect_equal(
+		is_equal_approx(spawner.active_spawn_wait_seconds(), con_small),
+		true,
+		"N1: CustomerSpawner reads the active-event traffic mult"
+	)
+	spawner.free()
+	_demand_signals.call("apply_event_save", {})
+	_expect_equal(
+		_demand_signals.call("has_convention_weekend"),
+		false,
+		"N1: clearing convention drops the flag"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(
+				_demand_signals.call(
+					"customer_spawn_wait_seconds",
+					12.0,
+					ShopState.Tier.LARGE
+				)
+			),
+			baseline_large
+		),
+		true,
+		"N1: spawn wait restores after convention ends"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_whale_weight_mult")), 1.0),
+		true,
+		"N1: whale weight restores after convention ends"
+	)
+	_expect_equal(
+		is_equal_approx(catalog.weight_for(whale, 80, NORMAL_CONFIG), baseline_whale),
+		true,
+		"N1: catalog whale weight restores to baseline"
+	)
+
+
+func _test_convention_weekend_levers_and_no_soft_lock() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	var shop: ShopState = _game_state.get("shop")
+	_expect_equal(shop.can_hire(), true, "N1: convention PREP can still hire")
+	_expect_equal(shop.hire_cashier(false) != null, true, "N1: staff-up lever works")
+	var sku := &"AA-DUST-ETB"
+	var listed_before := int(_inventory_service.call("listed_price_for", sku))
+	var raised := maxi(listed_before + 250, 1)
+	_expect_equal(
+		_inventory_service.call("set_listed_price", sku, raised),
+		true,
+		"N1: price-up lever works during convention"
+	)
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", sku)),
+		raised,
+		"N1: listed price persists after the raise"
+	)
+	var price_dto := _demand_signals.call(
+		"price_signal",
+		sku,
+		raised,
+		_inventory_service.call("location_for", sku)
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(price_dto, "N1 convention price signal")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_dto),
+		"N1 convention PriceEditor summary"
+	)
+	var inventory := FakeCustomerInventory.new()
+	var queue := CustomerQueue.new()
+	queue.configure(inventory)
+	var over_queue := CustomerProfile.new()
+	over_queue.budget_cents = 1000
+	over_queue.interest_tags = [&"accessory"]
+	_expect_equal(queue.enqueue(over_queue), true, "N1: convention queue still accepts")
+	_expect_equal(queue.refuse(), true, "N1: refuse over-queue lever works")
+	_expect_equal(inventory.sold, false, "N1: refuse does not sell")
+	queue.free()
+	inventory.free()
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"N1: convention can open FLOOR"
+	)
+	_expect_equal(
+		_game_state.call("start_settle"),
+		true,
+		"N1: convention FLOOR can settle — no soft-lock"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "N1: HUD loads during convention levers")
+	if hud != null:
+		var hire := hud.get_node_or_null("%HireCashierButton") as Button
+		var open_staff := hud.get_node_or_null("%OpenStaffButton") as Button
+		var open_price := hud.get_node_or_null("%OpenPriceButton") as Button
+		_expect_equal(hire != null, true, "N1: hire button exists")
+		_expect_equal(open_staff != null, true, "N1: staff panel exists")
+		_expect_equal(open_price != null, true, "N1: price panel exists")
+		_expect_equal(
+			open_price != null and not open_price.disabled,
+			true,
+			"N1: player can still open PriceEditor"
+		)
+		hud.queue_free()
+
+
+func _test_convention_weekend_section_45_and_banner() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 5)
+	_expect_equal(
+		String(_demand_signals.call("calendar_telegraph_text")).contains("incoming"),
+		true,
+		"N1: Friday news telegraph is calendar-known"
+	)
+	_assert_text_has_no_truth(
+		String(_demand_signals.call("calendar_telegraph_text")),
+		"N1 Friday calendar telegraph"
+	)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Convention"), true, "N1: banner names the weekend")
+	_expect_equal(banner.contains("Calendar"), true, "N1: banner is a calendar telegraph")
+	_expect_equal(
+		banner.to_lower().contains("whale"),
+		true,
+		"N1: banner telegraphs whale traffic"
+	)
+	_assert_text_has_no_truth(banner, "N1 convention banner")
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var payload: Dictionary = _demand_signals.call("roll_settle_events")
+	_assert_payload_has_no_truth(payload, "N1 convention market_event_rolled")
+	_expect_equal(
+		payload.has("traffic_mult") and payload.has("whale_weight_mult"),
+		true,
+		"N1: instrumentation records traffic and whale weights"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "N1: HUD loads for convention telegraph")
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		_expect_equal(banner_label != null, true, "N1: thin event banner exists")
+		_expect_equal(
+			banner_label != null
+			and banner_label.visible
+			and banner_label.text.contains("Convention")
+			and banner_label.text.contains("Calendar"),
+			true,
+			"N1: HUD banner shows convention without a new screen"
+		)
+		_assert_text_has_no_truth(
+			banner_label.text if banner_label != null else "",
+			"N1 HUD convention banner"
+		)
+		var demand_chip := hud.get_node_or_null("%PriceDemandChip") as Label
+		_expect_equal(demand_chip != null, true, "N1: PriceEditor demand chip still present")
+		hud.queue_free()
+
+
+func _test_convention_weekend_pack_coherence() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	var scare: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(scare != null, true, "N1: Counterfeit scare still starts after convention")
+	_expect_equal(
+		_demand_signals.call("has_convention_weekend"),
+		false,
+		"N1: scare replaces convention on the shared pack bus"
+	)
+	_expect_equal(
+		_demand_signals.call("has_counterfeit_scare"),
+		true,
+		"N1: Counterfeit scare modifiers still apply"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_traffic_mult")), 1.0),
+		true,
+		"N1: scare does not keep convention traffic"
+	)
+	var hype: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": &"AA-SKIE-047", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(hype != null, true, "N1: Option D hype still starts")
+	_expect_equal(hype.sku_id, &"AA-SKIE-047", "N1: hype still targets Titan")
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		true,
+		"N1: Option D hype still wants the PriceEditor"
+	)
+	var fog: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_FOG,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(fog != null, true, "N1: fog day still starts")
+	_expect_equal(_demand_signals.call("has_fog_flag"), true, "N1: fog flag still applies")
+	_expect_equal(
+		_demand_signals.call("has_convention_weekend"),
+		false,
+		"N1: fog does not leak convention traffic"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"N1: Soft _ensure_priceable_sku stays parked"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/customers/customer_spawner.gd"
+		).contains("_ensure_priceable_sku"),
+		false,
+		"N1: spawner does not call parked Soft helper"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/inventory_service.gd"
+		).contains("func apply_medium_capacity"),
+		true,
+		"N1: Soft apply_medium_capacity naming stays untouched"
+	)
+
+
+func _test_convention_weekend_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(started != null, true, "N1 save: convention starts")
+	_game_state.set("current_day", 6)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "N1 convention save")
+	var stored: Dictionary = saved.get("market_event", {})
+	_expect_equal(String(stored.get("id", "")), "convention_weekend", "N1 save writes event id")
+	_expect_equal(int(stored.get("remaining_days", 0)), 2, "N1 save writes remaining days")
+	_expect_equal(
+		String(stored.get("kind", "")),
+		"convention_weekend",
+		"N1 save writes kind"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_demand_signals.call("has_convention_weekend"),
+		false,
+		"N1: new game clears convention"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"N1: restore_save accepts convention snapshot"
+	)
+	var restored: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(restored != null, true, "N1: save/load restores convention")
+	_expect_equal(restored.kind, MarketEvent.KIND_CONVENTION, "N1: restored kind")
+	_expect_equal(restored.remaining_days, 2, "N1: save/load restores remaining days")
+	_expect_equal(
+		_demand_signals.call("has_convention_weekend"),
+		true,
+		"N1: restored convention re-applies traffic/whale"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_traffic_mult")),
+			MarketEventService.CONVENTION_TRAFFIC_MULT
+		),
+		true,
+		"N1: restored convention still doubles traffic"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_whale_weight_mult")),
+			MarketEventService.CONVENTION_WHALE_WEIGHT_MULT
+		),
+		true,
+		"N1: restored convention still raises whale weight"
+	)
+	var restored_banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(
+		restored_banner.contains("Convention"),
+		true,
+		"N1: restored banner still names convention"
+	)
+	_assert_text_has_no_truth(restored_banner, "N1 restored convention banner")
 
 
 func _assert_option_d_editor_open(
