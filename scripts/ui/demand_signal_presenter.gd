@@ -100,6 +100,13 @@ static func research_action_label(cash_cents: int, attention_cost: int) -> Strin
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 
 
+static func specialist_skill_hint() -> String:
+	return (
+		"Specialist on duty already narrows comps and demand bands "
+		+ "without Research spend. Research still buys a Rotation watch."
+	)
+
+
 static func rearrange_action_label(attention_cost: int) -> String:
 	return "Rearrange · Att %d" % attention_cost
 

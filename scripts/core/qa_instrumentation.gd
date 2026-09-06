@@ -86,7 +86,8 @@ func record_demand_signal_shown(
 	signal_dto: Resource,
 	true_market_cents: int,
 	true_demand_band: StringName,
-	listed_price_cents: int = -1
+	listed_price_cents: int = -1,
+	skill: Dictionary = {}
 ) -> void:
 	if not is_enabled():
 		return
@@ -99,6 +100,9 @@ func record_demand_signal_shown(
 		"shown_demand_band": String(signal_dto.get("shown_demand_band")),
 		"true_demand_band": String(true_demand_band),
 		"confidence": String(signal_dto.get("confidence")),
+		"skill_informed": bool(skill.get("informed", false)),
+		"demand_band_sigma": float(skill.get("demand_band_sigma", 0.0)),
+		"comp_narrow_factor": float(skill.get("comp_narrow_factor", 1.0)),
 	}
 	if screen == &"price_confirm" or screen == &"list_confirm":
 		payload["listed_price_cents"] = listed_price_cents
