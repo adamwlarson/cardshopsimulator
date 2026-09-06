@@ -27,6 +27,12 @@
 ## Mesh budget
 - Verts: 960 · Tris: **1760** (≤3k) · Soft bevel ~2.5 mm — **no cel/ink outlines**
 
+## J2 additive cue (do not rescale this case)
+Far aisle read still leans on a thin parented crest rather than a hero rewrite:
+- `prop_graded_case_badge_01` — local **`(0.0, 1.06, -0.452)`**, yaw 0, scale 1
+- Footprint / pivot of this slab case stay locked (1.800 × 0.900 × 1.120 m, bottom-center)
+- Eng: optional **static** child `GradedCaseBadge` — visibility wire not required
+
 ## Godot tips
 1. Drop-in companion to `prop_display_case_01`; same 2×1 footprint.
 2. Customer face ≈ −Z in Godot after +Y-up import.
