@@ -27,6 +27,9 @@ var _captured_buy_focus_beat: StringName = &""
 var _captured_showcase_decision: Dictionary = {}
 var _captured_showcase_failed: String = ""
 var _captured_campaign_won: Dictionary = {}
+var _captured_loan_shark: Dictionary = {}
+var _captured_loan_shark_outcome: StringName = &""
+var _captured_campaign_lost: Dictionary = {}
 var _event_bus: Node
 var _game_state: Node
 var _economy: Node
@@ -93,6 +96,9 @@ func _initialize() -> void:
 	_event_bus.connect("showcase_choice_requested", _capture_showcase_decision)
 	_event_bus.connect("showcase_choice_failed", _capture_showcase_failed)
 	_event_bus.connect("campaign_won", _capture_campaign_won)
+	_event_bus.connect("loan_shark_offered", _capture_loan_shark_offered)
+	_event_bus.connect("loan_shark_resolved", _capture_loan_shark_resolved)
+	_event_bus.connect("campaign_lost", _capture_campaign_lost)
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
 	_test_inventory_mutations_and_capacity()
@@ -180,6 +186,7 @@ func _initialize() -> void:
 	_test_survive_y1_win_award()
 	_test_liquidity_king_win_award()
 	_test_campaign_mode_picker()
+	_test_loan_shark_soft_fail()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -10654,6 +10661,18 @@ func _capture_campaign_won(payload: Dictionary) -> void:
 	_captured_campaign_won = payload
 
 
+func _capture_loan_shark_offered(payload: Dictionary) -> void:
+	_captured_loan_shark = payload
+
+
+func _capture_loan_shark_resolved(outcome: StringName) -> void:
+	_captured_loan_shark_outcome = outcome
+
+
+func _capture_campaign_lost(payload: Dictionary) -> void:
+	_captured_campaign_lost = payload
+
+
 func _capture_buy_focus(
 	opportunity_id: StringName,
 	beat_id: StringName,
@@ -12790,6 +12809,423 @@ func _test_campaign_mode_picker() -> void:
 	_game_state.set("sandbox_best_cash_cents", 0)
 	_game_state.call("select_campaign_mode", 0)
 	_game_state.call("start_new_game")
+
+
+func _test_loan_shark_soft_fail() -> void:
+	_test_loan_shark_balance_scalars()
+	_test_loan_shark_easy_offer_accept_and_drain()
+	_test_loan_shark_normal_offer_and_refuse()
+	_test_loan_shark_hard_instant_over()
+	_test_loan_shark_second_bankruptcy_over()
+	_test_loan_shark_hud_and_section_45()
+	_test_loan_shark_save_load()
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_loan_shark_balance_scalars() -> void:
+	_expect_equal(EASY_CONFIG.loan_shark_enabled, true, "W1: Easy loan shark enabled")
+	_expect_equal(NORMAL_CONFIG.loan_shark_enabled, true, "W1: Normal loan shark enabled")
+	_expect_equal(HARD_CONFIG.loan_shark_enabled, false, "W1: Hard loan shark disabled")
+	_expect_equal(EASY_CONFIG.loan_shark_cash_cents, 600_000, "W1: Easy +$6,000")
+	_expect_equal(NORMAL_CONFIG.loan_shark_cash_cents, 500_000, "W1: Normal +$5,000")
+	_expect_equal(EASY_CONFIG.loan_shark_daily_cents, 15_000, "W1: Easy −$150/day")
+	_expect_equal(NORMAL_CONFIG.loan_shark_daily_cents, 20_000, "W1: Normal −$200/day")
+	_expect_equal(EASY_CONFIG.loan_shark_days, 40, "W1: Easy 40-day drain")
+	_expect_equal(NORMAL_CONFIG.loan_shark_days, 40, "W1: Normal 40-day drain")
+	_expect_equal(EASY_CONFIG.loan_shark_rep_hit, 5, "W1: Easy Rep −5")
+	_expect_equal(NORMAL_CONFIG.loan_shark_rep_hit, 10, "W1: Normal Rep −10")
+	_expect_equal(EASY_CONFIG.missed_rent_weeks_to_lose, 3, "W1: Easy missed-rent weeks")
+	_expect_equal(NORMAL_CONFIG.missed_rent_weeks_to_lose, 2, "W1: Normal missed-rent weeks")
+	_expect_equal(HARD_CONFIG.missed_rent_weeks_to_lose, 2, "W1: Hard missed-rent weeks")
+
+
+func _test_loan_shark_easy_offer_accept_and_drain() -> void:
+	_game_state.call("set_balance_config", EASY_CONFIG)
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("Easy offer")
+	_expect_equal(
+		bool(_game_state.get("loan_shark_offer_pending")),
+		true,
+		"W1 Easy: first bankruptcy shows offer"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_lost")),
+		false,
+		"W1 Easy: offer is not game over"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		true,
+		"W1 Easy: campaign stays active during offer"
+	)
+	_expect_equal(
+		_game_state.call("can_progress_day"),
+		false,
+		"W1 Easy: day progress blocks while offer is up"
+	)
+	_expect_equal(
+		_game_state.call("advance_day"),
+		false,
+		"W1 Easy: cannot advance during offer"
+	)
+	_expect_equal(
+		int(_captured_loan_shark.get("cash_cents", 0)),
+		EASY_CONFIG.loan_shark_cash_cents,
+		"W1 Easy: offer cash uses Easy scalar"
+	)
+	_expect_equal(
+		int(_captured_loan_shark.get("daily_cents", 0)),
+		EASY_CONFIG.loan_shark_daily_cents,
+		"W1 Easy: offer daily uses Easy scalar"
+	)
+	_expect_equal(
+		int(_captured_loan_shark.get("rep_hit", 0)),
+		EASY_CONFIG.loan_shark_rep_hit,
+		"W1 Easy: offer Rep hit uses Easy scalar"
+	)
+	_assert_payload_has_no_truth(_captured_loan_shark, "W1 Easy: offer payload")
+	var cash_before := int(_economy.get("balance_cents"))
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_game_state.call("accept_loan_shark"),
+		true,
+		"W1 Easy: Accept applies terms"
+	)
+	_expect_equal(
+		String(_captured_loan_shark_outcome),
+		"accept",
+		"W1 Easy: accept resolves offer"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + EASY_CONFIG.loan_shark_cash_cents,
+		"W1 Easy: Accept grants +$6,000"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - EASY_CONFIG.loan_shark_rep_hit,
+		"W1 Easy: Accept hits Rep −5"
+	)
+	_expect_equal(
+		_economy.call("payday_loan_days_remaining"),
+		EASY_CONFIG.loan_shark_days,
+		"W1 Easy: drain scheduled for 40 days"
+	)
+	_expect_equal(
+		bool(_game_state.get("loan_shark_offer_pending")),
+		false,
+		"W1 Easy: offer clears after Accept"
+	)
+	_expect_equal(
+		_game_state.call("can_progress_day"),
+		true,
+		"W1 Easy: day progress resumes after Accept"
+	)
+	var cash_after_loan := int(_economy.get("balance_cents"))
+	var drain_count := 0
+	for _day_index: int in range(EASY_CONFIG.loan_shark_days):
+		_expect_equal(
+			_economy.call("has_active_payday_loan"),
+			true,
+			"W1 Easy: loan stays active through day %d" % (_day_index + 1)
+		)
+		_expect_equal(
+			_economy.call("settle_payday_loan"),
+			true,
+			"W1 Easy: daily drain fires day %d" % (_day_index + 1)
+		)
+		drain_count += 1
+	_expect_equal(drain_count, 40, "W1 Easy: drain fires 40 days")
+	_expect_equal(
+		_economy.call("has_active_payday_loan"),
+		false,
+		"W1 Easy: loan ends after 40 days"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_after_loan - EASY_CONFIG.loan_shark_daily_cents * 40,
+		"W1 Easy: 40-day drain totals −$150/day"
+	)
+
+
+func _test_loan_shark_normal_offer_and_refuse() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("Normal offer")
+	_expect_equal(
+		bool(_game_state.get("loan_shark_offer_pending")),
+		true,
+		"W1 Normal: first bankruptcy shows offer"
+	)
+	_expect_equal(
+		int(_captured_loan_shark.get("cash_cents", 0)),
+		NORMAL_CONFIG.loan_shark_cash_cents,
+		"W1 Normal: offer cash is +$5,000"
+	)
+	_expect_equal(
+		int(_captured_loan_shark.get("daily_cents", 0)),
+		NORMAL_CONFIG.loan_shark_daily_cents,
+		"W1 Normal: offer daily is −$200"
+	)
+	_expect_equal(
+		int(_captured_loan_shark.get("days", 0)),
+		40,
+		"W1 Normal: offer lasts 40 days"
+	)
+	_expect_equal(
+		int(_captured_loan_shark.get("rep_hit", 0)),
+		10,
+		"W1 Normal: offer Rep hit is −10"
+	)
+	_assert_payload_has_no_truth(_captured_loan_shark, "W1 Normal: offer payload")
+	_expect_equal(
+		_game_state.call("refuse_loan_shark"),
+		true,
+		"W1 Normal: Refuse is accepted"
+	)
+	_expect_equal(
+		String(_captured_loan_shark_outcome),
+		"refuse",
+		"W1 Normal: refuse resolves offer"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_lost")),
+		true,
+		"W1 Normal: Refuse is game over"
+	)
+	_expect_equal(
+		String(_game_state.get("last_lose_reason")),
+		"refused_loan_shark",
+		"W1 Normal: refuse reason is refused_loan_shark"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		false,
+		"W1 Normal: Refuse ends the campaign"
+	)
+	_expect_equal(
+		String(_captured_campaign_lost.get("reason", "")),
+		"refused_loan_shark",
+		"W1 Normal: campaign_lost reason is refuse"
+	)
+	_assert_payload_has_no_truth(_captured_campaign_lost, "W1 Normal: lose payload")
+	_expect_equal(
+		_game_state.call("advance_day"),
+		false,
+		"W1 Normal: game over cannot advance"
+	)
+
+
+func _test_loan_shark_hard_instant_over() -> void:
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("Hard instant over")
+	_expect_equal(
+		bool(_game_state.get("loan_shark_offer_pending")),
+		false,
+		"W1 Hard: no loan shark offer"
+	)
+	_expect_equal(
+		_captured_loan_shark.is_empty(),
+		true,
+		"W1 Hard: loan_shark_offered does not fire"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_lost")),
+		true,
+		"W1 Hard: instant game over"
+	)
+	_expect_equal(
+		String(_game_state.get("last_lose_reason")),
+		"missed_rent",
+		"W1 Hard: lose reason is missed rent"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		false,
+		"W1 Hard: campaign ends immediately"
+	)
+	_expect_equal(
+		_game_state.call("accept_loan_shark"),
+		false,
+		"W1 Hard: Accept is not available"
+	)
+	_assert_payload_has_no_truth(_captured_campaign_lost, "W1 Hard: lose payload")
+
+
+func _test_loan_shark_second_bankruptcy_over() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("second bankruptcy first offer")
+	_expect_equal(
+		_game_state.call("accept_loan_shark"),
+		true,
+		"W1: first Accept consumes the recovery"
+	)
+	_trigger_rent_bankruptcy("second bankruptcy")
+	_expect_equal(
+		bool(_game_state.get("loan_shark_offer_pending")),
+		false,
+		"W1: second bankruptcy does not re-offer"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_lost")),
+		true,
+		"W1: second bankruptcy is game over"
+	)
+	_expect_equal(
+		String(_game_state.get("last_lose_reason")),
+		"missed_rent",
+		"W1: second bankruptcy reason is missed rent"
+	)
+
+
+func _test_loan_shark_hud_and_section_45() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("HUD offer")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "W1: HUD loads for loan shark modal")
+	if hud == null:
+		return
+	var offer := hud.get_node_or_null("%LoanShark") as PanelContainer
+	var title := hud.get_node_or_null("%LoanSharkTitle") as Label
+	var body := hud.get_node_or_null("%LoanSharkBody") as Label
+	var accept := hud.get_node_or_null("%LoanSharkAcceptButton") as Button
+	var refuse := hud.get_node_or_null("%LoanSharkRefuseButton") as Button
+	var over := hud.get_node_or_null("%GameOver") as PanelContainer
+	_expect_equal(offer != null and offer.visible, true, "W1: loan shark modal shows")
+	_expect_equal(over == null or not over.visible, true, "W1: game over hidden during offer")
+	_expect_equal(
+		title != null and title.text == "Loan shark",
+		true,
+		"W1: modal title is Loan shark"
+	)
+	_expect_equal(
+		body != null
+		and body.text.contains("$5,000.00")
+		and body.text.contains("$200.00")
+		and body.text.contains("40")
+		and body.text.contains("10")
+		and body.text.to_lower().contains("refuse is game over"),
+		true,
+		"W1: modal body shows Normal terms and refuse=over"
+	)
+	_assert_text_has_no_truth(body.text if body != null else "", "W1 loan shark body")
+	_assert_text_has_no_truth(title.text if title != null else "", "W1 loan shark title")
+	_expect_equal(accept != null and accept.visible, true, "W1: Accept button exists")
+	_expect_equal(refuse != null and refuse.visible, true, "W1: Refuse button exists")
+	accept.pressed.emit()
+	_expect_equal(
+		offer == null or not offer.visible,
+		true,
+		"W1: modal closes after Accept"
+	)
+	_expect_equal(
+		_economy.call("has_active_payday_loan"),
+		true,
+		"W1: HUD Accept starts the daily drain"
+	)
+	hud.queue_free()
+
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("HUD Hard over")
+	hud = _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "W1: HUD loads for Hard game over")
+	if hud == null:
+		return
+	offer = hud.get_node_or_null("%LoanShark") as PanelContainer
+	over = hud.get_node_or_null("%GameOver") as PanelContainer
+	var over_title := hud.get_node_or_null("%GameOverTitle") as Label
+	var over_body := hud.get_node_or_null("%GameOverBody") as Label
+	_expect_equal(offer == null or not offer.visible, true, "W1 Hard HUD: no offer")
+	_expect_equal(over != null and over.visible, true, "W1 Hard HUD: game over shows")
+	_expect_equal(
+		over_title != null and over_title.text == "Game over",
+		true,
+		"W1 Hard HUD: title is Game over"
+	)
+	_assert_text_has_no_truth(
+		over_body.text if over_body != null else "",
+		"W1 Hard game over body"
+	)
+	hud.queue_free()
+
+
+func _test_loan_shark_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("save after accept")
+	_expect_equal(_game_state.call("accept_loan_shark"), true, "W1 save: Accept first")
+	_expect_equal(
+		_economy.call("settle_payday_loan"),
+		true,
+		"W1 save: one drain day before save"
+	)
+	var remaining := int(_economy.call("payday_loan_days_remaining"))
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(
+		bool(saved.get("loan_shark_recovery_used", false)),
+		true,
+		"W1 save: recovery used is persisted"
+	)
+	_expect_equal(
+		int(saved.get("payday_loan_days_remaining", 0)),
+		remaining,
+		"W1 save: remaining drain days persist"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		bool(_game_state.get("loan_shark_recovery_used")),
+		false,
+		"W1 save: new game clears recovery"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"W1 save: restore succeeds"
+	)
+	_expect_equal(
+		bool(_game_state.get("loan_shark_recovery_used")),
+		true,
+		"W1 save: restore keeps recovery used"
+	)
+	_expect_equal(
+		int(_economy.call("payday_loan_days_remaining")),
+		remaining,
+		"W1 save: restore keeps drain days"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_lost")),
+		false,
+		"W1 save: accepted recovery is not a loss"
+	)
+
+
+func _trigger_rent_bankruptcy(label: String) -> void:
+	var config: BalanceConfig = _game_state.get("balance_config")
+	_captured_loan_shark = {}
+	_captured_loan_shark_outcome = &""
+	_captured_campaign_lost = {}
+	_game_state.set("missed_rent_weeks", maxi(0, config.missed_rent_weeks_to_lose - 1))
+	_game_state.set("current_day", config.first_rent_due_day)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_game_state.set("loan_shark_offer_pending", false)
+	_game_state.set("campaign_lost", false)
+	_game_state.set("is_game_active", true)
+	_economy.set("balance_cents", 0)
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"W1 %s: FLOOR opens before rent miss" % label
+	)
+	_expect_equal(
+		_game_state.call("start_settle"),
+		true,
+		"W1 %s: SETTLE runs the rent miss" % label
+	)
 
 
 func _j1_comp_width(dto: Resource) -> int:

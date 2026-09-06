@@ -119,6 +119,42 @@ static func cameras_owned_label() -> String:
 	return "Cameras on"
 
 
+static func loan_shark_title() -> String:
+	return "Loan shark"
+
+
+static func loan_shark_body(payload: Dictionary) -> String:
+	return (
+		"First bankruptcy. Take the shark loan or fold.\n+%s cash. −%s/day for %d days. Rep −%d.\nRefuse is game over."
+		% [
+			format_cents(int(payload.get("cash_cents", 0))),
+			format_cents(int(payload.get("daily_cents", 0))),
+			int(payload.get("days", 0)),
+			int(payload.get("rep_hit", 0)),
+		]
+	)
+
+
+static func game_over_title() -> String:
+	return "Game over"
+
+
+static func game_over_body(payload: Dictionary) -> String:
+	match String(payload.get("reason", "")):
+		"refused_loan_shark":
+			return "You refused the loan. The shop is closed."
+		"missed_rent":
+			return "Missed rent closed the shop."
+		"unpaid_wages":
+			return "Unpaid wages closed the shop."
+		"reputation":
+			return "Reputation hit zero. The shop is closed."
+		"ironman":
+			return "Destitution closed the shop."
+		_:
+			return "The shop went bankrupt."
+
+
 static func event_banner(text: String) -> String:
 	return text.strip_edges()
 

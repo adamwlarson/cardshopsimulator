@@ -172,6 +172,18 @@ func record_campaign_won(payload: Dictionary) -> void:
 	_emit(&"campaign_won", payload.duplicate(true))
 
 
+func record_loan_shark_offered(payload: Dictionary) -> void:
+	_emit(&"loan_shark_offered", payload.duplicate(true))
+
+
+func record_loan_shark_resolved(payload: Dictionary) -> void:
+	_emit(&"loan_shark_resolved", payload.duplicate(true))
+
+
+func record_campaign_lost(payload: Dictionary) -> void:
+	_emit(&"campaign_lost", payload.duplicate(true))
+
+
 func record_save_pre_write(serialized_save: PackedByteArray) -> void:
 	if is_enabled():
 		_emit(&"save_hash_pre_write", {"hash": _sha256(serialized_save)})
