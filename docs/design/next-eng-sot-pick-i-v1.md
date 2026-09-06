@@ -1,6 +1,6 @@
 # Next Eng SoT Pick I v1 — post H2
 
-**Status:** Adopted — **I1 shipped #36** @ `7c40f3b8` (2026-09-06); park I2/I3/I4
+**Status:** **I1 shipped #36** @ `7c40f3b8` (docs tip `edc36571`); Softs parked. Park I2→pick-j J1; I3→J2; I4→J3.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §4.4 / §4.5, pick-h (H2 shipped @ `8a7f7a73`)  
@@ -99,3 +99,4 @@ Tiny Eng hygiene: Soft `_ensure_priceable_sku` → **Won’t-Fix** with demo not
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **I1 GO** (park I2/I3/I4). Synced main @ `4160b14a`. Eng online-listings spike launching. Soft seeds parked. No Art. |
+| 2026-09-06 | **I1 shipped #36** merged main @ `7c40f3b8` (docs tip `edc36571`). Softs parked. Queue → pick-j. |
