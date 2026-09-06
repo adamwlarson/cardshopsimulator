@@ -1,6 +1,6 @@
 # Next Eng SoT Pick K v1 — post J1 (hold Eng until J2)
 
-**Status:** Adopted — **K2 shipped** (online+Research re-smoke PASS 2026-09-06 @ `b94c1f51`); park K1/K3/K4; Eng S2+ No; Soft keep parked
+**Status:** **K2 shipped** — re-smoke PASS-with-notes @ `b94c1f51`; Eng S2+ No; Soft keep parked; K1 park. Report `docs/qa/playtest-k2-online-research-b94c1f51.md`.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §4.4 / §4.5 / §10, pick-j (J1 shipped #37; J2 Art dual-track in flight)  
@@ -93,3 +93,4 @@ Wire systems §8 **Counterfeit scare** (graded trust ↓; inspect mandatory) ato
 |------|----------|
 | 2026-09-06 | PM adopted **K2 GO** (park K1/K3/K4). Soft seeds parked. Formal QA/Eng hold until J2 Art #38 merges. |
 | 2026-09-06 | J2 Art #38 shipped @ `2bfa0efd`. K2 formal re-smoke kicked to QA. Soft parked. Eng S2+ standby. |
+| 2026-09-06 | **K2 shipped** — QA PASS-with-notes @ `b94c1f51`; Soft keep parked; Eng S2+ No. Queue → pick-l. |
