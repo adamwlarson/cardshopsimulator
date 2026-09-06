@@ -81,3 +81,10 @@ No new systems. Art/Eng polish only.
 - [x] Sync this file to main before cloud agent
 - [x] Softs stay parked unless Q2 Soft path
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **Q1 GO** (park Q2/Q3/Q4). Softs parked. Eng Supply glut spike launching. No Art. |
