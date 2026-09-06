@@ -1,6 +1,6 @@
 # Soft Hygiene U1 v1 — disposition table
 
-**Status:** Ready for Eng ACK  
+**Status:** Eng ACK locked — SH1–SH6 Won’t-Fix MVP; SH7 Art later; **SH8 Eng rename in flight**; Soft no mode-picker CLOSED. QA spot after SH8 tip.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** pick-u Adopted **U1 GO**; Soft no mode-picker CLOSED (#49)  
@@ -34,10 +34,10 @@
 
 ## 2. Eng ACK checklist
 
-- [ ] SH1: Delete **or** Won’t-Fix + demo note (pick one; document path)
-- [ ] SH2–SH6: Won’t-Fix logged in Eng notes / BalanceConfig comments as needed
-- [ ] SH7: Art ACK “later” (no Eng code)
-- [ ] SH8: Rename PR **or** Won’t-Fix
+- [x] SH1: **Won’t-Fix** (Hype/Fog empty-SKU bridge still calls it)
+- [x] SH2–SH6: **Won’t-Fix** MVP (Eng ACK)
+- [ ] SH7: Art ACK “later” (no Eng code) — *awaiting Art*
+- [ ] SH8: **Eng rename** in flight → `apply_shop_capacity_bonuses` (preferred)
 - [ ] No new economy verbs; §4.5 clean
 - [ ] Foundation suite still green if code touched
 
@@ -54,3 +54,4 @@ Spot-check only if SH1 Delete or SH8 rename lands — S3 smoke PriceEditor / Lar
 | When | Decision |
 |------|----------|
 | 2026-09-06 | Design Soft table ready for Eng ACK (U1). |
+| 2026-09-06 | Eng ACK: SH1 Won’t-Fix; SH2–SH6 Won’t-Fix MVP; SH7 Art later; SH8 rename preferred (`apply_shop_capacity_bonuses`). |
