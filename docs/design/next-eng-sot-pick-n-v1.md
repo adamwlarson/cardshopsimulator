@@ -95,3 +95,4 @@ No new events. QA asserts Flagship path (Large + Rep ≥ 80 + cash ≥ $50k) rea
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **N1 GO** (park N2/N3/N4). Softs parked. Eng Convention weekend spike launching. No Art. |
+| 2026-09-06 | **N1 SHIPPED #43** @ `73ac9dae`. Soft Fri spill OK for MVP. Softs parked. Queue → pick-o. |
