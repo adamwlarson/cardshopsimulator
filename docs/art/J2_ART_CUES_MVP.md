@@ -17,7 +17,9 @@ Thin additive props only. No hero-case rescale. No cel/ink. Principled/PBR, 1u=1
 
 Far / approach / interact proof: `docs/art/qa-shots/J2_graded_case_{far,approach,interact}.png` plus `J2_graded_case_badge_detail.png`.
 
-**Eng ACK (optional static):** node `GradedCaseBadge` — no runtime toggle.
+**X1 Soft far crest (SH7):** **PASS** — badge GLB revised in place (0.580 × 0.054 × 0.570 m; taller/fatter brass kite). Parent local **unchanged**. Proof: `docs/art/qa-shots/X1_graded_crest_{far,approach,interact,detail}.png` (+ `X1_graded_crest_far_vs_base.png`). Closeout: `docs/art/X1_FAR_CREST_POLISH.md`. Soft catalog otherwise **CLOSED** (do not reopen SH1–SH6/SH8).
+
+**Eng ACK (optional static):** node `GradedCaseBadge` — no runtime toggle. Path/name unchanged (no-op swap).
 
 ## 2. ONLINE_HOLD shelf/tag cue
 
