@@ -6938,7 +6938,7 @@ func _test_i1_online_unlock_gate() -> void:
 			"I1: HUD Online button enabled at Rep 35"
 		)
 		_game_state.set("current_reputation", 34)
-		EventBus.reputation_changed.emit(34)
+		_event_bus.reputation_changed.emit(34)
 		_expect_equal(
 			button != null and button.disabled,
 			true,
@@ -6966,7 +6966,7 @@ func _test_i1_list_hold_fee_and_cancel() -> void:
 		_qa_autoload.call("set_force_enabled", false)
 		return
 	var listed_price := 2500
-	var listed := _economy.get("online_listings").call(
+	var listed: Dictionary = _economy.get("online_listings").call(
 		"list_target",
 		_i1_card_target(card),
 		listed_price,
@@ -6995,7 +6995,7 @@ func _test_i1_list_hold_fee_and_cancel() -> void:
 		OnlineListingService.fee_cents_for(listed_price, NORMAL_CONFIG.online_fee),
 		"I1: 8% fee is computed on list"
 	)
-	var cancelled := _economy.get("online_listings").call("cancel_listing", listing.id)
+	var cancelled: Dictionary = _economy.get("online_listings").call("cancel_listing", listing.id)
 	_expect_equal(bool(cancelled.get("ok", false)), true, "I1: cancel before fill works")
 	_expect_equal(
 		card.location.type,
@@ -7007,7 +7007,7 @@ func _test_i1_list_hold_fee_and_cancel() -> void:
 		0,
 		"I1: cancel before fill does not charge fee"
 	)
-	var refill := _economy.get("online_listings").call(
+	var refill: Dictionary = _economy.get("online_listings").call(
 		"list_target",
 		_i1_card_target(card),
 		listed_price,
@@ -7064,7 +7064,7 @@ func _test_i1_frequent_cancel_rep_hit() -> void:
 	var hit_count := 0
 	var last_result: Dictionary = {}
 	for _index: int in 3:
-		var listed := _economy.get("online_listings").call(
+		var listed: Dictionary = _economy.get("online_listings").call(
 			"list_target",
 			_i1_card_target(card),
 			1800,
@@ -7198,7 +7198,7 @@ func _test_i1_soft_ensure_priceable_sku_parked() -> void:
 	_game_state.call("start_new_game")
 	_game_state.set("current_reputation", 40)
 	var titan_before := int(_inventory_service.call("card_count", &"AA-SKIE-047"))
-	var missing := _economy.get("online_listings").call(
+	var missing: Dictionary = _economy.get("online_listings").call(
 		"list_target",
 		{
 			"sku_id": &"NO-SUCH-SKU",
