@@ -1,6 +1,6 @@
 # Next Eng SoT Pick J v1 — post I1
 
-**Status:** Adopted **J1 GO** — synced main @ `b4afce4a`; Eng spike launching (Research/Specialist). Park J2/J3/J4. Soft seeds parked. No Art.  
+**Status:** Adopted — **J1 shipped #37** @ `8bd03a47` (2026-09-06); park J3/J4; J2 Art dual-track in flight (#38)
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §3 / §4.5 / §6.2, pick-i (I1 shipped #36)  
