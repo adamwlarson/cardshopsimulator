@@ -18,7 +18,7 @@
 
 **Parked soft (non-blocking):** MidCenter densify AABB, apron FOV, `can_research` / Easy-Hard inherit, icon 2× / sell-tint, etc.
 
-**Gap:** D/F1/G1/H2 shipped. Next: pick-i **I1** online listings in flight.
+**Gap:** D/F1/G1/H2/I1 #36 shipped. Queue empty — Design next SoT TBD.
 
 ---
 
