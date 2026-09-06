@@ -120,10 +120,12 @@ func is_rent_due_day(day: int) -> bool:
 
 
 func shop_traffic_mult(shop_tier: int) -> float:
+	# Integers match ShopState.Tier (SMALL=0, MEDIUM=1, LARGE=2).
+	# Do not reference ShopState here — BalanceConfig must stay loadable first.
 	var medium_mult := maxf(0.01, expand_medium_traffic_mult)
-	if shop_tier == ShopState.Tier.LARGE:
+	if shop_tier >= 2:
 		return medium_mult * maxf(0.01, expand_large_traffic_mult)
-	if shop_tier == ShopState.Tier.MEDIUM:
+	if shop_tier == 1:
 		return medium_mult
 	return 1.0
 
