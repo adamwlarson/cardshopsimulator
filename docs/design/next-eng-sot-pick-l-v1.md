@@ -1,6 +1,6 @@
 # Next Eng SoT Pick L v1 — post K2
 
-**Status:** Adopted **L1 GO** — synced main @ `f28a1078`; Eng spike launching (Large gates+rent). Park L2/L3/L4. Soft seeds parked. Art shell dual-track invited.  
+**Status:** **L1 SHIPPED** — PR #39 merged @ `f43958ae47c6743f9a859afe646ad77b2b669a12` (tip-freeze `49f0153a`); Art Large shell #40 already on main @ `dd20a701`. Soft `apply_medium_capacity` naming parked. Eng Large shell stub-swap next. L2/L3/L4 still parked.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §7.3 / §8 / §9, pick-k (K2 shipped @ `b94c1f51`)  
