@@ -79,3 +79,10 @@ No Eng systems. Art crest / polish backlog only.
 - [x] Sync this file to main before cloud agent
 - [x] Softs stay parked unless T2
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **T1 GO** (park T2/T3/T4). Softs parked. Eng campaign mode picker spike `bc-62301c7e` launching. Main @ `9d7baabe`. |
