@@ -2483,6 +2483,7 @@ func _test_market_event_save_load() -> void:
 
 
 func _test_option_d_seeded_hype_opens_price_editor_once() -> void:
+	_free_lingering_gameplay_huds()
 	_qa_autoload.call("set_force_enabled", false)
 	_qa.set_force_enabled(false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
@@ -2609,6 +2610,7 @@ func _test_option_d_seeded_hype_opens_price_editor_once() -> void:
 
 
 func _test_option_d_price_editor_has_no_truth() -> void:
+	_free_lingering_gameplay_huds()
 	_qa_autoload.call("set_force_enabled", false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
@@ -2665,6 +2667,7 @@ func _test_option_d_price_editor_has_no_truth() -> void:
 
 
 func _test_option_d_cancel_keeps_event_apply_persists() -> void:
+	_free_lingering_gameplay_huds()
 	_qa_autoload.call("set_force_enabled", false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
@@ -5710,7 +5713,23 @@ func _choice_enabled(payload: Dictionary, choice_id: StringName) -> bool:
 	return false
 
 
+func _free_lingering_gameplay_huds() -> void:
+	var stale: Array[Node] = []
+	for child: Node in root.get_children():
+		var script: Script = child.get_script() as Script
+		if (
+			script != null
+			and String(script.resource_path).ends_with("hud.gd")
+		):
+			stale.append(child)
+	for hud: Node in stale:
+		if hud.get_parent() == root:
+			root.remove_child(hud)
+		hud.free()
+
+
 func _instantiate_gameplay_hud() -> Node:
+	_free_lingering_gameplay_huds()
 	var packed: PackedScene = load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
 	if packed == null:
 		return null

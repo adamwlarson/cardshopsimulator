@@ -471,6 +471,8 @@ func _on_price_focus_requested(
 	message: String,
 	suggestion_mode: StringName
 ) -> void:
+	if not is_inside_tree() or is_queued_for_deletion():
+		return
 	beat_toast.text = message
 	beat_toast.show()
 	for dto: PriceConfirmSignal in DemandSignals.priceable_stock_signals():
@@ -491,7 +493,8 @@ func _on_price_focus_requested(
 				"Undercut focus must refresh to an undercut position."
 			)
 		DemandSignals.acknowledge_event_price_editor(sku_id)
-		price_input.grab_focus()
+		if price_input.is_inside_tree():
+			price_input.grab_focus()
 		return
 
 
@@ -1085,6 +1088,8 @@ func _on_market_event_changed(_payload: Dictionary) -> void:
 
 
 func _maybe_open_event_price_editor() -> void:
+	if not is_inside_tree() or is_queued_for_deletion():
+		return
 	var request := DemandSignals.peek_event_price_editor_request()
 	if request.is_empty():
 		return
