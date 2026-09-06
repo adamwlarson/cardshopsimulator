@@ -87,3 +87,4 @@ No Eng systems. Art crest polish and/or Eng polish backlog only.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **S1 GO** (park S2/S3/S4). Softs parked. Eng Survive Y1 + Liquidity king spike `bc-4a1a45a6` launching. Main @ `8a373ce9`. |
+| 2026-09-06 | **S1 SHIPPED #48** @ `43ca8e8a`. Soft no mode-picker Soft OK MVP. Softs parked. Queue → pick-t. |
