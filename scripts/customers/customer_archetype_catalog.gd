@@ -19,11 +19,18 @@ func _init(data_path: String = DATA_PATH) -> void:
 func total_weight(
 	reputation: int,
 	config: BalanceConfig,
-	event_whale_mult: float = 1.0
+	event_whale_mult: float = 1.0,
+	event_buylist_mult: float = 1.0
 ) -> float:
 	var total := 0.0
 	for archetype: Dictionary in archetypes:
-		total += weight_for(archetype, reputation, config, event_whale_mult)
+		total += weight_for(
+			archetype,
+			reputation,
+			config,
+			event_whale_mult,
+			event_buylist_mult
+		)
 	return total
 
 
@@ -31,7 +38,8 @@ func weight_for(
 	archetype: Dictionary,
 	reputation: int,
 	config: BalanceConfig,
-	event_whale_mult: float = 1.0
+	event_whale_mult: float = 1.0,
+	event_buylist_mult: float = 1.0
 ) -> float:
 	var weight := float(archetype.get("weight_normal", 0.0))
 	var band_key := "reputation_weight_mid"
@@ -44,7 +52,7 @@ func weight_for(
 	if archetype_id == &"whale":
 		weight *= config.whale_weight_mult * maxf(0.0, event_whale_mult)
 	elif archetype_id == &"flipper":
-		weight *= config.flipper_weight_mult
+		weight *= config.flipper_weight_mult * maxf(0.0, event_buylist_mult)
 	return maxf(0.0, weight)
 
 
@@ -52,14 +60,26 @@ func pick_weighted(
 	reputation: int,
 	config: BalanceConfig,
 	rng: RandomNumberGenerator,
-	event_whale_mult: float = 1.0
+	event_whale_mult: float = 1.0,
+	event_buylist_mult: float = 1.0
 ) -> Dictionary:
-	var total := total_weight(reputation, config, event_whale_mult)
+	var total := total_weight(
+		reputation,
+		config,
+		event_whale_mult,
+		event_buylist_mult
+	)
 	if total <= 0.0:
 		return {}
 	var roll := rng.randf() * total
 	for archetype: Dictionary in archetypes:
-		roll -= weight_for(archetype, reputation, config, event_whale_mult)
+		roll -= weight_for(
+			archetype,
+			reputation,
+			config,
+			event_whale_mult,
+			event_buylist_mult
+		)
 		if roll <= 0.0:
 			return archetype.duplicate(true)
 	return archetypes.back().duplicate(true)
