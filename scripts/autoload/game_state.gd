@@ -30,6 +30,8 @@ var pending_floor_skip_seconds: float = 0.0
 var campaign_mode: CampaignMode = CampaignMode.FLAGSHIP
 var campaign_complete: bool = false
 var last_prestige: StringName = &""
+var sandbox_best_day: int = 0
+var sandbox_best_cash_cents: int = 0
 var _win_signals_bound: bool = false
 
 
@@ -74,6 +76,7 @@ func start_new_game() -> void:
 	EventBus.attention_changed.emit(attention_remaining)
 	EventBus.day_phase_changed.emit(current_phase)
 	EventBus.shop_layout_changed.emit()
+	_record_sandbox_personal_bests()
 
 
 func start_floor() -> bool:
@@ -258,8 +261,16 @@ func meets_liquidity_king() -> bool:
 	return balance_config.meets_liquidity_king(current_day, Economy.balance_cents)
 
 
-func campaign_mode_id() -> StringName:
-	match campaign_mode:
+func select_campaign_mode(mode: CampaignMode) -> bool:
+	# Mid-run switch is out of scope. Menu / new-game only.
+	if is_game_active:
+		return false
+	campaign_mode = mode
+	return true
+
+
+func campaign_id(mode: CampaignMode) -> StringName:
+	match mode:
 		CampaignMode.SURVIVE_Y1:
 			return SURVIVE_Y1_MODE
 		CampaignMode.LIQUIDITY_KING:
@@ -268,6 +279,10 @@ func campaign_mode_id() -> StringName:
 			return &"sandbox"
 		_:
 			return FLAGSHIP_MODE
+
+
+func campaign_mode_id() -> StringName:
+	return campaign_id(campaign_mode)
 
 
 func campaign_title(mode: StringName) -> String:
@@ -280,6 +295,19 @@ func campaign_title(mode: StringName) -> String:
 			return "Sandbox"
 		_:
 			return "Flagship"
+
+
+func campaign_goal_copy(mode: StringName = &"") -> String:
+	var resolved := mode if not mode.is_empty() else campaign_mode_id()
+	match resolved:
+		SURVIVE_Y1_MODE:
+			return "Reach day 365 with cash on hand and a solid reputation."
+		LIQUIDITY_KING_MODE:
+			return "Close any month with a towering cash pile."
+		&"sandbox":
+			return "No win condition. Chase personal bests."
+		_:
+			return "Own a Large shop, hit high reputation, and bank a deep reserve."
 
 
 func campaign_win_payload() -> Dictionary:
@@ -319,7 +347,15 @@ func evaluate_campaign_win() -> bool:
 				return false
 			return _award_campaign(LIQUIDITY_KING_MODE)
 		_:
+			_record_sandbox_personal_bests()
 			return false
+
+
+func _record_sandbox_personal_bests() -> void:
+	if campaign_mode != CampaignMode.SANDBOX:
+		return
+	sandbox_best_day = maxi(sandbox_best_day, current_day)
+	sandbox_best_cash_cents = maxi(sandbox_best_cash_cents, Economy.balance_cents)
 
 
 func _award_campaign(mode: StringName) -> bool:
@@ -370,6 +406,8 @@ func capture_save() -> Dictionary:
 		"campaign_mode": int(campaign_mode),
 		"campaign_complete": campaign_complete,
 		"last_prestige": String(last_prestige),
+		"sandbox_best_day": sandbox_best_day,
+		"sandbox_best_cash_cents": sandbox_best_cash_cents,
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
@@ -394,6 +432,8 @@ func restore_save(data: Dictionary) -> bool:
 	pending_floor_skip_seconds = float(data.get("pending_floor_skip_seconds", 0.0))
 	campaign_mode = int(data.get("campaign_mode", CampaignMode.FLAGSHIP)) as CampaignMode
 	campaign_complete = bool(data.get("campaign_complete", false))
+	sandbox_best_day = int(data.get("sandbox_best_day", sandbox_best_day))
+	sandbox_best_cash_cents = int(data.get("sandbox_best_cash_cents", sandbox_best_cash_cents))
 	var saved_prestige := StringName(data.get("last_prestige", &""))
 	if not saved_prestige.is_empty():
 		last_prestige = saved_prestige
