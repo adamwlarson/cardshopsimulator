@@ -94,3 +94,4 @@ No new systems. QA re-smokes §10 Normal **with** online listings in play (list/
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **J1 GO** (park J2/J3/J4). Synced main @ `b4afce4a`. Eng Research/Specialist spike launching. Soft seeds parked. No Art. |
+| 2026-09-06 | **J2 Art dual-track** (not Eng SoT): showcase graded read + `ONLINE_HOLD` cue parallel with J1. Soft parked. No J1 drift. |
