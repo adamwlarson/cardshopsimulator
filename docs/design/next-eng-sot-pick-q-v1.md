@@ -88,3 +88,4 @@ No new systems. Art/Eng polish only.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **Q1 GO** (park Q2/Q3/Q4). Softs parked. Eng Supply glut spike launching. No Art. |
+| 2026-09-06 | **Q1 SHIPPED #46** @ `116ad889`. Softs parked. §8 suite largely closed. Queue → pick-r. |
