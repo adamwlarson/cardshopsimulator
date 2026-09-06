@@ -5061,8 +5061,9 @@ func _test_supply_glut_wholesale_and_race() -> void:
 	_expect_equal(baseline_moq != null, true, "Q1: catalog distributor MOQ exists")
 	var baseline_cost := baseline_moq.unit_cost_cents
 	_expect_equal(baseline_cost > 0, true, "Q1: catalog MOQ has a baseline wholesale")
+	var sealed_sku := (_inventory_service.get("model") as InventoryModel).get_sku(sealed)
 	var restock_baseline := PricingService.distributor_wholesale_cents(
-		InventoryService.model.get_sku(sealed).base_market_cents,
+		sealed_sku.base_market_cents if sealed_sku != null else 0,
 		NORMAL_CONFIG
 	)
 	_expect_equal(restock_baseline > 0, true, "Q1: restock formula prices sealed wholesale")
