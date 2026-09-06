@@ -471,7 +471,7 @@ func _on_price_focus_requested(
 	message: String,
 	suggestion_mode: StringName
 ) -> void:
-	if not is_inside_tree() or is_queued_for_deletion():
+	if is_queued_for_deletion():
 		return
 	beat_toast.text = message
 	beat_toast.show()
@@ -1088,7 +1088,7 @@ func _on_market_event_changed(_payload: Dictionary) -> void:
 
 
 func _maybe_open_event_price_editor() -> void:
-	if not is_inside_tree() or is_queued_for_deletion():
+	if is_queued_for_deletion():
 		return
 	var request := DemandSignals.peek_event_price_editor_request()
 	if request.is_empty():
