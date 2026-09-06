@@ -1,6 +1,6 @@
 # Next Eng SoT Pick J v1 — post I1
 
-**Status:** Adopted — **J1 shipped #37** @ `8bd03a47` (2026-09-06); park J3/J4; J2 Art dual-track in flight (#38)
+**Status:** **J1 shipped #37** @ `8bd03a47`; Softs parked. J2 Art dual-track still in flight (#38). Park J3→pick-k K1; J4→pick-k K2.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §3 / §4.5 / §6.2, pick-i (I1 shipped #36)  
@@ -95,3 +95,4 @@ No new systems. QA re-smokes §10 Normal **with** online listings in play (list/
 |------|----------|
 | 2026-09-06 | PM adopted **J1 GO** (park J2/J3/J4). Synced main @ `b4afce4a`. Eng Research/Specialist spike launching. Soft seeds parked. No Art. |
 | 2026-09-06 | **J2 Art dual-track** (not Eng SoT): showcase graded read + `ONLINE_HOLD` cue parallel with J1. Soft parked. No J1 drift. |
+| 2026-09-06 | **J1 shipped #37** merged @ `8bd03a47`. Softs parked. J2 Art #38 still in flight — next Eng SoT holds until J2 merges. Queue → pick-k. |
