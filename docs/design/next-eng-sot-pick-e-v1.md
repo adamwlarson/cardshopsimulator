@@ -18,7 +18,7 @@
 
 **Parked soft (non-blocking):** MidCenter densify AABB, apron FOV, `can_research` / Easy-Hard inherit, icon 2× / sell-tint, etc.
 
-**Gap:** D/F1/G1/H2/I1 #36 + J1 #37 shipped. J2 Art #38 in flight. Queue Eng SoT TBD after J2.
+**Gap:** D/F1/G1/H2/I1/J1 shipped. Next: pick-k **K2** re-smoke (queued after J2 #38 merges).
 
 ---
 
