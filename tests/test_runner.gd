@@ -3825,6 +3825,7 @@ func _test_expand_large_beat() -> void:
 		"Wait keeps Medium rent"
 	)
 	_expect_equal(shop.staff_cap(), 3, "Wait keeps Medium staff cap")
+	_assert_shop_shell_state(true, "Wait for cash-Rep keeps Medium shell")
 
 	_game_state.call("start_new_game")
 	_force_medium_shop(18)
@@ -3953,6 +3954,7 @@ func _test_expand_large_beat() -> void:
 		true,
 		"Signed Large traffic is not 2× Medium"
 	)
+	_assert_large_shell_state("Sign Large Art shell")
 
 	_game_state.call("set_balance_config", HARD_CONFIG)
 	_game_state.call("start_new_game")
@@ -8322,19 +8324,27 @@ func _assert_large_shell_state(label: String) -> void:
 		extent.sync_from_shop()
 		_expect_equal(
 			extent.is_medium_extension_visible(),
+			false,
+			"%s Medium Art shell hides after Large Sign" % label
+		)
+		_expect_equal(
+			extent.is_large_shell_visible(),
 			true,
-			"%s Medium Art shell stays as Large interior" % label
+			"%s Large Art shell is visible" % label
 		)
 		_expect_equal(
 			extent.is_large_scaffold_visible(),
-			true,
-			"%s Large scaffold interim floor is visible" % label
+			false,
+			"%s Large scaffold interim floor is gone" % label
 		)
 		_expect_equal(
 			extent.has_large_scaffold(),
-			true,
-			"%s Large scaffold nodes exist" % label
+			false,
+			"%s Large scaffold nodes are absent" % label
 		)
+		_expect_equal(extent.has_node("LargeFloor"), false, "%s no LargeFloor node" % label)
+		_expect_equal(extent.has_node("LargeWallEast"), false, "%s no LargeWallEast" % label)
+		_expect_equal(extent.has_node("LargeWallNorth"), false, "%s no LargeWallNorth" % label)
 		_expect_equal(extent.extra_floor_tile_count(), 154, "%s extra tiles vs Small" % label)
 		_expect_equal(extent.extra_large_tile_count(), 94, "%s extra tiles vs Medium" % label)
 		_expect_equal(extent.has_fog_veil(), false, "%s fog stays nacked" % label)
@@ -8345,6 +8355,28 @@ func _assert_large_shell_state(label: String) -> void:
 		)
 		_expect_equal(extent.has_node("MediumVeilX"), false, "%s no Medium fog veil X" % label)
 		_expect_equal(extent.has_node("MediumVeilZ"), false, "%s no Medium fog veil Z" % label)
+	var small_shell := floor.get_node_or_null("Architecture/ShopShell") as Node3D
+	var medium_shell := floor.get_node_or_null("Architecture/ShopShellMedium") as Node3D
+	var large_shell := floor.get_node_or_null("Architecture/ShopShellLarge") as Node3D
+	_expect_equal(small_shell != null, true, "%s Small Art GLB instanced" % label)
+	_expect_equal(medium_shell != null, true, "%s Medium Art GLB instanced" % label)
+	_expect_equal(large_shell != null, true, "%s Large Art GLB instanced" % label)
+	if small_shell != null:
+		_expect_equal(small_shell.visible, false, "%s Small shell hidden on Large" % label)
+	if medium_shell != null:
+		_expect_equal(medium_shell.visible, false, "%s Medium shell hidden on Large" % label)
+	if large_shell != null:
+		_expect_equal(large_shell.visible, true, "%s Large shell visible" % label)
+		_expect_equal(
+			large_shell.position.is_equal_approx(Vector3.ZERO),
+			true,
+			"%s Large SW pivot at origin" % label
+		)
+		_expect_equal(
+			large_shell.scale.is_equal_approx(Vector3.ONE),
+			true,
+			"%s Large scale 1u=1m" % label
+		)
 	var world := floor.get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world != null and world.environment != null:
 		_expect_equal(world.environment.fog_enabled, false, "%s fog volume nacked" % label)
@@ -8361,6 +8393,18 @@ func _assert_large_shell_state(label: String) -> void:
 			true,
 			"%s does not churn aisle camera" % label
 		)
+		_expect_equal(
+			is_equal_approx(camera.fov, ShopCamera.HOME_FOV),
+			true,
+			"%s does not churn FOV" % label
+		)
+		camera.apply_home_pose(ShopCamera.POSE_BEHIND_COUNTER)
+		_expect_equal(
+			camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
+			true,
+			"%s keeps Art behind-counter home" % label
+		)
+	_assert_overhead_lights_on_floor(floor, true, label)
 	_assert_shop_fog_nacked(floor, label)
 	floor.free()
 
@@ -8395,10 +8439,28 @@ func _assert_shop_shell_state(want_medium: bool, label: String) -> void:
 		_expect_equal(extent.has_node("MediumFloor"), false, "%s no MediumFloor node" % label)
 		_expect_equal(extent.has_node("MediumWallEast"), false, "%s no east wall stub" % label)
 		_expect_equal(extent.has_node("MediumWallNorth"), false, "%s no north wall stub" % label)
+		_expect_equal(
+			extent.is_large_shell_visible(),
+			false,
+			"%s Large Art shell stays hidden" % label
+		)
+		_expect_equal(
+			extent.has_large_scaffold(),
+			false,
+			"%s Large scaffold stays absent" % label
+		)
+		_expect_equal(
+			extent.is_large_scaffold_visible(),
+			false,
+			"%s Large scaffold stays hidden" % label
+		)
+		_expect_equal(extent.has_node("LargeFloor"), false, "%s no LargeFloor node" % label)
 	var small_shell := floor.get_node_or_null("Architecture/ShopShell") as Node3D
 	var medium_shell := floor.get_node_or_null("Architecture/ShopShellMedium") as Node3D
+	var large_shell := floor.get_node_or_null("Architecture/ShopShellLarge") as Node3D
 	_expect_equal(small_shell != null, true, "%s Small Art GLB instanced" % label)
 	_expect_equal(medium_shell != null, true, "%s Medium Art GLB instanced" % label)
+	_expect_equal(large_shell != null, true, "%s Large Art GLB instanced" % label)
 	if small_shell != null:
 		_expect_equal(small_shell.visible, not want_medium, "%s Small shell visible" % label)
 	if medium_shell != null:
@@ -8413,6 +8475,8 @@ func _assert_shop_shell_state(want_medium: bool, label: String) -> void:
 			true,
 			"%s Medium scale 1u=1m" % label
 		)
+	if large_shell != null:
+		_expect_equal(large_shell.visible, false, "%s Large shell hidden" % label)
 	var camera := floor.get_node_or_null("Camera") as ShopCamera
 	if camera != null:
 		camera.apply_home_pose(ShopCamera.POSE_AISLE)
