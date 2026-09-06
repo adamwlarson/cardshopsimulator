@@ -1,6 +1,6 @@
 # Next Eng SoT Pick L v1 — post K2
 
-**Status:** Adopted — **L1 GO** (2026-09-06); park L2/L3/L4; Art shell dual-track  
+**Status:** Adopted **L1 GO** — synced main @ `f28a1078`; Eng spike launching (Large gates+rent). Park L2/L3/L4. Soft seeds parked. Art shell dual-track invited.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §7.3 / §8 / §9, pick-k (K2 shipped @ `b94c1f51`)  
@@ -86,8 +86,15 @@ No new systems. Eng/Art polish backlog only; QA spot-checks. Soft stay parked.
 
 ## PM checklist
 
-- [x] Choose **L1** (park L2/L3/L4)
-- [x] If L1: Eng gates+rent first; Art shell dual-track
-- [x] Sync this file to main before cloud agent
+- [x] Choose **L1** (park L2/L3/L4) — PM 2026-09-06 @ `f28a1078`
+- [x] If L1: Eng gates+rent first; Art shell dual-track invited — Eng spike launching
+- [x] Sync this file to main before cloud agent @ `f28a1078`
 - [x] Soft seeds stay parked unless L3 Soft path
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **L1 GO** (park L2/L3/L4). Synced main @ `f28a1078`. Eng Large gates+rent spike launching. Soft seeds parked. Art shell dual-track invited. |
