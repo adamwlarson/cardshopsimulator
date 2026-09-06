@@ -3,16 +3,20 @@ extends Node3D
 
 ## Toggles Art shop shells after Sign. Small stays `prop_shop_shell_01`;
 ## Medium instances `prop_shop_shell_medium_01` at SW origin, scale 1 (1u=1m).
-## Walkable grid SoT remains 14×10 @ 0.9 m. No code-driven MediumFloor stub.
-## Fog-as-Medium stays nacked.
+## Large instances `prop_shop_shell_large_01` the same way (hides Small+Medium).
+## Walkable grid SoT remains 14×10 Medium / 18×13 Large @ 0.9 m.
+## No code-driven MediumFloor stub or LargeFloor scaffold. Fog stays nacked.
 ## Medium overhead extras (same `prop_light_overhead_01`) show at Medium+Large.
-## Large Art shell may lag — Eng ships a scaffold interim floor (not a fog veil).
 
 const MEDIUM_SHELL_SCENE := (
 	"res://assets/props/shop/fixtures/prop_shop_shell_medium_01/prop_shop_shell_medium_01.glb"
 )
+const LARGE_SHELL_SCENE := (
+	"res://assets/props/shop/fixtures/prop_shop_shell_large_01/prop_shop_shell_large_01.glb"
+)
 const SMALL_SHELL_PATH := "Architecture/ShopShell"
 const MEDIUM_SHELL_PATH := "Architecture/ShopShellMedium"
+const LARGE_SHELL_PATH := "Architecture/ShopShellLarge"
 const OVERHEAD_LIGHTS_PATH := "Fixtures/OverheadLights"
 const SMALL_OVERHEAD_MESH_NAMES := [
 	"FrontLeft",
@@ -46,8 +50,6 @@ const LARGE_SCAFFOLD_NAMES := [
 	"LargeWallEast",
 	"LargeWallNorth",
 ]
-const LARGE_SCAFFOLD_COLOR := Color(0.42, 0.40, 0.36, 1.0)
-const LARGE_WALL_COLOR := Color(0.34, 0.32, 0.29, 1.0)
 
 var _medium_active: bool = false
 var _large_active: bool = false
@@ -84,6 +86,11 @@ func extra_large_tile_count() -> int:
 		ShopState.LARGE_GRID_WIDTH * ShopState.LARGE_GRID_HEIGHT
 		- ShopState.MEDIUM_GRID_WIDTH * ShopState.MEDIUM_GRID_HEIGHT
 	)
+
+
+func is_large_shell_visible() -> bool:
+	var shell := _large_shell()
+	return _large_active and shell != null and shell.visible
 
 
 func is_large_scaffold_visible() -> bool:
@@ -156,7 +163,7 @@ func sync_from_shop() -> void:
 	_large_active = shop != null and shop.tier == ShopState.Tier.LARGE
 	_clear_extension()
 	_ensure_medium_shell()
-	_ensure_large_scaffold()
+	_ensure_large_shell()
 	_apply_shell_visibility()
 	_apply_medium_overhead_visibility()
 
@@ -185,10 +192,16 @@ func _apply_shell_visibility() -> void:
 		small.visible = not _medium_active
 	var medium := _medium_shell()
 	if medium != null:
-		medium.visible = _medium_active
-		if _medium_active:
+		medium.visible = _medium_active and not _large_active
+		if medium.visible:
 			medium.position = Vector3.ZERO
 			medium.scale = Vector3.ONE
+	var large := _large_shell()
+	if large != null:
+		large.visible = _large_active
+		if _large_active:
+			large.position = Vector3.ZERO
+			large.scale = Vector3.ONE
 
 
 func _apply_medium_overhead_visibility() -> void:
@@ -238,49 +251,25 @@ func _ensure_medium_shell() -> void:
 	architecture.add_child(shell)
 
 
-func _ensure_large_scaffold() -> void:
-	if not _large_active:
+func _ensure_large_shell() -> void:
+	if _large_shell() != null:
 		return
-	var tile := ShopGrid.TILE_SIZE
-	var large_w := float(ShopState.LARGE_GRID_WIDTH) * tile
-	var large_h := float(ShopState.LARGE_GRID_HEIGHT) * tile
-	_add_scaffold_box(
-		"LargeFloor",
-		Vector3(large_w, 0.04, large_h),
-		Vector3(large_w * 0.5, -0.02, -large_h * 0.5),
-		LARGE_SCAFFOLD_COLOR
-	)
-	_add_scaffold_box(
-		"LargeWallEast",
-		Vector3(0.12, 2.4, large_h),
-		Vector3(large_w + 0.06, 1.2, -large_h * 0.5),
-		LARGE_WALL_COLOR
-	)
-	_add_scaffold_box(
-		"LargeWallNorth",
-		Vector3(large_w, 2.4, 0.12),
-		Vector3(large_w * 0.5, 1.2, -(large_h + 0.06)),
-		LARGE_WALL_COLOR
-	)
-
-
-func _add_scaffold_box(
-	node_name: String,
-	size: Vector3,
-	position: Vector3,
-	color: Color
-) -> void:
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.name = node_name
-	var box := BoxMesh.new()
-	box.size = size
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = 0.85
-	box.material = mat
-	mesh_instance.mesh = box
-	mesh_instance.position = position
-	add_child(mesh_instance)
+	if get_parent() == null:
+		return
+	var architecture := get_parent().get_node_or_null("Architecture") as Node3D
+	if architecture == null:
+		return
+	var packed := load(LARGE_SHELL_SCENE) as PackedScene
+	if packed == null:
+		return
+	var shell := packed.instantiate() as Node3D
+	if shell == null:
+		return
+	shell.name = "ShopShellLarge"
+	shell.position = Vector3.ZERO
+	shell.scale = Vector3.ONE
+	shell.visible = false
+	architecture.add_child(shell)
 
 
 func _clear_extension() -> void:
@@ -299,6 +288,12 @@ func _medium_shell() -> Node3D:
 	if get_parent() == null:
 		return null
 	return get_parent().get_node_or_null(MEDIUM_SHELL_PATH) as Node3D
+
+
+func _large_shell() -> Node3D:
+	if get_parent() == null:
+		return null
+	return get_parent().get_node_or_null(LARGE_SHELL_PATH) as Node3D
 
 
 func _overhead_lights() -> Node3D:
