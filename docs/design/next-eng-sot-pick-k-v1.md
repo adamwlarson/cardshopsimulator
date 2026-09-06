@@ -1,6 +1,6 @@
 # Next Eng SoT Pick K v1 — post J1 (hold Eng until J2)
 
-**Status:** Adopted **K2 GO** — formal re-smoke **in flight** (J2 #38 shipped @ `2bfa0efd`); park K1/K3/K4; Soft seeds parked. Eng S2+ standby.  
+**Status:** Adopted — **K2 shipped** (online+Research re-smoke PASS 2026-09-06 @ `b94c1f51`); park K1/K3/K4; Eng S2+ No; Soft keep parked
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §4.4 / §4.5 / §10, pick-j (J1 shipped #37; J2 Art dual-track in flight)  
