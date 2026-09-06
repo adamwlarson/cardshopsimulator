@@ -80,8 +80,15 @@ No new systems. Art/Eng polish only.
 
 ## PM checklist
 
-- [ ] Choose **M1** / **M2** / **M3** / **M4**
-- [ ] Prefer Eng cloud after stub-swap lands (shell in build under test for any Large-adjacent QA)
-- [ ] Sync this file to main when adopting
-- [ ] Softs stay parked unless M3
+- [x] Choose **M1** (park M3/M4; M2 = QA beat) — PM 2026-09-06
+- [x] Prefer Eng cloud after stub-swap lands — **standing hold** until `bc-131c43f0` tip-freeze
+- [x] Sync this file to main when adopting (PM sha256 `96c39e9a…`)
+- [x] Softs stay parked unless M3
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **M1 GO** (park M3/M4). M2 Large re-smoke = QA beat after stub-swap. Softs parked. Eng holds until `bc-131c43f0` tip-freeze. |
