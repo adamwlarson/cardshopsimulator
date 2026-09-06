@@ -178,6 +178,7 @@ func _initialize() -> void:
 	_test_flagship_win_award()
 	_test_survive_y1_win_award()
 	_test_liquidity_king_win_award()
+	_test_campaign_mode_picker()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -12057,6 +12058,311 @@ func _test_liquidity_king_win_award() -> void:
 	_game_state.call("start_new_game")
 
 
+func _test_campaign_mode_picker() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("return_to_menu")
+	_game_state.set("campaign_complete", false)
+	_game_state.set("last_prestige", &"")
+	_game_state.set("sandbox_best_day", 0)
+	_game_state.set("sandbox_best_cash_cents", 0)
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 0),
+		true,
+		"T1: inactive session can select Flagship"
+	)
+
+	var menu := _instantiate_main_menu()
+	_expect_equal(menu != null, true, "T1: main menu instantiates")
+	var campaign_label := menu.get_node_or_null("%CampaignLabel") as Label if menu != null else null
+	var blurb := menu.get_node_or_null("%ModeBlurb") as Label if menu != null else null
+	var flagship_btn := menu.get_node_or_null("%FlagshipButton") as Button if menu != null else null
+	var survive_btn := menu.get_node_or_null("%SurviveYear1Button") as Button if menu != null else null
+	var liquidity_btn := menu.get_node_or_null("%LiquidityKingButton") as Button if menu != null else null
+	var sandbox_btn := menu.get_node_or_null("%SandboxButton") as Button if menu != null else null
+	_expect_equal(
+		flagship_btn != null and flagship_btn.text == "Flagship",
+		true,
+		"T1: Flagship picker button is player-facing"
+	)
+	_expect_equal(
+		survive_btn != null and survive_btn.text == "Survive Year 1",
+		true,
+		"T1: Survive Year 1 picker button is player-facing"
+	)
+	_expect_equal(
+		liquidity_btn != null and liquidity_btn.text == "Liquidity king",
+		true,
+		"T1: Liquidity king picker button is player-facing"
+	)
+	_expect_equal(
+		sandbox_btn != null and sandbox_btn.text == "Sandbox",
+		true,
+		"T1: Sandbox picker button is player-facing"
+	)
+	_expect_equal(
+		campaign_label != null and campaign_label.text.contains("Flagship"),
+		true,
+		"T1: menu starts on Flagship"
+	)
+	_expect_equal(
+		blurb != null and blurb.text.contains("Large shop"),
+		true,
+		"T1: Flagship blurb is player-facing"
+	)
+	if menu != null:
+		_assert_text_has_no_truth(campaign_label.text if campaign_label != null else "", "T1: campaign label")
+		_assert_text_has_no_truth(blurb.text if blurb != null else "", "T1: mode blurb")
+		_assert_text_has_no_truth(flagship_btn.text if flagship_btn != null else "", "T1: Flagship button")
+		_assert_text_has_no_truth(survive_btn.text if survive_btn != null else "", "T1: Survive button")
+		_assert_text_has_no_truth(liquidity_btn.text if liquidity_btn != null else "", "T1: Liquidity button")
+		_assert_text_has_no_truth(sandbox_btn.text if sandbox_btn != null else "", "T1: Sandbox button")
+
+	if survive_btn != null:
+		survive_btn.pressed.emit()
+	_expect_equal(int(_game_state.get("campaign_mode")), 1, "T1: Survive click sets CampaignMode")
+	_expect_equal(
+		campaign_label != null and campaign_label.text.contains("Survive Year 1"),
+		true,
+		"T1: campaign label follows Survive Year 1"
+	)
+	_expect_equal(
+		blurb != null and blurb.text.contains("365"),
+		true,
+		"T1: Survive blurb names day 365"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		int(_game_state.get("campaign_mode")),
+		1,
+		"T1: start_new_game keeps Survive Year 1"
+	)
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 3),
+		false,
+		"T1: mid-run mode switch is rejected"
+	)
+	_expect_equal(
+		int(_game_state.get("campaign_mode")),
+		1,
+		"T1: rejected switch leaves Survive Year 1"
+	)
+	_force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_day", 1)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("meets_flagship"),
+		true,
+		"T1: Flagship gates can be true in Survive Year 1"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"T1: Survive Year 1 does not award Flagship"
+	)
+	_game_state.set("current_day", 365)
+	_economy.set("balance_cents", 1)
+	_game_state.set("current_reputation", 40)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"T1: Survive Year 1 still awards when selected"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"survive_y1",
+		"T1: Survive picker path emits survive_y1"
+	)
+
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 2),
+		true,
+		"T1: after award, Liquidity king can be selected"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(int(_game_state.get("campaign_mode")), 2, "T1: Liquidity king persists into new game")
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"T1: Liquidity king still awards when selected"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"liquidity_king",
+		"T1: Liquidity picker path emits liquidity_king"
+	)
+
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 3),
+		true,
+		"T1: Sandbox can be selected before a new game"
+	)
+	if sandbox_btn != null:
+		sandbox_btn.pressed.emit()
+	_expect_equal(int(_game_state.get("campaign_mode")), 3, "T1: Sandbox click sets CampaignMode")
+	_expect_equal(
+		campaign_label != null and campaign_label.text.contains("Sandbox"),
+		true,
+		"T1: campaign label follows Sandbox"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(int(_game_state.get("campaign_mode")), 3, "T1: Sandbox persists into new game")
+	_expect_equal(
+		int(_game_state.get("sandbox_best_day")) >= 1,
+		true,
+		"T1: Sandbox records a day personal best"
+	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_cash_cents")) >= 800_000,
+		true,
+		"T1: Sandbox records a cash personal best"
+	)
+	_force_large_shop(40)
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_day", 390)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_captured_campaign_won = {}
+	_expect_equal(_game_state.call("meets_flagship"), true, "T1: Sandbox can meet Flagship")
+	_expect_equal(_game_state.call("meets_survive_y1"), true, "T1: Sandbox can meet Survive Y1")
+	_expect_equal(_game_state.call("meets_liquidity_king"), true, "T1: Sandbox can meet Liquidity king")
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"T1: Sandbox awards none"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		false,
+		"T1: Sandbox stays incomplete"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		true,
+		"T1: Sandbox stays active"
+	)
+	_expect_equal(
+		_captured_campaign_won.is_empty(),
+		true,
+		"T1: Sandbox does not emit campaign_won"
+	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_day")),
+		390,
+		"T1: Sandbox personal best day updates"
+	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_cash_cents")),
+		10_000_000,
+		"T1: Sandbox personal best cash updates"
+	)
+
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "T1: Sandbox save payload")
+	_expect_equal(int(saved.get("campaign_mode", -1)), 3, "T1: save stores Sandbox mode")
+	_expect_equal(int(saved.get("sandbox_best_day", 0)), 390, "T1: save stores sandbox best day")
+	_game_state.call("return_to_menu")
+	if menu != null:
+		menu.call("_sync_campaign_copy")
+		var bests := menu.get_node_or_null("%SandboxBests") as Label
+		_expect_equal(
+			bests != null and bests.visible and bests.text.contains("390")
+			and bests.text.contains("$100,000.00"),
+			true,
+			"T1: menu shows Sandbox personal bests"
+		)
+		_assert_text_has_no_truth(bests.text if bests != null else "", "T1: sandbox bests")
+
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 0),
+		true,
+		"T1: Flagship can be selected after Sandbox"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(int(_game_state.get("campaign_mode")), 0, "T1: Flagship picker selection persists")
+	var flagship_shop := _force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_captured_campaign_won = {}
+	_expect_equal(flagship_shop.tier, ShopState.Tier.LARGE, "T1: Flagship shop is Large")
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"T1: Flagship still awards when selected"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"flagship",
+		"T1: Flagship picker path emits flagship"
+	)
+
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"T1: restore Sandbox save"
+	)
+	_expect_equal(int(_game_state.get("campaign_mode")), 3, "T1: restore keeps Sandbox mode")
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		false,
+		"T1: restore keeps Sandbox incomplete"
+	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_day")),
+		390,
+		"T1: restore keeps sandbox best day"
+	)
+
+	if menu != null:
+		root.remove_child(menu)
+		menu.free()
+
+	var menu_src := FileAccess.get_file_as_string("res://scripts/ui/main_menu.gd")
+	var state_src := FileAccess.get_file_as_string("res://scripts/autoload/game_state.gd")
+	_expect_equal(
+		menu_src.contains("true_market")
+		or menu_src.contains("p_buy")
+		or menu_src.contains("cert_valid"),
+		false,
+		"T1: main menu script stays §4.5 clean"
+	)
+	_expect_equal(
+		state_src.contains("func _ensure_priceable_sku"),
+		false,
+		"T1: GameState does not grow the parked Soft helper"
+	)
+	for path: String in [
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/ui/main_menu.gd",
+		"res://scripts/ui/hud.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("_ensure_priceable_sku"),
+			false,
+			"T1: %s does not call parked Soft helper" % path
+		)
+		_expect_equal(
+			source.contains("flipper_weight_mult"),
+			false,
+			"T1: %s does not touch parked flipper Soft" % path
+		)
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.set("is_game_active", false)
+	_game_state.set("campaign_complete", false)
+	_game_state.set("sandbox_best_day", 0)
+	_game_state.set("sandbox_best_cash_cents", 0)
+	_game_state.call("select_campaign_mode", 0)
+	_game_state.call("start_new_game")
+
+
 func _j1_comp_width(dto: Resource) -> int:
 	if dto == null:
 		return -1
@@ -12127,6 +12433,17 @@ func _free_lingering_gameplay_huds() -> void:
 		if hud.get_parent() == root:
 			root.remove_child(hud)
 		hud.free()
+
+
+func _instantiate_main_menu() -> Node:
+	var packed: PackedScene = load("res://scenes/ui/main_menu.tscn") as PackedScene
+	if packed == null:
+		return null
+	var menu: Node = packed.instantiate()
+	root.add_child(menu)
+	if not menu.is_node_ready():
+		menu.notification(Node.NOTIFICATION_READY)
+	return menu
 
 
 func _instantiate_gameplay_hud() -> Node:

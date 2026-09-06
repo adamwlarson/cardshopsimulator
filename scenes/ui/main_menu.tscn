@@ -39,10 +39,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -260.0
-offset_top = -200.0
-offset_right = 260.0
-offset_bottom = 200.0
+offset_left = -300.0
+offset_top = -290.0
+offset_right = 300.0
+offset_bottom = 290.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StylePanel")
@@ -56,7 +56,7 @@ theme_override_constants/margin_bottom = 40
 
 [node name="Content" type="VBoxContainer" parent="Panel/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 12
 alignment = 1
 
 [node name="Title" type="Label" parent="Panel/Margin/Content"]
@@ -90,8 +90,76 @@ theme_override_font_sizes/font_size = 14
 text = "Last prestige: Flagship"
 horizontal_alignment = 1
 
+[node name="ModeHint" type="Label" parent="Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.7, 0.68, 1)
+theme_override_font_sizes/font_size = 14
+text = "Choose campaign"
+horizontal_alignment = 1
+
+[node name="ModePicker" type="GridContainer" parent="Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="FlagshipButton" type="Button" parent="Panel/Margin/Content/ModePicker"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+theme_override_font_sizes/font_size = 16
+text = "Flagship"
+
+[node name="SurviveYear1Button" type="Button" parent="Panel/Margin/Content/ModePicker"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+theme_override_font_sizes/font_size = 16
+text = "Survive Year 1"
+
+[node name="LiquidityKingButton" type="Button" parent="Panel/Margin/Content/ModePicker"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+theme_override_font_sizes/font_size = 16
+text = "Liquidity king"
+
+[node name="SandboxButton" type="Button" parent="Panel/Margin/Content/ModePicker"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+theme_override_font_sizes/font_size = 16
+text = "Sandbox"
+
+[node name="ModeBlurb" type="Label" parent="Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.74, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+text = "Own a Large shop, hit high reputation, and bank a deep reserve."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="SandboxBests" type="Label" parent="Panel/Margin/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.8, 0.62, 1)
+theme_override_font_sizes/font_size = 13
+text = "Personal best: day 1 · $8,000.00"
+horizontal_alignment = 1
+
 [node name="Spacer" type="Control" parent="Panel/Margin/Content"]
-custom_minimum_size = Vector2(0, 18)
+custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 
 [node name="StartButton" type="Button" parent="Panel/Margin/Content"]
