@@ -85,3 +85,4 @@ No new systems.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **V1 GO** (park V2/V3/V4). Soft catalog closed. Eng Camera unlock spike `bc-7e59087b` launching. Main @ `a2e84b1b`. |
+| 2026-09-06 | **V1 SHIPPED #51** Camera unlock @ `51b62d95`. Soft catalog closed. Queue → pick-w. |
