@@ -79,3 +79,10 @@ Art-owned crest thin on J2 badge. No Eng SoT.
 - [x] Sync this file to main before formal kick
 - [x] Softs stay parked unless R2
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **R1 GO** (park R2/R3/R4). Softs parked. QA Flagship formal CLEAR TO KICK; Eng S2+ standby. Main @ `7ef4ef11`. |
