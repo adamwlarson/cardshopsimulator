@@ -6,7 +6,7 @@ Each `prop_*` folder contains:
 - `<folder>.glb` — import-ready mesh
 - `IMPORT_NOTES.md` — provenance / import notes for Engineering
 
-## Props (32)
+## Props (33)
 
 | Folder | Priority notes |
 |--------|----------------|
@@ -40,6 +40,7 @@ Each `prop_*` folder contains:
 | `prop_display_case_slab_01` | B01 heavier décor |
 | `prop_graded_case_badge_01` | J2 additive graded-path crest (parent to slab case) |
 | `prop_online_hold_tag_01` | J2 ONLINE_HOLD shelf/case-lip tag (Accent_Amber) |
+| `prop_security_camera_01` | V1 Art dual-track ceiling/wall camera (Camera unlock) |
 | `prop_window_01` | B06 heavier décor |
 | `prop_back_office_glimpse_01` | B07 heavier décor |
 
