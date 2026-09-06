@@ -18,7 +18,7 @@
 
 **Parked soft (non-blocking):** MidCenter densify AABB, apron FOV, `can_research` / Easy-Hard inherit, icon 2× / sell-tint, etc.
 
-**Gap:** D/F1/G1/H2/I1/J1/J2/K2 shipped. Queue empty — Design next SoT TBD (K3 Large / K4 scare parked).
+**Gap:** D–K2 shipped. Next: pick-l **L1** Large expand in flight (Art shell dual-track).
 
 ---
 
