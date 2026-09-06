@@ -1,6 +1,6 @@
 # Next Eng SoT Pick M v1 — post L1
 
-**Status:** Adopted **M1 GO** (Counterfeit scare) — Eng spike holds until Large stub-swap `bc-131c43f0` lands + tip-freeze. Park M3 Soft hygiene / M4 idle polish. **M2** Large re-smoke = QA beat after stub-swap (concurrent OK with M1, not blocking adopt).
+**Status:** **M1 Eng spike launching** — Large stub-swap SHIPPED PR #41 @ `2afba0c2024491df90b43d8b2c0d872c42781784` (tip `ec34ba6f`). Park M3/M4. M2 Large re-smoke = QA concurrent. Softs parked.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §8 / §7.3, pick-l (L1 economy shipped #39; Art shell #40 on main; stub-swap in flight)  
