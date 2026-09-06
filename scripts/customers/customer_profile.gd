@@ -18,6 +18,7 @@ enum TradeIntent {
 @export var display_name: String = "Shopper"
 @export var trade_intent: TradeIntent = TradeIntent.BUYING_FROM_SHOP
 @export var desired_skus: Array[StringName] = []
+@export var wants_sku: StringName = &""
 @export_range(0, 1_000_000, 1) var budget_cents: int = 5_000
 @export_range(1.0, 600.0, 1.0) var patience_seconds: float = 60.0
 @export var interest_tags: Array[StringName] = []
@@ -34,7 +35,10 @@ var patience_tick_scale: float = 1.0
 
 func can_afford(sku: StringName, price_cents: int) -> bool:
 	return (
-		sku in desired_skus
+		(
+			sku in desired_skus
+			or (not wants_sku.is_empty() and sku == wants_sku)
+		)
 		and price_cents > 0
 		and price_cents <= budget_cents
 	)

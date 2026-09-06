@@ -46,6 +46,7 @@ extends Control
 @onready var showcase_summary: Label = %ShowcaseSummary
 @onready var showcase_slab_button: Button = %ShowcaseSlabButton
 @onready var showcase_singles_button: Button = %ShowcaseSinglesButton
+@onready var showcase_rotate_button: Button = %ShowcaseRotateButton
 @onready var beat_decision_panel: PanelContainer = %BeatDecision
 @onready var beat_decision_title: Label = %BeatDecisionTitle
 @onready var beat_decision_summary: Label = %BeatDecisionSummary
@@ -148,6 +149,7 @@ func _ready() -> void:
 	)
 	showcase_slab_button.pressed.connect(_select_showcase_choice.bind(&"slab"))
 	showcase_singles_button.pressed.connect(_select_showcase_choice.bind(&"singles"))
+	showcase_rotate_button.pressed.connect(_select_showcase_choice.bind(&"rotate"))
 	beat_choice_a_button.pressed.connect(_select_beat_choice.bind(beat_choice_a_button))
 	beat_choice_b_button.pressed.connect(_select_beat_choice.bind(beat_choice_b_button))
 	beat_choice_c_button.pressed.connect(_select_beat_choice.bind(beat_choice_c_button))
@@ -519,6 +521,7 @@ func _on_rent_decision_requested(payload: Dictionary) -> void:
 		payload.get("accessory_enabled", false)
 	)
 	rent_loan_button.visible = bool(payload.get("loan_enabled", false))
+	rent_loan_button.disabled = not bool(payload.get("loan_enabled", false))
 	rent_loan_terms.text = (
 		"Receive %s now.\nPay %s daily for %d days; lose %d Rep."
 		% [
@@ -585,6 +588,12 @@ func _on_showcase_choice_requested(payload: Dictionary) -> void:
 	showcase_singles_button.text = (
 		"Display chase singles\n%s" % payload.get("singles_label", "")
 	)
+	showcase_rotate_button.text = (
+		"Rotate display\n%s" % payload.get(
+			"rotate_label",
+			"Swap slab and singles later today"
+		)
+	)
 	showcase_panel.show()
 	_sync_modal_veil()
 
@@ -600,9 +609,14 @@ func _on_showcase_choice_resolved(
 	if beat_id != _showcase_beat_id:
 		return
 	_showcase_choice_made = true
+	var display_text := "the Empress slab"
+	if choice == &"singles":
+		display_text = "both chase singles"
+	elif choice == &"rotate":
+		display_text = "a rotated showcase"
 	showcase_summary.text = (
 		"Displaying %s. You can switch this choice until the day ends."
-		% ("the Empress slab" if choice == &"slab" else "both chase singles")
+		% display_text
 	)
 
 

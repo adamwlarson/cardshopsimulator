@@ -38,6 +38,8 @@ func enqueue(customer: CustomerProfile) -> bool:
 		queue_changed.emit(_customers.size())
 		customer_ready.emit(customer)
 		return true
+	if customer.desired_skus.is_empty() and not customer.wants_sku.is_empty():
+		customer.desired_skus = [customer.wants_sku]
 	if not customer.desired_skus.is_empty():
 		return enqueue_targeted(customer, customer.desired_skus[0])
 	var offer: Dictionary = _inventory_service.call(

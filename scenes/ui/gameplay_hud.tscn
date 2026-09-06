@@ -880,7 +880,7 @@ layout_mode = 0
 offset_left = 48.0
 offset_top = 80.0
 offset_right = 560.0
-offset_bottom = 440.0
+offset_bottom = 520.0
 mouse_filter = 0
 
 [node name="Content" type="VBoxContainer" parent="ShowcaseChoice"]
@@ -913,6 +913,13 @@ custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 theme_type_variation = &"ListRowButton"
 text = "Display chase singles"
+
+[node name="ShowcaseRotateButton" type="Button" parent="ShowcaseChoice/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_type_variation = &"ListRowButton"
+text = "Rotate display"
 
 [node name="BeatDecision" type="PanelContainer" parent="."]
 unique_name_in_owner = true
