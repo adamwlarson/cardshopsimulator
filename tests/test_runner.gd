@@ -3954,9 +3954,9 @@ func _test_convention_weekend_pack_coherence() -> void:
 	_expect_equal(
 		FileAccess.get_file_as_string(
 			"res://scripts/autoload/inventory_service.gd"
-		).contains("func apply_medium_capacity"),
+		).contains("func apply_shop_capacity_bonuses"),
 		true,
-		"N1: Soft apply_medium_capacity naming stays untouched"
+		"N1: apply_shop_capacity_bonuses is the Large-aware capacity helper"
 	)
 
 
@@ -4441,9 +4441,9 @@ func _test_theft_ring_pack_coherence() -> void:
 	_expect_equal(
 		FileAccess.get_file_as_string(
 			"res://scripts/autoload/inventory_service.gd"
-		).contains("func apply_medium_capacity"),
+		).contains("func apply_shop_capacity_bonuses"),
 		true,
-		"O1: Soft apply_medium_capacity naming stays untouched"
+		"O1: apply_shop_capacity_bonuses is the Large-aware capacity helper"
 	)
 	_expect_equal(
 		FileAccess.get_file_as_string("res://data/events.json").contains("camera unlock"),
@@ -4990,9 +4990,9 @@ func _test_recession_week_pack_coherence() -> void:
 	_expect_equal(
 		FileAccess.get_file_as_string(
 			"res://scripts/autoload/inventory_service.gd"
-		).contains("func apply_medium_capacity"),
+		).contains("func apply_shop_capacity_bonuses"),
 		true,
-		"P1: Soft apply_medium_capacity naming stays untouched"
+		"P1: apply_shop_capacity_bonuses is the Large-aware capacity helper"
 	)
 
 
@@ -5633,9 +5633,9 @@ func _test_supply_glut_pack_coherence() -> void:
 	_expect_equal(
 		FileAccess.get_file_as_string(
 			"res://scripts/autoload/inventory_service.gd"
-		).contains("func apply_medium_capacity"),
+		).contains("func apply_shop_capacity_bonuses"),
 		true,
-		"Q1: Soft apply_medium_capacity naming stays untouched"
+		"Q1: apply_shop_capacity_bonuses is the Large-aware capacity helper"
 	)
 	_expect_equal(
 		FileAccess.get_file_as_string(
@@ -7014,7 +7014,7 @@ func _force_medium_shop(signed_day: int) -> ShopState:
 		"force Medium shop for Large tests"
 	)
 	_inventory_service.call(
-		"apply_medium_capacity",
+		"apply_shop_capacity_bonuses",
 		ShopState.MEDIUM_CASE_SLOT_BONUS,
 		ShopState.MEDIUM_BACKSTOCK_BONUS
 	)
@@ -7031,7 +7031,7 @@ func _force_large_shop(signed_day: int) -> ShopState:
 		"force Large shop for Flagship tests"
 	)
 	_inventory_service.call(
-		"apply_medium_capacity",
+		"apply_shop_capacity_bonuses",
 		shop.case_slot_bonus(),
 		shop.backstock_bonus()
 	)

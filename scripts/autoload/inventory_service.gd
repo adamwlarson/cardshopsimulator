@@ -228,7 +228,7 @@ func backstock_free_bins() -> int:
 	return model.backstock_bin_limit() - model.backstock_bins_used()
 
 
-func apply_medium_capacity(case_bonus: int, backstock_bonus: int) -> void:
+func apply_shop_capacity_bonuses(case_bonus: int, backstock_bonus: int) -> void:
 	model.case_slot_bonus = maxi(0, case_bonus)
 	model.backstock_bin_bonus = maxi(0, backstock_bonus)
 
