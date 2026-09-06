@@ -1,6 +1,6 @@
 # Next Eng SoT Pick M v1 — post L1
 
-**Status:** **M1 Eng spike launching** — Large stub-swap SHIPPED PR #41 @ `2afba0c2024491df90b43d8b2c0d872c42781784` (tip `ec34ba6f`). Park M3/M4. M2 Large re-smoke = QA concurrent. Softs parked.
+**Status:** Adopted **M1 GO** — Eng spike **in flight** `bc-243a6aaf` (stub-swap #41 merged @ `2afba0c2`). M2 Large re-smoke in flight. Park M3/M4. Softs parked.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §8 / §7.3, pick-l (L1 economy shipped #39; Art shell #40 on main; stub-swap in flight)  
@@ -81,7 +81,7 @@ No new systems. Art/Eng polish only.
 ## PM checklist
 
 - [x] Choose **M1** (park M3/M4; M2 = QA beat) — PM 2026-09-06
-- [x] Prefer Eng cloud after stub-swap lands — **standing hold** until `bc-131c43f0` tip-freeze
+- [x] Prefer Eng cloud after stub-swap lands — **lifted**; #41 merged @ `2afba0c2`; M1 Eng `bc-243a6aaf` launched
 - [x] Sync this file to main when adopting (PM sha256 `96c39e9a…`)
 - [x] Softs stay parked unless M3
 
@@ -92,3 +92,4 @@ No new systems. Art/Eng polish only.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **M1 GO** (park M3/M4). M2 Large re-smoke = QA beat after stub-swap. Softs parked. Eng holds until `bc-131c43f0` tip-freeze. |
+| 2026-09-06 | Stub-swap #41 merged @ `2afba0c2`. M1 Eng spike launched `bc-243a6aaf`. M2 Large re-smoke kicked concurrent. Softs parked. |
