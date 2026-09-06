@@ -131,6 +131,7 @@ func _initialize() -> void:
 	_test_counterfeit_scare_event()
 	_test_convention_weekend_event()
 	_test_theft_ring_event()
+	_test_camera_unlock()
 	_test_recession_week_event()
 	_test_supply_glut_event()
 	_test_day_ten_beat_serialization()
@@ -1937,6 +1938,20 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		rearrange_button != null and rearrange_button.custom_minimum_size.y >= 40.0,
 		true,
 		"Rearrange hit target height"
+	)
+	var cameras_button := hud.get_node_or_null("%OpenCamerasButton") as Button
+	_expect_equal(cameras_button != null, true, "Cameras button present")
+	_expect_equal(
+		cameras_button != null
+		and cameras_button.text.contains("Att 8")
+		and cameras_button.text.contains("$2,500.00"),
+		true,
+		"Cameras button shows cash and Att cost"
+	)
+	_expect_equal(
+		cameras_button != null and cameras_button.custom_minimum_size.y >= 40.0,
+		true,
+		"Cameras hit target height"
 	)
 	var online_button := hud.get_node_or_null("%OpenOnlineButton") as Button
 	_expect_equal(online_button != null, true, "Online listings button present")
@@ -4245,15 +4260,14 @@ func _test_theft_ring_staff_lever_or_wait_out() -> void:
 		"res://scripts/economy/market_event_service.gd"
 	)
 	_expect_equal(
-		service_src.contains("Cameras (unlock) are out of pack"),
+		service_src.contains("wait out") or service_src.contains("wait-out"),
 		true,
-		"O1: wait-out is documented — cameras stay locked this pack"
+		"O1: wait-out stays documented without requiring cameras"
 	)
 	_expect_equal(
-		service_src.contains("camera unlock") == false
-		or service_src.contains("Cameras (unlock) are out of pack"),
+		service_src.contains("staff coverage") or service_src.contains("Staff coverage"),
 		true,
-		"O1: no camera unlock mini-tree"
+		"O1: staff lever stays documented"
 	)
 
 	_game_state.call("start_new_game")
@@ -4503,6 +4517,419 @@ func _test_theft_ring_save_load() -> void:
 		"O1: restored banner still uses rumor copy"
 	)
 	_assert_text_has_no_truth(restored_banner, "O1 restored theft banner")
+
+
+func _test_camera_unlock() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_camera_balance_scalars()
+	_test_camera_install_gates()
+	_test_camera_theft_shrink_reduction()
+	_test_camera_o1_unchanged_without_cams()
+	_test_camera_hud_confirm_and_section_45()
+	_test_camera_save_load()
+	_test_camera_soft_catalog_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_camera_balance_scalars() -> void:
+	_expect_equal(NORMAL_CONFIG.camera_cash_cents, 250_000, "V1: cash gate is $2,500")
+	_expect_equal(NORMAL_CONFIG.camera_attention, 8, "V1: install Att is 8")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.camera_theft_shrink_mult, 1.5),
+		true,
+		"V1: camera theft shrink mult is ×1.5"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.camera_theft_shrink_mult < MarketEventService.THEFT_RING_SHRINK_MULT,
+		true,
+		"V1: camera shrink mult is below theft ×3"
+	)
+	_expect_equal(EASY_CONFIG.camera_cash_cents, 250_000, "V1: Easy inherits camera cash")
+	_expect_equal(HARD_CONFIG.camera_attention, 8, "V1: Hard inherits camera Att")
+
+
+func _test_camera_install_gates() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.has_cameras(), false, "V1: cameras start unowned")
+	_expect_equal(shop.has_active_cameras(), false, "V1: cameras start inactive")
+	_expect_equal(shop.camera_cash_cost_cents(), 250_000, "V1: shop cash cost is $2,500")
+	_expect_equal(shop.camera_attention_cost(), 8, "V1: shop Att cost is 8")
+	_expect_equal(
+		_game_state.call("can_install_cameras"),
+		true,
+		"V1: PREP + cash + Att can install"
+	)
+
+	_game_state.set("attention_remaining", 0)
+	_event_bus.emit_signal("attention_changed", 0)
+	_expect_equal(
+		_game_state.call("can_install_cameras"),
+		false,
+		"V1: Att 0 blocks install"
+	)
+	var att0: Dictionary = _game_state.call("install_cameras")
+	_expect_equal(bool(att0.get("ok", true)), false, "V1: install refused at Att 0")
+	_expect_equal(
+		StringName(att0.get("reason", &"")),
+		&"insufficient_attention",
+		"V1: Att 0 reason is insufficient_attention"
+	)
+	_expect_equal(shop.has_cameras(), false, "V1: Att 0 does not own cameras")
+
+	_game_state.set("attention_remaining", 8)
+	_event_bus.emit_signal("attention_changed", 8)
+	_economy.set("balance_cents", 100_000)
+	_event_bus.call("publish_cash_changed", 100_000)
+	_expect_equal(
+		_game_state.call("can_install_cameras"),
+		false,
+		"V1: cash short blocks install"
+	)
+	var poor: Dictionary = _game_state.call("install_cameras")
+	_expect_equal(bool(poor.get("ok", true)), false, "V1: install refused when cash short")
+	_expect_equal(
+		StringName(poor.get("reason", &"")),
+		&"insufficient_cash",
+		"V1: cash-short reason is insufficient_cash"
+	)
+
+	_game_state.call("start_new_game")
+	_expect_equal(_game_state.call("start_settle"), false, "V1: cannot settle from PREP")
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		_game_state.call("can_install_cameras"),
+		false,
+		"V1: SETTLE blocks install"
+	)
+
+	_game_state.call("start_new_game")
+	var cash_before := int(_economy.get("balance_cents"))
+	var att_before := int(_game_state.get("attention_remaining"))
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var installed: Dictionary = _game_state.call("install_cameras")
+	_expect_equal(bool(installed.get("ok", false)), true, "V1: install succeeds when gates met")
+	_expect_equal(shop.has_cameras(), true, "V1: shop owns cameras after install")
+	_expect_equal(shop.has_active_cameras(), true, "V1: owned cameras are active")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 250_000,
+		"V1: install spends camera cash"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 8,
+		"V1: install spends camera Att"
+	)
+	_expect_equal(
+		_game_state.call("can_install_cameras"),
+		false,
+		"V1: already-owned blocks a second buy"
+	)
+	var again: Dictionary = _game_state.call("install_cameras")
+	_expect_equal(bool(again.get("ok", true)), false, "V1: second install refused")
+	_expect_equal(
+		StringName(again.get("reason", &"")),
+		&"already_owned",
+		"V1: second-install reason is already_owned"
+	)
+	var found_install := false
+	for event_value: Variant in _qa_autoload.call("get_events"):
+		var event := event_value as Dictionary
+		if String(event.get("event", "")) != "cameras_installed":
+			continue
+		found_install = true
+		_assert_payload_has_no_truth(event.get("payload", {}), "V1 cameras_installed")
+	_expect_equal(found_install, true, "V1: install is instrumented")
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_camera_theft_shrink_reduction() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var no_cam_mult := float(_demand_signals.call("active_shrink_multiplier"))
+	var no_cam_rate := float(_economy.call("effective_shrink_rate"))
+	_economy.call("_settle_shrink")
+	var no_cam := _last_shrink_applied()
+	_expect_equal(
+		is_equal_approx(no_cam_mult, MarketEventService.THEFT_RING_SHRINK_MULT),
+		true,
+		"V1: without cameras theft shrink is ×3"
+	)
+	_expect_equal(bool(no_cam.get("cameras_active", true)), false, "V1: no-cam payload flags cameras off")
+	_expect_equal(bool(no_cam.get("theft_ring", false)), true, "V1: no-cam payload flags theft")
+	var no_cam_loss := int(no_cam.get("loss_cents", 0))
+	_expect_equal(no_cam_loss > 0, true, "V1: no-cam theft loss is positive")
+
+	_game_state.call("start_new_game")
+	var install: Dictionary = _game_state.call("install_cameras")
+	_expect_equal(bool(install.get("ok", false)), true, "V1: install before theft compare")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var cam_mult := float(_demand_signals.call("active_shrink_multiplier"))
+	var cam_rate := float(_economy.call("effective_shrink_rate"))
+	_expect_equal(
+		is_equal_approx(cam_mult, NORMAL_CONFIG.camera_theft_shrink_mult),
+		true,
+		"V1: with cameras theft shrink uses camera scalar"
+	)
+	_expect_equal(cam_mult < no_cam_mult, true, "V1: camera shrink mult is below no-cam ×3")
+	_expect_equal(cam_rate < no_cam_rate, true, "V1: camera effective rate is below no-cam")
+	_qa_autoload.call("clear")
+	_economy.call("_settle_shrink")
+	var with_cam := _last_shrink_applied()
+	_expect_equal(
+		bool(with_cam.get("cameras_active", false)),
+		true,
+		"V1: camera shrink payload flags cameras_active"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(with_cam.get("shrink_mult", 0.0)),
+			NORMAL_CONFIG.camera_theft_shrink_mult
+		),
+		true,
+		"V1: instrumentation records camera shrink_mult"
+	)
+	var cam_loss := int(with_cam.get("loss_cents", 0))
+	_expect_equal(cam_loss < no_cam_loss, true, "V1: theft shrink loss is lower with cameras")
+	_expect_equal(
+		int(with_cam.get("cogs_cents", 0)),
+		int(no_cam.get("cogs_cents", 0)),
+		"V1: camera compare uses the same inventory COGS"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_camera_o1_unchanged_without_cams() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var unstaffed_rate := float(_economy.call("effective_shrink_rate"))
+	_expect_equal(
+		(_game_state.get("shop") as ShopState).has_cameras(),
+		false,
+		"V1: O1 path starts without cameras"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "V1: staff lever still hires")
+	_expect_equal(shop.has_cashier_on_duty(), true, "V1: hired cashier is on duty")
+	var staffed_rate := float(_economy.call("effective_shrink_rate"))
+	_expect_equal(
+		staffed_rate < unstaffed_rate,
+		true,
+		"V1: without cameras, staff still dampens theft loss rate"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_shrink_multiplier")),
+			MarketEventService.THEFT_RING_SHRINK_MULT
+		),
+		true,
+		"V1: without cameras, theft multiplier stays ×3"
+	)
+
+	_game_state.call("start_new_game")
+	var wait: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(wait != null, true, "V1: wait-out fixture starts without cameras")
+	_demand_signals.call("roll_settle_events")
+	var after_one: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		after_one != null and after_one.remaining_days == 2,
+		true,
+		"V1: wait-out still ticks 3→2 without cameras"
+	)
+	_demand_signals.call("roll_settle_events")
+	_demand_signals.call("roll_settle_events")
+	_demand_signals.call("apply_event_save", {})
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		false,
+		"V1: wait-out / clear still ends the ring without cameras"
+	)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Rumor"), true, "V1: rumor still works without cameras")
+	_expect_equal(
+		banner.to_lower().contains("staff") or banner.to_lower().contains("wait"),
+		true,
+		"V1: rumor still names staff / wait-out without cameras"
+	)
+	_expect_equal(banner.to_lower().contains("camera"), false, "V1: rumor does not require cameras")
+	_assert_text_has_no_truth(banner, "V1 theft rumor without cameras")
+
+
+func _test_camera_hud_confirm_and_section_45() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "V1: HUD loads for camera confirm")
+	if hud == null:
+		return
+	var open_button := hud.get_node_or_null("%OpenCamerasButton") as Button
+	_expect_equal(open_button != null, true, "V1: Cameras button exists")
+	_expect_equal(
+		open_button != null
+		and open_button.text.contains("$2,500.00")
+		and open_button.text.contains("Att 8"),
+		true,
+		"V1: Cameras button shows cash and Att"
+	)
+	_expect_equal(
+		open_button != null and open_button.custom_minimum_size.y >= 40.0,
+		true,
+		"V1: Cameras hit target height"
+	)
+	_expect_equal(
+		open_button != null and not open_button.disabled,
+		true,
+		"V1: Cameras button enabled when gates met"
+	)
+	open_button.pressed.emit()
+	var confirm := hud.get_node_or_null("%CameraConfirm") as PanelContainer
+	var body := hud.get_node_or_null("%CameraConfirmBody") as Label
+	var confirm_button := hud.get_node_or_null("%CameraConfirmButton") as Button
+	_expect_equal(
+		confirm != null and confirm.visible,
+		true,
+		"V1: buy/install confirm opens"
+	)
+	_expect_equal(body != null, true, "V1: confirm body exists")
+	_assert_text_has_no_truth(
+		body.text if body != null else "",
+		"V1 camera confirm body"
+	)
+	_assert_text_has_no_truth(
+		open_button.text if open_button != null else "",
+		"V1 camera button"
+	)
+	_assert_text_has_no_truth(
+		confirm_button.text if confirm_button != null else "",
+		"V1 camera confirm button"
+	)
+	_expect_equal(
+		body != null and body.text.contains("theft"),
+		true,
+		"V1: confirm names the theft tradeoff"
+	)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+	_expect_equal(
+		banner_label != null
+		and banner_label.visible
+		and banner_label.text.contains("Rumor"),
+		true,
+		"V1: EventBanner rumor still shows without cameras"
+	)
+	_assert_text_has_no_truth(
+		banner_label.text if banner_label != null else "",
+		"V1 HUD theft banner with camera button"
+	)
+	confirm_button.pressed.emit()
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.has_cameras(), true, "V1: HUD confirm installs cameras")
+	_expect_equal(
+		open_button.text.contains("Cameras on"),
+		true,
+		"V1: HUD shows cameras-on after install"
+	)
+	_expect_equal(open_button.disabled, true, "V1: cameras button disables once owned")
+	_expect_equal(
+		confirm == null or not confirm.visible,
+		true,
+		"V1: confirm closes after install"
+	)
+	hud.queue_free()
+
+
+func _test_camera_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var installed: Dictionary = _game_state.call("install_cameras")
+	_expect_equal(bool(installed.get("ok", false)), true, "V1 save: install first")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "V1 camera save")
+	var shop_row: Dictionary = saved.get("shop", {})
+	_expect_equal(bool(shop_row.get("cameras_owned", false)), true, "V1 save writes cameras_owned")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		(_game_state.get("shop") as ShopState).has_cameras(),
+		false,
+		"V1: new game clears cameras"
+	)
+	_expect_equal(_game_state.call("restore_save", saved), true, "V1: restore accepts camera save")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.has_cameras(), true, "V1: restore re-owns cameras")
+	_expect_equal(shop.has_active_cameras(), true, "V1: restored cameras stay active")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_shrink_multiplier")),
+			NORMAL_CONFIG.camera_theft_shrink_mult
+		),
+		true,
+		"V1: restored cameras still cut theft shrink"
+	)
+
+
+func _test_camera_soft_catalog_untouched() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"V1: Soft _ensure_priceable_sku stays parked"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://scripts/ui/hud.gd").contains("_ensure_priceable_sku"),
+		false,
+		"V1: HUD does not call parked Soft helper"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("camera unlock"),
+		false,
+		"V1: cameras stay out of the event catalog"
+	)
 
 
 func _test_recession_week_event() -> void:

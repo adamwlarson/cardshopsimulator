@@ -116,6 +116,13 @@ enum Difficulty {
 @export var liquidity_king_cash_cents: int = 10_000_000
 ## 30-day months for Liquidity king month-end. Shared across difficulties.
 @export var month_length_days: int = 30
+## V1 cameras: cash gate. $2,500 is a real capital bite vs start $8k,
+## cheaper than Medium Sign ($15k). Easy/Hard inherit unless overridden.
+@export var camera_cash_cents: int = 250_000
+## Thin Attention install — between Inspect (5) and Rearrange (10).
+@export var camera_attention: int = 8
+## Theft-ring shrink multiplier while cameras are owned/active (vs ×3).
+@export var camera_theft_shrink_mult: float = 1.5
 
 
 func is_rent_due_day(day: int) -> bool:

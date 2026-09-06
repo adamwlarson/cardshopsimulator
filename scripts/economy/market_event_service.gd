@@ -12,8 +12,9 @@ const COUNTERFEIT_SHADY_WIDTH_MULT := 1.35
 const CONVENTION_TRAFFIC_MULT := 2.0
 const CONVENTION_WHALE_WEIGHT_MULT := 2.5
 const CONVENTION_CALENDAR_WEIGHT_MULT := 2.5
-## systems §8 Theft ring: Shrink ×3 for 3 days. Cameras (unlock) are out of pack —
-## staff coverage on the floor dampens loss; otherwise wait out the window.
+## systems §8 Theft ring: Shrink ×3 for 3 days. Staff coverage on the floor
+## dampens the base loss rate; wait out still ends the window. Security cameras
+## (shop unlock) reduce the theft multiplier while owned/active.
 const THEFT_RING_SHRINK_MULT := 3.0
 ## systems §8 Recession week: all demand ↓, buylist sellers ↑. One week only —
 ## multi-week depression arc is out. Loan-shark stays bankruptcy-only.

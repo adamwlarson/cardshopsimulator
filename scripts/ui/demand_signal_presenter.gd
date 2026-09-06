@@ -111,6 +111,14 @@ static func rearrange_action_label(attention_cost: int) -> String:
 	return "Rearrange · Att %d" % attention_cost
 
 
+static func cameras_action_label(cash_cents: int, attention_cost: int) -> String:
+	return "Cameras · %s · Att %d" % [format_cents(cash_cents), attention_cost]
+
+
+static func cameras_owned_label() -> String:
+	return "Cameras on"
+
+
 static func event_banner(text: String) -> String:
 	return text.strip_edges()
 

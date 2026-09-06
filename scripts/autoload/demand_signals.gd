@@ -202,6 +202,8 @@ func effective_demand_band(sku_id: StringName) -> StringName:
 func active_shrink_multiplier() -> float:
 	if not has_theft_ring():
 		return 1.0
+	if GameState.shop.has_active_cameras():
+		return GameState.shop.camera_theft_shrink_mult()
 	return MarketEventService.THEFT_RING_SHRINK_MULT
 
 
@@ -1104,6 +1106,7 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		),
 		"shrink_mult": active_shrink_multiplier(),
 		"theft_ring": has_theft_ring(),
+		"cameras_active": GameState.shop.has_active_cameras(),
 		"demand_mult": active_event_demand_mult(),
 		"sell_through_mult": active_event_sell_through_mult(),
 		"buylist_mult": active_event_buylist_mult(),

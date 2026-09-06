@@ -78,3 +78,6 @@ ironman_destitution_default = false
 survive_y1_rep_floor = 40
 flagship_cash_cents = 5000000
 liquidity_king_cash_cents = 10000000
+camera_cash_cents = 250000
+camera_attention = 8
+camera_theft_shrink_mult = 1.5

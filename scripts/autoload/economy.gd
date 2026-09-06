@@ -128,6 +128,7 @@ func _settle_shrink() -> void:
 		"staff_on_floor": GameState.shop.has_cashier_on_duty(),
 		"theft_ring": DemandSignals.has_theft_ring(),
 		"theft_bias": _on_duty_theft_bias(),
+		"cameras_active": GameState.shop.has_active_cameras(),
 	})
 
 

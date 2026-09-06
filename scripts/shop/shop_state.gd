@@ -38,6 +38,7 @@ var large_lease_signed_day: int = -1
 var specialist_on_duty: bool = false
 var last_noshow_count: int = 0
 var last_shrink_rate: float = 0.0
+var cameras_owned: bool = false
 var layout := ShopLayout.new()
 var floor_grid: ShopGrid = ShopGrid.small_default()
 var _config: BalanceConfig
@@ -55,6 +56,7 @@ func reset(config: BalanceConfig) -> void:
 	specialist_on_duty = false
 	last_noshow_count = 0
 	last_shrink_rate = 0.0
+	cameras_owned = false
 	_attendance_rng.seed = STAFF_ATTENDANCE_SEED
 	layout.reset_small()
 	floor_grid = ShopGrid.small_default()
@@ -273,6 +275,40 @@ func research_cash_cost_cents() -> int:
 	return 5_000
 
 
+func has_cameras() -> bool:
+	return cameras_owned
+
+
+func has_active_cameras() -> bool:
+	return cameras_owned
+
+
+func camera_cash_cost_cents() -> int:
+	if _config != null:
+		return maxi(0, _config.camera_cash_cents)
+	return 250_000
+
+
+func camera_attention_cost() -> int:
+	if _config != null:
+		return maxi(1, _config.camera_attention)
+	return 8
+
+
+func camera_theft_shrink_mult() -> float:
+	if _config != null:
+		return maxf(0.01, _config.camera_theft_shrink_mult)
+	return 1.5
+
+
+func install_cameras() -> bool:
+	if cameras_owned:
+		return false
+	cameras_owned = true
+	_emit_cameras_changed()
+	return true
+
+
 func hire_cashier(cheap: bool) -> StaffMember:
 	if not can_hire():
 		return null
@@ -405,6 +441,7 @@ func to_save() -> Dictionary:
 		"medium_lease_signed_day": medium_lease_signed_day,
 		"large_lease_signed_day": large_lease_signed_day,
 		"specialist_on_duty": specialist_on_duty,
+		"cameras_owned": cameras_owned,
 		"layout": layout.to_save(),
 		"staff": staff_rows,
 	}
@@ -424,6 +461,7 @@ func apply_save(data: Dictionary, config: BalanceConfig) -> void:
 	medium_lease_signed_day = int(data.get("medium_lease_signed_day", -1))
 	large_lease_signed_day = int(data.get("large_lease_signed_day", -1))
 	specialist_on_duty = bool(data.get("specialist_on_duty", false))
+	cameras_owned = bool(data.get("cameras_owned", false))
 	var layout_data: Variant = data.get("layout", {})
 	if layout_data is Dictionary:
 		layout.apply_save(layout_data as Dictionary)
@@ -437,6 +475,7 @@ func apply_save(data: Dictionary, config: BalanceConfig) -> void:
 		if row is Dictionary:
 			staff.append(StaffMember.from_save(row as Dictionary))
 	_emit_staff_changed()
+	_emit_cameras_changed()
 
 
 func weekly_rent_cents(day: int) -> int:
@@ -472,12 +511,20 @@ func take_due_wages() -> Array[Dictionary]:
 
 
 func _emit_staff_changed() -> void:
+	_emit_bus_signal("staff_changed")
+
+
+func _emit_cameras_changed() -> void:
+	_emit_bus_signal("cameras_changed")
+
+
+func _emit_bus_signal(signal_name: String) -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return
 	var bus := tree.root.get_node_or_null("EventBus")
 	if bus != null:
-		bus.emit_signal("staff_changed")
+		bus.emit_signal(signal_name)
 
 
 func _make_cashier(cheap: bool) -> StaffMember:
