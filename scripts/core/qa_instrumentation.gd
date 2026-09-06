@@ -162,6 +162,10 @@ func record_online_cancel_rep_hit(payload: Dictionary) -> void:
 	_emit(&"online_cancel_rep_hit", payload)
 
 
+func record_campaign_won(payload: Dictionary) -> void:
+	_emit(&"campaign_won", payload.duplicate(true))
+
+
 func record_save_pre_write(serialized_save: PackedByteArray) -> void:
 	if is_enabled():
 		_emit(&"save_hash_pre_write", {"hash": _sha256(serialized_save)})

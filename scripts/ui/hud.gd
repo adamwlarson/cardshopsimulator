@@ -94,6 +94,10 @@ extends Control
 @onready var online_move_chip: Label = get_node_or_null("%OnlineMoveChip") as Label
 @onready var online_price_input: LineEdit = get_node_or_null("%OnlinePriceInput") as LineEdit
 @onready var online_confirm_button: Button = get_node_or_null("%OnlineConfirmButton") as Button
+@onready var campaign_win_panel: PanelContainer = get_node_or_null("%CampaignWin") as PanelContainer
+@onready var campaign_win_title: Label = get_node_or_null("%CampaignWinTitle") as Label
+@onready var campaign_win_body: Label = get_node_or_null("%CampaignWinBody") as Label
+@onready var campaign_win_menu_button: Button = get_node_or_null("%CampaignWinMenuButton") as Button
 
 var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
@@ -135,7 +139,10 @@ func _ready() -> void:
 	EventBus.staff_changed.connect(_on_staff_changed)
 	EventBus.market_event_changed.connect(_on_market_event_changed)
 	EventBus.reputation_changed.connect(_on_reputation_changed)
+	EventBus.campaign_won.connect(_on_campaign_won)
 	phase_button.pressed.connect(_on_phase_pressed)
+	if campaign_win_menu_button != null:
+		campaign_win_menu_button.pressed.connect(_on_campaign_win_menu)
 	%OpenBuyButton.pressed.connect(_open_buy_list)
 	%BuyListCancelButton.pressed.connect(_close_buy)
 	%BuyCancelButton.pressed.connect(_close_buy)
@@ -212,7 +219,7 @@ func _ready() -> void:
 
 
 func _bind_seeded_status() -> void:
-	if not GameState.is_game_active:
+	if not GameState.is_game_active and not GameState.campaign_complete:
 		GameState.start_new_game()
 	_update_cash(Economy.balance_cents)
 	_update_day(GameState.current_day)
@@ -220,6 +227,7 @@ func _bind_seeded_status() -> void:
 	_update_attention(GameState.attention_remaining)
 	_sync_rotation_watch()
 	_sync_event_banner()
+	_sync_campaign_win()
 	_maybe_open_event_price_editor()
 
 
@@ -250,6 +258,7 @@ func _update_phase(phase: int) -> void:
 			phase_chip.theme_type_variation = &"PhaseChipSettle"
 			phase_label.theme_type_variation = &"ChipLabel"
 			phase_button.text = "Next day"
+	phase_button.disabled = not GameState.is_game_active
 	_close_buy()
 	_close_price()
 	_close_online()
@@ -839,7 +848,7 @@ func _on_rent_decision_resolved(
 		return
 	rent_panel.hide()
 	_rent_beat_id = &""
-	phase_button.disabled = false
+	phase_button.disabled = not GameState.is_game_active
 	_sync_modal_veil()
 	if outcome == &"dismissed":
 		beat_toast.text = "Rent still due at SETTLE"
@@ -968,7 +977,7 @@ func _on_beat_decision_resolved(
 	_beat_decision_id = &""
 	_beat_confirms = {}
 	_pending_confirm_choice = &""
-	phase_button.disabled = false
+	phase_button.disabled = not GameState.is_game_active
 	_sync_modal_veil()
 	match outcome:
 		&"drive_out":
@@ -1715,4 +1724,43 @@ func _sync_modal_veil() -> void:
 		or (staff_panel != null and staff_panel.visible)
 		or (online_list_panel != null and online_list_panel.visible)
 		or (online_confirm_panel != null and online_confirm_panel.visible)
+		or (campaign_win_panel != null and campaign_win_panel.visible)
 	)
+
+
+func _on_campaign_won(payload: Dictionary) -> void:
+	_show_campaign_win(payload)
+
+
+func _sync_campaign_win() -> void:
+	if GameState.campaign_complete:
+		_show_campaign_win(GameState.campaign_win_payload())
+	elif campaign_win_panel != null:
+		campaign_win_panel.hide()
+		_sync_modal_veil()
+
+
+func _show_campaign_win(payload: Dictionary) -> void:
+	if campaign_win_panel == null:
+		return
+	if campaign_win_title != null:
+		campaign_win_title.text = "Flagship"
+	if campaign_win_body != null:
+		campaign_win_body.text = (
+			"You own a Large shop.\nReputation %d. Cash %s.\nCampaign complete."
+			% [
+				int(payload.get("reputation", GameState.current_reputation)),
+				DemandSignalPresenter.format_cents(
+					int(payload.get("cash_cents", Economy.balance_cents))
+				),
+			]
+		)
+	campaign_win_panel.show()
+	phase_button.disabled = true
+	_sync_prep_action_buttons()
+	_sync_modal_veil()
+
+
+func _on_campaign_win_menu() -> void:
+	GameState.return_to_menu()
+	get_tree().change_scene_to_file("res://scenes/boot/boot.tscn")

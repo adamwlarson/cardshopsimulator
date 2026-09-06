@@ -26,6 +26,7 @@ var _captured_buy_focus_id: StringName = &""
 var _captured_buy_focus_beat: StringName = &""
 var _captured_showcase_decision: Dictionary = {}
 var _captured_showcase_failed: String = ""
+var _captured_campaign_won: Dictionary = {}
 var _event_bus: Node
 var _game_state: Node
 var _economy: Node
@@ -91,6 +92,7 @@ func _initialize() -> void:
 	_event_bus.connect("buy_focus_requested", _capture_buy_focus)
 	_event_bus.connect("showcase_choice_requested", _capture_showcase_decision)
 	_event_bus.connect("showcase_choice_failed", _capture_showcase_failed)
+	_event_bus.connect("campaign_won", _capture_campaign_won)
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
 	_test_inventory_mutations_and_capacity()
@@ -173,6 +175,7 @@ func _initialize() -> void:
 	_test_i1_list_confirm_has_no_truth()
 	_test_i1_soft_ensure_priceable_sku_parked()
 	_test_j1_research_specialist_skill_deepen()
+	_test_flagship_win_award()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1310,6 +1313,27 @@ func _test_difficulty_balance_ordering() -> void:
 		),
 		true,
 		"Large spawn wait is 12s / 1.25"
+	)
+	_expect_equal(NORMAL_CONFIG.flagship_cash_cents, 5_000_000, "normal Flagship cash $50k")
+	_expect_equal(EASY_CONFIG.flagship_cash_cents, 4_000_000, "easy Flagship cash $40k")
+	_expect_equal(HARD_CONFIG.flagship_cash_cents, 6_500_000, "hard Flagship cash $65k")
+	_expect_equal(NORMAL_CONFIG.flagship_rep, 80, "normal Flagship Rep 80")
+	_expect_equal(EASY_CONFIG.flagship_rep, 80, "easy Flagship Rep inherits 80")
+	_expect_equal(HARD_CONFIG.flagship_rep, 80, "hard Flagship Rep inherits 80")
+	_expect_equal(
+		NORMAL_CONFIG.meets_flagship(ShopState.Tier.LARGE, 80, 5_000_000),
+		true,
+		"normal Flagship predicate at exact cash/Rep"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.meets_flagship(ShopState.Tier.LARGE, 80, 4_999_999),
+		false,
+		"normal Flagship misses one cent under"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.meets_flagship(ShopState.Tier.MEDIUM, 80, 5_000_000),
+		false,
+		"normal Flagship requires Large"
 	)
 
 
@@ -6946,6 +6970,23 @@ func _force_medium_shop(signed_day: int) -> ShopState:
 	return shop
 
 
+func _force_large_shop(signed_day: int) -> ShopState:
+	var shop := _force_medium_shop(signed_day)
+	_economy.set("balance_cents", 4_000_000)
+	_game_state.set("current_reputation", 70)
+	_expect_equal(
+		shop.expand_to_large(signed_day, 4_000_000, 70),
+		true,
+		"force Large shop for Flagship tests"
+	)
+	_inventory_service.call(
+		"apply_medium_capacity",
+		shop.case_slot_bonus(),
+		shop.backstock_bonus()
+	)
+	return shop
+
+
 func _test_shady_trunk_beat() -> void:
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
@@ -10129,6 +10170,10 @@ func _capture_beat_decision(payload: Dictionary) -> void:
 	_captured_beat_decision = payload
 
 
+func _capture_campaign_won(payload: Dictionary) -> void:
+	_captured_campaign_won = payload
+
+
 func _capture_buy_focus(
 	opportunity_id: StringName,
 	beat_id: StringName,
@@ -10919,6 +10964,497 @@ func _test_j1_research_specialist_skill_deepen() -> void:
 			"J1: %s does not call parked Soft helper" % path
 		)
 	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_flagship_win_award() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.set("campaign_mode", 0)
+	_game_state.call("start_new_game")
+	_captured_campaign_won = {}
+
+	var shop := _force_large_shop(40)
+	_expect_equal(shop.tier, ShopState.Tier.LARGE, "R1: L1 Sign still reaches Large")
+	_expect_equal(
+		shop.can_sign_large_lease(4_000_000, 70),
+		false,
+		"R1: already-Large cannot Sign again"
+	)
+	_economy.set("balance_cents", 4_000_000)
+	_game_state.set("current_reputation", 70)
+	_expect_equal(
+		_game_state.call("meets_flagship"),
+		false,
+		"R1: L1-only Large+Rep70+$40k is not Flagship"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"R1: L1-only state does not award"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		true,
+		"R1: L1-only leaves the campaign active"
+	)
+	_expect_equal(
+		_captured_campaign_won.is_empty(),
+		true,
+		"R1: L1-only does not emit campaign_won"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_medium_shop(18)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_expect_equal(
+		_game_state.call("meets_flagship"),
+		false,
+		"R1: Medium+$50k+Rep80 is not Flagship"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"R1: Medium does not award Flagship"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		true,
+		"R1: Medium miss stays active"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 4_999_999)
+	_game_state.set("current_reputation", 80)
+	_expect_equal(
+		_game_state.call("meets_flagship"),
+		false,
+		"R1: one cent under Flagship cash fails"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"R1: cash-under does not award"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 79)
+	_expect_equal(
+		_game_state.call("meets_flagship"),
+		false,
+		"R1: Rep 79 fails Flagship"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"R1: Rep 79 does not award"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		true,
+		"R1: Rep 79 stays active"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_medium_shop(18)
+	_economy.set("balance_cents", 4_000_000)
+	_game_state.set("current_reputation", 70)
+	_expect_equal(
+		shop.can_sign_large_lease(4_000_000, 70),
+		true,
+		"R1: L1 Sign gates still pass at $40k+Rep70"
+	)
+	_expect_equal(
+		shop.expand_to_large(40, 4_000_000, 70),
+		true,
+		"R1: L1 Sign still upgrades at exact gates"
+	)
+	_expect_equal(shop.tier, ShopState.Tier.LARGE, "R1: Sign still sets Large")
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"R1: Sign at L1 gates does not award Flagship"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		true,
+		"R1: post-Sign L1 state stays active"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("meets_flagship"),
+		true,
+		"R1: exact Large+Rep80+$50k meets Flagship"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"R1: exact predicate awards Flagship"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"R1: award marks campaign complete"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		false,
+		"R1: award ends the active campaign"
+	)
+	_expect_equal(
+		String(_game_state.get("last_prestige")),
+		"flagship",
+		"R1: last prestige is flagship"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"flagship",
+		"R1: campaign_won mode is flagship"
+	)
+	_expect_equal(
+		int(_captured_campaign_won.get("cash_cents", 0)),
+		5_000_000,
+		"R1: campaign_won cash is exact threshold"
+	)
+	_expect_equal(
+		int(_captured_campaign_won.get("reputation", 0)),
+		80,
+		"R1: campaign_won Rep is 80"
+	)
+	_expect_equal(
+		int(_captured_campaign_won.get("shop_tier", -1)),
+		int(ShopState.Tier.LARGE),
+		"R1: campaign_won shop tier is Large"
+	)
+	_assert_payload_has_no_truth(_captured_campaign_won, "R1: campaign_won payload")
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"R1: second evaluate does not re-award"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_campaign_won = {}
+	_expect_equal(_game_state.call("start_floor"), true, "R1: FLOOR opens before settle award")
+	_expect_equal(
+		_game_state.call("start_settle"),
+		true,
+		"R1: SETTLE runs the Flagship check"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"R1: SETTLE awards Flagship at exact predicate"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		false,
+		"R1: SETTLE award deactivates the campaign"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"flagship",
+		"R1: SETTLE emits campaign_won"
+	)
+	_expect_equal(
+		_game_state.call("advance_day"),
+		false,
+		"R1: awarded campaign cannot advance the day"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 4_999_999)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_campaign_won = {}
+	_expect_equal(_game_state.call("start_floor"), true, "R1: FLOOR opens for cash-under settle")
+	_expect_equal(_game_state.call("start_settle"), true, "R1: SETTLE runs cash-under")
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		false,
+		"R1: SETTLE cash-under does not award"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		true,
+		"R1: SETTLE cash-under stays active"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 4_999_999)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_economy.call("record_income", 1, &"sale", "Flagship cent"),
+		true,
+		"R1: income can cross Flagship cash"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"R1: cash_changed awards Flagship"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"flagship",
+		"R1: cash_changed emits campaign_won"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 79)
+	_captured_campaign_won = {}
+	_game_state.call("adjust_reputation", 1)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		80,
+		"R1: Rep bump reaches Flagship floor"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"R1: reputation bump awards Flagship"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_medium_shop(18)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_captured_campaign_won = {}
+	_expect_equal(
+		shop.expand_to_large(40, 5_000_000, 80),
+		true,
+		"R1: Sign Large while already over Flagship gates"
+	)
+	_event_bus.emit_signal("shop_layout_changed")
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"R1: layout change after over-gate Sign awards Flagship"
+	)
+
+	_game_state.call("set_balance_config", EASY_CONFIG)
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 3_999_999)
+	_game_state.set("current_reputation", 80)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"R1: Easy cash-under does not award"
+	)
+	_economy.set("balance_cents", 4_000_000)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"R1: Easy awards at $40k Flagship cash"
+	)
+
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 6_499_999)
+	_game_state.set("current_reputation", 80)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"R1: Hard cash-under does not award"
+	)
+	_economy.set("balance_cents", 6_500_000)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"R1: Hard awards at $65k Flagship cash"
+	)
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("campaign_mode", 3)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"R1: Sandbox does not award Flagship"
+	)
+	_game_state.set("campaign_mode", 0)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"R1: Flagship mode awards after leaving Sandbox"
+	)
+
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "R1: Flagship save payload")
+	_expect_equal(bool(saved.get("campaign_complete", false)), true, "R1: save stores complete")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		false,
+		"R1: new game clears complete"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"R1: restore Flagship save"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"R1: restore keeps campaign complete"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		false,
+		"R1: restore of a won campaign stays inactive"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_captured_campaign_won = {}
+	_expect_equal(_game_state.call("evaluate_campaign_win"), true, "R1: award before HUD bind")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "R1: HUD instantiates after Flagship award")
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"R1: HUD bind does not reset a completed campaign"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		false,
+		"R1: HUD bind keeps awarded campaign inactive"
+	)
+	if hud != null:
+		var win_panel := hud.get_node_or_null("%CampaignWin") as PanelContainer
+		var win_title := hud.get_node_or_null("%CampaignWinTitle") as Label
+		var win_body := hud.get_node_or_null("%CampaignWinBody") as Label
+		_expect_equal(
+			win_panel != null and win_panel.visible,
+			true,
+			"R1: HUD shows Flagship win panel"
+		)
+		_expect_equal(
+			win_title != null and win_title.text == "Flagship",
+			true,
+			"R1: HUD win title is Flagship"
+		)
+		_expect_equal(
+			win_body != null and win_body.text.contains("Large")
+			and win_body.text.contains("80")
+			and win_body.text.contains("$50,000.00"),
+			true,
+			"R1: HUD win body uses player-visible cash/Rep"
+		)
+		_assert_text_has_no_truth(
+			win_title.text if win_title != null else "",
+			"R1: HUD win title"
+		)
+		_assert_text_has_no_truth(
+			win_body.text if win_body != null else "",
+			"R1: HUD win body"
+		)
+		var phase_button := hud.get_node_or_null("%PhaseButton") as Button
+		_expect_equal(
+			phase_button != null and phase_button.disabled,
+			true,
+			"R1: HUD phase button disables after Flagship"
+		)
+		root.remove_child(hud)
+		hud.free()
+
+	var menu_packed: PackedScene = load("res://scenes/ui/main_menu.tscn") as PackedScene
+	_expect_equal(menu_packed != null, true, "R1: main menu scene loads")
+	if menu_packed != null:
+		var menu: Node = menu_packed.instantiate()
+		root.add_child(menu)
+		if not menu.is_node_ready():
+			menu.notification(Node.NOTIFICATION_READY)
+		var campaign_label := menu.get_node_or_null("%CampaignLabel") as Label
+		var prestige_label := menu.get_node_or_null("%PrestigeLabel") as Label
+		_expect_equal(
+			campaign_label != null and campaign_label.text.contains("Flagship"),
+			true,
+			"R1: main menu binds Flagship campaign"
+		)
+		_expect_equal(
+			prestige_label != null and prestige_label.visible
+			and prestige_label.text.contains("Flagship"),
+			true,
+			"R1: main menu shows last Flagship prestige"
+		)
+		_assert_text_has_no_truth(
+			campaign_label.text if campaign_label != null else "",
+			"R1: main menu campaign label"
+		)
+		_assert_text_has_no_truth(
+			prestige_label.text if prestige_label != null else "",
+			"R1: main menu prestige label"
+		)
+		root.remove_child(menu)
+		menu.free()
+
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	var menu_src := FileAccess.get_file_as_string("res://scripts/ui/main_menu.gd")
+	_expect_equal(
+		hud_src.contains("true_market")
+		or hud_src.contains("p_buy")
+		or hud_src.contains("cert_valid"),
+		false,
+		"R1: HUD script stays §4.5 clean"
+	)
+	_expect_equal(
+		menu_src.contains("true_market")
+		or menu_src.contains("p_buy")
+		or menu_src.contains("cert_valid"),
+		false,
+		"R1: main menu script stays §4.5 clean"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"R1: Soft _ensure_priceable_sku stays parked"
+	)
+	for path: String in [
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/core/balance_config.gd",
+		"res://scripts/autoload/event_bus.gd",
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/main_menu.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("_ensure_priceable_sku"),
+			false,
+			"R1: %s does not call parked Soft helper" % path
+		)
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.set("campaign_mode", 0)
 	_game_state.call("start_new_game")
 
 
