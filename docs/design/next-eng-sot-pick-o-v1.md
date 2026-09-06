@@ -1,6 +1,6 @@
 # Next Eng SoT Pick O v1 — post N1
 
-**Status:** Adopted **O1 GO** (Theft ring) — Eng spike launching. Park O2 Recession / O3 Soft hygiene / O4 Flagship STOP. Softs parked (Fri spill Soft OK MVP stands).
+**Status:** **O1 SHIPPED** — PR #44 merged @ `3074c9d6ec4af81b6e299b3047d3628d0904bfbe` (tip `87f78d15`). Soft EventBanner-only rumor Soft OK MVP. Park O2/O3/O4. Softs parked. Awaiting next Eng SoT pick (P).
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §8 / §9, pick-n (N1 shipped #43)  
