@@ -1,6 +1,6 @@
 # Next Eng SoT Pick G v1 — post F1
 
-**Status:** Adopted — **G1 GO** (2026-09-06); park G2; G3 STOP not chosen  
+**Status:** Adopted **G1 GO** — synced main @ `c9cc3b4b`; Eng spike launching. Park G2/G3. Soft seeds parked.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §2.2 / §4.5 / §3 (online), ui-wireflows Inspect★, pick-f (F1 shipped #34)  
@@ -81,8 +81,15 @@ No new systems spike. QA runs required+optional §10 arc on Normal; Eng only S2+
 
 ## PM checklist
 
-- [x] Choose **G1** (park G2/G3)
-- [x] If G1: Eng vs systems §2.2 + existing Inspect★ (no new screen)
-- [x] Sync this file to main before cloud agent
+- [x] Choose **G1** (park G2/G3) — PM 2026-09-06 @ `c9cc3b4b`
+- [x] If G1: Eng vs systems §2.2 + existing Inspect★ (no new screen) — Eng spike launching
+- [x] Sync this file to main before cloud agent @ `c9cc3b4b`
 - [x] Soft seeds stay parked
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **G1 GO** (park G2/G3). Synced main @ `c9cc3b4b`. Eng graded-authenticity / fake-slab spike launching. Soft seeds parked. |
