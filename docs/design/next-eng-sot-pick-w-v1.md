@@ -1,6 +1,6 @@
 # Next Eng SoT Pick W v1 — post V1
 
-**Status:** Adopted **W1 GO** (Loan shark / soft-fail polish) — Eng spike CLEAR TO KICK. Park W2 Soft far crest Art / W4 idle. **W3 Camera stub-swap dual-track already in flight** (Art #52 @ 481c1c16 + Eng bc-553287fc) — not Eng SoT this pick. Soft catalog stays closed.
+**Status:** **W1 SHIPPED** — Loan shark soft-fail PR #54 @ f692e59a; QA PASS-with-notes; Soft Easy scalars Soft OK MVP; Soft catalog CLOSED; Camera stub-swap #53 shipped parallel.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §9.3, pick-v (V1 Camera unlock shipped #51)  
