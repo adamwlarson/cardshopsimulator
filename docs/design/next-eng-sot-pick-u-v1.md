@@ -1,6 +1,6 @@
 # Next Eng SoT Pick U v1 — post T1
 
-**Status:** Adopted **U1 GO** (Soft hygiene closeout) — Design Soft disposition table CLEAR TO KICK → Eng ACK → QA spot-check. Park U2 cameras / U3 far crest / U4 idle. No new economy verbs.
+**Status:** **U1 SHIPPED** — Soft hygiene closeout #50 @ eb5e1a5a; Soft catalog Won’t-Fix/Art later; Soft no mode-picker CLOSED.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** pick-t (T1 shipped #49; Soft no mode-picker CLOSED)  
