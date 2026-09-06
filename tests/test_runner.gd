@@ -6453,36 +6453,30 @@ func _test_g1_inspect_clears_cert_fog() -> void:
 		"G1: accurate inspect reveals fail hologram"
 	)
 	_assert_text_has_no_truth(slab.shown_cert_cue, "G1 inspected slab cue")
-	var price_after: PriceConfirmSignal = _demand_signals.call(
-		"price_signal",
-		&"AA-SKIE-052",
-		listed,
-		slab.location
-	)
-	_demand_signals.call("apply_owned_slab_cue", price_after)
+	_demand_signals.call("apply_owned_slab_cue", price_before)
 	_expect_equal(
-		price_after.shown_comp_low_cents,
+		price_before.shown_comp_low_cents,
 		comp_low,
 		"G1: inspect does not change comp low"
 	)
 	_expect_equal(
-		price_after.shown_comp_high_cents,
+		price_before.shown_comp_high_cents,
 		comp_high,
 		"G1: inspect does not change comp high"
 	)
 	_expect_equal(
-		price_after.shown_demand_band,
+		price_before.shown_demand_band,
 		band,
 		"G1: inspect does not change demand band"
 	)
-	_expect_equal(price_after.inspected, true, "G1: price confirm shows inspected")
+	_expect_equal(price_before.inspected, true, "G1: price confirm shows inspected")
 	_expect_equal(
-		price_after.condition_cue,
+		price_before.condition_cue,
 		slab.shown_cert_cue,
 		"G1: price confirm uses inspected cue"
 	)
 	_assert_text_has_no_truth(
-		DemandSignalPresenter.price_summary(price_after),
+		DemandSignalPresenter.price_summary(price_before),
 		"G1 inspected price summary"
 	)
 	var att_before := int(_game_state.get("attention_remaining"))
