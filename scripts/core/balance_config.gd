@@ -108,10 +108,14 @@ enum Difficulty {
 @export var ironman_destitution_default: bool = false
 
 @export var survive_y1_rep_floor: int = 40
+## systems §9.2 Survive Year 1 day gate. Same day on Easy/Normal/Hard.
+@export var survive_y1_day: int = 365
 @export var flagship_cash_cents: int = 5_000_000
 ## systems §9.2 Flagship Rep floor. Cash is the difficulty scalar.
 @export var flagship_rep: int = 80
 @export var liquidity_king_cash_cents: int = 10_000_000
+## 30-day months for Liquidity king month-end. Shared across difficulties.
+@export var month_length_days: int = 30
 
 
 func is_rent_due_day(day: int) -> bool:
@@ -144,3 +148,19 @@ func meets_flagship(shop_tier: int, reputation: int, cash_cents: int) -> bool:
 		and reputation >= flagship_rep
 		and cash_cents >= flagship_cash_cents
 	)
+
+
+func meets_survive_y1(day: int, reputation: int, cash_cents: int) -> bool:
+	return (
+		day >= survive_y1_day
+		and cash_cents > 0
+		and reputation >= survive_y1_rep_floor
+	)
+
+
+func is_month_end_day(day: int) -> bool:
+	return day > 0 and month_length_days > 0 and day % month_length_days == 0
+
+
+func meets_liquidity_king(day: int, cash_cents: int) -> bool:
+	return is_month_end_day(day) and cash_cents >= liquidity_king_cash_cents

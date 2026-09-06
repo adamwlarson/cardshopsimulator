@@ -3,6 +3,8 @@ extends Node
 const FIRST_DAY := 1
 const NORMAL_BALANCE_CONFIG: BalanceConfig = preload("res://data/balance/normal.tres")
 const FLAGSHIP_MODE := &"flagship"
+const SURVIVE_Y1_MODE := &"survive_y1"
+const LIQUIDITY_KING_MODE := &"liquidity_king"
 
 enum DayPhase {
 	PREP,
@@ -114,6 +116,8 @@ func advance_day() -> bool:
 	EventBus.day_started.emit(current_day)
 	EventBus.attention_changed.emit(attention_remaining)
 	EventBus.day_phase_changed.emit(current_phase)
+	# Survive Y1 can first become true on the day-365 PREP landing.
+	evaluate_campaign_win()
 	return true
 
 
@@ -237,12 +241,56 @@ func meets_flagship() -> bool:
 	)
 
 
+func meets_survive_y1() -> bool:
+	if balance_config == null:
+		return false
+	return balance_config.meets_survive_y1(
+		current_day,
+		current_reputation,
+		Economy.balance_cents
+	)
+
+
+func meets_liquidity_king() -> bool:
+	# Liquidity king is a month-end SETTLE snapshot, not a mid-month cash spike.
+	if balance_config == null or current_phase != DayPhase.SETTLE:
+		return false
+	return balance_config.meets_liquidity_king(current_day, Economy.balance_cents)
+
+
+func campaign_mode_id() -> StringName:
+	match campaign_mode:
+		CampaignMode.SURVIVE_Y1:
+			return SURVIVE_Y1_MODE
+		CampaignMode.LIQUIDITY_KING:
+			return LIQUIDITY_KING_MODE
+		CampaignMode.SANDBOX:
+			return &"sandbox"
+		_:
+			return FLAGSHIP_MODE
+
+
+func campaign_title(mode: StringName) -> String:
+	match mode:
+		SURVIVE_Y1_MODE:
+			return "Survive Year 1"
+		LIQUIDITY_KING_MODE:
+			return "Liquidity king"
+		&"sandbox":
+			return "Sandbox"
+		_:
+			return "Flagship"
+
+
 func campaign_win_payload() -> Dictionary:
 	var tier := 0
 	if shop != null:
 		tier = int(shop.tier)
+	var mode := last_prestige
+	if mode.is_empty():
+		mode = campaign_mode_id()
 	return {
-		"mode": String(FLAGSHIP_MODE),
+		"mode": String(mode),
 		"day": current_day,
 		"cash_cents": Economy.balance_cents,
 		"reputation": current_reputation,
@@ -251,24 +299,41 @@ func campaign_win_payload() -> Dictionary:
 
 
 func evaluate_campaign_win() -> bool:
+	# Campaign mode select (not multi-goal): only the selected CampaignMode can
+	# award. Distinct win kinds (flagship / survive_y1 / liquidity_king) keep
+	# prestige from colliding. Sandbox never awards. Flagship branch is unchanged.
 	_ensure_win_signals()
 	if campaign_complete or not is_game_active:
 		return false
-	if campaign_mode != CampaignMode.FLAGSHIP:
-		return false
-	if not meets_flagship():
-		return false
-	return _award_flagship()
+	match campaign_mode:
+		CampaignMode.FLAGSHIP:
+			if not meets_flagship():
+				return false
+			return _award_campaign(FLAGSHIP_MODE)
+		CampaignMode.SURVIVE_Y1:
+			if not meets_survive_y1():
+				return false
+			return _award_campaign(SURVIVE_Y1_MODE)
+		CampaignMode.LIQUIDITY_KING:
+			if not meets_liquidity_king():
+				return false
+			return _award_campaign(LIQUIDITY_KING_MODE)
+		_:
+			return false
 
 
-func _award_flagship() -> bool:
+func _award_campaign(mode: StringName) -> bool:
 	campaign_complete = true
-	last_prestige = FLAGSHIP_MODE
+	last_prestige = mode
 	is_game_active = false
 	var payload := campaign_win_payload()
 	QaInstrumentation.record_campaign_won(payload)
 	EventBus.campaign_won.emit(payload)
 	return true
+
+
+func _award_flagship() -> bool:
+	return _award_campaign(FLAGSHIP_MODE)
 
 
 func _on_cash_changed_maybe_win(_balance_cents: int) -> void:

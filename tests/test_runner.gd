@@ -176,6 +176,8 @@ func _initialize() -> void:
 	_test_i1_soft_ensure_priceable_sku_parked()
 	_test_j1_research_specialist_skill_deepen()
 	_test_flagship_win_award()
+	_test_survive_y1_win_award()
+	_test_liquidity_king_win_award()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1334,6 +1336,54 @@ func _test_difficulty_balance_ordering() -> void:
 		NORMAL_CONFIG.meets_flagship(ShopState.Tier.MEDIUM, 80, 5_000_000),
 		false,
 		"normal Flagship requires Large"
+	)
+	_expect_equal(NORMAL_CONFIG.survive_y1_rep_floor, 40, "normal Survive Y1 Rep 40")
+	_expect_equal(EASY_CONFIG.survive_y1_rep_floor, 30, "easy Survive Y1 Rep 30")
+	_expect_equal(HARD_CONFIG.survive_y1_rep_floor, 50, "hard Survive Y1 Rep 50")
+	_expect_equal(NORMAL_CONFIG.survive_y1_day, 365, "Survive Y1 day is 365")
+	_expect_equal(
+		NORMAL_CONFIG.meets_survive_y1(365, 40, 1),
+		true,
+		"normal Survive Y1 at exact day/Rep/cash"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.meets_survive_y1(364, 40, 1),
+		false,
+		"normal Survive Y1 misses day 364"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.meets_survive_y1(365, 40, 0),
+		false,
+		"normal Survive Y1 misses cash 0"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.meets_survive_y1(365, 39, 1),
+		false,
+		"normal Survive Y1 misses Rep 39"
+	)
+	_expect_equal(NORMAL_CONFIG.liquidity_king_cash_cents, 10_000_000, "normal Liquidity $100k")
+	_expect_equal(EASY_CONFIG.liquidity_king_cash_cents, 7_500_000, "easy Liquidity $75k")
+	_expect_equal(HARD_CONFIG.liquidity_king_cash_cents, 12_500_000, "hard Liquidity $125k")
+	_expect_equal(NORMAL_CONFIG.month_length_days, 30, "Liquidity month is 30 days")
+	_expect_equal(
+		NORMAL_CONFIG.meets_liquidity_king(30, 10_000_000),
+		true,
+		"normal Liquidity king at month-end exact cash"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.meets_liquidity_king(29, 10_000_000),
+		false,
+		"normal Liquidity king misses mid-month"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.meets_liquidity_king(30, 9_999_999),
+		false,
+		"normal Liquidity king misses one cent under"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.meets_liquidity_king(60, 10_000_000),
+		true,
+		"normal Liquidity king accepts any month-end"
 	)
 
 
@@ -11452,6 +11502,555 @@ func _test_flagship_win_award() -> void:
 			false,
 			"R1: %s does not call parked Soft helper" % path
 		)
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.set("campaign_mode", 0)
+	_game_state.call("start_new_game")
+
+
+func _test_survive_y1_win_award() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 1)
+	_captured_campaign_won = {}
+	_economy.set("balance_cents", 1)
+	_game_state.set("current_reputation", 40)
+	_game_state.set("current_day", 364)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_expect_equal(
+		_game_state.call("meets_survive_y1"),
+		false,
+		"S1: day 364 is not Survive Y1"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: day 364 does not award Survive Y1"
+	)
+	_expect_equal(
+		_game_state.call("meets_flagship"),
+		false,
+		"S1: Survive Y1 seed is not Flagship"
+	)
+
+	_expect_equal(
+		_game_state.call("advance_day"),
+		true,
+		"S1: SETTLE advances onto day 365"
+	)
+	_expect_equal(int(_game_state.get("current_day")), 365, "S1: landing day is 365")
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"S1: day-365 PREP awards Survive Y1 once"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		false,
+		"S1: Survive Y1 award deactivates"
+	)
+	_expect_equal(
+		String(_game_state.get("last_prestige")),
+		"survive_y1",
+		"S1: last prestige is survive_y1"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"survive_y1",
+		"S1: campaign_won mode is survive_y1"
+	)
+	_expect_equal(
+		int(_captured_campaign_won.get("day", 0)),
+		365,
+		"S1: campaign_won day is 365"
+	)
+	_expect_equal(
+		int(_captured_campaign_won.get("reputation", 0)),
+		40,
+		"S1: campaign_won Rep is 40"
+	)
+	_assert_payload_has_no_truth(_captured_campaign_won, "S1: Survive Y1 payload")
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: second evaluate does not re-award Survive Y1"
+	)
+	_expect_equal(
+		_game_state.call("advance_day"),
+		false,
+		"S1: awarded Survive Y1 cannot advance"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 1)
+	_economy.set("balance_cents", 0)
+	_game_state.set("current_reputation", 40)
+	_game_state.set("current_day", 365)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: cash 0 does not award Survive Y1"
+	)
+	_economy.set("balance_cents", 1)
+	_game_state.set("current_reputation", 39)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: Rep 39 does not award Survive Y1"
+	)
+	_game_state.call("adjust_reputation", 1)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"S1: Rep bump on day 365 awards Survive Y1"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 0)
+	_economy.set("balance_cents", 1)
+	_game_state.set("current_reputation", 40)
+	_game_state.set("current_day", 365)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: Flagship mode does not award Survive Y1"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 1)
+	var shop := _force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_day", 1)
+	_expect_equal(shop.tier, ShopState.Tier.LARGE, "S1: Flagship seed is Large")
+	_expect_equal(
+		_game_state.call("meets_flagship"),
+		true,
+		"S1: Flagship predicate can be true in Survive Y1 mode"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: Survive Y1 mode does not award Flagship"
+	)
+	_expect_equal(
+		_captured_campaign_won.is_empty(),
+		true,
+		"S1: Flagship gates do not emit survive_y1"
+	)
+
+	_game_state.call("set_balance_config", EASY_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 1)
+	_economy.set("balance_cents", 1)
+	_game_state.set("current_day", 365)
+	_game_state.set("current_reputation", 29)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: Easy Rep 29 does not award"
+	)
+	_game_state.set("current_reputation", 30)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"S1: Easy awards at Rep 30"
+	)
+
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 1)
+	_economy.set("balance_cents", 1)
+	_game_state.set("current_day", 365)
+	_game_state.set("current_reputation", 49)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: Hard Rep 49 does not award"
+	)
+	_game_state.set("current_reputation", 50)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"S1: Hard awards at Rep 50"
+	)
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 1)
+	_economy.set("balance_cents", 800_000)
+	_game_state.set("current_reputation", 40)
+	_game_state.set("current_day", 365)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"S1: award Survive Y1 before HUD bind"
+	)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "S1: Survive Y1 save payload")
+	_expect_equal(int(saved.get("campaign_mode", -1)), 1, "S1: save stores Survive Y1 mode")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"S1: restore Survive Y1 save"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"S1: restore keeps Survive Y1 complete"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		false,
+		"S1: restore of a won Survive Y1 stays inactive"
+	)
+
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "S1: HUD instantiates after Survive Y1 award")
+	if hud != null:
+		var win_panel := hud.get_node_or_null("%CampaignWin") as PanelContainer
+		var win_title := hud.get_node_or_null("%CampaignWinTitle") as Label
+		var win_body := hud.get_node_or_null("%CampaignWinBody") as Label
+		_expect_equal(
+			win_panel != null and win_panel.visible,
+			true,
+			"S1: HUD shows Survive Y1 win panel"
+		)
+		_expect_equal(
+			win_title != null and win_title.text == "Survive Year 1",
+			true,
+			"S1: HUD win title is Survive Year 1"
+		)
+		_expect_equal(
+			win_body != null
+			and win_body.text.contains("365")
+			and win_body.text.contains("40")
+			and win_body.text.contains("$8,000.00"),
+			true,
+			"S1: HUD win body uses player-visible day/Rep/cash"
+		)
+		_assert_text_has_no_truth(
+			win_title.text if win_title != null else "",
+			"S1: HUD Survive Y1 title"
+		)
+		_assert_text_has_no_truth(
+			win_body.text if win_body != null else "",
+			"S1: HUD Survive Y1 body"
+		)
+		root.remove_child(hud)
+		hud.free()
+
+	var menu_packed: PackedScene = load("res://scenes/ui/main_menu.tscn") as PackedScene
+	_expect_equal(menu_packed != null, true, "S1: main menu scene loads")
+	if menu_packed != null:
+		var menu: Node = menu_packed.instantiate()
+		root.add_child(menu)
+		if not menu.is_node_ready():
+			menu.notification(Node.NOTIFICATION_READY)
+		var campaign_label := menu.get_node_or_null("%CampaignLabel") as Label
+		var prestige_label := menu.get_node_or_null("%PrestigeLabel") as Label
+		_expect_equal(
+			campaign_label != null and campaign_label.text.contains("Survive Year 1"),
+			true,
+			"S1: main menu binds Survive Year 1 campaign"
+		)
+		_expect_equal(
+			prestige_label != null and prestige_label.visible
+			and prestige_label.text.contains("Survive Year 1"),
+			true,
+			"S1: main menu shows last Survive Year 1 prestige"
+		)
+		root.remove_child(menu)
+		menu.free()
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.set("campaign_mode", 0)
+	_game_state.call("start_new_game")
+
+
+func _test_liquidity_king_win_award() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 2)
+	_captured_campaign_won = {}
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_day", 29)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_expect_equal(
+		_game_state.call("meets_liquidity_king"),
+		false,
+		"S1: day 29 SETTLE is not Liquidity king"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: mid-month SETTLE does not award Liquidity king"
+	)
+
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_expect_equal(
+		_game_state.call("meets_liquidity_king"),
+		false,
+		"S1: month-end PREP is not Liquidity king"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: month-end PREP does not award"
+	)
+
+	_game_state.set("current_phase", DayPhasePolicy.FLOOR)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: month-end FLOOR does not award Liquidity king"
+	)
+	_expect_equal(
+		_economy.call("record_income", 1, &"sale", "Liquidity spike"),
+		true,
+		"S1: mid-day income can cross Liquidity cash"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		false,
+		"S1: cash_changed mid-month-day does not award Liquidity king"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 2)
+	_economy.set("balance_cents", 9_999_999)
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_campaign_won = {}
+	_expect_equal(_game_state.call("start_floor"), true, "S1: FLOOR opens for cash-under settle")
+	_expect_equal(_game_state.call("start_settle"), true, "S1: SETTLE runs cash-under Liquidity")
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		false,
+		"S1: SETTLE cash-under does not award Liquidity king"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		true,
+		"S1: SETTLE cash-under stays active"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 2)
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_campaign_won = {}
+	_expect_equal(_game_state.call("start_floor"), true, "S1: FLOOR opens before Liquidity settle")
+	_expect_equal(
+		_game_state.call("start_settle"),
+		true,
+		"S1: SETTLE runs the Liquidity king check"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		true,
+		"S1: month-end SETTLE awards Liquidity king"
+	)
+	_expect_equal(
+		bool(_game_state.get("is_game_active")),
+		false,
+		"S1: Liquidity king award deactivates"
+	)
+	_expect_equal(
+		String(_game_state.get("last_prestige")),
+		"liquidity_king",
+		"S1: last prestige is liquidity_king"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"liquidity_king",
+		"S1: campaign_won mode is liquidity_king"
+	)
+	_expect_equal(
+		int(_captured_campaign_won.get("cash_cents", 0)),
+		10_000_000,
+		"S1: campaign_won cash is exact $100k"
+	)
+	_assert_payload_has_no_truth(_captured_campaign_won, "S1: Liquidity king payload")
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: second evaluate does not re-award Liquidity king"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 2)
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_day", 60)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_campaign_won = {}
+	_expect_equal(_game_state.call("start_floor"), true, "S1: FLOOR opens for month-2")
+	_expect_equal(_game_state.call("start_settle"), true, "S1: SETTLE month-2")
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"liquidity_king",
+		"S1: any month-end can award Liquidity king"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 0)
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: Flagship mode does not award Liquidity king"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 2)
+	_force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_day", 1)
+	_expect_equal(
+		_game_state.call("meets_flagship"),
+		true,
+		"S1: Flagship predicate can be true in Liquidity mode"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: Liquidity mode does not award Flagship"
+	)
+
+	_game_state.call("set_balance_config", EASY_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 2)
+	_economy.set("balance_cents", 7_499_999)
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: Easy Liquidity cash-under does not award"
+	)
+	_economy.set("balance_cents", 7_500_000)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"S1: Easy awards Liquidity at $75k"
+	)
+
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 2)
+	_economy.set("balance_cents", 12_499_999)
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"S1: Hard Liquidity cash-under does not award"
+	)
+	_economy.set("balance_cents", 12_500_000)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"S1: Hard awards Liquidity at $125k"
+	)
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("campaign_mode", 2)
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"S1: award Liquidity king before HUD bind"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "S1: HUD instantiates after Liquidity award")
+	if hud != null:
+		var win_panel := hud.get_node_or_null("%CampaignWin") as PanelContainer
+		var win_title := hud.get_node_or_null("%CampaignWinTitle") as Label
+		var win_body := hud.get_node_or_null("%CampaignWinBody") as Label
+		_expect_equal(
+			win_panel != null and win_panel.visible,
+			true,
+			"S1: HUD shows Liquidity king win panel"
+		)
+		_expect_equal(
+			win_title != null and win_title.text == "Liquidity king",
+			true,
+			"S1: HUD win title is Liquidity king"
+		)
+		_expect_equal(
+			win_body != null and win_body.text.contains("$100,000.00"),
+			true,
+			"S1: HUD Liquidity body uses player-visible cash"
+		)
+		_assert_text_has_no_truth(
+			win_title.text if win_title != null else "",
+			"S1: HUD Liquidity title"
+		)
+		_assert_text_has_no_truth(
+			win_body.text if win_body != null else "",
+			"S1: HUD Liquidity body"
+		)
+		root.remove_child(hud)
+		hud.free()
+
+	var menu_packed: PackedScene = load("res://scenes/ui/main_menu.tscn") as PackedScene
+	if menu_packed != null:
+		var menu: Node = menu_packed.instantiate()
+		root.add_child(menu)
+		if not menu.is_node_ready():
+			menu.notification(Node.NOTIFICATION_READY)
+		var campaign_label := menu.get_node_or_null("%CampaignLabel") as Label
+		var prestige_label := menu.get_node_or_null("%PrestigeLabel") as Label
+		_expect_equal(
+			campaign_label != null and campaign_label.text.contains("Liquidity king"),
+			true,
+			"S1: main menu binds Liquidity king campaign"
+		)
+		_expect_equal(
+			prestige_label != null and prestige_label.visible
+			and prestige_label.text.contains("Liquidity king"),
+			true,
+			"S1: main menu shows last Liquidity king prestige"
+		)
+		root.remove_child(menu)
+		menu.free()
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.set("campaign_mode", 0)
+	_game_state.call("start_new_game")
+	var flagship_shop := _force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_captured_campaign_won = {}
+	_expect_equal(flagship_shop.tier, ShopState.Tier.LARGE, "S1: Flagship sanity shop is Large")
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"S1: Flagship still awards after alternate-win tests"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"flagship",
+		"S1: Flagship win kind is unchanged"
+	)
 
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.set("campaign_mode", 0)
