@@ -1,6 +1,6 @@
 # Next Eng SoT Pick M v1 — post L1
 
-**Status:** Adopted **M1 GO** — Eng spike **in flight** `bc-243a6aaf` (stub-swap #41 merged @ `2afba0c2`). M2 Large re-smoke in flight. Park M3/M4. Softs parked.
+**Status:** Adopted **M1 GO** — Eng spike in flight `bc-243a6aaf`. **M2 Large re-smoke SHIPPED** PASS @ `83885e7dc1fafe468a9de1e7d89458851ce19dd7` (no Eng S2+). Park M3/M4. Softs parked.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §8 / §7.3, pick-l (L1 economy shipped #39; Art shell #40 on main; stub-swap in flight)  
