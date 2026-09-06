@@ -13,6 +13,7 @@ var duration_days: int = 0
 var sku_id: StringName = &""
 var set_id: StringName = &""
 var fog_flag: bool = false
+var price_editor_prompted: bool = false
 
 
 func is_active() -> bool:
@@ -29,6 +30,7 @@ func to_save() -> Dictionary:
 		"sku_id": String(sku_id),
 		"set_id": String(set_id),
 		"fog_flag": fog_flag,
+		"price_editor_prompted": price_editor_prompted,
 	}
 
 
@@ -44,4 +46,5 @@ static func from_save(data: Dictionary) -> MarketEvent:
 	event.sku_id = StringName(data.get("sku_id", ""))
 	event.set_id = StringName(data.get("set_id", ""))
 	event.fog_flag = bool(data.get("fog_flag", event.kind == KIND_FOG))
+	event.price_editor_prompted = bool(data.get("price_editor_prompted", false))
 	return event

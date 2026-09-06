@@ -118,6 +118,9 @@ func _initialize() -> void:
 	_test_hype_spike_target_sku_only()
 	_test_fog_day_sigma_and_inversion()
 	_test_market_event_save_load()
+	_test_option_d_seeded_hype_opens_price_editor_once()
+	_test_option_d_price_editor_has_no_truth()
+	_test_option_d_cancel_keeps_event_apply_persists()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -2476,6 +2479,273 @@ func _test_market_event_save_load() -> void:
 		String(_demand_signals.call("event_banner_text")).contains("Dustway"),
 		true,
 		"restored Specialist still sees the leak"
+	)
+
+
+func _test_option_d_seeded_hype_opens_price_editor_once() -> void:
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var titan := &"AA-SKIE-047"
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": titan, "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(started != null, true, "D gate 1: seeded hype starts on C1 bus")
+	_expect_equal(started.sku_id, titan, "D gate 1: hype target is Titan")
+	_expect_equal(
+		_beat_director.call("is_started", TITAN_HYPE_BEAT),
+		false,
+		"D gate 1: does not use QA Titan trigger"
+	)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		true,
+		"D gate 1: hype offers one PriceEditor prompt"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "D gate 1: HUD loads")
+	if hud == null:
+		return
+	_assert_option_d_editor_open(hud, titan, "D gate 1: seeded hype")
+	var opened_count := 1
+	Callable(hud, "_on_market_event_changed").call(
+		_demand_signals.call("event_to_save")
+	)
+	Callable(hud, "_maybe_open_event_price_editor").call()
+	_assert_option_d_editor_open(hud, titan, "D gate 1: no spam reopen")
+	_expect_equal(opened_count, 1, "D gate 1: still a single forced open")
+	var prompted_event: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		prompted_event != null and prompted_event.price_editor_prompted,
+		true,
+		"D gate 1: active event records the one-shot prompt"
+	)
+	Callable(hud, "_cancel_price").call()
+	_expect_equal(
+		(hud.get_node_or_null("%PriceEditor") as PanelContainer).visible,
+		false,
+		"D gate 1: Cancel closes PriceEditor"
+	)
+	Callable(hud, "_maybe_open_event_price_editor").call()
+	_expect_equal(
+		(hud.get_node_or_null("%PriceEditor") as PanelContainer).visible,
+		false,
+		"D gate 1: Cancel does not force a second open"
+	)
+	root.remove_child(hud)
+	hud.free()
+
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_FOG,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	var fog_sku: StringName = _demand_signals.call("resolve_event_price_sku")
+	_expect_equal(fog_sku.is_empty(), false, "D gate 1: fog resolves a priceable SKU")
+	hud = _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "D gate 1: fog HUD loads")
+	if hud == null:
+		return
+	_assert_option_d_editor_open(hud, fog_sku, "D gate 1: fog")
+	Callable(hud, "_maybe_open_event_price_editor").call()
+	_assert_option_d_editor_open(hud, fog_sku, "D gate 1: fog no spam")
+	root.remove_child(hud)
+	hud.free()
+
+	var rolled_hype := false
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 48):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		for _day_index: int in range(7):
+			_expect_equal(
+				_game_state.call("start_floor"),
+				true,
+				"D gate 1: seeded run can open floor"
+			)
+			_expect_equal(
+				_game_state.call("start_settle"),
+				true,
+				"D gate 1: seeded run can settle"
+			)
+			var rolled: MarketEvent = _demand_signals.call("active_event")
+			if rolled != null and rolled.kind == MarketEvent.KIND_HYPE:
+				_game_state.set("current_phase", DayPhasePolicy.PREP)
+				var rolled_sku: StringName = _demand_signals.call(
+					"resolve_event_price_sku"
+				)
+				hud = _instantiate_gameplay_hud()
+				_expect_equal(hud != null, true, "D gate 1: rolled hype HUD loads")
+				if hud != null:
+					_assert_option_d_editor_open(
+						hud,
+						rolled_sku,
+						"D gate 1: rolled hype day"
+					)
+					root.remove_child(hud)
+					hud.free()
+				rolled_hype = true
+				break
+			if int(_game_state.get("current_day")) < 7:
+				_expect_equal(
+					_game_state.call("advance_day"),
+					true,
+					"D gate 1: seeded run can advance"
+				)
+		if rolled_hype:
+			break
+	_expect_equal(
+		rolled_hype,
+		true,
+		"D gate 1: a seeded Normal run opens Hype PriceEditor without debug"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_option_d_price_editor_has_no_truth() -> void:
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var titan := &"AA-SKIE-047"
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": titan, "duration_days": 2, "remaining_days": 2}
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "D gate 2: HUD loads")
+	if hud == null:
+		return
+	_assert_option_d_editor_open(hud, titan, "D gate 2")
+	var price_signal := hud.get("_price_signal") as PriceConfirmSignal
+	_expect_equal(price_signal != null, true, "D gate 2: PriceEditor binds a signal")
+	if price_signal != null:
+		_expect_dto_has_no_truth_fields(price_signal, "D gate 2: event PriceEditor DTO")
+		_assert_text_has_no_truth(
+			DemandSignalPresenter.price_summary(price_signal, false),
+			"D gate 2: PriceEditor summary"
+		)
+	var title := hud.get_node_or_null("%PriceTitle") as Label
+	var summary := hud.get_node_or_null("%PriceSummary") as Label
+	var position := hud.get_node_or_null("%PricePositionChip") as Label
+	var demand := hud.get_node_or_null("%PriceDemandChip") as Label
+	var move := hud.get_node_or_null("%PriceMoveChip") as Label
+	var toast := hud.get_node_or_null("%BeatToast") as Label
+	for node: Label in [title, summary, position, demand, move, toast]:
+		if node == null:
+			continue
+		_assert_text_has_no_truth(node.text, "D gate 2: %s" % node.name)
+	_expect_equal(
+		demand != null and not demand.text.is_empty(),
+		true,
+		"D gate 2: §4.5 demand chip is shown"
+	)
+	_expect_equal(
+		position != null and not position.text.is_empty(),
+		true,
+		"D gate 2: §4.5 position chip is shown"
+	)
+	_expect_equal(
+		move != null and not move.text.is_empty(),
+		true,
+		"D gate 2: §4.5 move-feel chip is shown"
+	)
+	_assert_text_has_no_truth(
+		String(_demand_signals.call("event_banner_text")),
+		"D gate 2: event banner"
+	)
+	root.remove_child(hud)
+	hud.free()
+
+
+func _test_option_d_cancel_keeps_event_apply_persists() -> void:
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var titan := &"AA-SKIE-047"
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": titan, "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(started != null, true, "D gate 3: hype starts")
+	var remaining_before := started.remaining_days
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "D gate 3: HUD loads for Cancel")
+	if hud == null:
+		return
+	_assert_option_d_editor_open(hud, titan, "D gate 3: cancel path")
+	Callable(hud, "_cancel_price").call()
+	var after_cancel: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(after_cancel != null, true, "D gate 3: Cancel leaves event active")
+	_expect_equal(after_cancel.kind, MarketEvent.KIND_HYPE, "D gate 3: Cancel keeps hype")
+	_expect_equal(after_cancel.sku_id, titan, "D gate 3: Cancel keeps target SKU")
+	_expect_equal(
+		after_cancel.remaining_days,
+		remaining_before,
+		"D gate 3: Cancel does not consume event days"
+	)
+	_expect_equal(
+		(hud.get_node_or_null("%PriceEditor") as PanelContainer).visible,
+		false,
+		"D gate 3: Cancel closes the editor"
+	)
+	root.remove_child(hud)
+	hud.free()
+
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": titan, "duration_days": 2, "remaining_days": 2}
+	)
+	var listed_before := int(_inventory_service.call("listed_price_for", titan))
+	var apply_cents := listed_before + 375
+	hud = _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "D gate 3: HUD loads for Apply")
+	if hud == null:
+		return
+	_assert_option_d_editor_open(hud, titan, "D gate 3: apply path")
+	var price_input := hud.get_node_or_null("%PriceInput") as LineEdit
+	_expect_equal(price_input != null, true, "D gate 3: list input present")
+	if price_input != null:
+		price_input.text = DemandSignalPresenter.format_cents(apply_cents)
+		Callable(hud, "_update_price_preview").call(price_input.text)
+	Callable(hud, "_apply_price").call()
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", titan)),
+		apply_cents,
+		"D gate 3: Apply persists list price"
+	)
+	var after_apply: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(after_apply != null, true, "D gate 3: Apply leaves event active")
+	_expect_equal(after_apply.kind, MarketEvent.KIND_HYPE, "D gate 3: Apply keeps hype")
+	root.remove_child(hud)
+	hud.free()
+
+
+func _assert_option_d_editor_open(
+	hud: Node,
+	sku_id: StringName,
+	label: String
+) -> void:
+	var panel := hud.get_node_or_null("%PriceEditor") as PanelContainer
+	_expect_equal(panel != null and panel.visible, true, "%s PriceEditor is open" % label)
+	var price_signal := hud.get("_price_signal") as PriceConfirmSignal
+	_expect_equal(price_signal != null, true, "%s PriceEditor has a signal" % label)
+	if price_signal != null:
+		_expect_equal(price_signal.sku_id, sku_id, "%s PriceEditor SKU" % label)
+	var title := hud.get_node_or_null("%PriceTitle") as Label
+	_expect_equal(
+		title != null and title.text.begins_with("PRICE"),
+		true,
+		"%s PriceEditor title" % label
 	)
 
 

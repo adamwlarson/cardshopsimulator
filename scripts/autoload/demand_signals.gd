@@ -1,5 +1,7 @@
 extends Node
 
+const EVENT_PRICE_BRIDGE := &"event_price_bridge"
+
 var _market_state := MarketState.new()
 var _service: DemandSignalService
 var _opportunity_catalog := BuyOpportunityCatalog.new()
@@ -117,6 +119,52 @@ func active_demand_band_sigma(informed: bool = false) -> float:
 	if _service == null:
 		return GameState.balance_config.demand_band_sigma
 	return _service.active_demand_band_sigma(informed)
+
+
+func wants_event_price_editor() -> bool:
+	return not peek_event_price_editor_request().is_empty()
+
+
+func peek_event_price_editor_request() -> Dictionary:
+	if not _should_offer_event_price_editor():
+		return {}
+	var sku_id := resolve_event_price_sku()
+	if sku_id.is_empty():
+		return {}
+	return {
+		"sku_id": sku_id,
+		"beat_id": EVENT_PRICE_BRIDGE,
+		"message": event_banner_text(),
+		"suggestion_mode": &"suggested",
+	}
+
+
+func resolve_event_price_sku() -> StringName:
+	var event := active_event()
+	if event == null:
+		return &""
+	match event.kind:
+		MarketEvent.KIND_HYPE:
+			return _ensure_priceable_sku(event.sku_id)
+		MarketEvent.KIND_FOG:
+			if _is_sku_priceable(MarketEventService.TITAN_SKU):
+				return MarketEventService.TITAN_SKU
+			var owned := _first_priceable_sku()
+			if not owned.is_empty():
+				return owned
+			return _ensure_priceable_sku(MarketEventService.TITAN_SKU)
+	return &""
+
+
+func acknowledge_event_price_editor(sku_id: StringName = &"") -> void:
+	var event := active_event()
+	if event == null or event.price_editor_prompted:
+		return
+	if event.kind != MarketEvent.KIND_HYPE and event.kind != MarketEvent.KIND_FOG:
+		return
+	if not sku_id.is_empty() and resolve_event_price_sku() != sku_id:
+		return
+	event.price_editor_prompted = true
 
 
 func event_banner_text() -> String:
@@ -585,6 +633,52 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 	}
 	QaInstrumentation.record_market_event_rolled(payload)
 	return payload
+
+
+func _should_offer_event_price_editor() -> bool:
+	var event := active_event()
+	if event == null or event.price_editor_prompted:
+		return false
+	if event.kind != MarketEvent.KIND_HYPE and event.kind != MarketEvent.KIND_FOG:
+		return false
+	if not GameState.is_game_active:
+		return false
+	return GameState.current_phase in [
+		GameState.DayPhase.PREP,
+		GameState.DayPhase.FLOOR,
+	]
+
+
+func _is_sku_priceable(sku_id: StringName) -> bool:
+	if sku_id.is_empty():
+		return false
+	for item: Dictionary in InventoryService.get_priceable_stock():
+		if StringName(item["sku_id"]) == sku_id:
+			return true
+	return false
+
+
+func _first_priceable_sku() -> StringName:
+	for item: Dictionary in InventoryService.get_priceable_stock():
+		return StringName(item["sku_id"])
+	return &""
+
+
+func _ensure_priceable_sku(sku_id: StringName) -> StringName:
+	if _is_sku_priceable(sku_id):
+		return sku_id
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku != null and sku.product_class == ProductSKU.ProductClass.SINGLE:
+		if InventoryService.receive_card(
+			sku_id,
+			sku.base_market_cents,
+			InventoryLocation.new(InventoryLocation.Type.BINDER),
+			sku.base_market_cents
+		) != null:
+			return sku_id
+	if sku_id != MarketEventService.TITAN_SKU:
+		return _ensure_priceable_sku(MarketEventService.TITAN_SKU)
+	return &""
 
 
 func _publish_event_changed() -> void:

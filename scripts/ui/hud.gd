@@ -187,6 +187,7 @@ func _bind_seeded_status() -> void:
 	_update_attention(GameState.attention_remaining)
 	_sync_rotation_watch()
 	_sync_event_banner()
+	_maybe_open_event_price_editor()
 
 
 func _update_cash(balance_cents: int) -> void:
@@ -232,6 +233,7 @@ func _update_phase(phase: int) -> void:
 		beat_toast.text = "Cashier no-show — floor understaffed"
 		beat_toast.show()
 	_sync_modal_veil()
+	_maybe_open_event_price_editor()
 
 
 func _update_attention(remaining: int) -> void:
@@ -488,6 +490,7 @@ func _on_price_focus_requested(
 				and _price_signal.position == &"undercut",
 				"Undercut focus must refresh to an undercut position."
 			)
+		DemandSignals.acknowledge_event_price_editor(sku_id)
 		price_input.grab_focus()
 		return
 
@@ -1078,6 +1081,29 @@ func _close_research() -> void:
 func _on_market_event_changed(_payload: Dictionary) -> void:
 	_sync_event_banner()
 	_sync_rotation_watch()
+	_maybe_open_event_price_editor()
+
+
+func _maybe_open_event_price_editor() -> void:
+	var request := DemandSignals.peek_event_price_editor_request()
+	if request.is_empty():
+		return
+	var sku_id := StringName(request.get("sku_id", &""))
+	if sku_id.is_empty():
+		return
+	if (
+		price_panel.visible
+		and _price_signal != null
+		and _price_signal.sku_id == sku_id
+	):
+		DemandSignals.acknowledge_event_price_editor(sku_id)
+		return
+	_on_price_focus_requested(
+		sku_id,
+		StringName(request.get("beat_id", DemandSignals.EVENT_PRICE_BRIDGE)),
+		String(request.get("message", "")),
+		StringName(request.get("suggestion_mode", &"suggested"))
+	)
 
 
 func _sync_rotation_watch() -> void:
