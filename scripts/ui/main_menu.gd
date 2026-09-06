@@ -12,7 +12,7 @@ const MODE_BUTTON_NAMES: Array[String] = [
 
 
 func _ready() -> void:
-	_build_mode_picker()
+	_bind_mode_picker()
 	_sync_campaign_copy()
 
 
@@ -24,28 +24,17 @@ func select_displayed_mode(mode: int) -> bool:
 	return true
 
 
-func _build_mode_picker() -> void:
-	var host := get_node_or_null("%ModePicker") as GridContainer
-	if host == null:
-		return
-	for child: Node in host.get_children():
-		host.remove_child(child)
-		child.free()
+func _bind_mode_picker() -> void:
 	var group := ButtonGroup.new()
 	group.allow_unpress = false
 	for index: int in MODE_ORDER.size():
-		var mode: int = MODE_ORDER[index]
-		var button := Button.new()
-		button.name = MODE_BUTTON_NAMES[index]
-		button.text = GameState.campaign_title(GameState.campaign_id(mode as GameState.CampaignMode))
+		var button := get_node_or_null("%" + MODE_BUTTON_NAMES[index]) as Button
+		if button == null:
+			continue
 		button.toggle_mode = true
 		button.button_group = group
-		button.custom_minimum_size = Vector2(0, 40)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.add_theme_font_size_override("font_size", 16)
-		button.pressed.connect(_on_mode_button_pressed.bind(mode))
-		host.add_child(button)
-		button.unique_name_in_owner = true
+		if not button.pressed.is_connected(_on_mode_button_pressed.bind(MODE_ORDER[index])):
+			button.pressed.connect(_on_mode_button_pressed.bind(MODE_ORDER[index]))
 
 
 func _on_mode_button_pressed(mode: int) -> void:

@@ -104,6 +104,42 @@ theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 10
 columns = 2
 
+[node name="FlagshipButton" type="Button" parent="Panel/Margin/Content/ModePicker"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+theme_override_font_sizes/font_size = 16
+text = "Flagship"
+
+[node name="SurviveYear1Button" type="Button" parent="Panel/Margin/Content/ModePicker"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+theme_override_font_sizes/font_size = 16
+text = "Survive Year 1"
+
+[node name="LiquidityKingButton" type="Button" parent="Panel/Margin/Content/ModePicker"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+theme_override_font_sizes/font_size = 16
+text = "Liquidity king"
+
+[node name="SandboxButton" type="Button" parent="Panel/Margin/Content/ModePicker"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+theme_override_font_sizes/font_size = 16
+text = "Sandbox"
+
 [node name="ModeBlurb" type="Label" parent="Panel/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
