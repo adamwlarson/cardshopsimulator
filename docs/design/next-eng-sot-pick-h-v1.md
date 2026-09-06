@@ -1,6 +1,6 @@
 # Next Eng SoT Pick H v1 — post G1
 
-**Status:** Adopted — **H2 shipped** (campaign smoke PASS 2026-09-06); park H1/H3; Soft keep parked; Eng S2+ not needed  
+**Status:** **H2 shipped** — campaign smoke PASS-with-notes @ `8a7f7a73`; Soft keep parked; H3 No; Eng S2+ No. Report `docs/qa/playtest-h2-s10-campaign-8a7f7a73.md`.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §4.4 / §4.5 / §10, pick-g (G1 shipped #35)  
@@ -92,3 +92,4 @@ Choose **H1** only if Adam wants the online channel before hands-on. Choose **H3
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **H2 GO** (park H1/H3). Soft seeds parked. No Eng systems spike; S2+ from QA campaign smoke only. |
+| 2026-09-06 | **H2 shipped** — QA PASS-with-notes @ `8a7f7a73`; Soft keep parked; H3 No; Eng S2+ No. Queue → pick-i. |
