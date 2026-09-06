@@ -164,6 +164,7 @@ func _initialize() -> void:
 	_test_i1_frequent_cancel_rep_hit()
 	_test_i1_list_confirm_has_no_truth()
 	_test_i1_soft_ensure_priceable_sku_parked()
+	_test_j1_research_specialist_skill_deepen()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1115,6 +1116,7 @@ func _test_qa_instrumentation_payloads() -> void:
 		[
 			&"screen", &"sku_id", &"shown_comp_low_cents", &"shown_comp_high_cents",
 			&"true_market_cents", &"shown_demand_band", &"true_demand_band", &"confidence",
+			&"skill_informed", &"demand_band_sigma", &"comp_narrow_factor",
 		],
 		"buy demand signal payload"
 	)
@@ -1124,6 +1126,7 @@ func _test_qa_instrumentation_payloads() -> void:
 			&"screen", &"sku_id", &"shown_comp_low_cents", &"shown_comp_high_cents",
 			&"true_market_cents", &"shown_demand_band", &"true_demand_band", &"confidence",
 			&"listed_price_cents", &"move_feel",
+			&"skill_informed", &"demand_band_sigma", &"comp_narrow_factor",
 		],
 		"price demand signal payload"
 	)
@@ -7215,6 +7218,424 @@ func _test_i1_soft_ensure_priceable_sku_parked() -> void:
 		"I1: failed list does not seed Titan via Soft helper"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_j1_research_specialist_skill_deepen() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var sku_id := &"AA-SKIE-047"
+	_expect_equal(NORMAL_CONFIG.research_cost_cents, 5_000, "J1: Research cash is $50")
+	_expect_equal(NORMAL_CONFIG.research_attention, 15, "J1: Research Att cost is 15")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.research_comp_narrow_factor, 0.55),
+		true,
+		"J1: comp narrow factor is ×0.55"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.research_demand_band_sigma, 0.07),
+		true,
+		"J1: informed demand σ is 0.07"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.demand_band_sigma, 0.12),
+		true,
+		"J1: default demand σ is 0.12"
+	)
+
+	_game_state.set("attention_remaining", 0)
+	_event_bus.emit_signal("attention_changed", 0)
+	_expect_equal(_game_state.call("can_research"), false, "J1: can_research false at Att 0")
+	var att0 := _demand_signals.call("research_set", &"AA-SKIE") as Dictionary
+	_expect_equal(bool(att0.get("ok", false)), false, "J1: Research blocked at Att 0")
+	_expect_equal(
+		StringName(att0.get("reason", &"")),
+		&"insufficient_attention",
+		"J1: Att 0 reason is insufficient_attention"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	var location: InventoryLocation = _inventory_service.call("location_for", sku_id)
+	var buy_before := _demand_signals.call(
+		"buy_signal",
+		sku_id,
+		DemandSignalService.Channel.MARKETPLACE,
+		1200,
+		1
+	) as BuyConfirmSignal
+	var price_before := _demand_signals.call("price_signal", sku_id, 2200, location) as PriceConfirmSignal
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "J1: unique card for online confirm")
+	_game_state.set("current_reputation", 40)
+	var list_before := _demand_signals.call(
+		"list_confirm_signal",
+		card.sku_id,
+		card.listed_price_cents,
+		card.location
+	) as OnlineListConfirmSignal
+	_expect_equal(
+		_demand_signals.call("is_skill_informed", sku_id),
+		false,
+		"J1: default skill channel is off"
+	)
+	_expect_equal(
+		String(_demand_signals.call("skill_channel_for", sku_id)),
+		"",
+		"J1: default skill channel is empty"
+	)
+	_expect_equal(
+		String(_demand_signals.call("rotation_watch_text")),
+		"",
+		"J1: rotation watch hidden by default"
+	)
+
+	var cash_before := int(_economy.get("balance_cents"))
+	var att_before := int(_game_state.get("attention_remaining"))
+	_qa_autoload.call("clear")
+	var researched := _demand_signals.call("research_set", &"AA-SKIE") as Dictionary
+	_expect_equal(bool(researched.get("ok", false)), true, "J1: Research succeeds at Att ≥ cost + $50")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - NORMAL_CONFIG.research_attention,
+		"J1: Research spends Att 15"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - NORMAL_CONFIG.research_cost_cents,
+		"J1: Research spends $50"
+	)
+	_expect_equal(
+		_demand_signals.call("is_skill_informed", sku_id),
+		true,
+		"J1: Research buff informs the target set"
+	)
+	_expect_equal(
+		String(_demand_signals.call("skill_channel_for", sku_id)),
+		"research",
+		"J1: skill channel is research after spend"
+	)
+	_expect_equal(
+		_demand_signals.call("is_skill_informed", &"AA-BASE-088"),
+		false,
+		"J1: Research does not inform other sets"
+	)
+	var telegraph := int(researched.get("telegraph_through_day", -1))
+	_expect_equal(
+		telegraph >= int(_game_state.get("current_day"))
+		and telegraph <= int(_game_state.get("current_day")) + 2,
+		true,
+		"J1: Research telegraph lasts 24–72h (1–3 days)"
+	)
+	_expect_equal(
+		String(researched.get("rotation_watch", "")).begins_with("Rotation watch:"),
+		true,
+		"J1: Research rotation watch uses required copy"
+	)
+	_assert_payload_has_no_truth(researched, "J1: research payload")
+	_assert_text_has_no_truth(
+		String(researched.get("rotation_watch", "")),
+		"J1: research rotation watch"
+	)
+	_expect_equal(
+		String(researched.get("condition_cue", "")).to_lower().contains("photo")
+		or String(researched.get("condition_cue", "")).to_lower().contains("inspect"),
+		true,
+		"J1: Research keeps condition fog"
+	)
+
+	var buy_after := _demand_signals.call(
+		"buy_signal",
+		sku_id,
+		DemandSignalService.Channel.MARKETPLACE,
+		1200,
+		1
+	) as BuyConfirmSignal
+	var price_after := _demand_signals.call("price_signal", sku_id, 2200, location) as PriceConfirmSignal
+	var list_after := _demand_signals.call(
+		"list_confirm_signal",
+		card.sku_id,
+		card.listed_price_cents,
+		card.location
+	) as OnlineListConfirmSignal
+	_expect_equal(
+		_j1_comp_width(buy_after) < _j1_comp_width(buy_before),
+		true,
+		"J1: Research narrows buy confirm comps"
+	)
+	_expect_equal(
+		_j1_comp_width(price_after) < _j1_comp_width(price_before),
+		true,
+		"J1: Research narrows price confirm comps"
+	)
+	_expect_equal(
+		_j1_comp_width(list_after) < _j1_comp_width(list_before),
+		true,
+		"J1: Research narrows online list confirm comps"
+	)
+	_expect_dto_has_no_truth_fields(buy_after, "J1: researched buy confirm")
+	_expect_dto_has_no_truth_fields(price_after, "J1: researched price confirm")
+	_expect_dto_has_no_truth_fields(list_after, "J1: researched online confirm")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.buy_summary(buy_after),
+		"J1: researched buy summary"
+	)
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_after),
+		"J1: researched price summary"
+	)
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.list_confirm_summary(list_after),
+		"J1: researched online summary"
+	)
+	var skill_events := _j1_skill_signal_events()
+	_expect_equal(skill_events.size() >= 3, true, "J1: Research emits skill instrumentation")
+	var saw_informed_buy := false
+	var saw_informed_price := false
+	var saw_informed_list := false
+	for event: Dictionary in skill_events:
+		var payload: Dictionary = event.get("payload", {})
+		if not bool(payload.get("skill_informed", false)):
+			continue
+		_expect_equal(
+			is_equal_approx(float(payload.get("demand_band_sigma", 1.0)), 0.07),
+			true,
+			"J1: informed σ is 0.07"
+		)
+		_expect_equal(
+			is_equal_approx(float(payload.get("comp_narrow_factor", 1.0)), 0.55),
+			true,
+			"J1: informed narrow factor is 0.55"
+		)
+		match String(payload.get("screen", "")):
+			"buy_confirm":
+				saw_informed_buy = true
+			"price_confirm":
+				saw_informed_price = true
+			"list_confirm":
+				saw_informed_list = true
+	_expect_equal(saw_informed_buy, true, "J1: buy_confirm instrumentation is informed")
+	_expect_equal(saw_informed_price, true, "J1: price_confirm instrumentation is informed")
+	_expect_equal(saw_informed_list, true, "J1: list_confirm instrumentation is informed")
+
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION,
+		{"set_id": &"AA-DUST", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(
+		String(_demand_signals.call("event_banner_text")),
+		"",
+		"J1: Dustway rotation stays hidden without Research/Specialist on that set"
+	)
+	_expect_equal(
+		String(_demand_signals.call("rotation_watch_text")).contains("Skiefall"),
+		true,
+		"J1: Research buff still shows its own Rotation watch"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_game_state.set("current_reputation", 40)
+	card = _i1_unique_card()
+	location = _inventory_service.call("location_for", sku_id)
+	var spec_buy_before := _demand_signals.call(
+		"buy_signal",
+		sku_id,
+		DemandSignalService.Channel.MARKETPLACE,
+		1200,
+		1
+	) as BuyConfirmSignal
+	var spec_price_before := _demand_signals.call(
+		"price_signal",
+		sku_id,
+		2200,
+		location
+	) as PriceConfirmSignal
+	var spec_list_before := _demand_signals.call(
+		"list_confirm_signal",
+		card.sku_id,
+		card.listed_price_cents,
+		card.location
+	) as OnlineListConfirmSignal
+	var spec_cash := int(_economy.get("balance_cents"))
+	var spec_att := int(_game_state.get("attention_remaining"))
+	_qa_autoload.call("clear")
+	_expect_equal(shop.hire_specialist() != null, true, "J1: hire Specialist")
+	_expect_equal(shop.has_specialist_on_duty(), true, "J1: Specialist is on duty")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		spec_cash,
+		"J1: Specialist narrow does not spend Research cash"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		spec_att,
+		"J1: Specialist narrow does not spend Research Attention"
+	)
+	_expect_equal(
+		_demand_signals.call("is_skill_informed", sku_id),
+		true,
+		"J1: Specialist on duty informs confirms without Research"
+	)
+	_expect_equal(
+		_demand_signals.call("is_skill_informed", &"AA-BASE-088"),
+		true,
+		"J1: Specialist on duty informs every SKU"
+	)
+	_expect_equal(
+		_demand_signals.call("can_research_set", &"AA-SKIE"),
+		true,
+		"J1: Specialist does not consume the Research verb"
+	)
+	_expect_equal(
+		String(_demand_signals.call("skill_channel_for", sku_id)),
+		"specialist",
+		"J1: skill channel is specialist while on duty"
+	)
+	var spec_buy := _demand_signals.call(
+		"buy_signal",
+		sku_id,
+		DemandSignalService.Channel.MARKETPLACE,
+		1200,
+		1
+	) as BuyConfirmSignal
+	var spec_price := _demand_signals.call(
+		"price_signal",
+		sku_id,
+		2200,
+		location
+	) as PriceConfirmSignal
+	var spec_list := _demand_signals.call(
+		"list_confirm_signal",
+		card.sku_id,
+		card.listed_price_cents,
+		card.location
+	) as OnlineListConfirmSignal
+	_expect_equal(
+		_j1_comp_width(spec_buy) < _j1_comp_width(spec_buy_before),
+		true,
+		"J1: Specialist narrows buy confirm comps"
+	)
+	_expect_equal(
+		_j1_comp_width(spec_price) < _j1_comp_width(spec_price_before),
+		true,
+		"J1: Specialist narrows price confirm comps"
+	)
+	_expect_equal(
+		_j1_comp_width(spec_list) < _j1_comp_width(spec_list_before),
+		true,
+		"J1: Specialist narrows online list confirm comps"
+	)
+	_expect_dto_has_no_truth_fields(spec_buy, "J1: specialist buy confirm")
+	_expect_dto_has_no_truth_fields(spec_price, "J1: specialist price confirm")
+	_expect_dto_has_no_truth_fields(spec_list, "J1: specialist online confirm")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.list_confirm_summary(spec_list),
+		"J1: specialist online summary"
+	)
+	var spec_events := _j1_skill_signal_events()
+	var spec_informed := 0
+	for event: Dictionary in spec_events:
+		var payload: Dictionary = event.get("payload", {})
+		if bool(payload.get("skill_informed", false)):
+			spec_informed += 1
+			_expect_equal(
+				is_equal_approx(float(payload.get("demand_band_sigma", 1.0)), 0.07),
+				true,
+				"J1: Specialist σ is 0.07"
+			)
+	_expect_equal(spec_informed >= 3, true, "J1: Specialist instrumentation marks confirms informed")
+
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION,
+		{"set_id": &"AA-DUST", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(
+		String(_demand_signals.call("event_banner_text")).contains("Dustway"),
+		true,
+		"J1: Specialist reveals rotation leak without Research spend"
+	)
+	_expect_equal(
+		String(_demand_signals.call("rotation_watch_text")).contains("Rotation watch:"),
+		true,
+		"J1: Specialist rotation copy uses Rotation watch"
+	)
+	_assert_text_has_no_truth(
+		String(_demand_signals.call("rotation_watch_text")),
+		"J1: specialist rotation watch"
+	)
+
+	shop.fire_staff(0)
+	_expect_equal(shop.has_specialist_on_duty(), false, "J1: fire clears Specialist")
+	_expect_equal(
+		String(_demand_signals.call("event_banner_text")),
+		"",
+		"J1: rotation leak hides again without Specialist or Research"
+	)
+	_expect_equal(
+		_demand_signals.call("is_skill_informed", sku_id),
+		false,
+		"J1: firing Specialist turns skill channel off"
+	)
+
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "J1: HUD loads for skill-channel copy")
+	if hud != null:
+		Callable(hud, "_sync_staff_panel").call()
+		var staff_hint := hud.get_node_or_null("%StaffHint") as Label
+		_expect_equal(
+			staff_hint != null and staff_hint.text.contains("without Research spend"),
+			true,
+			"J1: staff hint names Specialist noise narrow"
+		)
+		_assert_text_has_no_truth(
+			staff_hint.text if staff_hint != null else "",
+			"J1: staff hint"
+		)
+		root.remove_child(hud)
+		hud.free()
+
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"J1: Soft _ensure_priceable_sku stays parked"
+	)
+	for path: String in [
+		"res://scripts/economy/demand_signal_service.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/ui/hud.gd",
+		"res://scripts/economy/online_listing_service.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("_ensure_priceable_sku"),
+			false,
+			"J1: %s does not call parked Soft helper" % path
+		)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _j1_comp_width(dto: Resource) -> int:
+	if dto == null:
+		return -1
+	return int(dto.get("shown_comp_high_cents")) - int(dto.get("shown_comp_low_cents"))
+
+
+func _j1_skill_signal_events() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for event_value: Variant in _qa_autoload.call("get_events"):
+		var event := event_value as Dictionary
+		if String(event.get("event", "")) == "demand_signal_shown":
+			result.append(event)
+	return result
 
 
 func _i1_unique_card() -> CardInstance:

@@ -833,7 +833,7 @@ text = "STAFF"
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"HintLabel"
-text = "Roster 0 / 1. Wages post at SETTLE. Specialist lowers Inspect and Research Attention."
+text = "Roster 0 / 1. Wages post at SETTLE. Specialist on duty narrows comps and demand bands without Research spend, and lowers Inspect/Research Attention."
 autowrap_mode = 3
 
 [node name="StaffRows" type="VBoxContainer" parent="StaffPanel/Content"]

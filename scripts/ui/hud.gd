@@ -1216,6 +1216,8 @@ func _sync_prep_action_buttons() -> void:
 		DemandSignalPresenter.format_cents(research_cash),
 		research_att,
 	]
+	if GameState.shop.has_specialist_on_duty():
+		research_hint.text += "\n" + DemandSignalPresenter.specialist_skill_hint()
 	research_confirm_button.text = DemandSignalPresenter.research_action_label(
 		research_cash,
 		research_att
@@ -1597,7 +1599,7 @@ func _sync_staff_panel() -> void:
 		)
 	if staff_hint != null:
 		staff_hint.text = (
-			"Roster %d / %d. Wages post at SETTLE. Specialist lowers Inspect and Research Attention."
+			"Roster %d / %d. Wages post at SETTLE. Specialist on duty narrows comps and demand bands without Research spend, and lowers Inspect/Research Attention."
 			% [GameState.shop.hired_count(), GameState.shop.staff_cap()]
 		)
 	if hire_cashier_button != null:

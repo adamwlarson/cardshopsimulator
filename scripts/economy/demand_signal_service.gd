@@ -131,7 +131,9 @@ func buy_confirm(
 			&"buy_confirm",
 			dto,
 			true_market_cents,
-			_true_demand_band(true_demand)
+			_true_demand_band(true_demand),
+			-1,
+			_skill_instrumentation(informed)
 		)
 	apply_inspect_state(dto)
 	return dto
@@ -247,6 +249,14 @@ func _research_duration_days(requested: int) -> int:
 		return clampi(requested, min_days, max_days)
 	var span := maxi(0, max_days - min_days)
 	return min_days + (_rng.randi() % (span + 1))
+
+
+func _skill_instrumentation(informed: bool) -> Dictionary:
+	return {
+		"informed": informed,
+		"demand_band_sigma": active_demand_band_sigma(informed),
+		"comp_narrow_factor": _narrow_factor() if informed else 1.0,
+	}
 
 
 func _narrow_factor() -> float:
@@ -442,7 +452,8 @@ func _populate_price_fields(
 			dto,
 			true_market_cents,
 			_true_demand_band(true_demand),
-			listed_price_cents
+			listed_price_cents,
+			_skill_instrumentation(informed)
 		)
 
 
