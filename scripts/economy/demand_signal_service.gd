@@ -348,6 +348,74 @@ func price_confirm(
 	informed: bool = false
 ) -> PriceConfirmSignal:
 	var dto := PriceConfirmSignal.new()
+	_populate_price_fields(
+		dto,
+		day,
+		sku_id,
+		listed_price_cents,
+		location,
+		channel,
+		informed,
+		&"price_confirm"
+	)
+	return dto
+
+
+func list_confirm(
+	day: int,
+	sku_id: StringName,
+	listed_price_cents: int,
+	location: InventoryLocation,
+	informed: bool = false
+) -> OnlineListConfirmSignal:
+	var dto := OnlineListConfirmSignal.new()
+	_populate_price_fields(
+		dto,
+		day,
+		sku_id,
+		listed_price_cents,
+		location,
+		Channel.MARKETPLACE,
+		informed,
+		&"list_confirm"
+	)
+	dto.fee_percent = _config.online_fee
+	dto.fee_cents = OnlineListingService.fee_cents_for(
+		listed_price_cents,
+		_config.online_fee
+	)
+	dto.ship_days_min = _config.online_ship_days_min
+	dto.ship_days_max = _config.online_ship_days_max
+	dto.unlocked = GameState.current_reputation >= _config.online_unlock_rep
+	dto.lock_reason = &"" if dto.unlocked else &"rep_locked"
+	return dto
+
+
+func refresh_list_confirm(
+	dto: OnlineListConfirmSignal,
+	listed_price_cents: int,
+	location: InventoryLocation
+) -> OnlineListConfirmSignal:
+	if dto == null:
+		return null
+	refresh_price_confirm(dto, listed_price_cents, location)
+	dto.fee_cents = OnlineListingService.fee_cents_for(
+		listed_price_cents,
+		dto.fee_percent
+	)
+	return dto
+
+
+func _populate_price_fields(
+	dto: PriceConfirmSignal,
+	day: int,
+	sku_id: StringName,
+	listed_price_cents: int,
+	location: InventoryLocation,
+	channel: Channel,
+	informed: bool,
+	screen: StringName
+) -> void:
 	var true_market_cents := _market_state.market_cents_for(sku_id)
 	var true_demand := _market_state.demand_score_for(sku_id)
 	var comp := _comp_range(true_market_cents, channel, informed)
@@ -370,13 +438,12 @@ func price_confirm(
 	dto.display_context = _display_context(location)
 	if _instrumentation != null:
 		_instrumentation.record_demand_signal_shown(
-			&"price_confirm",
+			screen,
 			dto,
 			true_market_cents,
 			_true_demand_band(true_demand),
 			listed_price_cents
 		)
-	return dto
 
 
 func refresh_price_confirm(

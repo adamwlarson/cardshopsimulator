@@ -122,6 +122,14 @@ size_flags_vertical = 4
 mouse_filter = 0
 text = "Price inventory"
 
+[node name="OpenOnlineButton" type="Button" parent="TopBar/Stats"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(132, 40)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 0
+text = "Online listings"
+
 [node name="OpenResearchButton" type="Button" parent="TopBar/Stats"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(168, 40)
@@ -490,6 +498,164 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"PrimaryButton"
 text = "Apply"
+
+[node name="OnlineListingList" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 520.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="OnlineListingList"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="OnlineListingList/Content"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "ONLINE LISTINGS"
+
+[node name="Hint" type="Label" parent="OnlineListingList/Content"]
+layout_mode = 2
+theme_type_variation = &"HintLabel"
+text = "List stock online. Fee 8% when it fills. Ships in 1–3 days. Held items cannot sell in-store."
+autowrap_mode = 3
+
+[node name="OnlineListingRows" type="VBoxContainer" parent="OnlineListingList/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="OnlineListingEmpty" type="Label" parent="OnlineListingList/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"EmptyLabel"
+text = "No stock to list"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ActiveCaption" type="Label" parent="OnlineListingList/Content"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Active holds"
+
+[node name="OnlineActiveRows" type="VBoxContainer" parent="OnlineListingList/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="OnlineListCancelButton" type="Button" parent="OnlineListingList/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Close"
+
+[node name="OnlineListConfirm" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 0
+offset_left = 48.0
+offset_top = 80.0
+offset_right = 560.0
+offset_bottom = 500.0
+mouse_filter = 0
+
+[node name="Content" type="VBoxContainer" parent="OnlineListConfirm"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="OnlineTitle" type="Label" parent="OnlineListConfirm/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "LIST ONLINE"
+autowrap_mode = 3
+
+[node name="OnlineChipRow" type="HBoxContainer" parent="OnlineListConfirm/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PositionChip" type="PanelContainer" parent="OnlineListConfirm/Content/OnlineChipRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SignalChip"
+
+[node name="OnlinePositionChip" type="Label" parent="OnlineListConfirm/Content/OnlineChipRow/PositionChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "◆ Position"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DemandChip" type="PanelContainer" parent="OnlineListConfirm/Content/OnlineChipRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SignalChip"
+
+[node name="OnlineDemandChip" type="Label" parent="OnlineListConfirm/Content/OnlineChipRow/DemandChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "● Demand"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MoveChip" type="PanelContainer" parent="OnlineListConfirm/Content/OnlineChipRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SignalChip"
+
+[node name="OnlineMoveChip" type="Label" parent="OnlineListConfirm/Content/OnlineChipRow/MoveChip"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"ChipLabel"
+text = "→ Move"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="OnlinePriceCaption" type="Label" parent="OnlineListConfirm/Content"]
+layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+text = "Your online list"
+
+[node name="OnlinePriceInput" type="LineEdit" parent="OnlineListConfirm/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+placeholder_text = "$44.99"
+
+[node name="OnlineSummary" type="Label" parent="OnlineListConfirm/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+text = "Demand signal"
+autowrap_mode = 3
+
+[node name="Actions" type="HBoxContainer" parent="OnlineListConfirm/Content"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="OnlineBackButton" type="Button" parent="OnlineListConfirm/Content/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Back"
+
+[node name="OnlineConfirmButton" type="Button" parent="OnlineListConfirm/Content/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
+text = "List online"
 
 [node name="ResearchList" type="PanelContainer" parent="."]
 unique_name_in_owner = true
