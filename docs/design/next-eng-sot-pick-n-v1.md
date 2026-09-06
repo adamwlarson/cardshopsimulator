@@ -88,3 +88,10 @@ No new events. QA asserts Flagship path (Large + Rep ≥ 80 + cash ≥ $50k) rea
 - [x] Sync this file to main before cloud agent
 - [x] Softs stay parked unless N3
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **N1 GO** (park N2/N3/N4). Softs parked. Eng Convention weekend spike launching. No Art. |
