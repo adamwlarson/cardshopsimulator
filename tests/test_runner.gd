@@ -23,6 +23,8 @@ var _captured_rent_decision: Dictionary = {}
 var _captured_beat_decision: Dictionary = {}
 var _captured_buy_focus_id: StringName = &""
 var _captured_buy_focus_beat: StringName = &""
+var _captured_showcase_decision: Dictionary = {}
+var _captured_showcase_failed: String = ""
 var _event_bus: Node
 var _game_state: Node
 var _economy: Node
@@ -86,6 +88,8 @@ func _initialize() -> void:
 	_event_bus.connect("rent_decision_requested", _capture_rent_decision)
 	_event_bus.connect("beat_decision_requested", _capture_beat_decision)
 	_event_bus.connect("buy_focus_requested", _capture_buy_focus)
+	_event_bus.connect("showcase_choice_requested", _capture_showcase_decision)
+	_event_bus.connect("showcase_choice_failed", _capture_showcase_failed)
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
 	_test_inventory_mutations_and_capacity()
@@ -150,6 +154,10 @@ func _initialize() -> void:
 	_test_c3_shady_confirm_has_no_truth()
 	_test_c3_report_applies_rep()
 	_test_hold_soft_polish()
+	_test_sec10_4_spike_staple()
+	_test_sec10_6_rent_firesale()
+	_test_sec10_7_titan_hype()
+	_test_sec10_8_slab_vs_singles()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -5574,6 +5582,628 @@ func _test_hold_soft_polish() -> void:
 	_game_state.call("start_new_game")
 
 
+func _test_sec10_4_spike_staple() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_qa_autoload.call("clear")
+	_qa_autoload.call("set_force_enabled", true)
+	_game_state.set("current_day", 3)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_scripted_customer = null
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"F1 #4: Normal day 3 FLOOR opens without QA trigger"
+	)
+	if not bool(_beat_director.call("is_started", SPIKE_STAPLE_BEAT)):
+		_beat_director.call("_on_day_phase_changed", DayPhasePolicy.FLOOR)
+	_expect_equal(
+		_beat_director.call("is_started", SPIKE_STAPLE_BEAT),
+		true,
+		"F1 #4: Spike staple reachable on Normal day 3–5 without debug"
+	)
+	_expect_equal(
+		_qa_has_beat_event("beat_started", SPIKE_STAPLE_BEAT),
+		true,
+		"F1 #4: emits beat_started"
+	)
+	_expect_equal(
+		_captured_scripted_customer != null,
+		true,
+		"F1 #4: Spike scripted customer emitted"
+	)
+	var staple := &"AA-BASE-088"
+	var spike := _captured_scripted_customer
+	if spike != null:
+		staple = spike.wants_sku
+		if staple.is_empty() and not spike.desired_skus.is_empty():
+			staple = spike.desired_skus[0]
+		_expect_equal(spike.display_name, "Spike", "F1 #4: customer is Spike")
+		_expect_equal(
+			staple in [&"AA-BASE-088", &"AA-BASE-078"],
+			true,
+			"F1 #4: wants Bastion Captain or Arcbolt Adept"
+		)
+		_expect_equal(spike.wants_sku, staple, "F1 #4: wants_sku matches the staple")
+	var hud := _instantiate_gameplay_hud()
+	var queue := CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		_game_state.adjust_reputation,
+		_game_state.spend_attention
+	)
+	if spike != null:
+		_expect_equal(queue.enqueue(spike), true, "F1 #4: Spike enqueues into CustomerServe")
+		_bind_customer_serve(hud, spike)
+		var serve := hud.get_node_or_null("%CustomerServe") as Control
+		var title := hud.get_node_or_null("%CustomerTitle") as Label
+		var summary := hud.get_node_or_null("%CustomerSummary") as Label
+		_expect_equal(
+			serve != null and serve.visible,
+			true,
+			"F1 #4: CustomerServe opens"
+		)
+		_expect_equal(
+			title != null and title.text.contains("Spike"),
+			true,
+			"F1 #4: CustomerServe titles Spike"
+		)
+		_expect_equal(
+			summary != null and summary.text.contains("Your list"),
+			true,
+			"F1 #4: CustomerServe uses Your list"
+		)
+		_expect_equal(
+			summary != null and summary.text.contains("AA-BASE-"),
+			false,
+			"F1 #4: Wants label is not a raw SKU"
+		)
+		if staple == &"AA-BASE-088":
+			_expect_equal(
+				summary != null and summary.text.contains("Bastion Captain"),
+				true,
+				"F1 #4: Wants shows Bastion Captain"
+			)
+		else:
+			_expect_equal(
+				summary != null and summary.text.contains("Arcbolt Adept"),
+				true,
+				"F1 #4: Wants shows Arcbolt Adept"
+			)
+		_assert_text_has_no_truth(
+			summary.text if summary != null else "",
+			"F1 #4 CustomerServe"
+		)
+		var stock_before := int(_inventory_service.call("card_count", staple))
+		var cash_before := int(_economy.get("balance_cents"))
+		var list_price := spike.listed_price_cents
+		_expect_equal(queue.sell_listed(), true, "F1 #4: sell at list resolves")
+		_beat_director.call("_on_customer_resolved", spike, &"sold")
+		_expect_equal(
+			int(_inventory_service.call("card_count", staple)),
+			stock_before - 1,
+			"F1 #4: sell removes the staple"
+		)
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before + list_price,
+			"F1 #4: sell pays list cash"
+		)
+		_expect_equal(
+			_beat_director.call("is_completed", SPIKE_STAPLE_BEAT),
+			true,
+			"F1 #4: sell completes the beat"
+		)
+		_expect_equal(
+			_qa_has_beat_event("beat_completed", SPIKE_STAPLE_BEAT),
+			true,
+			"F1 #4: sell emits beat_completed"
+		)
+	queue.free()
+	if hud != null:
+		root.remove_child(hud)
+		hud.free()
+
+	_game_state.call("start_new_game")
+	_qa_autoload.call("clear")
+	_qa_autoload.call("set_force_enabled", true)
+	_game_state.set("current_day", 4)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_scripted_customer = null
+	_expect_equal(_game_state.call("start_floor"), true, "F1 #4: day 4 FLOOR for refuse")
+	if not bool(_beat_director.call("is_started", SPIKE_STAPLE_BEAT)):
+		_beat_director.call("_on_day_phase_changed", DayPhasePolicy.FLOOR)
+	spike = _captured_scripted_customer
+	_expect_equal(spike != null, true, "F1 #4: Spike queues on day 4 refuse path")
+	queue = CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		_game_state.adjust_reputation,
+		_game_state.spend_attention
+	)
+	if spike != null:
+		staple = spike.wants_sku
+		if staple.is_empty():
+			staple = spike.target_sku
+		_expect_equal(queue.enqueue(spike), true, "F1 #4: refuse path enqueues Spike")
+		var refuse_stock := int(_inventory_service.call("card_count", staple))
+		var refuse_cash := int(_economy.get("balance_cents"))
+		var refuse_rep := int(_game_state.get("current_reputation"))
+		_expect_equal(queue.refuse(), true, "F1 #4: refuse resolves")
+		_beat_director.call("_on_customer_resolved", spike, &"refused")
+		_expect_equal(
+			int(_inventory_service.call("card_count", staple)),
+			refuse_stock,
+			"F1 #4: refuse keeps inventory"
+		)
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			refuse_cash,
+			"F1 #4: refuse does not pay cash"
+		)
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			refuse_rep - 1,
+			"F1 #4: refuse ticks Rep"
+		)
+		_expect_equal(
+			_beat_director.call("is_completed", SPIKE_STAPLE_BEAT),
+			true,
+			"F1 #4: refuse completes the beat"
+		)
+		_expect_equal(
+			_qa_has_beat_event("beat_completed", SPIKE_STAPLE_BEAT),
+			true,
+			"F1 #4: refuse emits beat_completed"
+		)
+	queue.free()
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_sec10_6_rent_firesale() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_qa_autoload.call("clear")
+	_qa_autoload.call("set_force_enabled", true)
+	_game_state.set("current_day", 7)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_rent_decision = {}
+	_captured_price_sku = &""
+	var hud := _instantiate_gameplay_hud()
+	_beat_director.call("_start_day_beats", 7)
+	_expect_equal(
+		_beat_director.call("is_started", RENT_FIRESALE_BEAT),
+		true,
+		"F1 #6: rent fire-sale reachable on Normal day 7 PREP without debug"
+	)
+	_expect_equal(
+		_qa_has_beat_event("beat_started", RENT_FIRESALE_BEAT),
+		true,
+		"F1 #6: emits beat_started"
+	)
+	_expect_equal(
+		bool(_captured_rent_decision.get("fire_sale_enabled", false)),
+		true,
+		"F1 #6: Fire-sale sealed reachable"
+	)
+	_expect_equal(
+		bool(_captured_rent_decision.get("accessory_enabled", false)),
+		true,
+		"F1 #6: Cut accessories reachable"
+	)
+	_expect_equal(
+		bool(_captured_rent_decision.get("loan_enabled", false)),
+		true,
+		"F1 #6: Payday loan reachable on Normal"
+	)
+	_assert_payload_has_no_truth(_captured_rent_decision, "F1 #6 rent payload")
+	if hud != null:
+		var rent_panel := hud.get_node_or_null("%RentDecision") as Control
+		var fire_sale := hud.get_node_or_null("%RentFireSaleButton") as Button
+		var accessories := hud.get_node_or_null("%RentAccessoriesButton") as Button
+		var loan := hud.get_node_or_null("%RentLoanButton") as Button
+		_expect_equal(
+			rent_panel != null and rent_panel.visible,
+			true,
+			"F1 #6: PREP rent-due modal is live"
+		)
+		_expect_equal(
+			fire_sale != null and fire_sale.visible and not fire_sale.disabled,
+			true,
+			"F1 #6: Fire-sale button live"
+		)
+		_expect_equal(
+			accessories != null and accessories.visible and not accessories.disabled,
+			true,
+			"F1 #6: Cut accessories button live"
+		)
+		_expect_equal(
+			loan != null and loan.visible and not loan.disabled,
+			true,
+			"F1 #6: Payday loan button live on Normal"
+		)
+		var rent_title := hud.get_node_or_null("%RentTitle") as Label
+		var rent_summary := hud.get_node_or_null("%RentSummary") as Label
+		_assert_text_has_no_truth(
+			rent_title.text if rent_title != null else "",
+			"F1 #6 rent title"
+		)
+		_assert_text_has_no_truth(
+			rent_summary.text if rent_summary != null else "",
+			"F1 #6 rent summary"
+		)
+	_expect_equal(
+		_beat_director.call("choose_rent_path", &"fire_sale"),
+		true,
+		"F1 #6: choosing Fire-sale sealed commits"
+	)
+	_expect_equal(
+		_captured_price_sku in [&"AA-DUST-ETB", &"AA-DUST-BLST"],
+		true,
+		"F1 #6: Fire-sale focuses Dustway sealed"
+	)
+	_expect_equal(
+		_beat_director.call("is_completed", RENT_FIRESALE_BEAT),
+		true,
+		"F1 #6: choosing Fire-sale closes the beat"
+	)
+	_expect_equal(
+		_qa_has_beat_event("beat_completed", RENT_FIRESALE_BEAT),
+		true,
+		"F1 #6: Fire-sale emits beat_completed"
+	)
+	if hud != null:
+		var price_panel := hud.get_node_or_null("%PriceEditor") as PanelContainer
+		_expect_equal(
+			price_panel != null and price_panel.visible,
+			true,
+			"F1 #6: Fire-sale opens PriceEditor"
+		)
+		var price_signal := hud.get("_price_signal") as PriceConfirmSignal
+		if price_signal != null:
+			_expect_dto_has_no_truth_fields(price_signal, "F1 #6 fire-sale PriceEditor")
+			_assert_text_has_no_truth(
+				DemandSignalPresenter.price_summary(price_signal, false),
+				"F1 #6 fire-sale price summary"
+			)
+		root.remove_child(hud)
+		hud.free()
+
+	_game_state.call("start_new_game")
+	_qa_autoload.call("clear")
+	_game_state.set("current_day", 7)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_price_sku = &""
+	_beat_director.call("_start_day_beats", 7)
+	_expect_equal(
+		_beat_director.call("choose_rent_path", &"cut_accessories"),
+		true,
+		"F1 #6: choosing Cut accessories commits"
+	)
+	_expect_equal(
+		String(_captured_price_sku).begins_with("ACC-"),
+		true,
+		"F1 #6: Cut accessories focuses ACC-*"
+	)
+	_expect_equal(
+		_beat_director.call("is_completed", RENT_FIRESALE_BEAT),
+		true,
+		"F1 #6: choosing Cut accessories closes the beat"
+	)
+
+	_game_state.call("start_new_game")
+	_qa_autoload.call("clear")
+	_game_state.set("current_day", 7)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 7)
+	var cash_before_loan := int(_economy.get("balance_cents"))
+	var rep_before_loan := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_beat_director.call("choose_rent_path", &"payday_loan"),
+		true,
+		"F1 #6: choosing Payday loan commits"
+	)
+	_expect_equal(
+		_beat_director.call("is_completed", RENT_FIRESALE_BEAT),
+		true,
+		"F1 #6: choosing Payday loan closes the beat"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before_loan + NORMAL_CONFIG.loan_shark_cash_cents,
+		"F1 #6: Payday loan adds cash"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before_loan - NORMAL_CONFIG.loan_shark_rep_hit,
+		"F1 #6: Payday loan hits Rep"
+	)
+
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 7)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_rent_decision = {}
+	hud = _instantiate_gameplay_hud()
+	_beat_director.call("_start_day_beats", 7)
+	_expect_equal(
+		bool(_captured_rent_decision.get("loan_enabled", true)),
+		false,
+		"F1 #6: Hard hides/disables payday loan"
+	)
+	if hud != null:
+		var hard_loan := hud.get_node_or_null("%RentLoanButton") as Button
+		_expect_equal(
+			hard_loan != null and not hard_loan.visible and hard_loan.disabled,
+			true,
+			"F1 #6: Hard loan button hidden and disabled"
+		)
+		root.remove_child(hud)
+		hud.free()
+	_expect_equal(
+		_beat_director.call("choose_rent_path", &"payday_loan"),
+		false,
+		"F1 #6: Hard payday loan cannot be chosen"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_sec10_7_titan_hype() -> void:
+	_free_lingering_gameplay_huds()
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_qa_autoload.call("clear")
+	_qa_autoload.call("set_force_enabled", true)
+	_game_state.set("current_day", 8)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_price_sku = &""
+	_captured_price_beat = &""
+	var hud := _instantiate_gameplay_hud()
+	_beat_director.call("_start_day_beats", 8)
+	_expect_equal(
+		_beat_director.call("is_started", TITAN_HYPE_BEAT),
+		true,
+		"F1 #7 assert: sec10_7_titan_hype starts on Normal day 8 without debug"
+	)
+	_expect_equal(
+		_qa_has_beat_event("beat_started", TITAN_HYPE_BEAT),
+		true,
+		"F1 #7 assert: emits beat_started"
+	)
+	_expect_equal(
+		_captured_price_sku,
+		&"AA-SKIE-047",
+		"F1 #7 assert: PriceEditor focus is Skiefall Titan"
+	)
+	_expect_equal(
+		_captured_price_beat,
+		TITAN_HYPE_BEAT,
+		"F1 #7 assert: focus carries sec10_7_titan_hype"
+	)
+	var titan_signal := _demand_signals.call(
+		"price_signal",
+		&"AA-SKIE-047",
+		_inventory_service.call("listed_price_for", &"AA-SKIE-047"),
+		_inventory_service.call("location_for", &"AA-SKIE-047")
+	) as PriceConfirmSignal
+	_expect_equal(
+		titan_signal.shown_demand_band,
+		&"hot",
+		"F1 #7 assert: Titan shows HOT"
+	)
+	_expect_dto_has_no_truth_fields(titan_signal, "F1 #7 assert price DTO")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(titan_signal, false),
+		"F1 #7 assert price summary"
+	)
+	if hud != null:
+		var price_panel := hud.get_node_or_null("%PriceEditor") as PanelContainer
+		_expect_equal(
+			price_panel != null and price_panel.visible,
+			true,
+			"F1 #7 assert: D-equivalent PriceEditor opens on Titan"
+		)
+		var demand := hud.get_node_or_null("%PriceDemandChip") as Label
+		var position := hud.get_node_or_null("%PricePositionChip") as Label
+		var move := hud.get_node_or_null("%PriceMoveChip") as Label
+		for node: Variant in [demand, position, move]:
+			if not node is Label:
+				continue
+			var chip := node as Label
+			_assert_text_has_no_truth(chip.text, "F1 #7 assert %s" % chip.name)
+		root.remove_child(hud)
+		hud.free()
+	_beat_director.call("_on_beat_ui_resolved", TITAN_HYPE_BEAT, &"cancelled")
+	_expect_equal(
+		_beat_director.call("is_completed", TITAN_HYPE_BEAT),
+		true,
+		"F1 #7 assert: Cancel completes the shipped Titan path"
+	)
+	_expect_equal(
+		_qa_has_beat_event("beat_completed", TITAN_HYPE_BEAT),
+		true,
+		"F1 #7 assert: emits beat_completed"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_sec10_8_slab_vs_singles() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_qa_autoload.call("clear")
+	_qa_autoload.call("set_force_enabled", true)
+	_game_state.set("current_day", 11)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_showcase_decision = {}
+	_captured_showcase_failed = ""
+	var hud := _instantiate_gameplay_hud()
+	_beat_director.call("_start_day_beats", 11)
+	_expect_equal(
+		_beat_director.call("is_started", SHOWCASE_BEAT),
+		true,
+		"F1 #8: slab vs singles reachable on Normal day 11 PREP without debug"
+	)
+	_expect_equal(
+		_qa_has_beat_event("beat_started", SHOWCASE_BEAT),
+		true,
+		"F1 #8: emits beat_started"
+	)
+	_expect_equal(
+		StringName(_captured_showcase_decision.get("beat_id", &"")),
+		SHOWCASE_BEAT,
+		"F1 #8: showcase payload tagged"
+	)
+	_assert_payload_has_no_truth(_captured_showcase_decision, "F1 #8 showcase payload")
+	if hud != null:
+		var panel := hud.get_node_or_null("%ShowcaseChoice") as Control
+		var slab_button := hud.get_node_or_null("%ShowcaseSlabButton") as Button
+		var singles_button := hud.get_node_or_null("%ShowcaseSinglesButton") as Button
+		var rotate_button := hud.get_node_or_null("%ShowcaseRotateButton") as Button
+		var title := hud.get_node_or_null("%ShowcaseTitle") as Label
+		_expect_equal(
+			panel != null and panel.visible,
+			true,
+			"F1 #8: showcase modal is live"
+		)
+		_expect_equal(
+			title != null and title.text == "Showcase tight — pick display",
+			true,
+			"F1 #8: showcase title"
+		)
+		_expect_equal(
+			slab_button != null and slab_button.visible and not slab_button.disabled,
+			true,
+			"F1 #8: slab choice reachable"
+		)
+		_expect_equal(
+			singles_button != null and singles_button.visible and not singles_button.disabled,
+			true,
+			"F1 #8: singles choice reachable"
+		)
+		_expect_equal(
+			rotate_button != null and rotate_button.visible and not rotate_button.disabled,
+			true,
+			"F1 #8: rotate choice reachable"
+		)
+		_assert_text_has_no_truth(
+			title.text if title != null else "",
+			"F1 #8 showcase title"
+		)
+	var slab := _inventory_service.call("get_slab", &"AA-SKIE-052") as SlabInstance
+	var titan := _inventory_service.call("get_card", &"AA-SKIE-047") as CardInstance
+	var paragon := _inventory_service.call("get_card", &"AA-SKIE-058") as CardInstance
+	_expect_equal(slab != null, true, "F1 #8: Empress slab seeded")
+	_expect_equal(titan != null and paragon != null, true, "F1 #8: chase singles seeded")
+	var case_location := InventoryLocation.new(InventoryLocation.Type.CASE)
+	var binder_location := InventoryLocation.new(InventoryLocation.Type.BINDER)
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var stuffed: Array[CardInstance] = []
+	var need := int(_inventory_service.call("case_free_slot_weight")) - 1
+	for card: CardInstance in inventory.cards:
+		if need <= 0:
+			break
+		if card.location.type != InventoryLocation.Type.BINDER:
+			continue
+		if card.sku_id in [&"AA-SKIE-047", &"AA-SKIE-058"]:
+			continue
+		if bool(_inventory_service.call("move_card_to", card, case_location)):
+			stuffed.append(card)
+			need -= 1
+	_expect_equal(
+		int(_inventory_service.call("case_free_slot_weight")) < 2,
+		true,
+		"F1 #8: stuffed case has under 2 free slot-weights"
+	)
+	_captured_showcase_failed = ""
+	_expect_equal(
+		_beat_director.call("choose_showcase", &"slab"),
+		false,
+		"F1 #8: illegal slab place is blocked"
+	)
+	_expect_equal(
+		_captured_showcase_failed.is_empty(),
+		false,
+		"F1 #8: over-capacity emits showcase_choice_failed"
+	)
+	_expect_equal(
+		bool(_inventory_service.call("move_slab_to", slab, case_location)),
+		false,
+		"F1 #8: case API rejects illegal slab place"
+	)
+	for card: CardInstance in stuffed:
+		_inventory_service.call("move_card_to", card, binder_location)
+	_expect_equal(
+		int(_inventory_service.call("case_free_slot_weight")) >= 2,
+		true,
+		"F1 #8: clearing filler restores slab space"
+	)
+	_expect_equal(
+		_beat_director.call("choose_showcase", &"rotate"),
+		true,
+		"F1 #8: rotate is a legal first choice"
+	)
+	_expect_equal(
+		slab.location.type,
+		InventoryLocation.Type.CASE,
+		"F1 #8: first rotate displays the slab"
+	)
+	_expect_equal(
+		_beat_director.call("is_completed", SHOWCASE_BEAT),
+		true,
+		"F1 #8: choosing rotate closes the beat"
+	)
+	_expect_equal(
+		_qa_has_beat_event("beat_completed", SHOWCASE_BEAT),
+		true,
+		"F1 #8: emits beat_completed"
+	)
+	_expect_equal(
+		_beat_director.call("choose_showcase", &"rotate"),
+		true,
+		"F1 #8: rotate stays reversible the same day"
+	)
+	_expect_equal(
+		titan.location.type,
+		InventoryLocation.Type.CASE,
+		"F1 #8: rotate swaps to chase singles"
+	)
+	_expect_equal(
+		paragon.location.type,
+		InventoryLocation.Type.CASE,
+		"F1 #8: both singles are displayed after rotate"
+	)
+	_expect_equal(
+		slab.location.type != InventoryLocation.Type.CASE,
+		true,
+		"F1 #8: slab leaves the case when singles rotate in"
+	)
+	_expect_equal(
+		_beat_director.call("choose_showcase", &"slab"),
+		true,
+		"F1 #8: player can still choose slab"
+	)
+	_expect_equal(
+		slab.location.type,
+		InventoryLocation.Type.CASE,
+		"F1 #8: slab choice displays Empress"
+	)
+	_expect_equal(
+		_beat_director.call("choose_showcase", &"singles"),
+		true,
+		"F1 #8: player can still choose singles"
+	)
+	if hud != null:
+		root.remove_child(hud)
+		hud.free()
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
 func _assert_hold_inherit_scalars(config: BalanceConfig, label: String) -> void:
 	_expect_equal(config.staff_noshow_mult, 0.4, "H2: %s staff_noshow_mult readable" % label)
 	_expect_equal(config.pull_attention, 5, "H3: %s pull_attention readable" % label)
@@ -5696,6 +6326,39 @@ func _capture_buy_focus(
 ) -> void:
 	_captured_buy_focus_id = opportunity_id
 	_captured_buy_focus_beat = beat_id
+
+
+func _capture_showcase_decision(payload: Dictionary) -> void:
+	_captured_showcase_decision = payload
+
+
+func _capture_showcase_failed(message: String) -> void:
+	_captured_showcase_failed = message
+
+
+func _qa_has_beat_event(event_name: String, beat_id: StringName) -> bool:
+	for event: Dictionary in _qa_autoload.call("get_events"):
+		if String(event.get("event", "")) != event_name:
+			continue
+		var payload: Dictionary = event.get("payload", {})
+		if String(payload.get("beat_id", "")) == String(beat_id):
+			return true
+	return false
+
+
+func _bind_customer_serve(hud: Node, customer: CustomerProfile) -> void:
+	if hud == null or customer == null:
+		return
+	if customer.target_sku.is_empty():
+		var sku_id := customer.wants_sku
+		if sku_id.is_empty() and not customer.desired_skus.is_empty():
+			sku_id = customer.desired_skus[0]
+		customer.target_sku = sku_id
+		customer.listed_price_cents = int(
+			_inventory_service.call("listed_price_for", sku_id)
+		)
+	Callable(hud, "_on_customer_head_changed").call(customer)
+	Callable(hud, "_on_customer_desk_ready").call(customer, true)
 
 
 func _choice_ids(payload: Dictionary) -> Array[StringName]:
