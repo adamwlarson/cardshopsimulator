@@ -77,3 +77,10 @@ No new systems. Polish backlog only.
 - [x] Sync this file to main before cloud agent
 - [x] Soft catalog stays closed
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **W1 GO** (park W2/W4; W3 dual-track separate). Soft catalog closed. Eng loan shark spike `bc-e913853b` launching. Main @ `440a7cf8`. |
