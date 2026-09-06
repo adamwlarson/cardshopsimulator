@@ -1,6 +1,6 @@
 # Next Eng SoT Pick E v1 — post C2 (beats vs polish)
 
-**Status:** Adopted — **C3 shipped #29**; **HOLD shipped #32**; **Option D event→Price bridge GO** (Eng spike in flight)
+**Status:** Adopted — **C3 shipped #29**; **HOLD shipped #32**; **Option D shipped #33** @ `b32703d9` (2026-09-06)
 **Author:** CSS Designer  
 **Date:** 2026-09-04  
 **Depends on:** pick-c (C1/C3), pick-d (C2 shipped #28), ui-wireflows §5.1 #3/#10, systems §8/#10  
@@ -18,7 +18,7 @@
 
 **Parked soft (non-blocking):** MidCenter densify AABB, apron FOV, `can_research` / Easy-Hard inherit, icon 2× / sell-tint, etc.
 
-**Gap:** Option D event→Price bridge **in flight**. C3 + HOLD shipped.
+**Gap:** Option D shipped #33. Queue empty — Design next SoT TBD.
 
 ---
 
