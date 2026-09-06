@@ -1,6 +1,6 @@
 # Next Eng SoT Pick M v1 — post L1
 
-**Status:** Adopted **M1 GO** — Eng spike in flight `bc-243a6aaf`. **M2 Large re-smoke SHIPPED** PASS @ `83885e7dc1fafe468a9de1e7d89458851ce19dd7` (no Eng S2+). Park M3/M4. Softs parked.
+**Status:** **M1 SHIPPED** — PR #42 merged @ `a266dcbcdd6b852040b95976d3d788cb30a5ec58` (tip `ce5577a4`). M2 Large re-smoke already SHIPPED. Park M3 Soft hygiene / M4 idle. Softs parked. Awaiting next Eng SoT pick (N).
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §8 / §7.3, pick-l (L1 economy shipped #39; Art shell #40 on main; stub-swap in flight)  
