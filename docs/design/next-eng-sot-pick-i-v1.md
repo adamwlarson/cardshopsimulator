@@ -1,6 +1,6 @@
 # Next Eng SoT Pick I v1 — post H2
 
-**Status:** Adopted — **I1 GO** (2026-09-06); park I2/I3/I4  
+**Status:** Adopted **I1 GO** — synced main @ `4160b14a`; Eng spike launching (online listings). Park I2/I3/I4. Soft seeds parked. No Art.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §4.4 / §4.5, pick-h (H2 shipped @ `8a7f7a73`)  
@@ -87,8 +87,15 @@ Tiny Eng hygiene: Soft `_ensure_priceable_sku` → **Won’t-Fix** with demo not
 
 ## PM checklist
 
-- [x] Choose **I1** (park I2/I3/I4)
-- [x] If I1: Eng spike vs systems §4.4; no Art required
-- [x] Sync this file to main before cloud agent
+- [x] Choose **I1** (park I2/I3/I4) — PM 2026-09-06 @ `4160b14a`
+- [x] If I1: Eng spike vs systems §4.4; no Art required — Eng spike launching
+- [x] Sync this file to main before cloud agent @ `4160b14a`
 - [x] Soft seeds stay parked unless I4
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **I1 GO** (park I2/I3/I4). Synced main @ `4160b14a`. Eng online-listings spike launching. Soft seeds parked. No Art. |
