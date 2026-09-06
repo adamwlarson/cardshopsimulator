@@ -1,6 +1,6 @@
 # Next Eng SoT Pick K v1 — post J1 (hold Eng until J2)
 
-**Status:** Adopted — **K2 GO** — J2 #38 shipped @ `2bfa0efd`; formal online+Research re-smoke **CLEAR TO KICK** (2026-09-06)
+**Status:** Adopted **K2 GO** — formal re-smoke **in flight** (J2 #38 shipped @ `2bfa0efd`); park K1/K3/K4; Soft seeds parked. Eng S2+ standby.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §4.4 / §4.5 / §10, pick-j (J1 shipped #37; J2 Art dual-track in flight)  
@@ -81,7 +81,7 @@ Wire systems §8 **Counterfeit scare** (graded trust ↓; inspect mandatory) ato
 ## PM checklist
 
 - [x] Choose **K2** (park K1/K3/K4) — PM 2026-09-06
-- [x] Hold Eng cloud / formal QA kick until J2 #38 merges — standing hold
+- [x] Hold Eng cloud / formal QA kick until J2 #38 merges — **lifted**; J2 shipped @ `2bfa0efd`; K2 formal kicked
 - [x] Sync this file to main when adopting
 - [x] Soft seeds stay parked unless K1
 
@@ -92,3 +92,4 @@ Wire systems §8 **Counterfeit scare** (graded trust ↓; inspect mandatory) ato
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **K2 GO** (park K1/K3/K4). Soft seeds parked. Formal QA/Eng hold until J2 Art #38 merges. |
+| 2026-09-06 | J2 Art #38 shipped @ `2bfa0efd`. K2 formal re-smoke kicked to QA. Soft parked. Eng S2+ standby. |
