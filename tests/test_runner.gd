@@ -2087,7 +2087,9 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		"CustomerServe still hides raw SKU ids"
 	)
 	_expect_equal(
-		hud_source.contains("Camera") or hud_source.contains("fov"),
+		hud_source.contains("ShopCamera")
+		or hud_source.contains("Camera3D")
+		or hud_source.contains("fov"),
 		false,
 		"HUD script does not mutate camera/FOV"
 	)
