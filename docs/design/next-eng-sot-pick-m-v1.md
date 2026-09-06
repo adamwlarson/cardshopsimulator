@@ -93,3 +93,4 @@ No new systems. Art/Eng polish only.
 |------|----------|
 | 2026-09-06 | PM adopted **M1 GO** (park M3/M4). M2 Large re-smoke = QA beat after stub-swap. Softs parked. Eng holds until `bc-131c43f0` tip-freeze. |
 | 2026-09-06 | Stub-swap #41 merged @ `2afba0c2`. M1 Eng spike launched `bc-243a6aaf`. M2 Large re-smoke kicked concurrent. Softs parked. |
+| 2026-09-06 | **M1 SHIPPED #42** @ `a266dcbc`. M2 PASS @ `83885e7d`. Softs parked. Queue → pick-n. |
