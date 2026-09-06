@@ -1,6 +1,6 @@
 # Next Eng SoT Pick H v1 — post G1
 
-**Status:** Adopted — **H2 GO** (2026-09-06); park H1/H3; STOP §10 Normal campaign smoke  
+**Status:** Adopted **H2 GO** — STOP §10 Normal campaign smoke; park H1/H3; Soft seeds parked. Eng S2+ standby only.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §4.4 / §4.5 / §10, pick-g (G1 shipped #35)  
@@ -80,8 +80,15 @@ Choose **H1** only if Adam wants the online channel before hands-on. Choose **H3
 
 ## PM checklist
 
-- [x] Choose **H2** (park H1/H3)
+- [x] Choose **H2** (park H1/H3) — PM 2026-09-06
 - [x] If H2: QA owns playtest plan; Eng on standby for S2+
-- [x] Sync this file to main before formal playtest kick
+- [x] Sync this file to main before any cloud agent / formal playtest kick
 - [x] Soft seeds stay parked unless H3 chosen
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **H2 GO** (park H1/H3). Soft seeds parked. No Eng systems spike; S2+ from QA campaign smoke only. |
