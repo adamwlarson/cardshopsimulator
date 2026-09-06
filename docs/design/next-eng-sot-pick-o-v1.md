@@ -82,3 +82,10 @@ QA asserts Flagship (Large + Rep ≥ 80 + cash ≥ $50k) reachability; Eng S2+ o
 - [x] Sync this file to main before cloud agent
 - [x] Softs stay parked unless O3
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **O1 GO** (park O2/O3/O4). Softs parked. Eng Theft ring spike launching. No Art. |
