@@ -89,3 +89,4 @@ QA asserts Flagship (Large + Rep ≥ 80 + cash ≥ $50k) reachability; Eng S2+ o
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **O1 GO** (park O2/O3/O4). Softs parked. Eng Theft ring spike launching. No Art. |
+| 2026-09-06 | **O1 SHIPPED #44** @ `3074c9d6`. Soft EventBanner rumor Soft OK MVP. Softs parked. Queue → pick-p. |
