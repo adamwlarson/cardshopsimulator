@@ -128,6 +128,7 @@ func _initialize() -> void:
 	_test_option_d_cancel_keeps_event_apply_persists()
 	_test_counterfeit_scare_event()
 	_test_convention_weekend_event()
+	_test_theft_ring_event()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -2410,9 +2411,10 @@ func _test_market_events_seven_day_seeded_run() -> void:
 		and FileAccess.get_file_as_string("res://data/events.json").contains("soft_rotation_leak")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("fog_day")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("counterfeit_scare")
-		and FileAccess.get_file_as_string("res://data/events.json").contains("convention_weekend"),
+		and FileAccess.get_file_as_string("res://data/events.json").contains("convention_weekend")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("theft_ring"),
 		true,
-		"C1 pack catalogs hype, rotation leak, fog, counterfeit scare, and convention"
+		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, and theft ring"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 
@@ -3942,6 +3944,495 @@ func _test_convention_weekend_save_load() -> void:
 		"N1: restored banner still names convention"
 	)
 	_assert_text_has_no_truth(restored_banner, "N1 restored convention banner")
+
+
+func _test_theft_ring_event() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_theft_ring_can_fire()
+	_test_theft_ring_shrink_multiplier()
+	_test_theft_ring_staff_lever_or_wait_out()
+	_test_theft_ring_section_45_and_banner()
+	_test_theft_ring_pack_coherence()
+	_test_theft_ring_save_load()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_theft_ring_can_fire() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(started != null, true, "O1: formal start_pack_event fires theft ring")
+	_expect_equal(started.kind, MarketEvent.KIND_THEFT_RING, "O1: kind is theft_ring")
+	_expect_equal(started.duration_days, 3, "O1: duration is 3 days")
+	_expect_equal(started.remaining_days, 3, "O1: remaining_days tracks the 3-day window")
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		true,
+		"O1: pack exposes theft ring flag"
+	)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"O1: theft ring does not open Option D PriceEditor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var fired := false
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 64):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		_qa_autoload.call("clear")
+		for _day_index: int in range(14):
+			_game_state.call("start_floor")
+			_game_state.call("start_settle")
+			var rolled: MarketEvent = _demand_signals.call("active_event")
+			if rolled != null and rolled.kind == MarketEvent.KIND_THEFT_RING:
+				fired = true
+				break
+			if int(_game_state.get("current_day")) < 14:
+				_game_state.call("advance_day")
+		if fired:
+			break
+	_expect_equal(fired, true, "O1: seeded settle run can roll theft_ring")
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_theft_ring_shrink_multiplier() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_shrink_multiplier")), 1.0),
+		true,
+		"O1: shrink mult is 1.0 with event off"
+	)
+	var baseline_rate := float(_economy.call("effective_shrink_rate"))
+	_economy.call("_settle_shrink")
+	var baseline := _last_shrink_applied()
+	_expect_equal(baseline.is_empty(), false, "O1: baseline shrink is instrumented")
+	_expect_equal(
+		is_equal_approx(float(baseline.get("shrink_mult", 0.0)), 1.0),
+		true,
+		"O1: baseline shrink_mult is 1.0"
+	)
+	_expect_equal(
+		is_equal_approx(float(baseline.get("rate", 0.0)), baseline_rate),
+		true,
+		"O1: baseline instrumented rate matches effective_shrink_rate"
+	)
+	var baseline_cogs := int(baseline.get("cogs_cents", 0))
+	var baseline_loss := int(baseline.get("loss_cents", 0))
+	_expect_equal(baseline_cogs > 0, true, "O1: seed inventory has COGS for shrink")
+
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_shrink_multiplier")),
+			MarketEventService.THEFT_RING_SHRINK_MULT
+		),
+		true,
+		"O1: active shrink mult is ×3"
+	)
+	var theft_rate := float(_economy.call("effective_shrink_rate"))
+	_expect_equal(
+		is_equal_approx(theft_rate, baseline_rate * MarketEventService.THEFT_RING_SHRINK_MULT),
+		true,
+		"O1: effective shrink rate is ×3 vs same-inventory baseline"
+	)
+	_qa_autoload.call("clear")
+	_economy.call("_settle_shrink")
+	var theft := _last_shrink_applied()
+	_expect_equal(bool(theft.get("theft_ring", false)), true, "O1: shrink payload flags theft ring")
+	_expect_equal(
+		is_equal_approx(
+			float(theft.get("shrink_mult", 0.0)),
+			MarketEventService.THEFT_RING_SHRINK_MULT
+		),
+		true,
+		"O1: instrumentation records shrink_mult ×3"
+	)
+	_expect_equal(
+		is_equal_approx(float(theft.get("rate", 0.0)), theft_rate),
+		true,
+		"O1: instrumented rate is the multiplied settle rate"
+	)
+	_expect_equal(
+		int(theft.get("cogs_cents", 0)),
+		baseline_cogs,
+		"O1: theft settle uses the same inventory COGS"
+	)
+	var theft_loss := int(theft.get("loss_cents", 0))
+	_expect_equal(theft_loss > baseline_loss, true, "O1: theft loss exceeds baseline")
+	_expect_equal(
+		theft_loss >= maxi(1, roundi(float(baseline_loss) * 2.4)),
+		true,
+		"O1: shrink loss ≈ ×3 vs baseline same inventory"
+	)
+	_demand_signals.call("apply_event_save", {})
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		false,
+		"O1: clearing theft ring drops the flag"
+	)
+	_expect_equal(
+		is_equal_approx(float(_economy.call("effective_shrink_rate")), baseline_rate),
+		true,
+		"O1: shrink rate restores after the event ends"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_theft_ring_staff_lever_or_wait_out() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var unstaffed_rate := float(_economy.call("effective_shrink_rate"))
+	_expect_equal(
+		(_game_state.get("shop") as ShopState).has_cashier_on_duty(),
+		false,
+		"O1: Normal start has no cashier on the floor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_economy.call("_settle_shrink")
+	var unstaffed := _last_shrink_applied()
+	_expect_equal(
+		bool(unstaffed.get("staff_on_floor", true)),
+		false,
+		"O1: unstaffed shrink records staff_on_floor false"
+	)
+
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "O1: staff-up lever hires a cashier")
+	_expect_equal(shop.has_cashier_on_duty(), true, "O1: hired cashier is on duty")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var staffed_rate := float(_economy.call("effective_shrink_rate"))
+	_expect_equal(
+		staffed_rate < unstaffed_rate,
+		true,
+		"O1: staff on floor reduces theft-ring loss rate vs unstaffed"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_shrink_multiplier")),
+			MarketEventService.THEFT_RING_SHRINK_MULT
+		),
+		true,
+		"O1: staff lever dampens the loss rate, not a camera unlock"
+	)
+	_qa_autoload.call("clear")
+	_economy.call("_settle_shrink")
+	var staffed := _last_shrink_applied()
+	_expect_equal(
+		bool(staffed.get("staff_on_floor", false)),
+		true,
+		"O1: staffed shrink records staff_on_floor"
+	)
+	_expect_equal(
+		int(staffed.get("loss_cents", 0)) < int(unstaffed.get("loss_cents", 0)),
+		true,
+		"O1: staffed theft loss is below unstaffed theft loss"
+	)
+
+	var service_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/market_event_service.gd"
+	)
+	_expect_equal(
+		service_src.contains("Cameras (unlock) are out of pack"),
+		true,
+		"O1: wait-out is documented — cameras stay locked this pack"
+	)
+	_expect_equal(
+		service_src.contains("camera unlock") == false
+		or service_src.contains("Cameras (unlock) are out of pack"),
+		true,
+		"O1: no camera unlock mini-tree"
+	)
+
+	_game_state.call("start_new_game")
+	var wait: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(wait != null, true, "O1: wait-out fixture starts")
+	var wait_rate := float(_economy.call("effective_shrink_rate"))
+	_demand_signals.call("roll_settle_events")
+	var after_one: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		after_one != null and after_one.kind == MarketEvent.KIND_THEFT_RING,
+		true,
+		"O1: day 1 wait-out keeps the ring active"
+	)
+	_expect_equal(after_one.remaining_days, 2, "O1: remaining_days ticks 3→2")
+	_expect_equal(
+		is_equal_approx(float(_economy.call("effective_shrink_rate")), wait_rate),
+		true,
+		"O1: shrink stays ×3 while remaining_days > 0"
+	)
+	_demand_signals.call("roll_settle_events")
+	var after_two: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		after_two != null and after_two.remaining_days == 1,
+		true,
+		"O1: remaining_days ticks 2→1"
+	)
+	_demand_signals.call("roll_settle_events")
+	_demand_signals.call("apply_event_save", {})
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		false,
+		"O1: wait-out / clear ends the ring"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_shrink_multiplier")), 1.0),
+		true,
+		"O1: shrink restores after wait-out"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_theft_ring_section_45_and_banner() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Rumor"), true, "O1: banner is rumor telegraph")
+	_expect_equal(banner.contains("floor"), true, "O1: rumor names the floor")
+	_expect_equal(
+		banner.to_lower().contains("staff") or banner.to_lower().contains("wait"),
+		true,
+		"O1: rumor names the staff / wait-out lever"
+	)
+	_expect_equal(banner.contains("true_market"), false, "O1: rumor has no true_market")
+	_assert_text_has_no_truth(banner, "O1 theft ring banner")
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var payload: Dictionary = _demand_signals.call("roll_settle_events")
+	_assert_payload_has_no_truth(payload, "O1 theft market_event_rolled")
+	_expect_equal(
+		payload.has("shrink_mult") and payload.has("theft_ring"),
+		true,
+		"O1: roll instrumentation records shrink_mult"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"O1: rumor banner does not open Option D PriceEditor"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "O1: HUD loads for theft rumor")
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		_expect_equal(banner_label != null, true, "O1: thin event banner exists")
+		_expect_equal(
+			banner_label != null
+			and banner_label.visible
+			and banner_label.text.contains("Rumor"),
+			true,
+			"O1: HUD banner shows theft rumor without a new screen"
+		)
+		_assert_text_has_no_truth(
+			banner_label.text if banner_label != null else "",
+			"O1 HUD theft banner"
+		)
+		var price_panel := hud.get_node_or_null("%PriceEditor") as PanelContainer
+		_expect_equal(
+			price_panel == null or not price_panel.visible,
+			true,
+			"O1: HUD does not force PriceEditor for theft ring"
+		)
+		var demand_chip := hud.get_node_or_null("%PriceDemandChip") as Label
+		_expect_equal(demand_chip != null, true, "O1: PriceEditor demand chip still present")
+		hud.queue_free()
+
+
+func _test_theft_ring_pack_coherence() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var convention: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(convention != null, true, "O1: Convention weekend still starts")
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		false,
+		"O1: convention replaces theft ring on the shared pack bus"
+	)
+	_expect_equal(
+		_demand_signals.call("has_convention_weekend"),
+		true,
+		"O1: Convention weekend modifiers still apply"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_shrink_multiplier")), 1.0),
+		true,
+		"O1: convention does not keep theft shrink ×3"
+	)
+	var scare: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(scare != null, true, "O1: Counterfeit scare still starts")
+	_expect_equal(
+		_demand_signals.call("has_counterfeit_scare"),
+		true,
+		"O1: Counterfeit scare modifiers still apply"
+	)
+	var hype: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": &"AA-SKIE-047", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(hype != null, true, "O1: Option D hype still starts")
+	_expect_equal(hype.sku_id, &"AA-SKIE-047", "O1: hype still targets Titan")
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		true,
+		"O1: Option D hype still wants the PriceEditor"
+	)
+	var fog: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_FOG,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(fog != null, true, "O1: fog day still starts")
+	_expect_equal(_demand_signals.call("has_fog_flag"), true, "O1: fog flag still applies")
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		false,
+		"O1: fog does not leak theft shrink"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"O1: Soft _ensure_priceable_sku stays parked"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/economy.gd"
+		).contains("_ensure_priceable_sku"),
+		false,
+		"O1: settle shrink does not call parked Soft helper"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/inventory_service.gd"
+		).contains("func apply_medium_capacity"),
+		true,
+		"O1: Soft apply_medium_capacity naming stays untouched"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("camera unlock"),
+		false,
+		"O1: no camera unlock content in the event catalog"
+	)
+
+
+func _test_theft_ring_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(started != null, true, "O1 save: theft ring starts")
+	_game_state.set("current_day", 4)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "O1 theft ring save")
+	var stored: Dictionary = saved.get("market_event", {})
+	_expect_equal(String(stored.get("id", "")), "theft_ring", "O1 save writes event id")
+	_expect_equal(int(stored.get("remaining_days", 0)), 3, "O1 save writes remaining days")
+	_expect_equal(String(stored.get("kind", "")), "theft_ring", "O1 save writes kind")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		false,
+		"O1: new game clears theft ring"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"O1: restore_save accepts theft ring snapshot"
+	)
+	var restored: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(restored != null, true, "O1: save/load restores theft ring")
+	_expect_equal(restored.kind, MarketEvent.KIND_THEFT_RING, "O1: restored kind")
+	_expect_equal(restored.remaining_days, 3, "O1: save/load restores remaining days")
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		true,
+		"O1: restored theft ring re-applies shrink ×3"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_shrink_multiplier")),
+			MarketEventService.THEFT_RING_SHRINK_MULT
+		),
+		true,
+		"O1: restored theft ring still multiplies shrink"
+	)
+	var restored_banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(
+		restored_banner.contains("Rumor"),
+		true,
+		"O1: restored banner still uses rumor copy"
+	)
+	_assert_text_has_no_truth(restored_banner, "O1 restored theft banner")
+
+
+func _last_shrink_applied() -> Dictionary:
+	var last: Dictionary = {}
+	for event_value: Variant in _qa_autoload.call("get_events"):
+		var event := event_value as Dictionary
+		if String(event.get("event", "")) == "shrink_applied":
+			last = event.get("payload", {})
+	return last
 
 
 func _assert_option_d_editor_open(

@@ -6,6 +6,7 @@ const KIND_ROTATION := &"soft_rotation_leak"
 const KIND_FOG := &"fog_day"
 const KIND_COUNTERFEIT := &"counterfeit_scare"
 const KIND_CONVENTION := &"convention_weekend"
+const KIND_THEFT_RING := &"theft_ring"
 
 var id: StringName = &""
 var kind: StringName = &""

@@ -106,17 +106,27 @@ func settle_day(day: int) -> void:
 	DemandSignals.roll_settle_events()
 
 
+func effective_shrink_rate() -> float:
+	return GameState.shop.shrink_rate() * DemandSignals.active_shrink_multiplier()
+
+
 func _settle_shrink() -> void:
-	var rate := GameState.shop.shrink_rate()
+	var base_rate := GameState.shop.shrink_rate()
+	var shrink_mult := DemandSignals.active_shrink_multiplier()
+	var rate := base_rate * shrink_mult
 	var applied: Dictionary = InventoryService.apply_daily_shrink(rate)
 	QaInstrumentation.record_shrink_applied({
 		"day": GameState.current_day,
 		"rate": rate,
+		"base_rate": base_rate,
+		"shrink_mult": shrink_mult,
 		"cogs_cents": int(applied.get("cogs_cents", 0)),
 		"loss_cents": int(applied.get("loss_cents", 0)),
 		"units_removed": int(applied.get("units_removed", 0)),
 		"understaffed": GameState.shop.is_floor_understaffed()
 			or not GameState.shop.has_cashier_on_duty(),
+		"staff_on_floor": GameState.shop.has_cashier_on_duty(),
+		"theft_ring": DemandSignals.has_theft_ring(),
 		"theft_bias": _on_duty_theft_bias(),
 	})
 

@@ -12,6 +12,9 @@ const COUNTERFEIT_SHADY_WIDTH_MULT := 1.35
 const CONVENTION_TRAFFIC_MULT := 2.0
 const CONVENTION_WHALE_WEIGHT_MULT := 2.5
 const CONVENTION_CALENDAR_WEIGHT_MULT := 2.5
+## systems §8 Theft ring: Shrink ×3 for 3 days. Cameras (unlock) are out of pack —
+## staff coverage on the floor dampens loss; otherwise wait out the window.
+const THEFT_RING_SHRINK_MULT := 3.0
 const TITAN_SKU := &"AA-SKIE-047"
 const ROTATION_SET_ID := &"AA-DUST"
 
@@ -106,7 +109,7 @@ func _load_catalog() -> void:
 		for entry_value: Variant in (parsed as Dictionary).get("events", []):
 			if entry_value is Dictionary:
 				defs.append(entry_value as Dictionary)
-	if defs.size() >= 5:
+	if defs.size() >= 6:
 		return
 	defs = [
 		_fallback_def(&"hype_spike", "Hype spike", false, 1, 3),
@@ -114,6 +117,7 @@ func _load_catalog() -> void:
 		_fallback_def(&"fog_day", "Fog day", true, 1, 1),
 		_fallback_def(&"counterfeit_scare", "Counterfeit scare", true, 1, 3),
 		_fallback_def(&"convention_weekend", "Convention weekend", false, 2, 2),
+		_fallback_def(&"theft_ring", "Theft ring", true, 3, 3),
 	]
 
 
