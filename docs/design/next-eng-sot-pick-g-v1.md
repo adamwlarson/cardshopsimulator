@@ -1,6 +1,6 @@
 # Next Eng SoT Pick G v1 — post F1
 
-**Status:** Adopted **G1 GO** — synced main @ `c9cc3b4b`; Eng spike launching. Park G2/G3. Soft seeds parked.  
+**Status:** Adopted — **G1 shipped #35** @ `8a7f7a73` (2026-09-06); park G2; G3 STOP not chosen  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §2.2 / §4.5 / §3 (online), ui-wireflows Inspect★, pick-f (F1 shipped #34)  
