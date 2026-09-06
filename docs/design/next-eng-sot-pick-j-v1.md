@@ -1,6 +1,6 @@
 # Next Eng SoT Pick J v1 — post I1
 
-**Status:** **J1 shipped #37** @ `8bd03a47`; Softs parked. J2 Art dual-track still in flight (#38). Park J3→pick-k K1; J4→pick-k K2.  
+**Status:** Adopted — **J1 shipped #37** @ `8bd03a47`; **J2 Art shipped #38** @ `2bfa0efd` (2026-09-06); park J3/J4
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §3 / §4.5 / §6.2, pick-i (I1 shipped #36)  
