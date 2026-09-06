@@ -964,11 +964,18 @@ func _on_beat_decision_resolved(
 		&"keep_solo":
 			beat_toast.text = "Staying solo today"
 		&"sign_lease":
-			beat_toast.text = "Medium lease signed — floor unlocked, rent changes next week"
+			if beat_id == BeatInjectionService.EXPAND_LARGE_BEAT:
+				beat_toast.text = "Large lease signed — floor unlocked, rent changes next week"
+			else:
+				beat_toast.text = "Medium lease signed — floor unlocked, rent changes next week"
 		&"wait_for_rep":
 			beat_toast.text = "Waiting on reputation — still Small"
+		&"wait_for_cash_rep":
+			beat_toast.text = "Waiting on cash and reputation — still Medium"
 		&"stay_small":
 			beat_toast.text = "Staying Small"
+		&"stay_medium":
+			beat_toast.text = "Staying Medium"
 		&"buy":
 			beat_toast.text = "Reviewing the trunk lot"
 		&"report":

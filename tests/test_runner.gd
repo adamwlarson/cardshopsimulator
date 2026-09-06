@@ -11,6 +11,7 @@ const MARKETPLACE_OUTING_BEAT := &"sec10_3_marketplace_outing"
 const HIRE_CASHIER_BEAT := &"sec10_5_hire_cashier"
 const EXPAND_MEDIUM_BEAT := &"sec10_9_expand_medium"
 const SHADY_TRUNK_BEAT := &"sec10_10_shady_trunk"
+const EXPAND_LARGE_BEAT := &"sec10_11_expand_large"
 
 var _failures: int = 0
 var _qa := QaInstrumentationService.new()
@@ -132,6 +133,8 @@ func _initialize() -> void:
 	_test_expand_medium_beat()
 	_test_medium_floor_growth()
 	_test_medium_overhead_lights()
+	_test_expand_large_beat()
+	_test_large_floor_growth()
 	_test_shady_trunk_beat()
 	_test_showcase_slab_and_singles_preconditions()
 	_test_shop_camera_framing()
@@ -1235,12 +1238,95 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(HARD_CONFIG.staff_cap_small, 1, "hard staff_cap_small inherits")
 	_expect_equal(EASY_CONFIG.staff_cap_medium, 3, "easy staff_cap_medium inherits")
 	_expect_equal(HARD_CONFIG.staff_cap_medium, 3, "hard staff_cap_medium inherits")
+	_expect_equal(NORMAL_CONFIG.staff_cap_large, 5, "normal staff_cap_large")
+	_expect_equal(EASY_CONFIG.staff_cap_large, 5, "easy staff_cap_large inherits")
+	_expect_equal(HARD_CONFIG.staff_cap_large, 5, "hard staff_cap_large inherits")
+	_expect_equal(NORMAL_CONFIG.rent_large_weekly_cents, 400_000, "normal Large rent $4,000")
+	_expect_equal(EASY_CONFIG.rent_large_weekly_cents, 400_000, "easy Large rent inherits")
+	_expect_equal(HARD_CONFIG.rent_large_weekly_cents, 400_000, "hard Large rent inherits")
+	_expect_equal(NORMAL_CONFIG.expand_large_cash_cents, 4_000_000, "normal Large cash gate $40k")
+	_expect_equal(NORMAL_CONFIG.expand_large_rep, 70, "normal Large Rep gate 70")
+	_expect_equal(EASY_CONFIG.expand_large_cash_cents, 4_000_000, "easy Large cash inherits")
+	_expect_equal(HARD_CONFIG.expand_large_rep, 70, "hard Large Rep inherits")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.expand_medium_traffic_mult, 1.0),
+		true,
+		"Medium traffic scalar stays 1.0 (shipped Medium spawn)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.expand_large_traffic_mult, 1.25),
+		true,
+		"Large traffic scalar is 1.25 versus Medium"
+	)
+	_expect_equal(
+		is_equal_approx(EASY_CONFIG.expand_large_traffic_mult, 1.25),
+		true,
+		"easy Large traffic inherits"
+	)
+	_expect_equal(
+		is_equal_approx(HARD_CONFIG.expand_large_traffic_mult, 1.25),
+		true,
+		"hard Large traffic inherits"
+	)
+	var rent_step := (
+		float(NORMAL_CONFIG.rent_large_weekly_cents)
+		/ float(NORMAL_CONFIG.rent_medium_weekly_cents)
+	)
+	_expect_equal(
+		NORMAL_CONFIG.expand_large_traffic_mult < 2.0,
+		true,
+		"Large traffic is not 2× Medium"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.expand_large_traffic_mult < rent_step,
+		true,
+		"Large traffic is sublinear versus the 1.67× rent step"
+	)
+	_expect_equal(
+		is_equal_approx(
+			NORMAL_CONFIG.shop_traffic_mult(ShopState.Tier.MEDIUM),
+			1.0
+		),
+		true,
+		"Medium shop traffic mult is the documented Medium scalar"
+	)
+	_expect_equal(
+		is_equal_approx(
+			NORMAL_CONFIG.shop_traffic_mult(ShopState.Tier.LARGE),
+			1.25
+		),
+		true,
+		"Large shop traffic mult is Medium × Large scalars"
+	)
+	_expect_equal(
+		is_equal_approx(
+			NORMAL_CONFIG.customer_spawn_wait_seconds(12.0, ShopState.Tier.LARGE),
+			9.6
+		),
+		true,
+		"Large spawn wait is 12s / 1.25"
+	)
 
 
 func _test_normal_shop_capacity() -> void:
 	var capacity := ShopCapacity.new()
 	_expect_equal(capacity.display_slots, NORMAL_CONFIG.case_slots, "normal case slots")
 	_expect_equal(capacity.storage_units, NORMAL_CONFIG.backstock_bins, "normal backstock bins")
+	capacity.apply_large_upgrade()
+	_expect_equal(
+		capacity.display_slots,
+		NORMAL_CONFIG.case_slots
+		+ ShopState.MEDIUM_CASE_SLOT_BONUS
+		+ ShopState.LARGE_CASE_SLOT_BONUS,
+		"Large case bonus stacks on Medium"
+	)
+	_expect_equal(
+		capacity.storage_units,
+		NORMAL_CONFIG.backstock_bins
+		+ ShopState.MEDIUM_BACKSTOCK_BONUS
+		+ ShopState.LARGE_BACKSTOCK_BONUS,
+		"Large backstock bonus stacks on Medium"
+	)
 
 
 func _test_weekly_rent_schedule() -> void:
@@ -1248,6 +1334,8 @@ func _test_weekly_rent_schedule() -> void:
 	_expect_equal(NORMAL_CONFIG.is_rent_due_day(7), true, "day seven weekly settle")
 	_expect_equal(NORMAL_CONFIG.is_rent_due_day(14), true, "recurring weekly settle")
 	_expect_equal(NORMAL_CONFIG.rent_small_weekly_cents, 120_000, "weekly rent amount")
+	_expect_equal(NORMAL_CONFIG.rent_medium_weekly_cents, 240_000, "Medium weekly rent")
+	_expect_equal(NORMAL_CONFIG.rent_large_weekly_cents, 400_000, "Large weekly rent")
 
 
 func _test_customer_archetype_weights() -> void:
@@ -3645,6 +3733,444 @@ func _test_medium_overhead_lights() -> void:
 
 	_game_state.call("start_new_game")
 	_assert_overhead_lights_for_tier(false, "new game hides Medium extras")
+
+
+func _test_expand_large_beat() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 40)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 40)
+	_expect_equal(
+		_beat_director.call("is_started", EXPAND_LARGE_BEAT),
+		false,
+		"Large does not start while the shop is still Small"
+	)
+
+	_force_medium_shop(18)
+	_economy.set("balance_cents", 2_000_000)
+	_game_state.set("current_reputation", 60)
+	_game_state.set("current_day", 40)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_day_beats", 40)
+	_expect_equal(
+		_beat_director.call("is_started", EXPAND_LARGE_BEAT),
+		true,
+		"Large starts on Normal day 40 PREP even if gates fail"
+	)
+	_expect_equal(
+		_choice_enabled(_captured_beat_decision, &"sign_lease"),
+		false,
+		"Sign stays gated below $40k cash and Rep 70"
+	)
+	_expect_equal(
+		_choice_enabled(_captured_beat_decision, &"wait_for_cash_rep"),
+		true,
+		"Wait shows when cash or Rep is short"
+	)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"sign_lease"),
+		false,
+		"Sign cannot upgrade without Large gates"
+	)
+	_assert_payload_has_no_truth(_captured_beat_decision, "Large expand soft-fail")
+	_assert_text_has_no_truth(
+		String(_captured_beat_decision.get("summary", "")),
+		"Large expand summary"
+	)
+	var shop: ShopState = _game_state.get("shop")
+	var stay_walkable := shop.walkable_tile_count()
+	var stay_rent := shop.weekly_rent_cents(42)
+	var stay_cap := shop.staff_cap()
+	var stay_traffic := shop.traffic_mult()
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"stay_medium"),
+		true,
+		"Stay Medium leaves the shop Medium"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.MEDIUM, "Stay Medium keeps Medium tier")
+	_expect_equal(shop.grid_width, ShopState.MEDIUM_GRID_WIDTH, "Stay Medium width")
+	_expect_equal(shop.grid_height, ShopState.MEDIUM_GRID_HEIGHT, "Stay Medium height")
+	_expect_equal(shop.walkable_tile_count(), stay_walkable, "Stay Medium walkable")
+	_expect_equal(shop.staff_cap(), stay_cap, "Stay Medium staff cap")
+	_expect_equal(shop.weekly_rent_cents(42), stay_rent, "Stay Medium rent")
+	_expect_equal(
+		is_equal_approx(shop.traffic_mult(), stay_traffic),
+		true,
+		"Stay Medium traffic"
+	)
+	_assert_shop_shell_state(true, "Stay Medium keeps Medium shell")
+
+	_game_state.call("start_new_game")
+	_force_medium_shop(18)
+	_economy.set("balance_cents", 3_000_000)
+	_game_state.set("current_reputation", 60)
+	_game_state.set("current_day", 40)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_captured_beat_decision = {}
+	_beat_director.call("_start_expand_large")
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"wait_for_cash_rep"),
+		true,
+		"Wait for cash-Rep is available when gates fail"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.MEDIUM, "Wait keeps Medium")
+	_expect_equal(
+		shop.weekly_rent_cents(42),
+		NORMAL_CONFIG.rent_medium_weekly_cents,
+		"Wait keeps Medium rent"
+	)
+	_expect_equal(shop.staff_cap(), 3, "Wait keeps Medium staff cap")
+
+	_game_state.call("start_new_game")
+	_force_medium_shop(18)
+	_economy.set("balance_cents", 3_999_999)
+	_game_state.set("current_reputation", 70)
+	shop = _game_state.get("shop")
+	_expect_equal(
+		shop.can_sign_large_lease(3_999_999, 70),
+		false,
+		"one cent below $40k cannot Sign"
+	)
+	_economy.set("balance_cents", 4_000_000)
+	_game_state.set("current_reputation", 69)
+	_expect_equal(
+		shop.can_sign_large_lease(4_000_000, 69),
+		false,
+		"Rep 69 cannot Sign"
+	)
+
+	_game_state.call("start_new_game")
+	_force_medium_shop(18)
+	_economy.set("balance_cents", 4_000_000)
+	_game_state.set("current_reputation", 70)
+	_game_state.set("current_day", 40)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	var hud := _instantiate_gameplay_hud()
+	_captured_beat_decision = {}
+	_beat_director.call("_start_expand_large")
+	_expect_equal(
+		_choice_enabled(_captured_beat_decision, &"sign_lease"),
+		true,
+		"Sign enabled when cash and Rep gates pass"
+	)
+	_expect_equal(
+		_choice_enabled(_captured_beat_decision, &"wait_for_cash_rep"),
+		false,
+		"Wait hidden when both Large gates pass"
+	)
+	var confirms: Dictionary = _captured_beat_decision.get("confirms", {})
+	var lease_confirm: Dictionary = confirms.get("sign_lease", {})
+	var lease_body := String(lease_confirm.get("body", ""))
+	_expect_equal(
+		lease_body.contains(
+			DemandSignalPresenter.format_cents(NORMAL_CONFIG.rent_medium_weekly_cents)
+		)
+		and lease_body.contains(
+			DemandSignalPresenter.format_cents(NORMAL_CONFIG.rent_large_weekly_cents)
+		),
+		true,
+		"Large lease confirm shows Medium vs Large rent"
+	)
+	_expect_equal(
+		lease_body.contains("1.25") or lease_body.contains("×1.25"),
+		true,
+		"Large lease confirm documents the traffic scalar"
+	)
+	_assert_payload_has_no_truth(_captured_beat_decision, "Large expand sign payload")
+	_assert_text_has_no_truth(lease_body, "Large lease confirm body")
+	if hud != null:
+		var title := hud.get_node_or_null("%BeatDecisionTitle") as Label
+		var summary := hud.get_node_or_null("%BeatDecisionSummary") as Label
+		var confirm_body := hud.get_node_or_null("%BeatConfirmBody") as Label
+		_expect_equal(
+			title != null and title.text.contains("Large"),
+			true,
+			"HUD lease title names Large"
+		)
+		_assert_text_has_no_truth(
+			title.text if title != null else "",
+			"HUD Large title"
+		)
+		_assert_text_has_no_truth(
+			summary.text if summary != null else "",
+			"HUD Large summary"
+		)
+		var sign_button := hud.get_node_or_null("%BeatChoiceAButton") as Button
+		if sign_button != null and not sign_button.disabled:
+			sign_button.pressed.emit()
+			_assert_text_has_no_truth(
+				confirm_body.text if confirm_body != null else "",
+				"HUD Large confirm"
+			)
+		root.remove_child(hud)
+		hud.free()
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"sign_lease"),
+		true,
+		"Sign Large lease path"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.LARGE, "Sign upgrades to Large")
+	_expect_equal(shop.staff_cap(), 5, "Large staff cap unlocks")
+	_expect_equal(shop.grid_width, ShopState.LARGE_GRID_WIDTH, "Large grid width 18")
+	_expect_equal(shop.grid_height, ShopState.LARGE_GRID_HEIGHT, "Large grid height 13")
+	_expect_equal(shop.tile_count(), 234, "Large tile count is 234")
+	_expect_equal(
+		shop.walkable_tile_count() > stay_walkable,
+		true,
+		"Sign increases walkable tiles past Medium"
+	)
+	_expect_equal(shop.layout.has_circulation(), true, "Large circulation holds")
+	_expect_equal(
+		(_inventory_service.get("model") as InventoryModel).case_slot_limit(),
+		NORMAL_CONFIG.case_slots
+		+ ShopState.MEDIUM_CASE_SLOT_BONUS
+		+ ShopState.LARGE_CASE_SLOT_BONUS,
+		"Large case capacity unlocks"
+	)
+	_expect_equal(
+		shop.weekly_rent_cents(40),
+		NORMAL_CONFIG.rent_medium_weekly_cents,
+		"signed-day rent stays Medium"
+	)
+	_expect_equal(
+		shop.weekly_rent_cents(42),
+		NORMAL_CONFIG.rent_large_weekly_cents,
+		"Large rent applies next week"
+	)
+	_expect_equal(
+		is_equal_approx(shop.traffic_mult(), 1.25),
+		true,
+		"Sign applies Large traffic scalar"
+	)
+	_expect_equal(
+		shop.traffic_mult() < 2.0 * NORMAL_CONFIG.expand_medium_traffic_mult,
+		true,
+		"Signed Large traffic is not 2× Medium"
+	)
+
+	_game_state.call("set_balance_config", HARD_CONFIG)
+	_game_state.call("start_new_game")
+	_force_medium_shop(18)
+	_game_state.set("current_day", 40)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_beat_director.call("_start_day_beats", 40)
+	_expect_equal(
+		_beat_director.call("is_started", EXPAND_LARGE_BEAT),
+		false,
+		"Hard does not auto-start Large expand"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_expect_equal(
+		_beat_director.call("trigger_qa_beat", EXPAND_LARGE_BEAT),
+		true,
+		"Hard can still open the Large expand modal via QA"
+	)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"sign_lease"),
+		false,
+		"Hard start cash/Rep cannot Sign Large"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"L1: Soft _ensure_priceable_sku stays parked"
+	)
+	for path: String in [
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/core/beat_injection.gd",
+		"res://scripts/core/balance_config.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/ui/hud.gd",
+		"res://scripts/shop/shop_floor_extent.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("_ensure_priceable_sku"),
+			false,
+			"L1: %s does not call parked Soft helper" % path
+		)
+
+
+func _test_large_floor_growth() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop: ShopState = _force_medium_shop(18)
+	var medium_walkable := shop.walkable_tile_count()
+	var medium_grid_walkable := shop.floor_grid.walkable_count()
+	_expect_equal(shop.tile_count(), 140, "Large growth starts from Medium 14×10")
+	_assert_shop_shell_state(true, "pre-Large / Stay Medium")
+
+	_economy.set("balance_cents", 2_500_000)
+	_game_state.set("current_reputation", 60)
+	_expect_equal(
+		shop.expand_to_large(40, 2_500_000, 60),
+		false,
+		"Sign refuses Large when cash/Rep fail"
+	)
+	_expect_equal(shop.tier, ShopState.Tier.MEDIUM, "failed Sign stays Medium")
+	_expect_equal(shop.layout.width, 14, "failed Sign leaves layout Medium")
+
+	var counter := shop.layout.fixture_by_id(&"counter")
+	_expect_equal(counter != null, true, "default counter exists for Large preview")
+	counter.is_counter = false
+	_economy.set("balance_cents", 4_000_000)
+	_game_state.set("current_reputation", 70)
+	_expect_equal(
+		shop.preview_expand_large(),
+		&"blocked_path",
+		"Large expand preview fails when counter is unreachable"
+	)
+	_expect_equal(
+		shop.expand_to_large(40, 4_000_000, 70),
+		false,
+		"Sign refuses when Large pathing fails"
+	)
+	_expect_equal(shop.tier, ShopState.Tier.MEDIUM, "blocked Large Sign stays Medium")
+
+	_game_state.call("start_new_game")
+	shop = _force_medium_shop(18)
+	_economy.set("balance_cents", 4_000_000)
+	_game_state.set("current_reputation", 70)
+	_game_state.set("current_day", 40)
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	var binder_origin := shop.layout.fixture_by_id(&"binder_rack").origin
+	_expect_equal(
+		_beat_director.call("_start_expand_large"),
+		true,
+		"Large expand modal opens for growth test"
+	)
+	_expect_equal(
+		_beat_director.call("choose_beat_path", &"sign_lease"),
+		true,
+		"Sign lease grows the Large floor"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.grid_width, 18, "signed Large width is 18")
+	_expect_equal(shop.grid_height, 13, "signed Large height is 13")
+	_expect_equal(
+		shop.walkable_tile_count() > medium_walkable,
+		true,
+		"domain walkable tiles increase on Large"
+	)
+	_expect_equal(
+		shop.floor_grid.walkable_count() > medium_grid_walkable,
+		true,
+		"NPC grid walkable tiles increase on Large"
+	)
+	_expect_equal(shop.floor_grid.width, 18, "NPC grid width is Large")
+	_expect_equal(shop.floor_grid.is_walkable(Vector2i(16, 11)), true, "new Large tile unlocks")
+	_expect_equal(
+		shop.layout.fixture_by_id(&"binder_rack").origin,
+		binder_origin,
+		"binder stays on its Medium tile"
+	)
+	_expect_equal(shop.layout.has_circulation(), true, "layout circulation on Large")
+	_assert_grid_path(
+		shop.floor_grid,
+		shop.floor_grid.entrance_tile,
+		shop.floor_grid.browse_tiles[0],
+		"Large entrance→display"
+	)
+	_assert_grid_path(
+		shop.floor_grid,
+		shop.floor_grid.browse_tiles[0],
+		shop.floor_grid.desk_tile,
+		"Large display→counter"
+	)
+	_assert_grid_path(
+		shop.floor_grid,
+		shop.floor_grid.entrance_tile,
+		Vector2i(16, 11),
+		"Large entrance→new tile"
+	)
+	_game_state.call("start_floor")
+	var presenter := _make_floor_presenter()
+	_expect_equal(presenter.path_between(
+		shop.floor_grid.tile_to_world(shop.floor_grid.entrance_tile),
+		shop.floor_grid.tile_to_world(shop.floor_grid.desk_tile)
+	).is_empty(), false, "presenter paths on Large grid")
+	presenter.free()
+
+	_expect_equal(
+		_economy.call("settle_weekly_obligations", 42),
+		true,
+		"week after Large Sign is a rent SETTLE day"
+	)
+	var rent_posted := 0
+	var ledger: Array = _economy.call("get_ledger")
+	for entry: Variant in ledger:
+		var row := entry as LedgerEntry
+		if row != null and row.category == &"rent":
+			rent_posted = row.amount_cents
+	_expect_equal(
+		rent_posted,
+		NORMAL_CONFIG.rent_large_weekly_cents,
+		"SETTLE posts Large weekly rent"
+	)
+
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(saved.has("shop"), true, "save includes shop after Large")
+	_assert_payload_has_no_truth(saved, "Large save payload")
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.SMALL, "new game resets to Small")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"restore Large save"
+	)
+	shop = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.LARGE, "save/load restores Large")
+	_expect_equal(shop.grid_width, 18, "save/load Large width")
+	_expect_equal(shop.grid_height, 13, "save/load Large height")
+	_expect_equal(shop.staff_cap(), 5, "save/load Large staff cap")
+	_expect_equal(
+		shop.weekly_rent_cents(int(_game_state.get("current_day")) + 3),
+		NORMAL_CONFIG.rent_large_weekly_cents,
+		"save/load Large rent tier"
+	)
+	_expect_equal(
+		(_inventory_service.get("model") as InventoryModel).case_slot_limit(),
+		NORMAL_CONFIG.case_slots
+		+ ShopState.MEDIUM_CASE_SLOT_BONUS
+		+ ShopState.LARGE_CASE_SLOT_BONUS,
+		"save/load Large case bonus"
+	)
+	_expect_equal(is_equal_approx(shop.usable_sq_ft(), 2040.1875), true, "18×13 is ~2,040 sq ft")
+	_assert_large_shell_state("Sign / save-load Large")
+
+	_game_state.call("start_new_game")
+	_assert_shop_shell_state(false, "new game resets Small shell after Large")
+
+
+func _force_medium_shop(signed_day: int) -> ShopState:
+	_economy.set("balance_cents", 1_600_000)
+	_game_state.set("current_reputation", 55)
+	var shop: ShopState = _game_state.get("shop")
+	_expect_equal(
+		shop.expand_to_medium(signed_day, 1_600_000, 55),
+		true,
+		"force Medium shop for Large tests"
+	)
+	_inventory_service.call(
+		"apply_medium_capacity",
+		ShopState.MEDIUM_CASE_SLOT_BONUS,
+		ShopState.MEDIUM_BACKSTOCK_BONUS
+	)
+	return shop
 
 
 func _test_shady_trunk_beat() -> void:
@@ -7781,6 +8307,62 @@ func _expect_payload_keys(
 	var payload: Dictionary = event["payload"]
 	for key: StringName in expected_keys:
 		_expect_equal(payload.has(String(key)), true, "%s key %s" % [label, key])
+
+
+func _assert_large_shell_state(label: String) -> void:
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "%s shop_floor loads" % label)
+	if packed == null:
+		return
+	var floor: Node = packed.instantiate()
+	root.add_child(floor)
+	var extent := floor.get_node_or_null("FloorExtent") as ShopFloorExtent
+	_expect_equal(extent != null, true, "%s FloorExtent present" % label)
+	if extent != null:
+		extent.sync_from_shop()
+		_expect_equal(
+			extent.is_medium_extension_visible(),
+			true,
+			"%s Medium Art shell stays as Large interior" % label
+		)
+		_expect_equal(
+			extent.is_large_scaffold_visible(),
+			true,
+			"%s Large scaffold interim floor is visible" % label
+		)
+		_expect_equal(
+			extent.has_large_scaffold(),
+			true,
+			"%s Large scaffold nodes exist" % label
+		)
+		_expect_equal(extent.extra_floor_tile_count(), 154, "%s extra tiles vs Small" % label)
+		_expect_equal(extent.extra_large_tile_count(), 94, "%s extra tiles vs Medium" % label)
+		_expect_equal(extent.has_fog_veil(), false, "%s fog stays nacked" % label)
+		_expect_equal(
+			extent.has_code_driven_stub(),
+			false,
+			"%s MediumFloor stub stays nacked" % label
+		)
+		_expect_equal(extent.has_node("MediumVeilX"), false, "%s no Medium fog veil X" % label)
+		_expect_equal(extent.has_node("MediumVeilZ"), false, "%s no Medium fog veil Z" % label)
+	var world := floor.get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world != null and world.environment != null:
+		_expect_equal(world.environment.fog_enabled, false, "%s fog volume nacked" % label)
+		_expect_equal(
+			world.environment.volumetric_fog_enabled,
+			false,
+			"%s volumetric fog nacked" % label
+		)
+	var camera := floor.get_node_or_null("Camera") as ShopCamera
+	if camera != null:
+		camera.apply_home_pose(ShopCamera.POSE_AISLE)
+		_expect_equal(
+			camera.position.is_equal_approx(ShopCamera.AISLE_POSITION),
+			true,
+			"%s does not churn aisle camera" % label
+		)
+	_assert_shop_fog_nacked(floor, label)
+	floor.free()
 
 
 func _assert_shop_shell_state(want_medium: bool, label: String) -> void:

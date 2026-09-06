@@ -20,13 +20,11 @@ func _ready() -> void:
 	_queue.queue_changed.connect(_on_queue_changed)
 	add_child(_queue)
 	_timer = Timer.new()
-	_timer.wait_time = (
-		spawn_interval_seconds
-		/ maxf(0.01, GameState.balance_config.customer_spawn_mult)
-	)
+	_refresh_spawn_interval()
 	_timer.timeout.connect(spawn_customer)
 	add_child(_timer)
 	EventBus.day_phase_changed.connect(_on_phase_changed)
+	EventBus.shop_layout_changed.connect(_on_shop_layout_changed)
 	EventBus.customer_action_requested.connect(_on_customer_action_requested)
 	EventBus.scripted_customer_requested.connect(_on_scripted_customer_requested)
 	_queue.customer_finished.connect(_on_customer_finished)
@@ -115,7 +113,21 @@ func _create_buylist_signal(
 	return DemandSignals.buylist_signal(selected.id)
 
 
+func _refresh_spawn_interval() -> void:
+	if _timer == null:
+		return
+	_timer.wait_time = GameState.balance_config.customer_spawn_wait_seconds(
+		spawn_interval_seconds,
+		int(GameState.shop.tier)
+	)
+
+
+func _on_shop_layout_changed() -> void:
+	_refresh_spawn_interval()
+
+
 func _on_phase_changed(phase: int) -> void:
+	_refresh_spawn_interval()
 	if can_spawn_for_phase(phase):
 		_timer.start()
 		spawn_customer()
