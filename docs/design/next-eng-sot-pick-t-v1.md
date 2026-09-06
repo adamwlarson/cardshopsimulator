@@ -1,6 +1,6 @@
 # Next Eng SoT Pick T v1 — post S1
 
-**Status:** Adopted **T1 GO** (Campaign mode picker UI) — Eng spike CLEAR TO KICK. Park T2 Soft hygiene / T3 cameras / T4 idle-far crest. Softs parked (mode-picker Soft closes with T1).
+**Status:** **T1 SHIPPED** — Campaign mode picker PR #49 @ 605be23b; QA PASS-with-notes; Soft no mode-picker CLOSED; Soft Sandbox PB Soft OK MVP; Softs parked.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §9, pick-s (S1 shipped #48)  
