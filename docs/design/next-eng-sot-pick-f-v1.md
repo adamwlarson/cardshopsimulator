@@ -1,6 +1,6 @@
 # Next Eng SoT Pick F v1 — post Option D
 
-**Status:** Adopted — **F1 GO** (2026-09-06); park F2/F3; STOP not chosen  
+**Status:** Adopted — **F1 shipped #34** @ `865c36cc` (2026-09-06); park F2/F3; STOP not chosen  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §2.2 / §7.3 / §9–§10, ui-wireflows §5.1, pick-e (C3/HOLD/D shipped)  
