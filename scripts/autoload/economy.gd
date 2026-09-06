@@ -26,6 +26,19 @@ func record_expense(amount_cents: int, category: StringName, memo: String = "") 
 	return _record(LedgerEntry.Kind.EXPENSE, amount_cents, category, memo)
 
 
+func record_forced_expense(
+	amount_cents: int,
+	category: StringName,
+	memo: String = ""
+) -> int:
+	var applied := mini(amount_cents, balance_cents)
+	if applied <= 0:
+		return 0
+	if _record(LedgerEntry.Kind.EXPENSE, applied, category, memo):
+		return applied
+	return 0
+
+
 func can_afford(amount_cents: int) -> bool:
 	return amount_cents >= 0 and balance_cents >= amount_cents
 

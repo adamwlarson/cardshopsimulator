@@ -230,17 +230,88 @@ func confirm_buy(dto: BuyConfirmSignal) -> bool:
 		var shown_midpoint := (
 			dto.shown_comp_low_cents + dto.shown_comp_high_cents
 		) / 2
-		var purchased := InventoryService.confirm_stock_purchase(
-			opportunity.sku_id,
-			opportunity.quantity,
-			opportunity.unit_cost_cents,
-			shown_midpoint - opportunity.unit_cost_cents,
-			InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
-		)
+		var purchased := false
+		if opportunity.is_graded():
+			purchased = _confirm_graded_purchase(dto, opportunity, shown_midpoint)
+		else:
+			purchased = InventoryService.confirm_stock_purchase(
+				opportunity.sku_id,
+				opportunity.quantity,
+				opportunity.unit_cost_cents,
+				shown_midpoint - opportunity.unit_cost_cents,
+				InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+			)
 		if purchased:
 			_closed_opportunity_ids[opportunity.id] = true
 		return purchased
 	return false
+
+
+func inject_graded_opportunity(
+	opportunity_id: StringName,
+	sku_id: StringName,
+	channel: DemandSignalService.Channel,
+	unit_cost_cents: int,
+	grader: StringName,
+	grade: float,
+	offer_label: String = "Graded slab",
+	seeded_cert_state: int = -1,
+	beat_id: StringName = &""
+) -> BuyOpportunity:
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null or grader.is_empty() or grade <= 0.0:
+		return null
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = opportunity_id
+	opportunity.sku_id = sku_id
+	opportunity.display_name = sku.display_name
+	opportunity.offer_label = offer_label
+	opportunity.channel = channel
+	opportunity.unit_cost_cents = unit_cost_cents
+	opportunity.quantity = 1
+	opportunity.space_required = 2
+	opportunity.beat_id = beat_id
+	opportunity.grader = grader
+	opportunity.grade = grade
+	opportunity.seeded_cert_state = seeded_cert_state
+	if not inject_buy_opportunity(opportunity):
+		return _existing_opportunity(opportunity_id)
+	return opportunity
+
+
+func apply_owned_slab_cue(dto: PriceConfirmSignal) -> void:
+	if dto == null:
+		return
+	var slab := InventoryService.get_slab(dto.sku_id)
+	if slab == null:
+		return
+	dto.condition_cue = slab.shown_cert_cue
+	dto.inspected = slab.inspected
+	dto.grader = slab.grader
+	dto.grade = slab.grade
+
+
+func inspect_owned_slab(slab: SlabInstance) -> bool:
+	if _service == null or slab == null or slab.inspected:
+		return false
+	return _service.inspect_slab_instance(slab)
+
+
+func can_inspect_slab(slab: SlabInstance) -> bool:
+	return (
+		_service != null
+		and slab != null
+		and not slab.inspected
+		and GameState.can_inspect()
+	)
+
+
+func roll_channel_slab_cert(channel: Variant) -> bool:
+	if _service == null:
+		return true
+	if not DemandSignalService.is_risky_slab_channel(channel):
+		return true
+	return _service.roll_risky_slab_cert()
 
 
 func inject_buy_opportunity(opportunity: BuyOpportunity) -> bool:
@@ -317,6 +388,10 @@ func priceable_stock_signals() -> Array[PriceConfirmSignal]:
 		)
 		dto.display_name = String(item["display_name"])
 		dto.quantity = int(item["quantity"])
+		dto.condition_cue = String(item.get("condition_cue", ""))
+		dto.inspected = bool(item.get("inspected", false))
+		dto.grader = StringName(item.get("grader", &""))
+		dto.grade = float(item.get("grade", 0.0))
 		result.append(dto)
 	return result
 
@@ -332,6 +407,51 @@ func refresh_price_signal(
 		listed_price_cents,
 		InventoryService.location_for(dto.sku_id)
 	)
+
+
+func _confirm_graded_purchase(
+	dto: BuyConfirmSignal,
+	opportunity: BuyOpportunity,
+	shown_midpoint: int
+) -> bool:
+	var total_cost := opportunity.unit_cost_cents * opportunity.quantity
+	if total_cost <= 0 or not Economy.can_afford(total_cost):
+		return false
+	var location := InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+	var cert_state := 1 if _service.true_cert_valid(dto) else 0
+	var slab := InventoryService.receive_slab(
+		opportunity.sku_id,
+		opportunity.grader,
+		opportunity.grade,
+		opportunity.unit_cost_cents,
+		location,
+		dto.channel,
+		cert_state
+	)
+	if slab == null:
+		return false
+	_service.apply_inspect_to_slab(dto, slab)
+	if not Economy.record_expense(total_cost, &"inventory", "Graded slab purchase"):
+		InventoryService.model.remove_slab(slab)
+		return false
+	QaInstrumentation.record_buy_confirm(
+		opportunity.sku_id,
+		opportunity.quantity,
+		opportunity.unit_cost_cents,
+		shown_midpoint - opportunity.unit_cost_cents
+	)
+	EventBus.publish_inventory_changed(
+		opportunity.sku_id,
+		InventoryService.total_owned(opportunity.sku_id)
+	)
+	return true
+
+
+func _existing_opportunity(opportunity_id: StringName) -> BuyOpportunity:
+	for opportunity: BuyOpportunity in _open_opportunities():
+		if opportunity.id == opportunity_id:
+			return opportunity
+	return null
 
 
 func _open_opportunities() -> Array[BuyOpportunity]:
@@ -363,6 +483,13 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 	)
 	dto.quantity = opportunity.quantity
 	dto.beat_id = opportunity.beat_id
+	if opportunity.is_graded():
+		_service.bind_graded_signal(
+			dto,
+			opportunity.grader,
+			opportunity.grade,
+			opportunity.seeded_cert_state
+		)
 	_service.apply_inspect_state(dto)
 	return dto
 

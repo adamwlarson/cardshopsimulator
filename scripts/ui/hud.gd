@@ -14,6 +14,7 @@ extends Control
 @onready var buy_title: Label = %BuyOpportunityTitle
 @onready var buy_summary: Label = %BuySummary
 @onready var inspect_button: Button = %InspectButton
+@onready var price_inspect_button: Button = get_node_or_null("%PriceInspectButton") as Button
 @onready var buy_button: Button = %BuyButton
 @onready var buy_confirm_panel: PanelContainer = %BuyConfirm
 @onready var buy_confirm_summary: Label = %BuyConfirmSummary
@@ -123,6 +124,8 @@ func _ready() -> void:
 	%BuyListCancelButton.pressed.connect(_close_buy)
 	%BuyCancelButton.pressed.connect(_close_buy)
 	inspect_button.pressed.connect(_inspect_buy)
+	if price_inspect_button != null:
+		price_inspect_button.pressed.connect(_inspect_price_slab)
 	buy_button.pressed.connect(_open_buy_confirm)
 	%BuyBackButton.pressed.connect(_back_to_buy_detail)
 	%BuyConfirmButton.pressed.connect(_confirm_buy)
@@ -303,18 +306,8 @@ func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
 func _open_buy_confirm() -> void:
 	if _buy_signal == null:
 		return
-	buy_confirm_summary.text = (
-		"%s ×%d @ %s\nTotal %s\n%s–%s · %s · %s"
-		% [
-			_buy_signal.display_name,
-			_buy_signal.quantity,
-			DemandSignalPresenter.format_cents(_buy_signal.unit_cost_cents),
-			DemandSignalPresenter.format_cents(_buy_signal.lot_total_cents),
-			DemandSignalPresenter.format_cents(_buy_signal.shown_comp_low_cents),
-			DemandSignalPresenter.format_cents(_buy_signal.shown_comp_high_cents),
-			DemandSignalPresenter.band_chip(_buy_signal.shown_demand_band),
-			String(_buy_signal.confidence).to_upper(),
-		]
+	buy_confirm_summary.text = DemandSignalPresenter.buy_confirm_snapshot(
+		_buy_signal
 	)
 	buy_panel.hide()
 	buy_confirm_panel.show()
@@ -350,6 +343,47 @@ func _inspect_buy() -> void:
 	DemandSignals.inspect_buy(_buy_signal)
 	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
 	_sync_inspect_button()
+
+
+func _inspect_price_slab() -> void:
+	if _price_signal == null:
+		_sync_price_inspect_button()
+		return
+	var slab := InventoryService.get_slab(_price_signal.sku_id)
+	if slab == null or slab.inspected:
+		_sync_price_inspect_button()
+		return
+	if not DemandSignals.can_inspect_slab(slab):
+		_sync_price_inspect_button()
+		return
+	var cost := GameState.shop.inspect_attention_cost()
+	if not GameState.consume_attention(cost):
+		_sync_price_inspect_button()
+		return
+	DemandSignals.inspect_owned_slab(slab)
+	_price_signal.condition_cue = slab.shown_cert_cue
+	_price_signal.inspected = slab.inspected
+	_update_price_preview(price_input.text)
+	_sync_price_inspect_button()
+
+
+func _sync_price_inspect_button() -> void:
+	if price_inspect_button == null:
+		return
+	var cost := GameState.shop.inspect_attention_cost()
+	price_inspect_button.text = DemandSignalPresenter.inspect_action_label(cost)
+	var slab: SlabInstance = null
+	if _price_signal != null:
+		slab = InventoryService.get_slab(_price_signal.sku_id)
+	var show_inspect := slab != null
+	price_inspect_button.visible = show_inspect
+	if not show_inspect:
+		return
+	price_inspect_button.disabled = (
+		slab.inspected
+		or not DemandSignals.can_inspect_slab(slab)
+		or GameState.attention_remaining < cost
+	)
 
 
 func _sync_inspect_button() -> void:
@@ -416,6 +450,7 @@ func _select_price_stock(dto: PriceConfirmSignal) -> void:
 	)
 	_bind_price_chips(dto)
 	_update_price_preview(price_input.text)
+	_sync_price_inspect_button()
 	price_list_panel.hide()
 	price_panel.show()
 	_sync_modal_veil()
@@ -437,6 +472,7 @@ func _update_price_preview(value: String) -> void:
 	)
 	_bind_price_chips(_price_signal)
 	%PriceApplyButton.disabled = listed_price_cents <= 0
+	_sync_price_inspect_button()
 
 
 func _apply_price() -> void:
@@ -464,6 +500,7 @@ func _close_price() -> void:
 	price_panel.hide()
 	_price_signal = null
 	_active_price_beat_id = &""
+	_sync_price_inspect_button()
 	_sync_modal_veil()
 
 
@@ -814,6 +851,7 @@ func _sync_customer_serve() -> void:
 		_current_customer.listed_price_cents,
 		InventoryService.location_for(_current_customer.target_sku)
 	)
+	DemandSignals.apply_owned_slab_cue(signal_dto)
 	customer_summary.text = (
 		"Wants: %s\n%s: %s\n%s"
 		% [

@@ -51,7 +51,9 @@ func receive_slab(
 	grader: StringName,
 	grade: float,
 	acquired_cost_cents: int,
-	location: InventoryLocation
+	location: InventoryLocation,
+	source_channel: StringName = &"",
+	seeded_cert_state: int = -1
 ) -> SlabInstance:
 	var sku := model.get_sku(sku_id)
 	if sku == null or sku.product_class != ProductSKU.ProductClass.SINGLE:
@@ -68,10 +70,39 @@ func receive_slab(
 		location
 	)
 	slab.listed_price_cents = sku.base_market_cents
+	slab.source_channel = source_channel
+	slab.cert_valid = _roll_slab_cert_valid(source_channel, seeded_cert_state)
+	slab.inspected = false
+	slab.shown_cert_cue = SlabInstance.CERT_FOG_CUE
 	if not model.add_slab(slab):
 		return null
 	EventBus.publish_inventory_changed(sku_id, total_owned(sku_id))
 	return slab
+
+
+func seed_fake_slab(
+	sku_id: StringName,
+	grader: StringName,
+	grade: float,
+	acquired_cost_cents: int,
+	location: InventoryLocation,
+	source_channel: StringName = &"shady"
+) -> SlabInstance:
+	return receive_slab(
+		sku_id,
+		grader,
+		grade,
+		acquired_cost_cents,
+		location,
+		source_channel,
+		0
+	)
+
+
+func inspect_slab(slab: SlabInstance) -> bool:
+	if slab == null or slab.inspected:
+		return false
+	return DemandSignals.inspect_owned_slab(slab)
 
 
 func confirm_stock_purchase(
@@ -253,11 +284,28 @@ func get_priceable_stock() -> Array[Dictionary]:
 			"quantity": 1,
 			"listed_price_cents": slab.listed_price_cents,
 			"location": slab.location,
+			"condition_cue": slab.shown_cert_cue,
+			"inspected": slab.inspected,
+			"grader": slab.grader,
+			"grade": slab.grade,
 		})
 	return result
 
 
 func find_listed_sku_offer(sku_id: StringName, budget_cents: int) -> Dictionary:
+	for slab: SlabInstance in model.slabs:
+		if (
+			slab.card_ref != null
+			and slab.card_ref.sku_id == sku_id
+			and slab.listed_price_cents > 0
+			and slab.listed_price_cents <= budget_cents
+			and slab.location.type == InventoryLocation.Type.CASE
+		):
+			return _offer_for(
+				model.get_sku(slab.card_ref.sku_id),
+				slab.listed_price_cents,
+				slab.location
+			)
 	for card: CardInstance in model.cards:
 		if (
 			card.sku_id == sku_id
@@ -300,12 +348,30 @@ func find_listed_offer(
 			and _matches_interest(sku, interest_tags)
 		):
 			return _offer_for(sku, card.listed_price_cents, card.location)
+	for slab: SlabInstance in model.slabs:
+		if slab.card_ref == null:
+			continue
+		var slab_sku := model.get_sku(slab.card_ref.sku_id)
+		if (
+			slab.listed_price_cents > 0
+			and slab.listed_price_cents <= budget_cents
+			and slab.location.type == InventoryLocation.Type.CASE
+			and _matches_interest(slab_sku, interest_tags)
+		):
+			return _offer_for(
+				slab_sku,
+				slab.listed_price_cents,
+				slab.location
+			)
 	return {}
 
 
 func confirm_customer_sale(sku_id: StringName, sale_price_cents: int) -> bool:
 	if sale_price_cents <= 0:
 		return false
+	var slab := _listed_slab_for(sku_id)
+	if slab != null:
+		return _resolve_slab_sale(slab, sale_price_cents)
 	for card: CardInstance in model.cards:
 		if card.sku_id == sku_id and card.listed_price_cents > 0:
 			if not model.remove_card(card):
@@ -330,6 +396,10 @@ func set_listed_price(sku_id: StringName, listed_price_cents: int) -> bool:
 		if card.sku_id == sku_id:
 			card.listed_price_cents = listed_price_cents
 			return true
+	for slab: SlabInstance in model.slabs:
+		if slab.card_ref != null and slab.card_ref.sku_id == sku_id:
+			slab.listed_price_cents = listed_price_cents
+			return true
 	return false
 
 
@@ -340,6 +410,9 @@ func listed_price_for(sku_id: StringName) -> int:
 	for card: CardInstance in model.cards:
 		if card.sku_id == sku_id:
 			return card.listed_price_cents
+	for slab: SlabInstance in model.slabs:
+		if slab.card_ref != null and slab.card_ref.sku_id == sku_id:
+			return slab.listed_price_cents
 	return 0
 
 
@@ -431,4 +504,71 @@ func _total_quantity(sku_id: StringName) -> int:
 	for card: CardInstance in model.cards:
 		if card.sku_id == sku_id:
 			total += 1
+	for slab: SlabInstance in model.slabs:
+		if slab.card_ref != null and slab.card_ref.sku_id == sku_id:
+			total += 1
 	return total
+
+
+func _listed_slab_for(sku_id: StringName) -> SlabInstance:
+	for slab: SlabInstance in model.slabs:
+		if (
+			slab.card_ref != null
+			and slab.card_ref.sku_id == sku_id
+			and slab.listed_price_cents > 0
+		):
+			return slab
+	return null
+
+
+func _roll_slab_cert_valid(source_channel: StringName, seeded_cert_state: int) -> bool:
+	if seeded_cert_state >= 0:
+		return seeded_cert_state == 1
+	if not DemandSignalService.is_risky_slab_channel(source_channel):
+		return true
+	return DemandSignals.roll_channel_slab_cert(source_channel)
+
+
+func _resolve_slab_sale(slab: SlabInstance, sale_price_cents: int) -> bool:
+	if slab == null or slab.card_ref == null:
+		return false
+	var sku_id := slab.card_ref.sku_id
+	if slab.cert_valid:
+		if not model.remove_slab(slab):
+			return false
+		Economy.record_income(sale_price_cents, &"customer_sale", "Customer sale")
+		EventBus.publish_inventory_changed(sku_id, total_owned(sku_id))
+		return true
+	return _fail_fake_slab_sale(slab, sale_price_cents)
+
+
+func _fail_fake_slab_sale(slab: SlabInstance, sale_price_cents: int) -> bool:
+	if slab == null or slab.card_ref == null:
+		return false
+	var sku_id := slab.card_ref.sku_id
+	var inspected := slab.inspected
+	if not model.remove_slab(slab):
+		return false
+	var penalty := maxi(1, sale_price_cents)
+	var cash_before := Economy.balance_cents
+	var applied := Economy.record_forced_expense(
+		penalty,
+		&"authenticity",
+		"Fake slab sale"
+	)
+	var rep_hit := 15
+	if GameState.balance_config != null:
+		rep_hit = GameState.balance_config.fake_slab_sale_rep_hit
+	GameState.adjust_reputation(-rep_hit)
+	EventBus.publish_inventory_changed(sku_id, total_owned(sku_id))
+	QaInstrumentation.record_slab_sale_failed({
+		"sku_id": String(sku_id),
+		"listed_price_cents": sale_price_cents,
+		"cash_penalty_cents": applied,
+		"cash_before_cents": cash_before,
+		"cash_after_cents": Economy.balance_cents,
+		"rep_delta": -rep_hit,
+		"inspected": inspected,
+		"outcome": "sale_fail",
+	})
+	return true
