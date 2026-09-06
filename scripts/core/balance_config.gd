@@ -32,6 +32,12 @@ enum Difficulty {
 @export var distributor_discount_min: float = 0.30
 @export var distributor_discount_max: float = 0.40
 @export var online_fee: float = 0.08
+@export var online_unlock_rep: int = 35
+@export var online_ship_days_min: int = 1
+@export var online_ship_days_max: int = 3
+@export var online_cancel_window_days: int = 7
+@export var online_cancel_frequent_threshold: int = 3
+@export var online_cancel_rep_hit: int = 3
 @export var shrink_daily_base: float = 0.002
 @export var shrink_unstaffed_add: float = 0.005
 ## HOLD H2: Easy/Hard inherit this Normal default when omitted from .tres.

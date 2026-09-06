@@ -81,9 +81,24 @@ extends Control
 @onready var rearrange_grid: GridContainer = %RearrangeGrid
 @onready var rearrange_status: Label = %RearrangeStatus
 @onready var rearrange_confirm_button: Button = %RearrangeConfirmButton
+@onready var open_online_button: Button = get_node_or_null("%OpenOnlineButton") as Button
+@onready var online_list_panel: PanelContainer = get_node_or_null("%OnlineListingList") as PanelContainer
+@onready var online_rows: VBoxContainer = get_node_or_null("%OnlineListingRows") as VBoxContainer
+@onready var online_empty_label: Label = get_node_or_null("%OnlineListingEmpty") as Label
+@onready var online_active_rows: VBoxContainer = get_node_or_null("%OnlineActiveRows") as VBoxContainer
+@onready var online_confirm_panel: PanelContainer = get_node_or_null("%OnlineListConfirm") as PanelContainer
+@onready var online_title: Label = get_node_or_null("%OnlineTitle") as Label
+@onready var online_summary: Label = get_node_or_null("%OnlineSummary") as Label
+@onready var online_position_chip: Label = get_node_or_null("%OnlinePositionChip") as Label
+@onready var online_demand_chip: Label = get_node_or_null("%OnlineDemandChip") as Label
+@onready var online_move_chip: Label = get_node_or_null("%OnlineMoveChip") as Label
+@onready var online_price_input: LineEdit = get_node_or_null("%OnlinePriceInput") as LineEdit
+@onready var online_confirm_button: Button = get_node_or_null("%OnlineConfirmButton") as Button
 
 var _buy_signal: BuyConfirmSignal
 var _price_signal: PriceConfirmSignal
+var _online_signal: OnlineListConfirmSignal
+var _online_target: Dictionary = {}
 var _current_customer: CustomerProfile
 var _desk_customer_ready: bool = false
 var _serve_dismissed: bool = false
@@ -119,6 +134,7 @@ func _ready() -> void:
 	EventBus.buy_focus_requested.connect(_on_buy_focus_requested)
 	EventBus.staff_changed.connect(_on_staff_changed)
 	EventBus.market_event_changed.connect(_on_market_event_changed)
+	EventBus.reputation_changed.connect(_on_reputation_changed)
 	phase_button.pressed.connect(_on_phase_pressed)
 	%OpenBuyButton.pressed.connect(_open_buy_list)
 	%BuyListCancelButton.pressed.connect(_close_buy)
@@ -178,6 +194,18 @@ func _ready() -> void:
 	open_rearrange_button.pressed.connect(_open_rearrange)
 	%RearrangeCancelButton.pressed.connect(_close_rearrange)
 	rearrange_confirm_button.pressed.connect(_confirm_rearrange)
+	if open_online_button != null:
+		open_online_button.pressed.connect(_open_online_list)
+	var online_list_cancel := get_node_or_null("%OnlineListCancelButton") as Button
+	if online_list_cancel != null:
+		online_list_cancel.pressed.connect(_close_online)
+	var online_back := get_node_or_null("%OnlineBackButton") as Button
+	if online_back != null:
+		online_back.pressed.connect(_back_to_online_list)
+	if online_confirm_button != null:
+		online_confirm_button.pressed.connect(_confirm_online_list)
+	if online_price_input != null:
+		online_price_input.text_changed.connect(_update_online_preview)
 	set_process(false)
 	_bind_seeded_status()
 	_update_queue(0)
@@ -224,6 +252,7 @@ func _update_phase(phase: int) -> void:
 			phase_button.text = "Next day"
 	_close_buy()
 	_close_price()
+	_close_online()
 	_close_research()
 	_close_rearrange()
 	_close_staff()
@@ -501,6 +530,196 @@ func _close_price() -> void:
 	_price_signal = null
 	_active_price_beat_id = &""
 	_sync_price_inspect_button()
+	_sync_modal_veil()
+
+
+func _on_reputation_changed(_reputation: int) -> void:
+	_sync_online_button()
+
+
+func _sync_online_button() -> void:
+	if open_online_button == null:
+		return
+	var unlock_rep := Economy.online_listings.unlock_rep()
+	var unlocked := Economy.online_listings.is_unlocked()
+	var active_count := Economy.online_listings.active_listings().size()
+	if unlocked:
+		open_online_button.text = (
+			"Online listings"
+			if active_count == 0
+			else "Online · %d hold" % active_count
+		)
+	else:
+		open_online_button.text = "Online · Rep %d" % unlock_rep
+	open_online_button.disabled = not GameState.is_game_active or not unlocked
+
+
+func _open_online_list() -> void:
+	if open_online_button == null or open_online_button.disabled:
+		return
+	_close_online()
+	if online_rows != null:
+		for child: Node in online_rows.get_children():
+			online_rows.remove_child(child)
+			child.queue_free()
+		var targets := Economy.online_listings.listable_targets()
+		if online_empty_label != null:
+			online_empty_label.visible = targets.is_empty()
+		for item: Dictionary in targets:
+			var dto := DemandSignals.list_confirm_signal(
+				StringName(item["sku_id"]),
+				int(item["listed_price_cents"]),
+				item["location"] as InventoryLocation
+			)
+			dto.display_name = String(item["display_name"])
+			dto.quantity = int(item["quantity"])
+			var row := Button.new()
+			row.text = DemandSignalPresenter.listable_stock_row(dto)
+			row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			row.custom_minimum_size = Vector2(0.0, 64.0)
+			row.theme_type_variation = &"ListRowButton"
+			row.pressed.connect(_select_online_target.bind(item, dto))
+			online_rows.add_child(row)
+	_rebuild_online_active_rows()
+	if online_list_panel != null:
+		online_list_panel.show()
+	_sync_modal_veil()
+
+
+func _rebuild_online_active_rows() -> void:
+	if online_active_rows == null:
+		return
+	for child: Node in online_active_rows.get_children():
+		online_active_rows.remove_child(child)
+		child.queue_free()
+	for listing: OnlineListing in Economy.online_listings.active_listings():
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var label := Label.new()
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.text = DemandSignalPresenter.online_listing_row(listing)
+		var cancel := Button.new()
+		cancel.text = "Cancel"
+		cancel.custom_minimum_size = Vector2(88, 40)
+		cancel.pressed.connect(_cancel_online_listing.bind(listing.id))
+		row.add_child(label)
+		row.add_child(cancel)
+		online_active_rows.add_child(row)
+
+
+func _select_online_target(target: Dictionary, dto: OnlineListConfirmSignal) -> void:
+	_online_target = target
+	_online_signal = dto
+	if online_title != null:
+		online_title.text = "LIST ONLINE · %s\n%s" % [
+			dto.display_name,
+			dto.display_context,
+		]
+	if online_price_input != null:
+		online_price_input.text = DemandSignalPresenter.format_cents(
+			dto.listed_price_cents
+		)
+	_bind_online_chips(dto)
+	_update_online_preview(
+		online_price_input.text if online_price_input != null else ""
+	)
+	if online_list_panel != null:
+		online_list_panel.hide()
+	if online_confirm_panel != null:
+		online_confirm_panel.show()
+	_sync_modal_veil()
+
+
+func _update_online_preview(value: String) -> void:
+	if _online_signal == null:
+		return
+	var listed_price_cents := DemandSignalPresenter.parse_cents(value)
+	if listed_price_cents <= 0:
+		listed_price_cents = _online_signal.listed_price_cents
+	_online_signal = DemandSignals.refresh_list_signal(
+		_online_signal,
+		listed_price_cents,
+		_online_target.get("location") as InventoryLocation
+	)
+	if _online_signal == null:
+		return
+	if online_summary != null:
+		online_summary.text = DemandSignalPresenter.list_confirm_summary(_online_signal)
+	_bind_online_chips(_online_signal)
+	if online_confirm_button != null:
+		online_confirm_button.disabled = (
+			listed_price_cents <= 0 or not Economy.online_listings.can_list()
+		)
+
+
+func _bind_online_chips(dto: OnlineListConfirmSignal) -> void:
+	if online_position_chip != null:
+		online_position_chip.text = DemandSignalPresenter.position_chip(dto.position)
+	if online_demand_chip != null:
+		online_demand_chip.text = DemandSignalPresenter.band_chip(dto.shown_demand_band)
+	if online_move_chip != null:
+		online_move_chip.text = DemandSignalPresenter.move_feel_chip(dto.move_feel)
+
+
+func _confirm_online_list() -> void:
+	if _online_signal == null or _online_target.is_empty():
+		return
+	if not Economy.online_listings.can_list():
+		_sync_online_button()
+		return
+	var listed_price_cents := _online_signal.listed_price_cents
+	if online_price_input != null:
+		listed_price_cents = DemandSignalPresenter.parse_cents(online_price_input.text)
+	var result := Economy.online_listings.list_target(_online_target, listed_price_cents)
+	if not bool(result.get("ok", false)):
+		beat_toast.text = "Could not list online"
+		beat_toast.show()
+		_sync_online_button()
+		return
+	var listing := result.get("listing") as OnlineListing
+	if listing != null:
+		beat_toast.text = "Listed · ships %d day(s) · fee %s" % [
+			listing.ship_days,
+			DemandSignalPresenter.format_cents(listing.fee_cents),
+		]
+		beat_toast.show()
+	_open_online_list()
+
+
+func _cancel_online_listing(listing_id: StringName) -> void:
+	var result := Economy.online_listings.cancel_listing(listing_id)
+	if not bool(result.get("ok", false)):
+		beat_toast.text = "Could not cancel listing"
+		beat_toast.show()
+		return
+	if bool(result.get("frequent", false)):
+		beat_toast.text = "Listing cancelled — frequent cancels cost Rep"
+	else:
+		beat_toast.text = "Listing cancelled — stock returned"
+	beat_toast.show()
+	if online_list_panel != null and online_list_panel.visible:
+		_open_online_list()
+	else:
+		_rebuild_online_active_rows()
+	_sync_online_button()
+
+
+func _back_to_online_list() -> void:
+	if online_confirm_panel != null:
+		online_confirm_panel.hide()
+	_online_signal = null
+	_online_target = {}
+	_open_online_list()
+
+
+func _close_online() -> void:
+	if online_list_panel != null:
+		online_list_panel.hide()
+	if online_confirm_panel != null:
+		online_confirm_panel.hide()
+	_online_signal = null
+	_online_target = {}
 	_sync_modal_veil()
 
 
@@ -977,6 +1196,7 @@ func _sync_patience_bar(customer: CustomerProfile) -> void:
 
 func _sync_prep_action_buttons() -> void:
 	_sync_staff_panel()
+	_sync_online_button()
 	if open_research_button == null or open_rearrange_button == null:
 		return
 	var research_att := GameState.shop.research_attention_cost()
@@ -1464,4 +1684,6 @@ func _sync_modal_veil() -> void:
 		or research_confirm_panel.visible
 		or rearrange_panel.visible
 		or (staff_panel != null and staff_panel.visible)
+		or (online_list_panel != null and online_list_panel.visible)
+		or (online_confirm_panel != null and online_confirm_panel.visible)
 	)

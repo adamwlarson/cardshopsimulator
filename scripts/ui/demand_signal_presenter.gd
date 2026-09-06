@@ -200,6 +200,44 @@ static func priceable_stock_row(dto: PriceConfirmSignal) -> String:
 	]
 
 
+static func listable_stock_row(dto: OnlineListConfirmSignal) -> String:
+	var name_text := dto.display_name
+	if name_text.strip_edges().is_empty():
+		name_text = String(dto.sku_id)
+	return "%s ×%d\nList %s · fee %d%% · ships %d–%d days" % [
+		name_text,
+		dto.quantity,
+		format_cents(dto.listed_price_cents),
+		roundi(dto.fee_percent * 100.0),
+		dto.ship_days_min,
+		dto.ship_days_max,
+	]
+
+
+static func online_listing_row(listing: OnlineListing) -> String:
+	return "%s ×%d · %s\nFee %s · ships %d day(s) left · ONLINE HOLD" % [
+		listing.display_name,
+		listing.quantity,
+		format_cents(listing.listed_price_cents),
+		format_cents(listing.fee_cents),
+		listing.remaining_days,
+	]
+
+
+static func list_confirm_summary(dto: OnlineListConfirmSignal) -> String:
+	return "\n".join([
+		price_summary(dto, false),
+		"Fee: %d%% · %s taken when the listing fills" % [
+			roundi(dto.fee_percent * 100.0),
+			format_cents(dto.fee_cents),
+		],
+		"Ships in %d–%d days. Stock moves to Online hold and cannot sell in-store." % [
+			dto.ship_days_min,
+			dto.ship_days_max,
+		],
+	])
+
+
 static func buy_summary(dto: BuyConfirmSignal) -> String:
 	return "\n".join([
 		"%s: %s each · %s total" % [

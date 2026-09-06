@@ -100,7 +100,7 @@ func record_demand_signal_shown(
 		"true_demand_band": String(true_demand_band),
 		"confidence": String(signal_dto.get("confidence")),
 	}
-	if screen == &"price_confirm":
+	if screen == &"price_confirm" or screen == &"list_confirm":
 		payload["listed_price_cents"] = listed_price_cents
 		payload["move_feel"] = String(signal_dto.get("move_feel"))
 	_emit(&"demand_signal_shown", payload)
@@ -140,6 +140,22 @@ func record_slab_sale_failed(payload: Dictionary) -> void:
 	if not is_enabled():
 		return
 	_emit(&"slab_sale_failed", payload.duplicate(true))
+
+
+func record_online_listed(payload: Dictionary) -> void:
+	_emit(&"online_listed", payload)
+
+
+func record_online_cancelled(payload: Dictionary) -> void:
+	_emit(&"online_cancelled", payload)
+
+
+func record_online_filled(payload: Dictionary) -> void:
+	_emit(&"online_filled", payload)
+
+
+func record_online_cancel_rep_hit(payload: Dictionary) -> void:
+	_emit(&"online_cancel_rep_hit", payload)
 
 
 func record_save_pre_write(serialized_save: PackedByteArray) -> void:

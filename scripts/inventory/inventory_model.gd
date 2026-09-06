@@ -127,7 +127,7 @@ func apply_shrink_loss(loss_cents: int) -> Dictionary:
 			var lot := target.get("lot") as StockLot
 			if lot == null or lot.qty <= 0:
 				break
-			if not remove_stock(lot.sku.id, 1):
+			if not remove_stock_from(lot.sku.id, lot.location, 1):
 				break
 		elif kind == &"card":
 			var card := target.get("card") as CardInstance
@@ -201,18 +201,22 @@ func _cheapest_shrink_target() -> Dictionary:
 	var best: Dictionary = {}
 	var best_cost := 1_000_000_000
 	for lot: StockLot in stock_lots:
-		if lot.qty <= 0:
+		if lot.qty <= 0 or _is_online_hold(lot.location):
 			continue
 		var cost := maxi(1, lot.unit_cost_cents())
 		if cost < best_cost:
 			best_cost = cost
 			best = {"kind": &"lot", "lot": lot, "cost_cents": cost}
 	for card: CardInstance in cards:
+		if _is_online_hold(card.location):
+			continue
 		var cost := maxi(1, card.acquired_cost_cents)
 		if cost < best_cost:
 			best_cost = cost
 			best = {"kind": &"card", "card": card, "cost_cents": cost}
 	for slab: SlabInstance in slabs:
+		if _is_online_hold(slab.location):
+			continue
 		var cost := maxi(1, slab.acquired_cost_cents)
 		if cost < best_cost:
 			best_cost = cost
@@ -257,11 +261,30 @@ func add_stock(
 
 
 func remove_stock(sku_id: StringName, quantity: int) -> bool:
-	if quantity <= 0 or get_stock_quantity(sku_id) < quantity:
+	return remove_stock_from(sku_id, null, quantity)
+
+
+func remove_stock_from(
+	sku_id: StringName,
+	location: InventoryLocation,
+	quantity: int
+) -> bool:
+	if quantity <= 0:
+		return false
+	var available := 0
+	for lot: StockLot in stock_lots:
+		if lot.sku.id != sku_id:
+			continue
+		if location != null and not _same_location(lot.location, location):
+			continue
+		available += lot.qty
+	if available < quantity:
 		return false
 	var remaining := quantity
 	for lot: StockLot in stock_lots.duplicate():
 		if lot.sku.id != sku_id:
+			continue
+		if location != null and not _same_location(lot.location, location):
 			continue
 		var removed := mini(lot.qty, remaining)
 		lot.qty -= removed
@@ -434,18 +457,24 @@ func _find_stock_lot(
 	location: InventoryLocation = null
 ) -> StockLot:
 	for lot: StockLot in stock_lots:
-		if (
-			lot.sku.id == sku_id
-			and (
-				location == null
-				or (
-					lot.location.type == location.type
-					and lot.location.slot_id == location.slot_id
-				)
-			)
-		):
+		if lot.sku.id != sku_id:
+			continue
+		if location == null or _same_location(lot.location, location):
 			return lot
 	return null
+
+
+func _same_location(left: InventoryLocation, right: InventoryLocation) -> bool:
+	return (
+		left != null
+		and right != null
+		and left.type == right.type
+		and left.slot_id == right.slot_id
+	)
+
+
+func _is_online_hold(location: InventoryLocation) -> bool:
+	return location != null and location.type == InventoryLocation.Type.ONLINE_HOLD
 
 
 func _register_sku(

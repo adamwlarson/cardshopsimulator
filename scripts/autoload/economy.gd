@@ -1,6 +1,7 @@
 extends Node
 
 var balance_cents: int = 0
+var online_listings := OnlineListingService.new()
 var _ledger: Array[LedgerEntry] = []
 var _payday_loan_days_remaining: int = 0
 
@@ -13,6 +14,7 @@ func reset() -> void:
 	balance_cents = GameState.balance_config.start_cash_cents
 	_ledger.clear()
 	_payday_loan_days_remaining = 0
+	online_listings.reset(GameState.current_day * 7919 + 35)
 	EventBus.publish_cash_changed(balance_cents)
 
 
@@ -99,6 +101,7 @@ func settle_day(day: int) -> void:
 			String(wage.get("memo", "Staff wage"))
 		)
 	settle_payday_loan()
+	online_listings.tick_shipping()
 	_settle_shrink()
 	DemandSignals.roll_settle_events()
 

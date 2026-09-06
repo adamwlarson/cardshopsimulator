@@ -523,6 +523,46 @@ func price_signal(
 	)
 
 
+func listable_stock_signals() -> Array[OnlineListConfirmSignal]:
+	var result: Array[OnlineListConfirmSignal] = []
+	if _service == null:
+		return result
+	for item: Dictionary in Economy.online_listings.listable_targets():
+		var dto := list_confirm_signal(
+			StringName(item["sku_id"]),
+			int(item["listed_price_cents"]),
+			item["location"] as InventoryLocation
+		)
+		dto.display_name = String(item["display_name"])
+		dto.quantity = int(item["quantity"])
+		result.append(dto)
+	return result
+
+
+func list_confirm_signal(
+	sku_id: StringName,
+	listed_price_cents: int,
+	location: InventoryLocation
+) -> OnlineListConfirmSignal:
+	return _service.list_confirm(
+		GameState.current_day,
+		sku_id,
+		listed_price_cents,
+		location,
+		_informed_for_sku(sku_id)
+	)
+
+
+func refresh_list_signal(
+	dto: OnlineListConfirmSignal,
+	listed_price_cents: int,
+	location: InventoryLocation
+) -> OnlineListConfirmSignal:
+	if dto == null or _service == null:
+		return null
+	return _service.refresh_list_confirm(dto, listed_price_cents, location)
+
+
 func researchable_sets() -> Array[Dictionary]:
 	var seen := {}
 	var result: Array[Dictionary] = []

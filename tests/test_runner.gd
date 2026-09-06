@@ -159,6 +159,11 @@ func _initialize() -> void:
 	_test_sec10_7_titan_hype()
 	_test_sec10_8_slab_vs_singles()
 	_test_g1_graded_authenticity()
+	_test_i1_online_unlock_gate()
+	_test_i1_list_hold_fee_and_cancel()
+	_test_i1_frequent_cancel_rep_hit()
+	_test_i1_list_confirm_has_no_truth()
+	_test_i1_soft_ensure_priceable_sku_parked()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -369,6 +374,15 @@ func _test_demand_signal_dto_does_not_leak_truth() -> void:
 		"shared daily demand band"
 	)
 	_expect_equal(price_signal.move_feel.is_empty(), false, "qualitative move feel")
+	var list_signal := service.list_confirm(
+		1, &"AA-SKIE-047", 2300,
+		InventoryLocation.new(InventoryLocation.Type.SHELF)
+	)
+	_expect_dto_has_no_truth_fields(list_signal, "list confirm signal")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.list_confirm_summary(list_signal),
+		"list confirm summary"
+	)
 
 
 func _test_demand_fairness_contract() -> void:
@@ -1443,6 +1457,9 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 		"res://scripts/shop/staff_presenter.gd",
 		"res://scripts/shop/staff_member.gd",
 		"res://scripts/shop/shop_state.gd",
+		"res://scripts/economy/online_listing.gd",
+		"res://scripts/economy/online_list_confirm_signal.gd",
+		"res://scripts/economy/online_listing_service.gd",
 	]:
 		var source := FileAccess.get_file_as_string(path)
 		_expect_equal(source.contains("true_market"), false, "%s market truth access" % path)
@@ -1749,6 +1766,13 @@ func _test_gameplay_hud_visual_smoke() -> void:
 		rearrange_button != null and rearrange_button.custom_minimum_size.y >= 40.0,
 		true,
 		"Rearrange hit target height"
+	)
+	var online_button := hud.get_node_or_null("%OpenOnlineButton") as Button
+	_expect_equal(online_button != null, true, "Online listings button present")
+	_expect_equal(
+		online_button != null and online_button.custom_minimum_size.y >= 40.0,
+		true,
+		"Online listings hit target height"
 	)
 	_expect_equal(
 		price_button != null and price_button.custom_minimum_size.y >= 40.0,
@@ -6862,6 +6886,377 @@ func _choice_enabled(payload: Dictionary, choice_id: StringName) -> bool:
 			continue
 		return bool(choice.get("enabled", false))
 	return false
+
+
+func _test_i1_online_unlock_gate() -> void:
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_expect_equal(NORMAL_CONFIG.online_unlock_rep, 35, "I1: unlock Rep is 35")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"I1: fee is 8%"
+	)
+	_game_state.set("current_reputation", 34)
+	_expect_equal(
+		bool(_economy.get("online_listings").call("is_unlocked")),
+		false,
+		"I1: locked below Rep 35"
+	)
+	_expect_equal(
+		bool(_economy.get("online_listings").call("can_list")),
+		false,
+		"I1: cannot list below Rep 35"
+	)
+	var locked := _i1_list_unique_card(2200)
+	_expect_equal(bool(locked.get("ok", false)), false, "I1: list rejected while locked")
+	_expect_equal(
+		StringName(locked.get("reason", &"")),
+		&"locked",
+		"I1: lock reason is locked"
+	)
+	_game_state.set("current_reputation", 35)
+	_expect_equal(
+		bool(_economy.get("online_listings").call("is_unlocked")),
+		true,
+		"I1: unlocks at Rep 35"
+	)
+	_expect_equal(
+		bool(_economy.get("online_listings").call("can_list")),
+		true,
+		"I1: can list at Rep 35"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "I1: HUD loads for unlock gate")
+	if hud != null:
+		Callable(hud, "_sync_online_button").call()
+		var button := hud.get_node_or_null("%OpenOnlineButton") as Button
+		_expect_equal(
+			button != null and not button.disabled,
+			true,
+			"I1: HUD Online button enabled at Rep 35"
+		)
+		_game_state.set("current_reputation", 34)
+		EventBus.reputation_changed.emit(34)
+		_expect_equal(
+			button != null and button.disabled,
+			true,
+			"I1: HUD Online button disabled below Rep 35"
+		)
+		_expect_equal(
+			button != null and button.text.contains("35"),
+			true,
+			"I1: locked HUD copy names Rep 35"
+		)
+		root.remove_child(hud)
+		hud.free()
+	_game_state.call("start_new_game")
+
+
+func _test_i1_list_hold_fee_and_cancel() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "I1: unique card for hold path")
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var listed_price := 2500
+	var listed := _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(card),
+		listed_price,
+		{"ship_days": 1}
+	)
+	_expect_equal(bool(listed.get("ok", false)), true, "I1: list succeeds when unlocked")
+	var listing := listed.get("listing") as OnlineListing
+	_expect_equal(listing != null, true, "I1: listing record created")
+	_expect_equal(
+		card.location.type,
+		InventoryLocation.Type.ONLINE_HOLD,
+		"I1: listed card moves to ONLINE_HOLD"
+	)
+	_expect_equal(
+		_inventory_service.call("find_listed_sku_offer", card.sku_id, listed_price),
+		{},
+		"I1: held card cannot be offered in-store"
+	)
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", card.sku_id, listed_price)),
+		false,
+		"I1: held card cannot sell in-store"
+	)
+	_expect_equal(
+		listing.fee_cents,
+		OnlineListingService.fee_cents_for(listed_price, NORMAL_CONFIG.online_fee),
+		"I1: 8% fee is computed on list"
+	)
+	var cancelled := _economy.get("online_listings").call("cancel_listing", listing.id)
+	_expect_equal(bool(cancelled.get("ok", false)), true, "I1: cancel before fill works")
+	_expect_equal(
+		card.location.type,
+		InventoryLocation.Type.BINDER,
+		"I1: cancel returns stock from ONLINE_HOLD"
+	)
+	_expect_equal(
+		_i1_ledger_count(&"online_fee"),
+		0,
+		"I1: cancel before fill does not charge fee"
+	)
+	var refill := _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(card),
+		listed_price,
+		{"ship_days": 1}
+	)
+	_expect_equal(bool(refill.get("ok", false)), true, "I1: re-list after cancel")
+	var cash_before := int(_economy.get("balance_cents"))
+	_expect_equal(bool(_game_state.call("start_floor")), true, "I1: open floor for fill")
+	_expect_equal(bool(_game_state.call("start_settle")), true, "I1: settle fills ship=1")
+	var filled := refill.get("listing") as OnlineListing
+	_expect_equal(
+		filled.status,
+		OnlineListing.Status.FILLED,
+		"I1: 1-day ship fills at settle"
+	)
+	_expect_equal(
+		_i1_ledger_count(&"online_sale") >= 1,
+		true,
+		"I1: fill posts online_sale income"
+	)
+	_expect_equal(
+		_i1_ledger_count(&"online_fee") >= 1,
+		true,
+		"I1: fill posts online_fee expense"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price - filled.fee_cents,
+		"I1: net cash is list price minus 8% fee"
+	)
+	_expect_equal(
+		_inventory_service.call("get_card", card.sku_id) == null
+		or (
+			_inventory_service.call("get_card", card.sku_id) as CardInstance
+		) != card,
+		true,
+		"I1: filled listing removes held stock"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_i1_frequent_cancel_rep_hit() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "I1: unique card for cancel streak")
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var hit_count := 0
+	var last_result: Dictionary = {}
+	for _index: int in 3:
+		var listed := _economy.get("online_listings").call(
+			"list_target",
+			_i1_card_target(card),
+			1800,
+			{"ship_days": 3}
+		)
+		_expect_equal(bool(listed.get("ok", false)), true, "I1: cancel-streak list")
+		var listing := listed.get("listing") as OnlineListing
+		last_result = _economy.get("online_listings").call(
+			"cancel_listing",
+			listing.id
+		)
+		if bool(last_result.get("frequent", false)):
+			hit_count += 1
+	_expect_equal(hit_count >= 1, true, "I1: frequent-cancel flag fires")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		40 - NORMAL_CONFIG.online_cancel_rep_hit,
+		"I1: frequent cancel applies Rep hit"
+	)
+	var events: Array = _qa_autoload.call("get_events")
+	var saw_hit := false
+	for event_value: Variant in events:
+		var event := event_value as Dictionary
+		if String(event.get("event", "")) != "online_cancel_rep_hit":
+			continue
+		saw_hit = true
+		var payload: Dictionary = event.get("payload", {})
+		_expect_payload_keys(
+			event,
+			[&"listing_id", &"sku_id", &"cancels_in_window", &"window_days", &"rep_delta", &"reputation"],
+			"I1: frequent-cancel QA payload"
+		)
+		_expect_equal(int(payload.get("rep_delta", 0)) < 0, true, "I1: QA rep_delta is a hit")
+		_expect_equal(
+			int(payload.get("cancels_in_window", 0))
+			>= NORMAL_CONFIG.online_cancel_frequent_threshold,
+			true,
+			"I1: QA window count meets threshold"
+		)
+	_expect_equal(saw_hit, true, "I1: online_cancel_rep_hit instrumentation fires")
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_i1_list_confirm_has_no_truth() -> void:
+	_free_lingering_gameplay_huds()
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "I1: unique card for confirm nack")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "I1: HUD loads for list confirm")
+	if hud == null or card == null:
+		return
+	var dto: OnlineListConfirmSignal = _demand_signals.call(
+		"list_confirm_signal",
+		card.sku_id,
+		card.listed_price_cents,
+		card.location
+	)
+	_expect_equal(dto != null, true, "I1: list confirm DTO exists")
+	if dto != null:
+		_expect_dto_has_no_truth_fields(dto, "I1: list confirm DTO")
+		_assert_text_has_no_truth(
+			DemandSignalPresenter.list_confirm_summary(dto),
+			"I1: list confirm summary"
+		)
+		_assert_text_has_no_truth(
+			DemandSignalPresenter.listable_stock_row(dto),
+			"I1: listable row"
+		)
+	Callable(hud, "_select_online_target").call(_i1_card_target(card), dto)
+	var title := hud.get_node_or_null("%OnlineTitle") as Label
+	var summary := hud.get_node_or_null("%OnlineSummary") as Label
+	var position := hud.get_node_or_null("%OnlinePositionChip") as Label
+	var demand := hud.get_node_or_null("%OnlineDemandChip") as Label
+	var move := hud.get_node_or_null("%OnlineMoveChip") as Label
+	for node: Label in [title, summary, position, demand, move]:
+		if node == null:
+			continue
+		_assert_text_has_no_truth(node.text, "I1: %s" % node.name)
+	_expect_equal(
+		demand != null and not demand.text.is_empty(),
+		true,
+		"I1: §4.5 demand chip is shown"
+	)
+	_expect_equal(
+		position != null and not position.text.is_empty(),
+		true,
+		"I1: §4.5 position chip is shown"
+	)
+	_expect_equal(
+		move != null and not move.text.is_empty(),
+		true,
+		"I1: §4.5 move-feel chip is shown"
+	)
+	_expect_equal(
+		summary != null and summary.text.to_lower().contains("8%"),
+		true,
+		"I1: confirm shows 8% fee"
+	)
+	root.remove_child(hud)
+	hud.free()
+	_game_state.call("start_new_game")
+
+
+func _test_i1_soft_ensure_priceable_sku_parked() -> void:
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"I1: Soft _ensure_priceable_sku stays parked in DemandSignals"
+	)
+	for path: String in [
+		"res://scripts/economy/online_listing_service.gd",
+		"res://scripts/economy/online_listing.gd",
+		"res://scripts/economy/online_list_confirm_signal.gd",
+		"res://scripts/ui/hud.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("_ensure_priceable_sku"),
+			false,
+			"I1: %s does not call parked Soft helper" % path
+		)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var titan_before := int(_inventory_service.call("card_count", &"AA-SKIE-047"))
+	var missing := _economy.get("online_listings").call(
+		"list_target",
+		{
+			"sku_id": &"NO-SUCH-SKU",
+			"display_name": "Missing",
+			"listed_price_cents": 1000,
+			"location": InventoryLocation.new(InventoryLocation.Type.SHELF),
+		},
+		1000
+	)
+	_expect_equal(bool(missing.get("ok", false)), false, "I1: missing SKU does not list")
+	_expect_equal(
+		int(_inventory_service.call("card_count", &"AA-SKIE-047")),
+		titan_before,
+		"I1: failed list does not seed Titan via Soft helper"
+	)
+	_game_state.call("start_new_game")
+
+
+func _i1_unique_card() -> CardInstance:
+	return _inventory_service.call(
+		"receive_card",
+		&"AA-SKIE-058",
+		900,
+		InventoryLocation.new(InventoryLocation.Type.BINDER),
+		1800
+	) as CardInstance
+
+
+func _i1_card_target(card: CardInstance) -> Dictionary:
+	var sku := _inventory_service.get("model").get_sku(card.sku_id) as ProductSKU
+	return {
+		"sku_id": card.sku_id,
+		"display_name": sku.display_name if sku != null else String(card.sku_id),
+		"quantity": 1,
+		"listed_price_cents": card.listed_price_cents,
+		"location": card.location,
+		"card": card,
+	}
+
+
+func _i1_list_unique_card(listed_price_cents: int) -> Dictionary:
+	var card := _i1_unique_card()
+	if card == null:
+		return {"ok": false, "reason": &"no_card"}
+	return _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(card),
+		listed_price_cents,
+		{"ship_days": 2}
+	)
+
+
+func _i1_ledger_count(category: StringName) -> int:
+	var count := 0
+	for entry: LedgerEntry in _economy.call("get_ledger"):
+		if entry.category == category:
+			count += 1
+	return count
 
 
 func _free_lingering_gameplay_huds() -> void:

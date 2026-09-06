@@ -233,6 +233,68 @@ func apply_medium_capacity(case_bonus: int, backstock_bonus: int) -> void:
 	model.backstock_bin_bonus = maxi(0, backstock_bonus)
 
 
+func is_in_store_sellable(location: InventoryLocation) -> bool:
+	return location != null and location.type != InventoryLocation.Type.ONLINE_HOLD
+
+
+func first_in_store_card(sku_id: StringName) -> CardInstance:
+	for card: CardInstance in model.cards:
+		if card.sku_id == sku_id and is_in_store_sellable(card.location):
+			return card
+	return null
+
+
+func first_in_store_slab(sku_id: StringName) -> SlabInstance:
+	for slab: SlabInstance in model.slabs:
+		if (
+			slab.card_ref != null
+			and slab.card_ref.sku_id == sku_id
+			and is_in_store_sellable(slab.location)
+		):
+			return slab
+	return null
+
+
+func move_stock_to(
+	sku_id: StringName,
+	source: InventoryLocation,
+	destination: InventoryLocation,
+	quantity: int
+) -> bool:
+	if model == null or not model.move_stock(sku_id, source, destination, quantity):
+		return false
+	EventBus.publish_inventory_changed(sku_id, total_owned(sku_id))
+	return true
+
+
+func remove_stock_from(
+	sku_id: StringName,
+	location: InventoryLocation,
+	quantity: int
+) -> bool:
+	if model == null or not model.remove_stock_from(sku_id, location, quantity):
+		return false
+	EventBus.publish_inventory_changed(sku_id, model.get_stock_quantity(sku_id))
+	return true
+
+
+func remove_card(card: CardInstance) -> bool:
+	if model == null or not model.remove_card(card):
+		return false
+	EventBus.publish_inventory_changed(card.sku_id, total_owned(card.sku_id))
+	return true
+
+
+func remove_slab(slab: SlabInstance) -> bool:
+	if model == null or slab == null or slab.card_ref == null:
+		return false
+	var sku_id := slab.card_ref.sku_id
+	if not model.remove_slab(slab):
+		return false
+	EventBus.publish_inventory_changed(sku_id, total_owned(sku_id))
+	return true
+
+
 func move_card_to(card: CardInstance, destination: InventoryLocation) -> bool:
 	if not model.move_card(card, destination):
 		return false
@@ -258,6 +320,7 @@ func get_priceable_stock() -> Array[Dictionary]:
 			"quantity": lot.qty,
 			"listed_price_cents": lot.listed_price_cents,
 			"location": lot.location,
+			"lot": lot,
 		})
 	for card: CardInstance in model.cards:
 		var sku := model.get_sku(card.sku_id)
@@ -269,6 +332,7 @@ func get_priceable_stock() -> Array[Dictionary]:
 			"quantity": 1,
 			"listed_price_cents": card.listed_price_cents,
 			"location": card.location,
+			"card": card,
 		})
 	for slab: SlabInstance in model.slabs:
 		if slab.card_ref == null:
@@ -288,6 +352,7 @@ func get_priceable_stock() -> Array[Dictionary]:
 			"inspected": slab.inspected,
 			"grader": slab.grader,
 			"grade": slab.grade,
+			"slab": slab,
 		})
 	return result
 
@@ -333,6 +398,7 @@ func find_listed_offer(
 			lot.qty > 0
 			and lot.listed_price_cents > 0
 			and lot.listed_price_cents <= budget_cents
+			and is_in_store_sellable(lot.location)
 			and _matches_interest(lot.sku, interest_tags)
 		):
 			return _offer_for(
@@ -345,6 +411,7 @@ func find_listed_offer(
 		if (
 			card.listed_price_cents > 0
 			and card.listed_price_cents <= budget_cents
+			and is_in_store_sellable(card.location)
 			and _matches_interest(sku, interest_tags)
 		):
 			return _offer_for(sku, card.listed_price_cents, card.location)
@@ -373,16 +440,28 @@ func confirm_customer_sale(sku_id: StringName, sale_price_cents: int) -> bool:
 	if slab != null:
 		return _resolve_slab_sale(slab, sale_price_cents)
 	for card: CardInstance in model.cards:
-		if card.sku_id == sku_id and card.listed_price_cents > 0:
+		if (
+			card.sku_id == sku_id
+			and card.listed_price_cents > 0
+			and is_in_store_sellable(card.location)
+		):
 			if not model.remove_card(card):
 				return false
 			Economy.record_income(sale_price_cents, &"customer_sale", "Customer sale")
 			EventBus.publish_inventory_changed(sku_id, _total_quantity(sku_id))
 			return true
-	if not remove_stock(sku_id, 1):
-		return false
-	Economy.record_income(sale_price_cents, &"customer_sale", "Customer sale")
-	return true
+	for lot: StockLot in model.stock_lots:
+		if (
+			lot.sku.id == sku_id
+			and lot.qty > 0
+			and lot.listed_price_cents > 0
+			and is_in_store_sellable(lot.location)
+		):
+			if not remove_stock_from(sku_id, lot.location, 1):
+				return false
+			Economy.record_income(sale_price_cents, &"customer_sale", "Customer sale")
+			return true
+	return false
 
 
 func set_listed_price(sku_id: StringName, listed_price_cents: int) -> bool:
@@ -516,6 +595,7 @@ func _listed_slab_for(sku_id: StringName) -> SlabInstance:
 			slab.card_ref != null
 			and slab.card_ref.sku_id == sku_id
 			and slab.listed_price_cents > 0
+			and is_in_store_sellable(slab.location)
 		):
 			return slab
 	return null
