@@ -41,6 +41,17 @@
       "negative": true,
       "duration_days_min": 1,
       "duration_days_max": 3
+    },
+    {
+      "id": "convention_weekend",
+      "type": "convention_weekend",
+      "title": "Convention weekend",
+      "description": "Calendar weekend — the floor gets busier and whales show up more often.",
+      "weight": 1.0,
+      "negative": false,
+      "calendar": true,
+      "duration_days_min": 2,
+      "duration_days_max": 2
     }
   ]
 }

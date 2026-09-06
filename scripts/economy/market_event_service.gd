@@ -9,6 +9,9 @@ const HYPE_DEMAND_SCORE := 0.95
 const COUNTERFEIT_TRUST_MULT := 0.55
 const COUNTERFEIT_SHADY_FAKE_MULT := 2.5
 const COUNTERFEIT_SHADY_WIDTH_MULT := 1.35
+const CONVENTION_TRAFFIC_MULT := 2.0
+const CONVENTION_WHALE_WEIGHT_MULT := 2.5
+const CONVENTION_CALENDAR_WEIGHT_MULT := 2.5
 const TITAN_SKU := &"AA-SKIE-047"
 const ROTATION_SET_ID := &"AA-DUST"
 
@@ -37,11 +40,11 @@ func should_roll(config: BalanceConfig) -> bool:
 	return rng.randf() < settle_chance(config)
 
 
-func roll_definition(config: BalanceConfig) -> Dictionary:
+func roll_definition(config: BalanceConfig, day: int = 0) -> Dictionary:
 	var total := 0.0
 	var weighted: Array[Dictionary] = []
 	for def: Dictionary in defs:
-		var weight := _weight_for(def, config)
+		var weight := _weight_for(def, config, day)
 		if weight <= 0.0:
 			continue
 		total += weight
@@ -72,10 +75,27 @@ func definition_for(kind: StringName) -> Dictionary:
 	return {}
 
 
-func _weight_for(def: Dictionary, config: BalanceConfig) -> float:
+static func is_convention_calendar_day(day: int) -> bool:
+	var weekday := posmod(day, 7)
+	return weekday == 0 or weekday == 6
+
+
+static func is_convention_telegraph_day(day: int) -> bool:
+	return posmod(day, 7) == 5
+
+
+static func convention_calendar_weight_mult(day: int) -> float:
+	if is_convention_calendar_day(day) or is_convention_telegraph_day(day):
+		return CONVENTION_CALENDAR_WEIGHT_MULT
+	return 1.0
+
+
+func _weight_for(def: Dictionary, config: BalanceConfig, day: int = 0) -> float:
 	var weight := float(def.get("weight", 1.0))
 	if bool(def.get("negative", false)) and config != null:
 		weight *= config.negative_event_weight_mult
+	if StringName(def.get("type", "")) == MarketEvent.KIND_CONVENTION:
+		weight *= convention_calendar_weight_mult(day)
 	return maxf(0.0, weight)
 
 
@@ -86,13 +106,14 @@ func _load_catalog() -> void:
 		for entry_value: Variant in (parsed as Dictionary).get("events", []):
 			if entry_value is Dictionary:
 				defs.append(entry_value as Dictionary)
-	if defs.size() >= 4:
+	if defs.size() >= 5:
 		return
 	defs = [
 		_fallback_def(&"hype_spike", "Hype spike", false, 1, 3),
 		_fallback_def(&"soft_rotation_leak", "Soft rotation leak", true, 1, 3),
 		_fallback_def(&"fog_day", "Fog day", true, 1, 1),
 		_fallback_def(&"counterfeit_scare", "Counterfeit scare", true, 1, 3),
+		_fallback_def(&"convention_weekend", "Convention weekend", false, 2, 2),
 	]
 
 
