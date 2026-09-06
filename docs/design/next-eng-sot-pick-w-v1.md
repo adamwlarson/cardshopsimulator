@@ -84,3 +84,4 @@ No new systems. Polish backlog only.
 | When | Decision |
 |------|----------|
 | 2026-09-06 | PM adopted **W1 GO** (park W2/W4; W3 dual-track separate). Soft catalog closed. Eng loan shark spike `bc-e913853b` launching. Main @ `440a7cf8`. |
+| 2026-09-06 | **W1 SHIPPED #54** Loan shark @ `6cc87b96`. Soft catalog CLOSED. Queue → pick-x. |
