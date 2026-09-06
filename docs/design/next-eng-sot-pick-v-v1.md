@@ -1,6 +1,6 @@
 # Next Eng SoT Pick V v1 — post U1
 
-**Status:** Adopted **V1 GO** (Camera unlock) — Eng spike CLEAR TO KICK. Park V2 Soft far crest Art / V3 loan shark / V4 idle. Soft catalog stays closed. Art optional prop dual-track.
+**Status:** **V1 SHIPPED** — Camera unlock PR #51 @ 0cbef7bc; QA PASS-with-notes; Soft active≡owned Soft OK MVP; Soft catalog closed; Art prop dual-track stub-swap later.
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §8 Theft, pick-u (U1 Soft hygiene shipped #50)  
