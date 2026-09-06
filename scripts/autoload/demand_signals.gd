@@ -129,6 +129,39 @@ func has_theft_ring() -> bool:
 	return event != null and event.kind == MarketEvent.KIND_THEFT_RING
 
 
+func has_recession_week() -> bool:
+	var event := active_event()
+	return event != null and event.kind == MarketEvent.KIND_RECESSION
+
+
+func active_event_demand_mult() -> float:
+	if not has_recession_week():
+		return 1.0
+	return MarketEventService.RECESSION_DEMAND_MULT
+
+
+func active_event_sell_through_mult() -> float:
+	return active_event_demand_mult()
+
+
+func active_event_buylist_mult() -> float:
+	if not has_recession_week():
+		return 1.0
+	return MarketEventService.RECESSION_BUYLIST_MULT
+
+
+func effective_demand_score(sku_id: StringName) -> float:
+	if _service == null:
+		return 0.0
+	return _service.effective_demand_score_for(sku_id)
+
+
+func effective_demand_band(sku_id: StringName) -> StringName:
+	if _service == null:
+		return &""
+	return _service.effective_demand_band_for(sku_id)
+
+
 func active_shrink_multiplier() -> float:
 	if not has_theft_ring():
 		return 1.0
@@ -258,6 +291,8 @@ func event_banner_text() -> String:
 			return "Calendar: Convention weekend — busier floor · whales inbound"
 		MarketEvent.KIND_THEFT_RING:
 			return "Rumor: extra loss on the floor — staff up or wait it out"
+		MarketEvent.KIND_RECESSION:
+			return "Macro: Recession week — demand soft · sellers inbound"
 		MarketEvent.KIND_ROTATION:
 			if not _can_see_rotation_leak(event):
 				return ""
@@ -828,6 +863,8 @@ func _bind_event_targets(event: MarketEvent) -> bool:
 			return true
 		MarketEvent.KIND_THEFT_RING:
 			return true
+		MarketEvent.KIND_RECESSION:
+			return true
 	return false
 
 
@@ -854,6 +891,12 @@ func _apply_event_effects(event: MarketEvent) -> bool:
 		MarketEvent.KIND_CONVENTION:
 			return true
 		MarketEvent.KIND_THEFT_RING:
+			return true
+		MarketEvent.KIND_RECESSION:
+			_service.set_recession_week(
+				true,
+				MarketEventService.RECESSION_DEMAND_MULT
+			)
 			return true
 	return false
 
@@ -887,6 +930,8 @@ func _revert_event_effects(event: MarketEvent) -> void:
 			pass
 		MarketEvent.KIND_THEFT_RING:
 			pass
+		MarketEvent.KIND_RECESSION:
+			_service.set_recession_week(false)
 		MarketEvent.KIND_ROTATION:
 			pass
 
@@ -942,6 +987,10 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		),
 		"shrink_mult": active_shrink_multiplier(),
 		"theft_ring": has_theft_ring(),
+		"demand_mult": active_event_demand_mult(),
+		"sell_through_mult": active_event_sell_through_mult(),
+		"buylist_mult": active_event_buylist_mult(),
+		"recession_week": has_recession_week(),
 	}
 	QaInstrumentation.record_market_event_rolled(payload)
 	return payload

@@ -44,7 +44,8 @@ func spawn_customer() -> bool:
 		GameState.current_reputation,
 		GameState.balance_config,
 		_rng,
-		DemandSignals.active_event_whale_weight_mult()
+		DemandSignals.active_event_whale_weight_mult(),
+		DemandSignals.active_event_buylist_mult()
 	)
 	if archetype.is_empty():
 		return false

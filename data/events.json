@@ -62,6 +62,16 @@
       "negative": true,
       "duration_days_min": 3,
       "duration_days_max": 3
+    },
+    {
+      "id": "recession_week",
+      "type": "recession_week",
+      "title": "Recession week",
+      "description": "Macro ticker — all demand softens and walk-in sellers pile up. Liquidate staples, cut buys, or ride it out.",
+      "weight": 1.0,
+      "negative": true,
+      "duration_days_min": 7,
+      "duration_days_max": 7
     }
   ]
 }

@@ -38,6 +38,8 @@ var _counterfeit_scare: bool = false
 var _scare_trust_mult: float = 1.0
 var _scare_shady_fake_mult: float = 1.0
 var _scare_shady_width_mult: float = 1.0
+var _recession_week: bool = false
+var _recession_demand_mult: float = 1.0
 var _instrumentation: QaInstrumentationService
 
 
@@ -84,6 +86,28 @@ func set_counterfeit_scare(
 
 func has_counterfeit_scare() -> bool:
 	return _counterfeit_scare
+
+
+func set_recession_week(active: bool, demand_mult: float = 0.65) -> void:
+	_recession_week = active
+	_recession_demand_mult = demand_mult if active else 1.0
+	_demand_cache.clear()
+
+
+func has_recession_week() -> bool:
+	return _recession_week
+
+
+func demand_mult() -> float:
+	return _recession_demand_mult if _recession_week else 1.0
+
+
+func effective_demand_score_for(sku_id: StringName) -> float:
+	return _effective_demand(_market_state.demand_score_for(sku_id))
+
+
+func effective_demand_band_for(sku_id: StringName) -> StringName:
+	return _true_demand_band(effective_demand_score_for(sku_id))
 
 
 func graded_trust_mult() -> float:
@@ -168,7 +192,7 @@ func buy_confirm(
 ) -> BuyConfirmSignal:
 	var dto := BuyConfirmSignal.new()
 	var true_market_cents := _market_state.market_cents_for(sku_id)
-	var true_demand := _market_state.demand_score_for(sku_id)
+	var true_demand := _effective_demand(_market_state.demand_score_for(sku_id))
 	var comp := _comp_range(true_market_cents, channel, informed)
 	dto.sku_id = sku_id
 	dto.unit_cost_cents = unit_cost_cents
@@ -497,7 +521,7 @@ func _populate_price_fields(
 	screen: StringName
 ) -> void:
 	var true_market_cents := _market_state.market_cents_for(sku_id)
-	var true_demand := _market_state.demand_score_for(sku_id)
+	var true_demand := _effective_demand(_market_state.demand_score_for(sku_id))
 	var comp := _comp_range(true_market_cents, channel, informed)
 	var midpoint: int = (comp.x + comp.y) / 2
 	dto.sku_id = sku_id
@@ -592,6 +616,10 @@ func _should_forbid_hot_cold_invert() -> bool:
 	if _config == null:
 		return not _fog_flag
 	return _config.fair_forbid_hot_cold_invert and not _fog_flag
+
+
+func _effective_demand(score: float) -> float:
+	return clampf(score * demand_mult(), 0.0, 1.0)
 
 
 func _true_demand_band(score: float) -> StringName:

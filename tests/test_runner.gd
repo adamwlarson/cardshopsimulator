@@ -129,6 +129,7 @@ func _initialize() -> void:
 	_test_counterfeit_scare_event()
 	_test_convention_weekend_event()
 	_test_theft_ring_event()
+	_test_recession_week_event()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -2412,9 +2413,10 @@ func _test_market_events_seven_day_seeded_run() -> void:
 		and FileAccess.get_file_as_string("res://data/events.json").contains("fog_day")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("counterfeit_scare")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("convention_weekend")
-		and FileAccess.get_file_as_string("res://data/events.json").contains("theft_ring"),
+		and FileAccess.get_file_as_string("res://data/events.json").contains("theft_ring")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("recession_week"),
 		true,
-		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, and theft ring"
+		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, theft ring, and recession"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 
@@ -4424,6 +4426,563 @@ func _test_theft_ring_save_load() -> void:
 		"O1: restored banner still uses rumor copy"
 	)
 	_assert_text_has_no_truth(restored_banner, "O1 restored theft banner")
+
+
+func _test_recession_week_event() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_recession_week_can_fire()
+	_test_recession_week_demand_and_buylist()
+	_test_recession_week_levers_and_no_soft_lock()
+	_test_recession_week_section_45_and_banner()
+	_test_recession_week_pack_coherence()
+	_test_recession_week_save_load()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_recession_week_can_fire() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_RECESSION,
+		{"duration_days": 7, "remaining_days": 7}
+	)
+	_expect_equal(started != null, true, "P1: formal start_pack_event fires recession week")
+	_expect_equal(started.kind, MarketEvent.KIND_RECESSION, "P1: kind is recession_week")
+	_expect_equal(started.duration_days, 7, "P1: duration is 7 days")
+	_expect_equal(started.remaining_days, 7, "P1: remaining_days tracks the week")
+	_expect_equal(
+		_demand_signals.call("has_recession_week"),
+		true,
+		"P1: pack exposes recession week flag"
+	)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"P1: recession does not open Option D PriceEditor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var fired := false
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 64):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		_qa_autoload.call("clear")
+		for _day_index: int in range(14):
+			_game_state.call("start_floor")
+			_game_state.call("start_settle")
+			var rolled: MarketEvent = _demand_signals.call("active_event")
+			if rolled != null and rolled.kind == MarketEvent.KIND_RECESSION:
+				fired = true
+				break
+			if int(_game_state.get("current_day")) < 14:
+				_game_state.call("advance_day")
+		if fired:
+			break
+	_expect_equal(fired, true, "P1: seeded settle run can roll recession_week")
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_recession_week_demand_and_buylist() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var staple := &"AA-BASE-088"
+	var catalog := CustomerArchetypeCatalog.new()
+	var flipper: Dictionary = {}
+	for archetype: Dictionary in catalog.archetypes:
+		if StringName(archetype.get("id", "")) == &"flipper":
+			flipper = archetype
+			break
+	var baseline_score := float(_demand_signals.call("effective_demand_score", staple))
+	var baseline_band: StringName = _demand_signals.call("effective_demand_band", staple)
+	var baseline_flipper := catalog.weight_for(flipper, 40, NORMAL_CONFIG)
+	_expect_equal(baseline_score > 0.0, true, "P1: staple has baseline demand")
+	_expect_equal(baseline_band, &"warm", "P1: staple baseline demand band is warm")
+	_expect_equal(baseline_flipper > 0.0, true, "P1: flipper baseline weight is positive")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_demand_mult")), 1.0),
+		true,
+		"P1: demand mult is 1.0 with event off"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_buylist_mult")), 1.0),
+		true,
+		"P1: buylist mult is 1.0 with event off"
+	)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_RECESSION,
+		{"duration_days": 7, "remaining_days": 7}
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_demand_mult")),
+			MarketEventService.RECESSION_DEMAND_MULT
+		),
+		true,
+		"P1: recession demand mult is 0.65"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_sell_through_mult")),
+			MarketEventService.RECESSION_DEMAND_MULT
+		),
+		true,
+		"P1: sell-through mult tracks demand mult"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_buylist_mult")),
+			MarketEventService.RECESSION_BUYLIST_MULT
+		),
+		true,
+		"P1: recession buylist seller mult is ×2"
+	)
+	var rec_score := float(_demand_signals.call("effective_demand_score", staple))
+	var rec_band: StringName = _demand_signals.call("effective_demand_band", staple)
+	_expect_equal(rec_score < baseline_score, true, "P1: staple demand score drops")
+	_expect_equal(
+		is_equal_approx(
+			rec_score,
+			baseline_score * MarketEventService.RECESSION_DEMAND_MULT
+		),
+		true,
+		"P1: demand uses pack mult, not a BalanceConfig rewrite"
+	)
+	_expect_equal(rec_band, &"steady", "P1: staple demand band cools warm → steady")
+	_expect_equal(rec_band != baseline_band, true, "P1: sell-through band is observably colder")
+	var buylist_mult := float(_demand_signals.call("active_event_buylist_mult"))
+	var rec_flipper := catalog.weight_for(flipper, 40, NORMAL_CONFIG, 1.0, buylist_mult)
+	_expect_equal(rec_flipper > baseline_flipper, true, "P1: flipper/buylist weight rises")
+	_expect_equal(
+		is_equal_approx(
+			rec_flipper,
+			baseline_flipper * MarketEventService.RECESSION_BUYLIST_MULT
+		),
+		true,
+		"P1: buylist seller pressure uses pack mult"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	_expect_equal(
+		spawn_src.contains("active_event_buylist_mult"),
+		true,
+		"P1: CustomerSpawner reads active-event buylist multiplier"
+	)
+	var wait: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(wait != null, true, "P1: week window is active")
+	_demand_signals.call("roll_settle_events")
+	var after_one: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		after_one != null and after_one.kind == MarketEvent.KIND_RECESSION,
+		true,
+		"P1: day 1 wait-out keeps recession active"
+	)
+	_expect_equal(after_one.remaining_days, 6, "P1: remaining_days ticks 7→6")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_demand_mult")),
+			MarketEventService.RECESSION_DEMAND_MULT
+		),
+		true,
+		"P1: demand stays down while remaining_days > 0"
+	)
+	_demand_signals.call("apply_event_save", {})
+	_expect_equal(
+		_demand_signals.call("has_recession_week"),
+		false,
+		"P1: clearing recession drops the flag"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("effective_demand_score", staple)),
+			baseline_score
+		),
+		true,
+		"P1: demand score restores after the event ends"
+	)
+	_expect_equal(
+		_demand_signals.call("effective_demand_band", staple),
+		baseline_band,
+		"P1: demand band restores after the event ends"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_buylist_mult")), 1.0),
+		true,
+		"P1: buylist weight restores after recession ends"
+	)
+	_expect_equal(
+		is_equal_approx(catalog.weight_for(flipper, 40, NORMAL_CONFIG), baseline_flipper),
+		true,
+		"P1: catalog flipper weight restores to baseline"
+	)
+
+
+func _test_recession_week_levers_and_no_soft_lock() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_RECESSION,
+		{"duration_days": 7, "remaining_days": 7}
+	)
+	var staple := &"AA-BASE-088"
+	var listed_before := int(_inventory_service.call("listed_price_for", staple))
+	var fire_sale := maxi(1, floori(float(listed_before) * 0.90))
+	_expect_equal(
+		_inventory_service.call("set_listed_price", staple, fire_sale),
+		true,
+		"P1: liquidate-staples lever works during recession"
+	)
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", staple)),
+		fire_sale,
+		"P1: fire-sale listed price persists"
+	)
+	var price_dto := _demand_signals.call(
+		"price_signal",
+		staple,
+		fire_sale,
+		_inventory_service.call("location_for", staple)
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(price_dto, "P1 recession fire-sale price signal")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_dto),
+		"P1 recession fire-sale PriceEditor summary"
+	)
+	_expect_equal(
+		price_dto.position == &"undercut" or price_dto.move_feel == &"should_move",
+		true,
+		"P1: fire-sale confirm still prices without a soft-lock"
+	)
+	var stock_before := int(_inventory_service.call("card_count", staple))
+	var inventory := FakeCustomerInventory.new()
+	var queue := CustomerQueue.new()
+	queue.configure(inventory)
+	var buyer := CustomerProfile.new()
+	buyer.budget_cents = 10_000
+	buyer.interest_tags = [&"staple"]
+	_expect_equal(queue.enqueue(buyer), true, "P1: recession queue still accepts buyers")
+	_expect_equal(queue.sell_listed(), true, "P1: liquidate sell-listed still works")
+	_expect_equal(inventory.sold, true, "P1: liquidate reaches a sale")
+	var seller := CustomerProfile.new()
+	seller.trade_intent = CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	seller.buylist_signal = _demand_signals.call(
+		"buylist_signal",
+		&"AA-DUST-ETB",
+		1
+	) as BuyConfirmSignal
+	_expect_equal(queue.enqueue(seller), true, "P1: buylist seller still queues")
+	_expect_equal(queue.refuse(), true, "P1: refuse-buy lever works")
+	_expect_equal(inventory.bought, false, "P1: refuse-buy does not purchase")
+	queue.free()
+	inventory.free()
+	var opportunity: bool = _demand_signals.call(
+		"inject_buy_opportunity",
+		_scripted_buy_opportunity()
+	)
+	_expect_equal(opportunity, true, "P1: buy opportunity still injects")
+	_expect_equal(
+		_demand_signals.call("dismiss_buy_opportunity", &"p1_recession_skip"),
+		true,
+		"P1: cut-buys dismiss still works"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"p1_recession_skip") == null,
+		true,
+		"P1: dismissed buy stays closed — no soft-lock"
+	)
+	_expect_equal(stock_before > 0, true, "P1: seed staples remain liquidatable")
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"P1: recession can open FLOOR"
+	)
+	_expect_equal(
+		_game_state.call("start_settle"),
+		true,
+		"P1: recession FLOOR can settle — no soft-lock"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "P1: HUD loads during recession levers")
+	if hud != null:
+		var open_price := hud.get_node_or_null("%OpenPriceButton") as Button
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		var refuse := hud.get_node_or_null("%RefuseButton") as Button
+		_expect_equal(
+			open_price != null and not open_price.disabled,
+			true,
+			"P1: player can still open PriceEditor to liquidate"
+		)
+		_expect_equal(
+			open_buy != null and not open_buy.disabled,
+			true,
+			"P1: player can still open buys to refuse them"
+		)
+		_expect_equal(refuse != null, true, "P1: refuse control still exists")
+		hud.queue_free()
+
+
+func _scripted_buy_opportunity() -> BuyOpportunity:
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = &"p1_recession_skip"
+	opportunity.sku_id = &"AA-DUST-ETB"
+	opportunity.display_name = "Dustway Chronicles Explorer Box"
+	opportunity.offer_label = "Distributor lot"
+	opportunity.channel = DemandSignalService.Channel.DISTRIBUTOR
+	opportunity.unit_cost_cents = 3600
+	opportunity.quantity = 1
+	opportunity.space_required = 1
+	return opportunity
+
+
+func _test_recession_week_section_45_and_banner() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_RECESSION,
+		{"duration_days": 7, "remaining_days": 7}
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Macro"), true, "P1: banner is a macro ticker")
+	_expect_equal(banner.contains("Recession"), true, "P1: banner names the week")
+	_expect_equal(
+		banner.to_lower().contains("demand") or banner.to_lower().contains("seller"),
+		true,
+		"P1: banner telegraphs demand / seller pressure"
+	)
+	_expect_equal(banner.contains("true_market"), false, "P1: ticker has no true_market")
+	_assert_text_has_no_truth(banner, "P1 recession banner")
+	var fire_sale := _demand_signals.call(
+		"price_signal",
+		&"AA-BASE-088",
+		400,
+		_inventory_service.call("location_for", &"AA-BASE-088")
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(fire_sale, "P1 recession fire-sale confirm")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(fire_sale),
+		"P1 recession fire-sale summary"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var payload: Dictionary = _demand_signals.call("roll_settle_events")
+	_assert_payload_has_no_truth(payload, "P1 recession market_event_rolled")
+	_expect_equal(
+		payload.has("demand_mult")
+		and payload.has("buylist_mult")
+		and payload.has("sell_through_mult"),
+		true,
+		"P1: instrumentation records demand and buylist multipliers"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"P1: macro banner does not open Option D PriceEditor"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "P1: HUD loads for recession ticker")
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		_expect_equal(banner_label != null, true, "P1: thin event banner exists")
+		_expect_equal(
+			banner_label != null
+			and banner_label.visible
+			and banner_label.text.contains("Macro")
+			and banner_label.text.contains("Recession"),
+			true,
+			"P1: HUD banner shows recession without a new screen"
+		)
+		_assert_text_has_no_truth(
+			banner_label.text if banner_label != null else "",
+			"P1 HUD recession banner"
+		)
+		var price_panel := hud.get_node_or_null("%PriceEditor") as PanelContainer
+		_expect_equal(
+			price_panel == null or not price_panel.visible,
+			true,
+			"P1: HUD does not force PriceEditor for recession"
+		)
+		var demand_chip := hud.get_node_or_null("%PriceDemandChip") as Label
+		_expect_equal(demand_chip != null, true, "P1: PriceEditor demand chip still present")
+		hud.queue_free()
+
+
+func _test_recession_week_pack_coherence() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_RECESSION,
+		{"duration_days": 7, "remaining_days": 7}
+	)
+	var convention: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(convention != null, true, "P1: Convention weekend still starts")
+	_expect_equal(
+		_demand_signals.call("has_recession_week"),
+		false,
+		"P1: convention replaces recession on the shared pack bus"
+	)
+	_expect_equal(
+		_demand_signals.call("has_convention_weekend"),
+		true,
+		"P1: Convention weekend modifiers still apply"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_demand_mult")), 1.0),
+		true,
+		"P1: convention does not keep recession demand ↓"
+	)
+	var theft: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(theft != null, true, "P1: Theft ring still starts")
+	_expect_equal(
+		_demand_signals.call("has_theft_ring"),
+		true,
+		"P1: Theft ring modifiers still apply"
+	)
+	var scare: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(scare != null, true, "P1: Counterfeit scare still starts")
+	_expect_equal(
+		_demand_signals.call("has_counterfeit_scare"),
+		true,
+		"P1: Counterfeit scare modifiers still apply"
+	)
+	var hype: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": &"AA-SKIE-047", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(hype != null, true, "P1: Option D hype still starts")
+	_expect_equal(hype.sku_id, &"AA-SKIE-047", "P1: hype still targets Titan")
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		true,
+		"P1: Option D hype still wants the PriceEditor"
+	)
+	var fog: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_FOG,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(fog != null, true, "P1: fog day still starts")
+	_expect_equal(_demand_signals.call("has_fog_flag"), true, "P1: fog flag still applies")
+	_expect_equal(
+		_demand_signals.call("has_recession_week"),
+		false,
+		"P1: fog does not leak recession demand"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"P1: Soft _ensure_priceable_sku stays parked"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/customers/customer_spawner.gd"
+		).contains("_ensure_priceable_sku"),
+		false,
+		"P1: spawner does not call parked Soft helper"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/inventory_service.gd"
+		).contains("func apply_medium_capacity"),
+		true,
+		"P1: Soft apply_medium_capacity naming stays untouched"
+	)
+
+
+func _test_recession_week_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_RECESSION,
+		{"duration_days": 7, "remaining_days": 7}
+	)
+	_expect_equal(started != null, true, "P1 save: recession starts")
+	_game_state.set("current_day", 11)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "P1 recession save")
+	var stored: Dictionary = saved.get("market_event", {})
+	_expect_equal(String(stored.get("id", "")), "recession_week", "P1 save writes event id")
+	_expect_equal(int(stored.get("remaining_days", 0)), 7, "P1 save writes remaining days")
+	_expect_equal(String(stored.get("kind", "")), "recession_week", "P1 save writes kind")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_demand_signals.call("has_recession_week"),
+		false,
+		"P1: new game clears recession"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"P1: restore_save accepts recession snapshot"
+	)
+	var restored: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(restored != null, true, "P1: save/load restores recession")
+	_expect_equal(restored.kind, MarketEvent.KIND_RECESSION, "P1: restored kind")
+	_expect_equal(restored.remaining_days, 7, "P1: save/load restores remaining days")
+	_expect_equal(
+		_demand_signals.call("has_recession_week"),
+		true,
+		"P1: restored recession re-applies demand ↓ / buylist ↑"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_demand_mult")),
+			MarketEventService.RECESSION_DEMAND_MULT
+		),
+		true,
+		"P1: restored recession still multiplies demand"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_buylist_mult")),
+			MarketEventService.RECESSION_BUYLIST_MULT
+		),
+		true,
+		"P1: restored recession still raises buylist sellers"
+	)
+	_expect_equal(
+		_demand_signals.call("effective_demand_band", &"AA-BASE-088"),
+		&"steady",
+		"P1: restored recession still cools staple demand"
+	)
+	var restored_banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(
+		restored_banner.contains("Macro") and restored_banner.contains("Recession"),
+		true,
+		"P1: restored banner still uses macro ticker copy"
+	)
+	_assert_text_has_no_truth(restored_banner, "P1 restored recession banner")
 
 
 func _last_shrink_applied() -> Dictionary:
