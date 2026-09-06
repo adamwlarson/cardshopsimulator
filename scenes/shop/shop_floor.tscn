@@ -1,4 +1,4 @@
-[gd_scene load_steps=39 format=3]
+[gd_scene load_steps=41 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
@@ -37,6 +37,8 @@
 [ext_resource type="Script" path="res://scripts/customers/customer_presenter.gd" id="33_presenter"]
 [ext_resource type="Script" path="res://scripts/shop/shop_floor_extent.gd" id="34_extent"]
 [ext_resource type="Script" path="res://scripts/shop/staff_presenter.gd" id="35_staff"]
+[ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_security_camera_01/prop_security_camera_01.glb" id="38_sec_cam"]
+[ext_resource type="Script" path="res://scripts/shop/security_cameras.gd" id="39_sec_cams"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -303,6 +305,24 @@ light_energy = 1.65
 omni_range = 7.0
 omni_attenuation = 1.2
 shadow_enabled = false
+
+[node name="SecurityCameras" type="Node3D" parent="Fixtures"]
+script = ExtResource("39_sec_cams")
+
+[node name="SecurityCamera" parent="Fixtures/SecurityCameras" instance=ExtResource("38_sec_cam")]
+visible = false
+position = Vector3(6.3, 2.8, -1.8)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="SecurityCameraAisle" parent="Fixtures/SecurityCameras" instance=ExtResource("38_sec_cam")]
+visible = false
+position = Vector3(4.5, 2.8, -4.2)
+rotation_degrees = Vector3(0, 180, 0)
+
+[node name="SecurityCameraLarge" parent="Fixtures/SecurityCameras" instance=ExtResource("38_sec_cam")]
+visible = false
+position = Vector3(10.4, 2.8, -8.4)
+rotation_degrees = Vector3(0, 180, 0)
 
 [node name="Systems" type="Node" parent="."]
 

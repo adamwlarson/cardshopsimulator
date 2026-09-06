@@ -132,6 +132,7 @@ func _initialize() -> void:
 	_test_convention_weekend_event()
 	_test_theft_ring_event()
 	_test_camera_unlock()
+	_test_security_camera_prop_stub_swap()
 	_test_recession_week_event()
 	_test_supply_glut_event()
 	_test_day_ten_beat_serialization()
@@ -4931,6 +4932,182 @@ func _test_camera_soft_catalog_untouched() -> void:
 		FileAccess.get_file_as_string("res://data/events.json").contains("camera unlock"),
 		false,
 		"V1: cameras stay out of the event catalog"
+	)
+
+
+func _test_security_camera_prop_stub_swap() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.has_cameras(), false, "V1 art: start unowned")
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "V1 art: shop_floor loads")
+	if packed == null:
+		return
+	var floor: Node = packed.instantiate()
+	root.add_child(floor)
+	var rig := floor.get_node_or_null("Fixtures/SecurityCameras") as SecurityCameras
+	_expect_equal(rig != null, true, "V1 art: SecurityCameras presenter present")
+	if rig == null:
+		floor.free()
+		return
+	rig.sync_from_shop()
+	_assert_security_camera_mount(
+		rig,
+		SecurityCameras.ENTRANCE_NAME,
+		SecurityCameras.ENTRANCE_POSITION,
+		"entrance"
+	)
+	_assert_security_camera_mount(
+		rig,
+		SecurityCameras.AISLE_NAME,
+		SecurityCameras.AISLE_POSITION,
+		"aisle"
+	)
+	_assert_security_camera_mount(
+		rig,
+		SecurityCameras.LARGE_NAME,
+		SecurityCameras.LARGE_POSITION,
+		"large extra"
+	)
+	_expect_equal(
+		SecurityCameras.CEILING_ROTATION_DEGREES.is_equal_approx(Vector3(0.0, 180.0, 0.0)),
+		true,
+		"V1 art: ceiling yaw 180 looks −Z"
+	)
+	_expect_equal(
+		SecurityCameras.WALL_ROTATION_DEGREES.is_equal_approx(Vector3(-90.0, 180.0, 0.0)),
+		true,
+		"V1 art: wall recipe is Y=180 then X=−90"
+	)
+	_expect_equal(
+		SecurityCameras.WALL_EXAMPLE_POSITION.is_equal_approx(Vector3(6.30, 2.40, -8.95)),
+		true,
+		"V1 art: Medium back-wall example stays SoT"
+	)
+	_expect_equal(rig.owned_cameras_visible(), false, "V1 art: unowned hides Medium cams")
+	_expect_equal(rig.large_camera_visible(), false, "V1 art: unowned hides Large extra")
+	_expect_equal(rig.visible_camera_count(), 0, "V1 art: unowned visible count is 0")
+	_expect_equal(
+		rig.camera_node(SecurityCameras.ENTRANCE_NAME) != null
+		and not rig.camera_node(SecurityCameras.ENTRANCE_NAME).visible,
+		true,
+		"V1 art: SecurityCamera node exists but is hidden"
+	)
+
+	var cash_before := int(_economy.get("balance_cents"))
+	var att_before := int(_game_state.get("attention_remaining"))
+	var installed: Dictionary = _game_state.call("install_cameras")
+	_expect_equal(bool(installed.get("ok", false)), true, "V1 art: consume existing install")
+	_expect_equal(shop.has_cameras(), true, "V1 art: install still owns cameras")
+	_expect_equal(shop.has_active_cameras(), true, "V1 art: owned cameras stay active")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - NORMAL_CONFIG.camera_cash_cents,
+		"V1 art: install cash gate unchanged"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - NORMAL_CONFIG.camera_attention,
+		"V1 art: install Att gate unchanged"
+	)
+	_expect_equal(rig.owned_cameras_visible(), true, "V1 art: owned shows Medium cams")
+	_expect_equal(rig.large_camera_visible(), false, "V1 art: Small hides Large extra")
+	_expect_equal(rig.visible_camera_count(), 2, "V1 art: Small owned shows two ceiling cams")
+
+	shop.tier = ShopState.Tier.LARGE
+	rig.sync_from_shop()
+	_expect_equal(rig.owned_cameras_visible(), true, "V1 art: Large keeps Medium cams")
+	_expect_equal(rig.large_camera_visible(), true, "V1 art: Large extra shows when owned")
+	_expect_equal(rig.visible_camera_count(), 3, "V1 art: Large owned shows three ceiling cams")
+
+	var camera := floor.get_node_or_null("Camera") as ShopCamera
+	_expect_equal(camera != null, true, "V1 art: ShopCamera unchanged")
+	if camera != null:
+		_expect_equal(
+			camera.position.is_equal_approx(ShopCamera.BEHIND_COUNTER_POSITION),
+			true,
+			"V1 art: prop does not move Day1 camera"
+		)
+		_expect_equal(
+			is_equal_approx(camera.fov, ShopCamera.HOME_FOV),
+			true,
+			"V1 art: prop does not churn FOV"
+		)
+
+	var again: Dictionary = _game_state.call("install_cameras")
+	_expect_equal(bool(again.get("ok", true)), false, "V1 art: no second install verb")
+	_expect_equal(
+		StringName(again.get("reason", &"")),
+		&"already_owned",
+		"V1 art: already-owned reason unchanged"
+	)
+
+	var src := FileAccess.get_file_as_string("res://scripts/shop/security_cameras.gd")
+	_assert_text_has_no_truth(src, "V1 art security camera rig")
+	_expect_equal(src.contains("install_cameras"), false, "V1 art: rig does not buy cameras")
+	_expect_equal(src.contains("true_market"), false, "V1 art: rig has no true_market")
+	_expect_equal(
+		FileAccess.get_file_as_string("res://scripts/shop/shop_floor_extent.gd").contains(
+			"prop_security_camera_01"
+		),
+		false,
+		"V1 art: floor-extent stays shell-only"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"V1 art: Soft _ensure_priceable_sku stays parked"
+	)
+	_game_state.call("start_new_game")
+	rig.sync_from_shop()
+	_expect_equal(
+		(_game_state.get("shop") as ShopState).has_cameras(),
+		false,
+		"V1 art: new game clears ownership"
+	)
+	_expect_equal(rig.owned_cameras_visible(), false, "V1 art: new game hides the prop")
+	_expect_equal(rig.visible_camera_count(), 0, "V1 art: new game visible count is 0")
+	floor.free()
+
+
+func _assert_security_camera_mount(
+	rig: SecurityCameras,
+	node_name: String,
+	want_position: Vector3,
+	label: String
+) -> void:
+	var node := rig.camera_node(node_name)
+	_expect_equal(node != null, true, "V1 art: %s node exists" % label)
+	if node == null:
+		return
+	_expect_equal(node is Marker3D, false, "V1 art: %s is not a Marker3D placeholder" % label)
+	_expect_equal(
+		node.scene_file_path.contains("prop_security_camera_01"),
+		true,
+		"V1 art: %s instances the Art GLB" % label
+	)
+	_expect_equal(
+		node.position.is_equal_approx(want_position),
+		true,
+		"V1 art: %s MOUNT sits on SoT ceiling spot" % label
+	)
+	_expect_equal(
+		node.rotation_degrees.is_equal_approx(SecurityCameras.CEILING_ROTATION_DEGREES),
+		true,
+		"V1 art: %s yaw looks into the shop" % label
+	)
+	_expect_equal(
+		node.scale.is_equal_approx(Vector3.ONE),
+		true,
+		"V1 art: %s scale 1u=1m" % label
+	)
+	_expect_equal(
+		is_equal_approx(node.position.y, 2.80),
+		true,
+		"V1 art: %s hangs from ceiling Y=2.80" % label
 	)
 
 
