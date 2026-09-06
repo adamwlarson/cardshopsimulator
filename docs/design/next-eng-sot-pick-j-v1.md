@@ -1,6 +1,6 @@
 # Next Eng SoT Pick J v1 — post I1
 
-**Status:** Adopted — **J1 GO** (2026-09-06); park J2/J3/J4  
+**Status:** Adopted **J1 GO** — synced main @ `b4afce4a`; Eng spike launching (Research/Specialist). Park J2/J3/J4. Soft seeds parked. No Art.  
 **Author:** CSS Designer  
 **Date:** 2026-09-06  
 **Depends on:** systems §3 / §4.5 / §6.2, pick-i (I1 shipped #36)  
@@ -82,8 +82,15 @@ No new systems. QA re-smokes §10 Normal **with** online listings in play (list/
 
 ## PM checklist
 
-- [x] Choose **J1** (park J2/J3/J4)
-- [x] If J1: Eng vs systems §4.5 Research table; no Art
-- [x] Sync this file to main before cloud agent
+- [x] Choose **J1** (park J2/J3/J4) — PM 2026-09-06 @ `b4afce4a`
+- [x] If J1: Eng vs systems §4.5 Research table; no Art — Eng spike launching
+- [x] Sync this file to main before cloud agent @ `b4afce4a`
 - [x] Soft seeds stay parked unless J3
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **J1 GO** (park J2/J3/J4). Synced main @ `b4afce4a`. Eng Research/Specialist spike launching. Soft seeds parked. No Art. |
