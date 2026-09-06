@@ -52,6 +52,16 @@
       "calendar": true,
       "duration_days_min": 2,
       "duration_days_max": 2
+    },
+    {
+      "id": "theft_ring",
+      "type": "theft_ring",
+      "title": "Theft ring",
+      "description": "Optional rumor — extra shrink on the floor for a few days. Staff coverage helps; otherwise wait it out.",
+      "weight": 1.0,
+      "negative": true,
+      "duration_days_min": 3,
+      "duration_days_max": 3
     }
   ]
 }

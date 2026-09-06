@@ -124,6 +124,17 @@ func has_convention_weekend() -> bool:
 	return event != null and event.kind == MarketEvent.KIND_CONVENTION
 
 
+func has_theft_ring() -> bool:
+	var event := active_event()
+	return event != null and event.kind == MarketEvent.KIND_THEFT_RING
+
+
+func active_shrink_multiplier() -> float:
+	if not has_theft_ring():
+		return 1.0
+	return MarketEventService.THEFT_RING_SHRINK_MULT
+
+
 func active_event_traffic_mult() -> float:
 	if has_convention_weekend():
 		return MarketEventService.CONVENTION_TRAFFIC_MULT
@@ -245,6 +256,8 @@ func event_banner_text() -> String:
 			return "Counterfeit scare — Inspect mandatory · shady risk up"
 		MarketEvent.KIND_CONVENTION:
 			return "Calendar: Convention weekend — busier floor · whales inbound"
+		MarketEvent.KIND_THEFT_RING:
+			return "Rumor: extra loss on the floor — staff up or wait it out"
 		MarketEvent.KIND_ROTATION:
 			if not _can_see_rotation_leak(event):
 				return ""
@@ -813,6 +826,8 @@ func _bind_event_targets(event: MarketEvent) -> bool:
 			return true
 		MarketEvent.KIND_CONVENTION:
 			return true
+		MarketEvent.KIND_THEFT_RING:
+			return true
 	return false
 
 
@@ -837,6 +852,8 @@ func _apply_event_effects(event: MarketEvent) -> bool:
 			)
 			return true
 		MarketEvent.KIND_CONVENTION:
+			return true
+		MarketEvent.KIND_THEFT_RING:
 			return true
 	return false
 
@@ -867,6 +884,8 @@ func _revert_event_effects(event: MarketEvent) -> void:
 		MarketEvent.KIND_COUNTERFEIT:
 			_service.set_counterfeit_scare(false)
 		MarketEvent.KIND_CONVENTION:
+			pass
+		MarketEvent.KIND_THEFT_RING:
 			pass
 		MarketEvent.KIND_ROTATION:
 			pass
@@ -921,6 +940,8 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		"calendar_day": MarketEventService.is_convention_calendar_day(
 			GameState.current_day
 		),
+		"shrink_mult": active_shrink_multiplier(),
+		"theft_ring": has_theft_ring(),
 	}
 	QaInstrumentation.record_market_event_rolled(payload)
 	return payload
