@@ -9,6 +9,9 @@ const MARKETPLACE_OUTING_BEAT := &"sec10_3_marketplace_outing"
 const HIRE_CASHIER_BEAT := &"sec10_5_hire_cashier"
 const EXPAND_MEDIUM_BEAT := &"sec10_9_expand_medium"
 const SHADY_TRUNK_BEAT := &"sec10_10_shady_trunk"
+const EXPAND_LARGE_BEAT := &"sec10_11_expand_large"
+const EXPAND_LARGE_DAY_MIN := 40
+const EXPAND_LARGE_DAY_MAX := 55
 
 const BASTION_SKU := &"AA-BASE-088"
 const ARCBOLT_SKU := &"AA-BASE-078"
@@ -80,6 +83,11 @@ func trigger_qa_beat(beat_id: StringName) -> bool:
 			return (
 				GameState.current_phase == GameState.DayPhase.PREP
 				and _start_expand_medium()
+			)
+		EXPAND_LARGE_BEAT:
+			return (
+				GameState.current_phase == GameState.DayPhase.PREP
+				and _start_expand_large()
 			)
 		SHADY_TRUNK_BEAT:
 			return (
@@ -171,6 +179,8 @@ func choose_beat_path(choice: StringName) -> bool:
 		return _choose_hire_cashier(choice)
 	if _is_pending(EXPAND_MEDIUM_BEAT):
 		return _choose_expand_medium(choice)
+	if _is_pending(EXPAND_LARGE_BEAT):
+		return _choose_expand_large(choice)
 	if _is_pending(SHADY_TRUNK_BEAT):
 		return _choose_shady_trunk(choice)
 	return false
@@ -231,6 +241,13 @@ func _start_day_beats(day: int) -> void:
 	):
 		return
 	if _start_shady_trunk_if_due(day):
+		return
+	if (
+		day >= EXPAND_LARGE_DAY_MIN
+		and day <= EXPAND_LARGE_DAY_MAX
+		and not _started.has(EXPAND_LARGE_BEAT)
+		and _start_expand_large()
+	):
 		return
 
 
@@ -760,6 +777,121 @@ func _choose_expand_medium(choice: StringName) -> bool:
 		_:
 			return false
 	_resolve_decision(EXPAND_MEDIUM_BEAT, choice)
+	return true
+
+
+func _start_expand_large() -> bool:
+	if (
+		GameState.current_phase != GameState.DayPhase.PREP
+		or _started.has(EXPAND_LARGE_BEAT)
+		or GameState.shop.tier != ShopState.Tier.MEDIUM
+	):
+		return false
+	var config := GameState.balance_config
+	var can_sign := GameState.shop.can_sign_large_lease(
+		Economy.balance_cents,
+		GameState.current_reputation
+	)
+	var gate_lines: PackedStringArray = []
+	if not GameState.shop.cash_meets_large(Economy.balance_cents):
+		gate_lines.append(
+			"Need %s cash (have %s)." % [
+				DemandSignalPresenter.format_cents(config.expand_large_cash_cents),
+				DemandSignalPresenter.format_cents(Economy.balance_cents),
+			]
+		)
+	if not GameState.shop.rep_meets_large(GameState.current_reputation):
+		gate_lines.append(
+			"Need Rep %d (have %d)." % [
+				config.expand_large_rep,
+				GameState.current_reputation,
+			]
+		)
+	if GameState.shop.preview_expand_large() == &"blocked_path":
+		gate_lines.append("Large floor would leave the counter unreachable.")
+	var summary := (
+		"Landlord offered a Large unit (~2,000 sq ft). Weekly rent becomes %s. Traffic scales sublinearly versus Medium."
+		% DemandSignalPresenter.format_cents(config.rent_large_weekly_cents)
+	)
+	if not gate_lines.is_empty():
+		summary += " Missing gate: " + " ".join(gate_lines)
+	_mark_started(EXPAND_LARGE_BEAT)
+	EventBus.beat_decision_requested.emit({
+		"beat_id": EXPAND_LARGE_BEAT,
+		"title": "Landlord offered Large unit — sign?",
+		"summary": summary,
+		"choices": [
+			{
+				"id": &"sign_lease",
+				"label": "Sign lease\nLarge rent next week · floor/staff upgrade",
+				"enabled": can_sign,
+			},
+			{
+				"id": &"wait_for_cash_rep",
+				"label": "Wait for cash and Rep\nStay Medium until both gates land",
+				"enabled": not (
+					GameState.shop.cash_meets_large(Economy.balance_cents)
+					and GameState.shop.rep_meets_large(GameState.current_reputation)
+				),
+			},
+			{
+				"id": &"stay_medium",
+				"label": "Stay Medium\nKeep current rent, staff cap, and traffic",
+				"enabled": true,
+			},
+		],
+		"confirms": {
+			"sign_lease": {
+				"title": "Confirm Large lease?",
+				"body": (
+					"Rent %s → %s next week. Staff cap %d → %d. Grid %dx%d → %dx%d. Traffic ×%.2f versus Medium (sublinear; not 2×)."
+					% [
+						DemandSignalPresenter.format_cents(
+							config.rent_medium_weekly_cents
+						),
+						DemandSignalPresenter.format_cents(
+							config.rent_large_weekly_cents
+						),
+						config.staff_cap_medium,
+						config.staff_cap_large,
+						ShopState.MEDIUM_GRID_WIDTH,
+						ShopState.MEDIUM_GRID_HEIGHT,
+						ShopState.LARGE_GRID_WIDTH,
+						ShopState.LARGE_GRID_HEIGHT,
+						config.expand_large_traffic_mult,
+					]
+				),
+			},
+		},
+	})
+	return true
+
+
+func _choose_expand_large(choice: StringName) -> bool:
+	match choice:
+		&"sign_lease":
+			if not GameState.shop.expand_to_large(
+				GameState.current_day,
+				Economy.balance_cents,
+				GameState.current_reputation
+			):
+				return false
+			InventoryService.apply_medium_capacity(
+				GameState.shop.case_slot_bonus(),
+				GameState.shop.backstock_bonus()
+			)
+			EventBus.shop_layout_changed.emit()
+		&"wait_for_cash_rep":
+			if GameState.shop.can_expand_large(
+				Economy.balance_cents,
+				GameState.current_reputation
+			):
+				return false
+		&"stay_medium":
+			pass
+		_:
+			return false
+	_resolve_decision(EXPAND_LARGE_BEAT, choice)
 	return true
 
 

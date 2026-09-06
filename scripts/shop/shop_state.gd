@@ -4,6 +4,7 @@ extends RefCounted
 enum Tier {
 	SMALL,
 	MEDIUM,
+	LARGE,
 }
 
 const CASHIER_WAGE_CENTS := 8_000
@@ -19,6 +20,13 @@ const MEDIUM_GRID_WIDTH := 14
 const MEDIUM_GRID_HEIGHT := 10
 const MEDIUM_CASE_SLOT_BONUS := 12
 const MEDIUM_BACKSTOCK_BONUS := 20
+## Option L1: 18×13 = 234 tiles @ 0.9 m → ~2,040 sq ft usable
+## (systems-design Large markets 2,000).
+const LARGE_GRID_WIDTH := 18
+const LARGE_GRID_HEIGHT := 13
+## Additional on top of Medium (sublinear vs ~1.67× floor / rent step).
+const LARGE_CASE_SLOT_BONUS := 16
+const LARGE_BACKSTOCK_BONUS := 24
 const SQ_FT_PER_TILE := 8.71875
 
 var tier: Tier = Tier.SMALL
@@ -26,6 +34,7 @@ var staff: Array[StaffMember] = []
 var grid_width: int = SMALL_GRID_WIDTH
 var grid_height: int = SMALL_GRID_HEIGHT
 var medium_lease_signed_day: int = -1
+var large_lease_signed_day: int = -1
 var specialist_on_duty: bool = false
 var last_noshow_count: int = 0
 var last_shrink_rate: float = 0.0
@@ -42,6 +51,7 @@ func reset(config: BalanceConfig) -> void:
 	grid_width = SMALL_GRID_WIDTH
 	grid_height = SMALL_GRID_HEIGHT
 	medium_lease_signed_day = -1
+	large_lease_signed_day = -1
 	specialist_on_duty = false
 	last_noshow_count = 0
 	last_shrink_rate = 0.0
@@ -174,14 +184,41 @@ func specialist_wage_cents() -> int:
 func staff_cap() -> int:
 	var small_cap := 1
 	var medium_cap := 3
+	var large_cap := 5
 	if _config != null:
 		if _config.staff_cap_small > 0:
 			small_cap = _config.staff_cap_small
 		if _config.staff_cap_medium > 0:
 			medium_cap = _config.staff_cap_medium
+		if _config.staff_cap_large > 0:
+			large_cap = _config.staff_cap_large
+	if tier == Tier.LARGE:
+		return large_cap
 	if tier == Tier.MEDIUM:
 		return medium_cap
 	return small_cap
+
+
+func case_slot_bonus() -> int:
+	if tier == Tier.LARGE:
+		return MEDIUM_CASE_SLOT_BONUS + LARGE_CASE_SLOT_BONUS
+	if tier == Tier.MEDIUM:
+		return MEDIUM_CASE_SLOT_BONUS
+	return 0
+
+
+func backstock_bonus() -> int:
+	if tier == Tier.LARGE:
+		return MEDIUM_BACKSTOCK_BONUS + LARGE_BACKSTOCK_BONUS
+	if tier == Tier.MEDIUM:
+		return MEDIUM_BACKSTOCK_BONUS
+	return 0
+
+
+func traffic_mult() -> float:
+	if _config == null:
+		return 1.0
+	return _config.shop_traffic_mult(int(tier))
 
 
 func can_hire() -> bool:
@@ -305,6 +342,46 @@ func expand_to_medium(signed_day: int, cash_cents: int, reputation: int) -> bool
 	return true
 
 
+func cash_meets_large(cash_cents: int) -> bool:
+	return _config != null and cash_cents >= _config.expand_large_cash_cents
+
+
+func rep_meets_large(reputation: int) -> bool:
+	return _config != null and reputation >= _config.expand_large_rep
+
+
+func can_expand_large(cash_cents: int, reputation: int) -> bool:
+	return (
+		tier == Tier.MEDIUM
+		and cash_meets_large(cash_cents)
+		and rep_meets_large(reputation)
+	)
+
+
+func preview_expand_large() -> StringName:
+	return layout.preview_expand(LARGE_GRID_WIDTH, LARGE_GRID_HEIGHT)
+
+
+func can_sign_large_lease(cash_cents: int, reputation: int) -> bool:
+	return (
+		can_expand_large(cash_cents, reputation)
+		and preview_expand_large() == &"ok"
+	)
+
+
+func expand_to_large(signed_day: int, cash_cents: int, reputation: int) -> bool:
+	if not can_sign_large_lease(cash_cents, reputation):
+		return false
+	if layout.expand(LARGE_GRID_WIDTH, LARGE_GRID_HEIGHT) != &"ok":
+		return false
+	tier = Tier.LARGE
+	large_lease_signed_day = signed_day
+	grid_width = LARGE_GRID_WIDTH
+	grid_height = LARGE_GRID_HEIGHT
+	floor_grid.expand(LARGE_GRID_WIDTH, LARGE_GRID_HEIGHT)
+	return true
+
+
 func tile_count() -> int:
 	return grid_width * grid_height
 
@@ -326,6 +403,7 @@ func to_save() -> Dictionary:
 		"grid_width": grid_width,
 		"grid_height": grid_height,
 		"medium_lease_signed_day": medium_lease_signed_day,
+		"large_lease_signed_day": large_lease_signed_day,
 		"specialist_on_duty": specialist_on_duty,
 		"layout": layout.to_save(),
 		"staff": staff_rows,
@@ -335,13 +413,16 @@ func to_save() -> Dictionary:
 func apply_save(data: Dictionary, config: BalanceConfig) -> void:
 	_config = config
 	var saved_tier := int(data.get("tier", Tier.SMALL))
-	if saved_tier == int(Tier.MEDIUM):
+	if saved_tier == int(Tier.LARGE):
+		tier = Tier.LARGE
+	elif saved_tier == int(Tier.MEDIUM):
 		tier = Tier.MEDIUM
 	else:
 		tier = Tier.SMALL
 	grid_width = int(data.get("grid_width", SMALL_GRID_WIDTH))
 	grid_height = int(data.get("grid_height", SMALL_GRID_HEIGHT))
 	medium_lease_signed_day = int(data.get("medium_lease_signed_day", -1))
+	large_lease_signed_day = int(data.get("large_lease_signed_day", -1))
 	specialist_on_duty = bool(data.get("specialist_on_duty", false))
 	var layout_data: Variant = data.get("layout", {})
 	if layout_data is Dictionary:
@@ -362,7 +443,13 @@ func weekly_rent_cents(day: int) -> int:
 	if _config == null:
 		return 0
 	if (
-		tier == Tier.MEDIUM
+		tier == Tier.LARGE
+		and large_lease_signed_day >= 0
+		and day > large_lease_signed_day
+	):
+		return _config.rent_large_weekly_cents
+	if (
+		tier in [Tier.MEDIUM, Tier.LARGE]
 		and medium_lease_signed_day >= 0
 		and day > medium_lease_signed_day
 	):

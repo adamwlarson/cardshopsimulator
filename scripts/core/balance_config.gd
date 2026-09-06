@@ -46,12 +46,26 @@ enum Difficulty {
 @export var pull_attention: int = 5
 @export var rent_small_weekly_cents: int = 120_000
 @export var rent_medium_weekly_cents: int = 240_000
+## systems §7.3 Large weekly rent $4,000. Applied the week after Sign.
+@export var rent_large_weekly_cents: int = 400_000
 @export var wage_mult: float = 1.0
 @export var staff_cap_small: int = 1
 @export var staff_cap_medium: int = 3
+@export var staff_cap_large: int = 5
 @export var specialist_wage_cents: int = 14_000
 @export var expand_medium_cash_cents: int = 1_500_000
 @export var expand_medium_rep: int = 55
+## systems §7.3 Large unlock: Cash ≥ $40k + Rep 70.
+@export var expand_large_cash_cents: int = 4_000_000
+@export var expand_large_rep: int = 70
+## Medium vs Small traffic. Default 1.0 keeps shipped Medium spawn rate
+## (Option B did not change traffic). Large's scalar is relative to this.
+@export var expand_medium_traffic_mult: float = 1.0
+## Large vs Medium traffic (Option L1). Rent step is $4,000 / $2,400 ≈ 1.67×
+## and floor is ~2,000 / ~1,200 ≈ 1.67× (~2× Small rent). Traffic uses this
+## sublinear extra scalar so Large is not 2× Medium traffic for ~2× rent.
+## Effective Large mult = expand_medium_traffic_mult × this (1.0 × 1.25 = 1.25).
+@export var expand_large_traffic_mult: float = 1.25
 @export var marketplace_outing_attention: int = 25
 @export var marketplace_outing_floor_skip_seconds: float = 34.0
 @export var marketplace_courier_fee_cents: int = 3_500
@@ -103,3 +117,19 @@ func is_rent_due_day(day: int) -> bool:
 		day >= first_rent_due_day
 		and (day - first_rent_due_day) % 7 == 0
 	)
+
+
+func shop_traffic_mult(shop_tier: int) -> float:
+	# Integers match ShopState.Tier (SMALL=0, MEDIUM=1, LARGE=2).
+	# Do not reference ShopState here — BalanceConfig must stay loadable first.
+	var medium_mult := maxf(0.01, expand_medium_traffic_mult)
+	if shop_tier >= 2:
+		return medium_mult * maxf(0.01, expand_large_traffic_mult)
+	if shop_tier == 1:
+		return medium_mult
+	return 1.0
+
+
+func customer_spawn_wait_seconds(base_interval: float, shop_tier: int) -> float:
+	var combined := customer_spawn_mult * shop_traffic_mult(shop_tier)
+	return base_interval / maxf(0.01, combined)
