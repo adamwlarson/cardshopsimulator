@@ -80,3 +80,10 @@ No Eng systems. Art crest polish and/or Eng polish backlog only.
 - [x] Sync this file to main before cloud agent
 - [x] Softs stay parked unless S2
 
+---
+
+## Decision log
+
+| When | Decision |
+|------|----------|
+| 2026-09-06 | PM adopted **S1 GO** (park S2/S3/S4). Softs parked. Eng Survive Y1 + Liquidity king spike `bc-4a1a45a6` launching. Main @ `8a373ce9`. |
