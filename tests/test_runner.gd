@@ -207,6 +207,7 @@ func _initialize() -> void:
 	_test_player_trades_unlock()
 	_test_regulars_return()
 	_test_distributor_moq_worse()
+	_test_better_marketplace_lead()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -22207,6 +22208,668 @@ func _test_distributor_moq_section_45_and_parked() -> void:
 		"AP1: AO1/AN1/AI1/AJ1/AH1/AG1/AK1 stay off the sell roll"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_better_marketplace_lead() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_better_marketplace_lead_named_gate()
+	_test_better_marketplace_lead_same_seed_count()
+	_test_better_marketplace_lead_extra_ask_and_others_match()
+	_test_better_marketplace_lead_fog_decline_no_rep()
+	_test_better_marketplace_lead_spawn_and_whale_stay()
+	_test_better_marketplace_lead_sale_pays_listed()
+	_test_better_marketplace_lead_shipped_levers_stay()
+	_test_better_marketplace_lead_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_better_marketplace_lead_named_gate() -> void:
+	_expect_equal(
+		MarketplaceLeadPolicy.HIGH_REP_MIN_REP,
+		75,
+		"AQ1: locked better-lead gate is Rep 75"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.EXTRA_LEAD_COUNT,
+		1,
+		"AQ1: locked extra-lead count is 1"
+	)
+	_expect_equal(
+		is_equal_approx(MarketplaceLeadPolicy.ASK_RATE, 0.40),
+		true,
+		"AQ1: locked extra-lead ask is 40% of today's basis"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.is_high_rep(75),
+		true,
+		"AQ1: Rep 75 is the better-lead band"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.is_high_rep(74),
+		false,
+		"AQ1: Rep 74 keeps today's list"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.is_high_rep(100),
+		true,
+		"AQ1: Rep 100 matches the Rep 75 band"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.extra_leads_for(75),
+		1,
+		"AQ1: Rep 75 adds one extra lead"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.extra_leads_for(74),
+		0,
+		"AQ1: Rep 74 adds no extra lead"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.extra_leads_for(100),
+		1,
+		"AQ1: Rep 100 extra-lead count matches Rep 75"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.extra_lead_count(0),
+		1,
+		"AQ1: missing or 0 extra-lead count falls back to 1"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.extra_lead_count(-2),
+		1,
+		"AQ1: negative extra-lead count falls back to 1"
+	)
+	_expect_equal(
+		is_equal_approx(MarketplaceLeadPolicy.ask_rate(0.0), 0.40),
+		true,
+		"AQ1: missing or 0 ask rate falls back to 40%"
+	)
+	_expect_equal(
+		is_equal_approx(MarketplaceLeadPolicy.ask_rate(-0.5), 0.40),
+		true,
+		"AQ1: negative ask rate falls back to 40%"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.ask_cents(4499),
+		1800,
+		"AQ1: 40% of today's Dustway market basis is $18.00"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.ask_cents(4499, 0.0),
+		1800,
+		"AQ1: configured 0 still uses 40%"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.ask_cents(4499, -1.0),
+		1800,
+		"AQ1: configured negative still uses 40%"
+	)
+	_expect_equal(
+		int(_demand_signals.call("marketplace_extra_lead_count", 0)),
+		1,
+		"AQ1: DemandSignals 0-count fallback is 1"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("marketplace_ask_rate", 0.0)), 0.40),
+		true,
+		"AQ1: DemandSignals omitted rate is 40%"
+	)
+	_expect_equal(
+		bool(_demand_signals.call("is_better_marketplace_lead", 75))
+		and not bool(_demand_signals.call("is_better_marketplace_lead", 74)),
+		true,
+		"AQ1: DemandSignals better-lead gate follows Rep 75"
+	)
+	_expect_equal(
+		int(_demand_signals.call("marketplace_ask_cents", 4499, 0.0)),
+		1800,
+		"AQ1: DemandSignals 0-rate fallback is 40%"
+	)
+
+
+func _test_better_marketplace_lead_same_seed_count() -> void:
+	_aq1_reset_at(74)
+	var at_74 := _aq1_marketplace_signals()
+	_expect_equal(at_74.is_empty(), false, "AQ1: same seed at Rep 74 still offers today's leads")
+	_aq1_reset_at(75)
+	var at_75 := _aq1_marketplace_signals()
+	_aq1_reset_at(100)
+	var at_100 := _aq1_marketplace_signals()
+	_expect_equal(
+		at_74.size(),
+		_aq1_today_marketplace_count(),
+		"AQ1: Rep 74 lead count equals today's count"
+	)
+	_expect_equal(
+		at_75.size(),
+		at_74.size() + 1,
+		"AQ1: same seed at Rep 75 is today's count plus 1"
+	)
+	_expect_equal(
+		at_100.size(),
+		at_75.size(),
+		"AQ1: same seed at Rep 100 matches Rep 75"
+	)
+	_expect_equal(
+		_aq1_has_extra(at_74),
+		false,
+		"AQ1: extra lead is absent at Rep 74"
+	)
+	_expect_equal(_aq1_has_extra(at_75), true, "AQ1: extra lead is present at Rep 75")
+	_expect_equal(_aq1_has_extra(at_100), true, "AQ1: extra lead is present at Rep 100")
+
+
+func _test_better_marketplace_lead_extra_ask_and_others_match() -> void:
+	_aq1_reset_at(74)
+	var at_74 := _aq1_marketplace_signals()
+	_aq1_reset_at(75)
+	var at_75 := _aq1_marketplace_signals()
+	var extra := _aq1_extra_signal(at_75)
+	_expect_equal(extra != null, true, "AQ1: Rep 75 prep includes the extra lead")
+	if extra == null:
+		return
+	_expect_equal(_aq1_extra_signal(at_74) == null, true, "AQ1: extra lead stays off Rep 74")
+	var template := _aq1_first_today(at_74)
+	_expect_equal(template != null, true, "AQ1: today's marketplace list has a basis lead")
+	if template == null:
+		return
+	_expect_equal(extra.sku_id, template.sku_id, "AQ1: extra lead uses today's marketplace SKU")
+	_expect_equal(
+		extra.quantity,
+		template.quantity,
+		"AQ1: extra lead copies today's lot size"
+	)
+	var basis := int(_demand_signals.call("market_cents_for", extra.sku_id))
+	_expect_equal(basis > 0, true, "AQ1: extra ask uses today's live market basis")
+	_expect_equal(
+		extra.unit_cost_cents,
+		int(_demand_signals.call("marketplace_ask_cents", basis)),
+		"AQ1: extra ask is 40% of the same basis today's leads use"
+	)
+	_expect_equal(
+		extra.unit_cost_cents,
+		MarketplaceLeadPolicy.ask_cents(basis),
+		"AQ1: extra ask is the low end of today's 40% marketplace band"
+	)
+	_expect_equal(
+		extra.unit_cost_cents < template.unit_cost_cents,
+		true,
+		"AQ1: extra ask is cleaner than today's catalog lot"
+	)
+	_expect_equal(
+		_aq1_today_fingerprints(at_75),
+		_aq1_today_fingerprints(at_74),
+		"AQ1: other leads at Rep 75 match the Rep 74 leads"
+	)
+	_aq1_reset_at(100)
+	var at_100 := _aq1_marketplace_signals()
+	var extra_100 := _aq1_extra_signal(at_100)
+	_expect_equal(extra_100 != null, true, "AQ1: Rep 100 still offers the extra lead")
+	if extra_100 != null:
+		_expect_equal(
+			extra_100.unit_cost_cents,
+			extra.unit_cost_cents,
+			"AQ1: Rep 100 extra ask matches Rep 75"
+		)
+		_expect_equal(
+			extra_100.sku_id,
+			extra.sku_id,
+			"AQ1: Rep 100 extra SKU matches Rep 75"
+		)
+	_expect_equal(
+		_aq1_today_fingerprints(at_100),
+		_aq1_today_fingerprints(at_74),
+		"AQ1: other leads at Rep 100 still match Rep 74"
+	)
+
+
+func _test_better_marketplace_lead_fog_decline_no_rep() -> void:
+	_aq1_reset_at(75)
+	var extra: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		MarketplaceLeadPolicy.EXTRA_LEAD_ID
+	)
+	_expect_equal(extra != null, true, "AQ1: fog scan needs the extra lead")
+	if extra == null:
+		return
+	_expect_equal(extra.channel, &"marketplace", "AQ1: extra lead stays on marketplace")
+	_expect_equal(extra.confidence, &"low", "AQ1: extra lead keeps low marketplace confidence")
+	_expect_equal(
+		extra.condition_cue,
+		"Photo only — inspect recommended",
+		"AQ1: condition stays hidden, same as today's marketplace leads"
+	)
+	_expect_equal(extra.inspected, false, "AQ1: extra lead starts uninspected")
+	_expect_dto_has_no_truth_fields(extra, "AQ1 extra lead")
+	var row := DemandSignalPresenter.opportunity_row(extra)
+	var summary := DemandSignalPresenter.buy_summary(extra)
+	var snapshot := DemandSignalPresenter.buy_confirm_snapshot(extra)
+	_expect_equal(row.contains("Ask"), true, "AQ1: list row shows the ask")
+	_expect_equal(summary.contains("Ask"), true, "AQ1: detail shows the ask")
+	_expect_equal(
+		summary.contains("Photo only"),
+		true,
+		"AQ1: detail shows the noisy photo cue, not the basis"
+	)
+	_assert_text_has_no_truth(row, "AQ1 extra row")
+	_assert_text_has_no_truth(summary, "AQ1 extra summary")
+	_assert_text_has_no_truth(snapshot, "AQ1 extra snapshot")
+	_expect_equal(row.to_lower().contains("true_market"), false, "AQ1: row never shows true_market")
+	_expect_equal(
+		summary.to_lower().contains("true_market"),
+		false,
+		"AQ1: offer never shows true_market"
+	)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AQ1: HUD loads for the extra lead")
+	if hud != null:
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		_expect_equal(open_buy != null, true, "AQ1: OpenBuyButton still opens prep offers")
+		if open_buy != null:
+			open_buy.pressed.emit()
+		_expect_equal(
+			_aq1_marketplace_row_count(hud),
+			_aq1_today_marketplace_count() + 1,
+			"AQ1: prep list adds one extra marketplace row at Rep 75"
+		)
+		_select_buy_on_hud(hud, extra)
+		var hud_summary := hud.get_node_or_null("%BuySummary") as Label
+		if hud_summary != null:
+			_expect_equal(
+				hud_summary.text.contains("Photo only"),
+				true,
+				"AQ1: HUD shows the noisy photo cue"
+			)
+			_assert_text_has_no_truth(hud_summary.text, "AQ1 HUD extra summary")
+			_expect_equal(
+				hud_summary.text.to_lower().contains("true_market"),
+				false,
+				"AQ1: HUD offer never shows true_market"
+			)
+		hud.free()
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_demand_signals.call("dismiss_buy_opportunity", MarketplaceLeadPolicy.EXTRA_LEAD_ID),
+		true,
+		"AQ1: declining the extra lead dismisses it"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", MarketplaceLeadPolicy.EXTRA_LEAD_ID) == null,
+		true,
+		"AQ1: declined extra lead is gone"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AQ1: declining the extra lead does not change Rep"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"dustway-marketplace-day-1") != null,
+		true,
+		"AQ1: declining the extra lead leaves today's marketplace lot"
+	)
+
+
+func _test_better_marketplace_lead_spawn_and_whale_stay() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_74 := catalog.roll_spawn(SEED, 74, NORMAL_CONFIG, BASELINE)
+	var at_75 := catalog.roll_spawn(SEED, 75, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_74.size(), 5, "AQ1: Rep 74 keeps today's door spawn count")
+	_expect_equal(at_75.size(), at_74.size(), "AQ1: Rep 75 door spawn count stays as shipped")
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(74, 5),
+		"AQ1: spawn_count at Rep 75 stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AQ1/AJ1: high-rep whale pack stays ×1.5"
+	)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "AQ1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"AQ1/AJ1: Rep 75 whale weight stays the shipped ×1.5"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	_expect_equal(
+		not policy_src.contains("marketplace_lead")
+		and not policy_src.contains("MarketplaceLeadPolicy")
+		and not policy_src.contains("ASK_RATE"),
+		true,
+		"AQ1: spawn policy has no marketplace-lead traffic change"
+	)
+	_expect_equal(
+		not spawn_src.contains("marketplace_lead")
+		and not spawn_src.contains("MarketplaceLeadPolicy"),
+		true,
+		"AQ1: door spawn path does not read the extra lead"
+	)
+
+
+func _test_better_marketplace_lead_sale_pays_listed() -> void:
+	_aq1_reset_at(75)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AQ1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AQ1: listed price stays set at Rep 75")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AQ1: sell_through_mult_for stays 1.0 at Rep 75"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := _ao1_listed_buyer()
+	_expect_equal(queue.enqueue(customer), true, "AQ1: listed lot still enqueues at Rep 75")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AQ1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AQ1: live sell still resolves at Rep 75")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AQ1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AQ1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "marketplace")
+		and not _function_body_contains(queue_src, "func sell_listed()", "extra_lead")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"marketplace"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"reputation"
+		),
+		true,
+		"AQ1: extra marketplace lead is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_better_marketplace_lead_shipped_levers_stay() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		DistributorMoqPolicy.is_worse_moq(24) and not DistributorMoqPolicy.is_worse_moq(25),
+		true,
+		"AQ1/AP1: distributor MOQ stays worse at Rep 24"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.is_unlocked(50) and not RegularsReturnPolicy.is_unlocked(49),
+		true,
+		"AQ1/AO1: Regulars return stays unlocked at Rep 50"
+	)
+	_expect_equal(
+		PlayerTradePolicy.is_unlocked(50) and not PlayerTradePolicy.is_unlocked(49),
+		true,
+		"AQ1/AN1: player trades stay unlocked at Rep 50"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and NORMAL_CONFIG.register_walkout_rep_cap == 3
+		and shop.register_walkout_rep_hit() == 1
+		and shop.register_walkout_rep_cap() == 3,
+		true,
+		"AQ1/AH1: walkout scalars stay Rep −1 / cap 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5
+		and NORMAL_CONFIG.fire_popular_roster_age == 3
+		and shop.fire_rep_hit() == 5
+		and shop.fire_popular_roster_age() == 3,
+		true,
+		"AQ1/AG1: Fire scalars stay Rep −5 at roster age 3"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005)
+		and is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AQ1/AK1/AL1: daily shrink 0.2%/0.7% and floor-sealed +0.3% stay"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(75)
+		and not CustomerSpawnPolicy.is_high_rep(74)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AQ1/AJ1: high-rep whale pack stays ×1.5 at 75"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AQ1: marketplace sell fee stays today's 8%"
+	)
+	_expect_equal(_game_state.call("start_floor"), true, "AQ1/AH1: walkout day opens")
+	_game_state.set("attention_remaining", 0)
+	var queue := _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AQ1/AH1: waiter enqueues")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout") >= 1, true, "AQ1/AH1: uncovered leave is a walkout")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AQ1/AH1: walkout math stays Rep −1"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AQ1/AG1: hire Cashier to age")
+	_ag1_run_floor_days(3)
+	_expect_equal(shop.staff[0].roster_age, 3, "AQ1/AG1: Cashier is popular")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AQ1/AG1: Fire a popular Cashier"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 5,
+		"AQ1/AG1: popular Fire still drops Rep 5 once"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_better_marketplace_lead_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("true_market_drift")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("marketplace_lead"),
+		false,
+		"AQ1: Soft catalog stays closed"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AQ1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_min, 0.30)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_max, 0.40),
+		true,
+		"AQ1: marketplace fee stays 8% — this is not a fee cut"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AQ1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("true_market"),
+		true,
+		"AQ1: HUD has no STOP, camera off-switch, or true_market"
+	)
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	_expect_equal(
+		not balance_src.contains("marketplace_lead")
+		and not balance_src.contains("fee_cut")
+		and not balance_src.contains("ASK_RATE"),
+		true,
+		"AQ1: extra-lead knobs live on the policy, not BalanceConfig"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/marketplace_lead_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AQ1: %s stays §4.5 clean" % path
+		)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _high_rep_marketplace_leads")
+		and demand_src.contains("GameState.current_reputation")
+		and demand_src.contains("MarketplaceLeadPolicy"),
+		true,
+		"AQ1: marketplace prep reads live Rep"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "moq")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "regulars")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "quiet")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "marketplace"),
+		true,
+		"AQ1: AC1 through AP1 stay off the sell roll"
+	)
+	_game_state.call("start_new_game")
+
+
+func _aq1_reset_at(reputation: int) -> void:
+	_ap1_reset_at(reputation)
+
+
+func _aq1_marketplace_signals() -> Array[BuyConfirmSignal]:
+	var result: Array[BuyConfirmSignal] = []
+	for dto: BuyConfirmSignal in _demand_signals.call("open_buy_signals"):
+		if dto != null and dto.channel == &"marketplace":
+			result.append(dto)
+	return result
+
+
+func _aq1_today_marketplace_count() -> int:
+	var count := 0
+	for opportunity: BuyOpportunity in BuyOpportunityCatalog.new().open_for_day(
+		int(_game_state.get("current_day")),
+		(_inventory_service.get("model") as InventoryModel).catalog
+	):
+		if opportunity.channel == DemandSignalService.Channel.MARKETPLACE:
+			count += 1
+	return count
+
+
+func _aq1_has_extra(signals: Array[BuyConfirmSignal]) -> bool:
+	return _aq1_extra_signal(signals) != null
+
+
+func _aq1_extra_signal(signals: Array[BuyConfirmSignal]) -> BuyConfirmSignal:
+	for dto: BuyConfirmSignal in signals:
+		if MarketplaceLeadPolicy.is_extra_lead_id(dto.opportunity_id):
+			return dto
+	return null
+
+
+func _aq1_first_today(signals: Array[BuyConfirmSignal]) -> BuyConfirmSignal:
+	for dto: BuyConfirmSignal in signals:
+		if not MarketplaceLeadPolicy.is_extra_lead_id(dto.opportunity_id):
+			return dto
+	return null
+
+
+func _aq1_today_fingerprints(signals: Array[BuyConfirmSignal]) -> PackedStringArray:
+	var fingerprints: PackedStringArray = []
+	for dto: BuyConfirmSignal in signals:
+		if MarketplaceLeadPolicy.is_extra_lead_id(dto.opportunity_id):
+			continue
+		fingerprints.append(
+			"%s|%s|%d|%d" % [
+				String(dto.opportunity_id),
+				String(dto.sku_id),
+				dto.quantity,
+				dto.unit_cost_cents,
+			]
+		)
+	return fingerprints
+
+
+func _aq1_marketplace_row_count(hud: Node) -> int:
+	var rows := hud.get_node_or_null("%BuyOpportunityRows") as VBoxContainer
+	if rows == null:
+		return 0
+	var count := 0
+	for child: Node in rows.get_children():
+		var row := child as Button
+		if row != null and row.text.begins_with("Marketplace ·"):
+			count += 1
+	return count
 
 
 func _ap1_reset_at(reputation: int) -> void:

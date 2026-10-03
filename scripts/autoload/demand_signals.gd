@@ -577,6 +577,23 @@ func distributor_minimum_units(
 	return DistributorMoqPolicy.minimum_units(today_moq, resolved, configured_mult)
 
 
+func marketplace_extra_lead_count(configured: int = 0) -> int:
+	return MarketplaceLeadPolicy.extra_lead_count(configured)
+
+
+func marketplace_ask_rate(configured: float = 0.0) -> float:
+	return MarketplaceLeadPolicy.ask_rate(configured)
+
+
+func is_better_marketplace_lead(reputation: int = -1) -> bool:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return MarketplaceLeadPolicy.is_high_rep(resolved)
+
+
+func marketplace_ask_cents(basis_cents: int, configured_rate: float = 0.0) -> int:
+	return MarketplaceLeadPolicy.ask_cents(basis_cents, configured_rate)
+
+
 func _ensure_regulars_bus() -> void:
 	if EventBus.customer_resolved.is_connected(_on_customer_resolved_regulars):
 		return
@@ -839,10 +856,94 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 	)
 	opportunities.append_array(_scripted_opportunities)
 	opportunities.append_array(_supply_glut_restock_lots())
+	# AQ1: read live Rep when today's marketplace list is prepared.
+	# Rep ≥ 75 appends one extra lead. Rep ≤ 74 keeps today's list.
+	opportunities.append_array(_high_rep_marketplace_leads(opportunities))
 	for opportunity: BuyOpportunity in opportunities:
 		if not _closed_opportunity_ids.has(opportunity.id):
 			result.append(opportunity)
 	return result
+
+
+func _high_rep_marketplace_leads(today: Array[BuyOpportunity]) -> Array[BuyOpportunity]:
+	var extras: Array[BuyOpportunity] = []
+	var extra_count := MarketplaceLeadPolicy.extra_leads_for(GameState.current_reputation)
+	if extra_count <= 0:
+		return extras
+	var used_ids: Dictionary = {}
+	for opportunity: BuyOpportunity in today:
+		if opportunity != null:
+			used_ids[opportunity.id] = true
+	for index: int in extra_count:
+		var lead_id := MarketplaceLeadPolicy.extra_lead_id(index)
+		if used_ids.has(lead_id):
+			continue
+		var lead := _make_high_rep_marketplace_lead(today, lead_id)
+		if lead != null and lead.is_valid():
+			extras.append(lead)
+			used_ids[lead.id] = true
+	return extras
+
+
+func _make_high_rep_marketplace_lead(
+	today: Array[BuyOpportunity],
+	lead_id: StringName
+) -> BuyOpportunity:
+	var template := _today_marketplace_template(today)
+	var sku_id := StringName(template.get("sku_id", MarketplaceLeadPolicy.DEFAULT_SKU_ID))
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null:
+		return null
+	var ask_cents := marketplace_ask_cents(_marketplace_basis_cents(sku_id))
+	if ask_cents <= 0:
+		return null
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = lead_id
+	opportunity.sku_id = sku_id
+	opportunity.display_name = sku.display_name
+	opportunity.offer_label = String(
+		template.get("offer_label", MarketplaceLeadPolicy.OFFER_LABEL)
+	)
+	opportunity.channel = DemandSignalService.Channel.MARKETPLACE
+	opportunity.unit_cost_cents = ask_cents
+	opportunity.quantity = maxi(1, int(template.get("quantity", 1)))
+	opportunity.space_required = maxi(1, int(template.get("space_required", 1)))
+	return opportunity
+
+
+func _today_marketplace_template(today: Array[BuyOpportunity]) -> Dictionary:
+	for opportunity: BuyOpportunity in today:
+		if opportunity == null:
+			continue
+		if opportunity.channel != DemandSignalService.Channel.MARKETPLACE:
+			continue
+		if MarketplaceLeadPolicy.is_extra_lead_id(opportunity.id):
+			continue
+		return {
+			"sku_id": opportunity.sku_id,
+			"quantity": opportunity.quantity,
+			"space_required": opportunity.space_required,
+			"offer_label": opportunity.offer_label,
+		}
+	return {
+		"sku_id": MarketplaceLeadPolicy.DEFAULT_SKU_ID,
+		"quantity": 1,
+		"space_required": 1,
+		"offer_label": MarketplaceLeadPolicy.OFFER_LABEL,
+	}
+
+
+func _marketplace_basis_cents(sku_id: StringName) -> int:
+	# Same live market today's marketplace comps already read.
+	var live := market_cents_for(sku_id)
+	if live > 0:
+		return live
+	if InventoryService.model == null:
+		return 0
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null:
+		return 0
+	return sku.base_market_cents
 
 
 func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
