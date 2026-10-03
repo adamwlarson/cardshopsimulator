@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AP v1 — post AO1
 
-**Status:** **AP1 ADOPTED** 2026-10-03 — Distributor MOQ ×2 at Rep ≤ 24. Park AP2/AP3/AP4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
+**Status:** **AP1 SHIPPED** 2026-10-03 — squash-merged #72 @ `dbf2f918` (reviewed `726bbd39`). Distributor MOQ ×2 at Rep ≤ 24. Park AP2/AP3/AP4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-ao (AO1 Regulars return SHIPPED #71 @ `b0224aae`); Soft catalog CLOSED
@@ -93,3 +93,7 @@
 |------|----------|
 | 2026-10-03 | Drafted post AO1 SHIPPED #71 @ `b0224aae`. Lean **AP1 Distributor MOQ ×2 at Rep ≤ 24**. Leads / drift / HUD / STOP parked. Camera off-switch hard-parked. |
 | 2026-10-03 | PM adopted **AP1**. Park AP2/AP3/AP4. Hard-park camera off-switch. Soft catalog CLOSED. Fees / HUD / STOP stay parked. Same menu, only the minimum doubles at Rep ≤ 24. Draft sha256 `c30db000`. |
+| 2026-10-03 | PM adopted **AP1**. Spec on main `03232240`. Spike [AP1 distributor MOQ](https://cursor.com/agents/bc-4e9ee13b-9034-58fa-89b2-9eea30678140). Eng bar locked. Park AP2/AP3/AP4. No Art. Soft catalog CLOSED. Draft sha256 `c30db000`. |
+| 2026-10-03 | Tip-frozen PR #72 @ `726bbd39` (branch `cursor/ap1-distributor-moq-worse-8140`). Five files, no docs. Rep 24 doubles today's MOQ. Rep 25 keeps today's minimum. |
+| 2026-10-03 | Eng APPROVE #72 @ `726bbd39`. No Soft notes. Formal released. Quiet floor at 24 stays as shipped. |
+| 2026-10-03 | SHIPPED squash-merge #72 @ `dbf2f918` (reviewed `726bbd39`). QA PASS-with-notes, harness 88/0/3. No new Soft note. Seeded menu AA-SKIE-BLST, today 8 at 1800¢, Rep 24 and Rep 0 offer 16. Branch `cursor/ap1-distributor-moq-worse-8140` deleted. |
