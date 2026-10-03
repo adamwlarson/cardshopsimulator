@@ -206,6 +206,7 @@ func _initialize() -> void:
 	_test_mid_band_baseline()
 	_test_player_trades_unlock()
 	_test_regulars_return()
+	_test_distributor_moq_worse()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -21605,6 +21606,617 @@ func _ao1_regular_catalog_tags() -> Array[StringName]:
 			tags.append(StringName(tag))
 		return tags
 	return tags
+
+
+func _test_distributor_moq_worse() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_distributor_moq_named_gate()
+	_test_distributor_moq_same_seed_min_and_price()
+	_test_distributor_moq_buy_under_refused_at_floor_succeeds()
+	_test_distributor_moq_offer_shows_min_no_truth()
+	_test_distributor_moq_spawn_and_whale_stay()
+	_test_distributor_moq_sale_pays_listed()
+	_test_distributor_moq_shipped_levers_stay()
+	_test_distributor_moq_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_distributor_moq_named_gate() -> void:
+	_expect_equal(
+		DistributorMoqPolicy.QUIET_FLOOR_MAX_REP,
+		24,
+		"AP1: locked worse-MOQ gate is Rep 24"
+	)
+	_expect_equal(
+		is_equal_approx(DistributorMoqPolicy.QUIET_FLOOR_MOQ_MULT, 2.0),
+		true,
+		"AP1: locked quiet-band MOQ scalar is ×2"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.is_worse_moq(24),
+		true,
+		"AP1: Rep 24 is the worse-MOQ band"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.is_worse_moq(25),
+		false,
+		"AP1: Rep 25 keeps today's MOQ"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.is_worse_moq(0),
+		true,
+		"AP1: Rep 0 matches the Rep 24 band"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.minimum_units(8, 24),
+		16,
+		"AP1: today's 8 at Rep 24 is 16"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.minimum_units(8, 25),
+		8,
+		"AP1: today's 8 at Rep 25 stays 8"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.minimum_units(8, 0),
+		16,
+		"AP1: Rep 0 minimum matches Rep 24"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.minimum_units(8, 40),
+		8,
+		"AP1: mid-band Rep keeps today's MOQ"
+	)
+	_expect_equal(
+		is_equal_approx(DistributorMoqPolicy.moq_mult(0.0), 2.0),
+		true,
+		"AP1: missing or 0 multiplier falls back to ×2"
+	)
+	_expect_equal(
+		is_equal_approx(DistributorMoqPolicy.moq_mult(-1.0), 2.0),
+		true,
+		"AP1: negative multiplier falls back to ×2"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.minimum_units(8, 24, 0.0),
+		16,
+		"AP1: configured 0 still doubles the floor"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.minimum_units(8, 24, -4.0),
+		16,
+		"AP1: configured negative still doubles the floor"
+	)
+	_expect_equal(
+		int(_demand_signals.call("distributor_minimum_units", 8, 24, 0.0)),
+		16,
+		"AP1: DemandSignals 0-mult fallback is ×2"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("distributor_moq_mult", 0.0)), 2.0),
+		true,
+		"AP1: DemandSignals omitted mult is ×2"
+	)
+	_expect_equal(
+		bool(_demand_signals.call("is_distributor_moq_worse", 24))
+		and not bool(_demand_signals.call("is_distributor_moq_worse", 25)),
+		true,
+		"AP1: DemandSignals worse-MOQ gate follows Rep 24"
+	)
+
+
+func _test_distributor_moq_same_seed_min_and_price() -> void:
+	const TODAY_MOQ := 8
+	_ap1_reset_at(25)
+	var at_25: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		_ap1_moq_id()
+	)
+	_expect_equal(at_25 != null, true, "AP1: same seed at Rep 25 still offers the catalog MOQ")
+	if at_25 == null:
+		return
+	_expect_equal(at_25.quantity, TODAY_MOQ, "AP1: Rep 25 matches today's MOQ")
+	_expect_equal(at_25.sku_id, &"AA-SKIE-BLST", "AP1: Rep 25 keeps the catalog SKU")
+	_expect_equal(at_25.unit_cost_cents, 1800, "AP1: Rep 25 keeps today's unit price")
+	_ap1_reset_at(24)
+	var at_24: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		_ap1_moq_id()
+	)
+	_expect_equal(at_24 != null, true, "AP1: same seed at Rep 24 still offers the catalog MOQ")
+	if at_24 == null:
+		return
+	_expect_equal(at_24.quantity, TODAY_MOQ * 2, "AP1: Rep 24 minimum is exactly twice Rep 25")
+	_expect_equal(at_24.sku_id, at_25.sku_id, "AP1: same seed SKUs match across Rep 24 and 25")
+	_expect_equal(
+		at_24.unit_cost_cents,
+		at_25.unit_cost_cents,
+		"AP1: same seed unit price matches across Rep 24 and 25"
+	)
+	_ap1_reset_at(0)
+	var at_0: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		_ap1_moq_id()
+	)
+	_expect_equal(at_0 != null, true, "AP1: same seed at Rep 0 still offers the catalog MOQ")
+	if at_0 == null:
+		return
+	_expect_equal(at_0.quantity, at_24.quantity, "AP1: Rep 0 minimum matches Rep 24")
+	_expect_equal(at_0.sku_id, at_24.sku_id, "AP1: Rep 0 SKU matches Rep 24")
+	_expect_equal(
+		at_0.unit_cost_cents,
+		at_24.unit_cost_cents,
+		"AP1: Rep 0 unit price matches Rep 24"
+	)
+	_ap1_reset_at(24)
+	var market: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		&"dustway-marketplace-day-1"
+	)
+	_expect_equal(market != null, true, "AP1: marketplace lot still opens at Rep 24")
+	if market != null:
+		_expect_equal(
+			market.quantity,
+			2,
+			"AP1: marketplace count is unchanged — MOQ is distributor-only"
+		)
+
+
+func _test_distributor_moq_buy_under_refused_at_floor_succeeds() -> void:
+	_ap1_reset_at(24)
+	var dto: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		_ap1_moq_id()
+	)
+	_expect_equal(dto != null, true, "AP1: Rep 24 floor buy needs the catalog MOQ")
+	if dto == null:
+		return
+	_expect_equal(dto.quantity, 16, "AP1: live offer at Rep 24 is the doubled floor")
+	_expect_equal(dto.can_confirm, true, "AP1: doubled floor is still affordable")
+	var cash_before := int(_economy.get("balance_cents"))
+	var stock_before := _an1_stock_qty(dto.sku_id)
+	_expect_equal(
+		_demand_signals.call("confirm_buy", dto, 15),
+		false,
+		"AP1: a buy under the Rep 24 floor is refused"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AP1: refused under-min buy does not move cash"
+	)
+	_expect_equal(
+		_an1_stock_qty(dto.sku_id),
+		stock_before,
+		"AP1: refused under-min buy does not add stock"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", _ap1_moq_id()) != null,
+		true,
+		"AP1: refused under-min buy leaves the offer open"
+	)
+	_expect_equal(
+		_demand_signals.call("confirm_buy", dto, 16),
+		true,
+		"AP1: a buy at the Rep 24 floor succeeds"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - dto.unit_cost_cents * 16,
+		"AP1: floor buy drops cash by unit price times count"
+	)
+	_expect_equal(
+		_an1_stock_qty(dto.sku_id),
+		stock_before + 16,
+		"AP1: floor buy receives the minimum count"
+	)
+	_ap1_reset_at(25)
+	var today: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		_ap1_moq_id()
+	)
+	_expect_equal(today != null, true, "AP1: Rep 25 floor buy needs the catalog MOQ")
+	if today == null:
+		return
+	cash_before = int(_economy.get("balance_cents"))
+	_expect_equal(
+		_demand_signals.call("confirm_buy", today, 7),
+		false,
+		"AP1: a buy under today's MOQ is refused at Rep 25"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AP1: refused under-today buy does not move cash"
+	)
+	_expect_equal(
+		_demand_signals.call("confirm_buy", today, 8),
+		true,
+		"AP1: a buy at today's MOQ succeeds at Rep 25"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - today.unit_cost_cents * 8,
+		"AP1: Rep 25 buy drops cash by today's unit price times count"
+	)
+
+
+func _test_distributor_moq_offer_shows_min_no_truth() -> void:
+	_ap1_reset_at(24)
+	var dto: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		_ap1_moq_id()
+	)
+	_expect_equal(dto != null, true, "AP1: offer scan needs the catalog MOQ")
+	if dto == null:
+		return
+	_expect_dto_has_no_truth_fields(dto, "AP1 distributor offer")
+	var row := DemandSignalPresenter.opportunity_row(dto)
+	var summary := DemandSignalPresenter.buy_summary(dto)
+	var snapshot := DemandSignalPresenter.buy_confirm_snapshot(dto)
+	_expect_equal(row.contains("min ×16"), true, "AP1: list row shows the Rep 24 minimum")
+	_expect_equal(summary.contains("Minimum: ×16"), true, "AP1: detail shows the Rep 24 minimum")
+	_expect_equal(
+		snapshot.contains("Minimum: ×16"),
+		true,
+		"AP1: confirm snapshot shows the Rep 24 minimum"
+	)
+	_assert_text_has_no_truth(row, "AP1 distributor row")
+	_assert_text_has_no_truth(summary, "AP1 distributor summary")
+	_assert_text_has_no_truth(snapshot, "AP1 distributor snapshot")
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AP1: HUD loads for the distributor offer")
+	if hud != null:
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		_expect_equal(open_buy != null, true, "AP1: OpenBuyButton still opens prep offers")
+		if open_buy != null:
+			open_buy.pressed.emit()
+		_expect_equal(
+			_click_buy_row_for_channel(hud, &"distributor"),
+			true,
+			"AP1: prep list shows the distributor row at Rep 24"
+		)
+		var title := hud.get_node_or_null("%BuyOpportunityTitle") as Label
+		var hud_summary := hud.get_node_or_null("%BuySummary") as Label
+		if title != null:
+			_expect_equal(
+				title.text.contains("min ×16"),
+				true,
+				"AP1: HUD title shows the minimum count"
+			)
+			_assert_text_has_no_truth(title.text, "AP1 HUD buy title")
+		if hud_summary != null:
+			_expect_equal(
+				hud_summary.text.contains("Minimum: ×16"),
+				true,
+				"AP1: HUD summary shows the minimum count"
+			)
+			_assert_text_has_no_truth(hud_summary.text, "AP1 HUD buy summary")
+		hud.free()
+	_ap1_reset_at(25)
+	var today: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		_ap1_moq_id()
+	)
+	_expect_equal(today != null, true, "AP1: Rep 25 offer scan needs the catalog MOQ")
+	if today == null:
+		return
+	_expect_equal(
+		DemandSignalPresenter.opportunity_row(today).contains("min ×8"),
+		true,
+		"AP1: list row at Rep 25 shows today's minimum"
+	)
+	_expect_equal(
+		DemandSignalPresenter.buy_summary(today).contains("Minimum: ×8"),
+		true,
+		"AP1: detail at Rep 25 shows today's minimum"
+	)
+
+
+func _test_distributor_moq_spawn_and_whale_stay() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_24 := catalog.roll_spawn(SEED, 24, NORMAL_CONFIG, BASELINE)
+	var at_25 := catalog.roll_spawn(SEED, 25, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_25.size(), 5, "AP1: Rep 25 keeps the AI1 spawn count")
+	_expect_equal(at_24.size(), 2, "AP1/AI1: same seed at Rep 24 is still half, rounded down")
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(24, 5),
+		CustomerSpawnPolicy.spawn_count(25, 5) / 2,
+		"AP1: spawn_count at Rep 24 stays half of Rep 25"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"AP1/AI1: quiet-floor count scalar stays ×0.5"
+	)
+	var weight_24 := catalog.weight_for(whale, 24, NORMAL_CONFIG)
+	var weight_25 := catalog.weight_for(whale, 25, NORMAL_CONFIG)
+	_expect_equal(is_equal_approx(weight_24, 0.0), true, "AP1/AI1: Rep 24 whale weight stays 0")
+	_expect_equal(weight_25 > 0.0, true, "AP1/AI1: Rep 25 keeps today's whale weight")
+	_expect_equal(
+		_ai1_whale_count(at_24),
+		0,
+		"AP1/AI1: same seed at Rep 24 still spawns no whales"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	_expect_equal(
+		not policy_src.contains("distributor_moq")
+		and not policy_src.contains("MOQ")
+		and not policy_src.contains("minimum_units"),
+		true,
+		"AP1: spawn policy has no distributor MOQ traffic change"
+	)
+	_expect_equal(
+		not spawn_src.contains("distributor_moq")
+		and not spawn_src.contains("minimum_units"),
+		true,
+		"AP1: door spawn path does not read the MOQ floor"
+	)
+
+
+func _test_distributor_moq_sale_pays_listed() -> void:
+	_ap1_reset_at(24)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AP1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AP1: listed price stays set at Rep 24")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AP1: sell_through_mult_for stays 1.0 at Rep 24"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := _ao1_listed_buyer()
+	_expect_equal(queue.enqueue(customer), true, "AP1: listed lot still enqueues at Rep 24")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AP1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AP1: live sell still resolves at Rep 24")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AP1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AP1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "moq")
+		and not _function_body_contains(queue_src, "func sell_listed()", "distributor")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"moq"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"reputation"
+		),
+		true,
+		"AP1: distributor MOQ is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_distributor_moq_shipped_levers_stay() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and NORMAL_CONFIG.register_walkout_rep_cap == 3
+		and shop.register_walkout_rep_hit() == 1
+		and shop.register_walkout_rep_cap() == 3,
+		true,
+		"AP1/AH1: walkout scalars stay Rep −1 / cap 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5
+		and NORMAL_CONFIG.fire_popular_roster_age == 3
+		and shop.fire_rep_hit() == 5
+		and shop.fire_popular_roster_age() == 3,
+		true,
+		"AP1/AG1: Fire scalars stay Rep −5 at roster age 3"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005)
+		and is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AP1/AK1/AL1: daily shrink 0.2%/0.7% and floor-sealed +0.3% stay"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_quiet_floor(24)
+		and not CustomerSpawnPolicy.is_quiet_floor(25)
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"AP1/AI1: quiet floor stays Rep 24"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(75)
+		and not CustomerSpawnPolicy.is_high_rep(74)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AP1/AJ1: high-rep whale pack stays ×1.5 at 75"
+	)
+	_expect_equal(
+		PlayerTradePolicy.is_unlocked(50) and not PlayerTradePolicy.is_unlocked(49),
+		true,
+		"AP1/AN1: player trades stay unlocked at Rep 50"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.is_unlocked(50) and not RegularsReturnPolicy.is_unlocked(49),
+		true,
+		"AP1/AO1: Regulars return stays unlocked at Rep 50"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.distributor_discount_min, 0.30)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_max, 0.40),
+		true,
+		"AP1: MSRP discount stays today's 30–40% band"
+	)
+	_expect_equal(_game_state.call("start_floor"), true, "AP1/AH1: walkout day opens")
+	_game_state.set("attention_remaining", 0)
+	var queue := _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AP1/AH1: waiter enqueues")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout") >= 1, true, "AP1/AH1: uncovered leave is a walkout")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AP1/AH1: walkout math stays Rep −1"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AP1/AG1: hire Cashier to age")
+	_ag1_run_floor_days(3)
+	_expect_equal(shop.staff[0].roster_age, 3, "AP1/AG1: Cashier is popular")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AP1/AG1: Fire a popular Cashier"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 5,
+		"AP1/AG1: popular Fire still drops Rep 5 once"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_distributor_moq_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("distributor_moq")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("true_market_drift"),
+		false,
+		"AP1: Soft catalog stays closed"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AP1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_min, 0.30)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_max, 0.40),
+		true,
+		"AP1: marketplace fees and distributor discount stay as shipped"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AP1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("true_market"),
+		true,
+		"AP1: HUD has no STOP, camera off-switch, or true_market"
+	)
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	_expect_equal(
+		not balance_src.contains("moq")
+		and not balance_src.contains("fee_cut")
+		and not shop_src.contains("moq"),
+		true,
+		"AP1: MOQ scalar lives on the policy, not BalanceConfig"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/distributor_moq_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AP1: %s stays §4.5 clean" % path
+		)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _offer_quantity")
+		and demand_src.contains("GameState.current_reputation")
+		and demand_src.contains("DistributorMoqPolicy"),
+		true,
+		"AP1: distributor offer build reads live Rep"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "moq")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "regulars")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "quiet")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AP1: AO1/AN1/AI1/AJ1/AH1/AG1/AK1 stay off the sell roll"
+	)
+	_game_state.call("start_new_game")
+
+
+func _ap1_reset_at(reputation: int) -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", reputation)
+	_event_bus.emit_signal("reputation_changed", reputation)
+
+
+func _ap1_moq_id() -> StringName:
+	return &"skiefall-distributor-moq-day-2"
 
 
 func _click_player_trade_row(hud: Node) -> bool:

@@ -254,10 +254,15 @@ static func opportunity_row(dto: BuyConfirmSignal) -> String:
 	var name_text := dto.display_name
 	if name_text.strip_edges().is_empty():
 		name_text = String(dto.sku_id)
-	return "%s · %s ×%d\nAsk %s · %s · %s confidence" % [
+	var count_text := (
+		"min ×%d" % dto.quantity
+		if dto.channel == &"distributor"
+		else "×%d" % dto.quantity
+	)
+	return "%s · %s %s\nAsk %s · %s · %s confidence" % [
 		String(dto.channel).capitalize(),
 		name_text,
-		dto.quantity,
+		count_text,
 		format_cents(dto.lot_total_cents),
 		band_chip(dto.shown_demand_band),
 		String(dto.confidence).capitalize(),
@@ -315,12 +320,16 @@ static func list_confirm_summary(dto: OnlineListConfirmSignal) -> String:
 
 
 static func buy_summary(dto: BuyConfirmSignal) -> String:
-	return "\n".join([
+	var lines: PackedStringArray = [
 		"%s: %s each · %s total" % [
 			price_label(PriceContext.SHOP_BUYING_OPPORTUNITY),
 			format_cents(dto.unit_cost_cents),
 			format_cents(dto.lot_total_cents),
 		],
+	]
+	if dto.channel == &"distributor":
+		lines.append("Minimum: ×%d" % dto.quantity)
+	lines.append_array(PackedStringArray([
 		"Comp range: %s – %s" % [
 			format_cents(dto.shown_comp_low_cents),
 			format_cents(dto.shown_comp_high_cents),
@@ -337,7 +346,8 @@ static func buy_summary(dto: BuyConfirmSignal) -> String:
 			dto.space_required,
 			dto.space_free,
 		],
-	])
+	]))
+	return "\n".join(lines)
 
 
 static func buylist_seller_summary(dto: BuyConfirmSignal) -> String:
@@ -403,13 +413,17 @@ static func condition_line(
 
 
 static func buy_confirm_snapshot(dto: BuyConfirmSignal) -> String:
-	return "\n".join([
+	var lines: PackedStringArray = [
 		"%s ×%d @ %s" % [
 			dto.display_name,
 			dto.quantity,
 			format_cents(dto.unit_cost_cents),
 		],
 		"Total %s" % format_cents(dto.lot_total_cents),
+	]
+	if dto.channel == &"distributor":
+		lines.append("Minimum: ×%d" % dto.quantity)
+	lines.append_array(PackedStringArray([
 		"%s–%s · %s · %s" % [
 			format_cents(dto.shown_comp_low_cents),
 			format_cents(dto.shown_comp_high_cents),
@@ -417,4 +431,5 @@ static func buy_confirm_snapshot(dto: BuyConfirmSignal) -> String:
 			String(dto.confidence).to_upper(),
 		],
 		condition_line(dto.condition_cue, dto.grader, dto.grade),
-	])
+	]))
+	return "\n".join(lines)
