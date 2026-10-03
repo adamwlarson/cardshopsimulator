@@ -1,6 +1,7 @@
 extends Control
 
 @onready var cash_label: Label = %CashLabel
+@onready var sandbox_bests_label: Label = get_node_or_null("%SandboxBests") as Label
 @onready var day_label: Label = %DayLabel
 @onready var phase_chip: PanelContainer = %PhaseChip
 @onready var phase_label: Label = %PhaseLabel
@@ -135,6 +136,7 @@ var _selected_rearrange_origin := Vector2i(-1, -1)
 
 func _ready() -> void:
 	EventBus.cash_changed.connect(_update_cash)
+	EventBus.inventory_changed.connect(_on_inventory_changed_bests)
 	EventBus.day_started.connect(_update_day)
 	EventBus.day_phase_changed.connect(_update_phase)
 	EventBus.attention_changed.connect(_update_attention)
@@ -259,6 +261,7 @@ func _bind_seeded_status() -> void:
 		GameState.start_new_game()
 	_update_cash(Economy.balance_cents)
 	_update_day(GameState.current_day)
+	_sync_sandbox_bests()
 	_update_phase(GameState.current_phase)
 	_update_attention(GameState.attention_remaining)
 	_sync_rotation_watch()
@@ -271,11 +274,33 @@ func _bind_seeded_status() -> void:
 
 func _update_cash(balance_cents: int) -> void:
 	cash_label.text = DemandSignalPresenter.format_cents(balance_cents)
+	_sync_sandbox_bests()
 	_sync_prep_action_buttons()
+
+
+func _on_inventory_changed_bests(_sku: StringName, _quantity: int) -> void:
+	_sync_sandbox_bests()
+
+
+func _sync_sandbox_bests() -> void:
+	if sandbox_bests_label == null:
+		return
+	if (
+		GameState.campaign_mode != GameState.CampaignMode.SANDBOX
+		or not GameState.has_sandbox_personal_bests()
+	):
+		sandbox_bests_label.hide()
+		return
+	sandbox_bests_label.text = DemandSignalPresenter.sandbox_bests_label(
+		GameState.sandbox_best_day,
+		GameState.sandbox_best_net_worth_cents
+	)
+	sandbox_bests_label.show()
 
 
 func _update_day(day: int) -> void:
 	day_label.text = "Day %d" % day
+	_sync_sandbox_bests()
 	_sync_rotation_watch()
 	_sync_event_banner()
 

@@ -45,6 +45,74 @@ func can_afford(amount_cents: int) -> bool:
 	return amount_cents >= 0 and balance_cents >= amount_cents
 
 
+## systems §9.2 AA1: cash + inventory at hidden market × liquidity haircut.
+## Haircuts stay in economy math. UI only sees the summed cents.
+const LIQUIDITY_HAIRCUT_SEALED := 0.85
+const LIQUIDITY_HAIRCUT_SINGLES := 0.7
+const LIQUIDITY_HAIRCUT_GRADED := 0.6
+const LIQUIDITY_HAIRCUT_ACCESSORIES := 0.9
+
+
+func net_worth_cents() -> int:
+	return balance_cents + _liquidity_inventory_cents()
+
+
+func liquidity_haircut(product_class: ProductSKU.ProductClass) -> float:
+	match product_class:
+		ProductSKU.ProductClass.SEALED:
+			return LIQUIDITY_HAIRCUT_SEALED
+		ProductSKU.ProductClass.SINGLE:
+			return LIQUIDITY_HAIRCUT_SINGLES
+		ProductSKU.ProductClass.GRADED:
+			return LIQUIDITY_HAIRCUT_GRADED
+		ProductSKU.ProductClass.ACCESSORY:
+			return LIQUIDITY_HAIRCUT_ACCESSORIES
+		_:
+			return 0.0
+
+
+func _liquidity_inventory_cents() -> int:
+	var model := InventoryService.model
+	if model == null:
+		return 0
+	var total := 0
+	for lot: StockLot in model.stock_lots:
+		if lot == null or lot.sku == null or lot.qty <= 0:
+			continue
+		total += _haircut_units(
+			DemandSignals.market_cents_for(lot.sku.id),
+			lot.sku.product_class,
+			lot.qty
+		)
+	for card: CardInstance in model.cards:
+		if card == null:
+			continue
+		total += _haircut_units(
+			DemandSignals.market_cents_for(card.sku_id),
+			ProductSKU.ProductClass.SINGLE,
+			1
+		)
+	for slab: SlabInstance in model.slabs:
+		if slab == null:
+			continue
+		total += _haircut_units(
+			DemandSignals.market_cents_for(slab.sku_id()),
+			ProductSKU.ProductClass.GRADED,
+			1
+		)
+	return total
+
+
+func _haircut_units(
+	market_cents: int,
+	product_class: ProductSKU.ProductClass,
+	quantity: int
+) -> int:
+	if market_cents <= 0 or quantity <= 0:
+		return 0
+	return roundi(float(market_cents) * liquidity_haircut(product_class)) * quantity
+
+
 func get_ledger() -> Array[LedgerEntry]:
 	return _ledger.duplicate()
 

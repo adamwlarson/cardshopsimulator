@@ -190,6 +190,7 @@ func _initialize() -> void:
 	_test_campaign_mode_picker()
 	_test_loan_shark_soft_fail()
 	_test_ironman_optional_lose()
+	_test_sandbox_personal_bests()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -12728,7 +12729,7 @@ func _test_campaign_mode_picker() -> void:
 	_game_state.set("campaign_complete", false)
 	_game_state.set("last_prestige", &"")
 	_game_state.set("sandbox_best_day", 0)
-	_game_state.set("sandbox_best_cash_cents", 0)
+	_game_state.set("sandbox_best_net_worth_cents", 0)
 	_expect_equal(
 		_game_state.call("select_campaign_mode", 0),
 		true,
@@ -12883,9 +12884,9 @@ func _test_campaign_mode_picker() -> void:
 		"T1: Sandbox records a day personal best"
 	)
 	_expect_equal(
-		int(_game_state.get("sandbox_best_cash_cents")) >= 800_000,
+		int(_game_state.get("sandbox_best_net_worth_cents")) >= 800_000,
 		true,
-		"T1: Sandbox records a cash personal best"
+		"T1: Sandbox records a net-worth personal best"
 	)
 	_force_large_shop(40)
 	_economy.set("balance_cents", 10_000_000)
@@ -12916,28 +12917,39 @@ func _test_campaign_mode_picker() -> void:
 		true,
 		"T1: Sandbox does not emit campaign_won"
 	)
+	var peak_nw: int = _economy.call("net_worth_cents")
 	_expect_equal(
 		int(_game_state.get("sandbox_best_day")),
 		390,
 		"T1: Sandbox personal best day updates"
 	)
 	_expect_equal(
-		int(_game_state.get("sandbox_best_cash_cents")),
-		10_000_000,
-		"T1: Sandbox personal best cash updates"
+		int(_game_state.get("sandbox_best_net_worth_cents")),
+		peak_nw,
+		"T1: Sandbox personal best net worth updates"
+	)
+	_expect_equal(
+		peak_nw >= 10_000_000,
+		true,
+		"T1: peak net worth is at least cash"
 	)
 
 	var saved: Dictionary = _game_state.call("capture_save")
 	_assert_payload_has_no_truth(saved, "T1: Sandbox save payload")
 	_expect_equal(int(saved.get("campaign_mode", -1)), 3, "T1: save stores Sandbox mode")
 	_expect_equal(int(saved.get("sandbox_best_day", 0)), 390, "T1: save stores sandbox best day")
+	_expect_equal(
+		int(saved.get("sandbox_best_net_worth_cents", 0)),
+		peak_nw,
+		"T1: save stores sandbox best net worth"
+	)
 	_game_state.call("return_to_menu")
 	if menu != null:
 		menu.call("_sync_campaign_copy")
 		var bests := menu.get_node_or_null("%SandboxBests") as Label
+		var bests_copy := DemandSignalPresenter.sandbox_bests_label(390, peak_nw)
 		_expect_equal(
-			bests != null and bests.visible and bests.text.contains("390")
-			and bests.text.contains("$100,000.00"),
+			bests != null and bests.visible and bests.text == bests_copy,
 			true,
 			"T1: menu shows Sandbox personal bests"
 		)
@@ -12982,6 +12994,11 @@ func _test_campaign_mode_picker() -> void:
 		390,
 		"T1: restore keeps sandbox best day"
 	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_net_worth_cents")),
+		peak_nw,
+		"T1: restore keeps sandbox best net worth"
+	)
 
 	if menu != null:
 		root.remove_child(menu)
@@ -13022,7 +13039,7 @@ func _test_campaign_mode_picker() -> void:
 	_game_state.set("is_game_active", false)
 	_game_state.set("campaign_complete", false)
 	_game_state.set("sandbox_best_day", 0)
-	_game_state.set("sandbox_best_cash_cents", 0)
+	_game_state.set("sandbox_best_net_worth_cents", 0)
 	_game_state.call("select_campaign_mode", 0)
 	_game_state.call("start_new_game")
 
@@ -13457,6 +13474,355 @@ func _test_ironman_optional_lose() -> void:
 	_game_state.call("select_ironman", false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
+
+
+func _test_sandbox_personal_bests() -> void:
+	_reset_sandbox_bests_session()
+	_expect_equal(
+		_economy.call("liquidity_haircut", ProductSKU.ProductClass.SEALED),
+		0.85,
+		"AA1: sealed haircut is 0.85"
+	)
+	_expect_equal(
+		_economy.call("liquidity_haircut", ProductSKU.ProductClass.SINGLE),
+		0.7,
+		"AA1: singles haircut is 0.7"
+	)
+	_expect_equal(
+		_economy.call("liquidity_haircut", ProductSKU.ProductClass.GRADED),
+		0.6,
+		"AA1: graded haircut is 0.6"
+	)
+	_expect_equal(
+		_economy.call("liquidity_haircut", ProductSKU.ProductClass.ACCESSORY),
+		0.9,
+		"AA1: accessories haircut is 0.9"
+	)
+
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 3),
+		true,
+		"AA1: Sandbox can be selected"
+	)
+	_game_state.call("start_new_game")
+	_clear_owned_inventory()
+	_economy.set("balance_cents", 100_000)
+	var shelf := InventoryLocation.new(InventoryLocation.Type.SHELF)
+	var binder := InventoryLocation.new(InventoryLocation.Type.BINDER)
+	var case_location := InventoryLocation.new(InventoryLocation.Type.CASE)
+	_expect_equal(
+		_inventory_service.call("receive_stock", &"AA-SKIE-BLST", 1, 100, shelf),
+		true,
+		"AA1: seed sealed at cheap acquired cost"
+	)
+	_expect_equal(
+		_inventory_service.call("receive_stock", &"ACC-SLV-60", 1, 50, shelf),
+		true,
+		"AA1: seed accessory at cheap acquired cost"
+	)
+	_expect_equal(
+		_inventory_service.call("receive_card", &"AA-BASE-088", 80, binder) != null,
+		true,
+		"AA1: seed single at cheap acquired cost"
+	)
+	_expect_equal(
+		_inventory_service.call(
+			"receive_slab",
+			&"AA-SKIE-052",
+			&"Prism Grade",
+			10.0,
+			70,
+			case_location
+		) != null,
+		true,
+		"AA1: seed graded at cheap acquired cost"
+	)
+	_expect_equal(
+		_inventory_service.call("inventory_cogs_cents"),
+		300,
+		"AA1: COGS stays acquired-cost sum, not haircut NW"
+	)
+	var expected_nw := (
+		100_000
+		+ _aa1_haircut_units(2999, 0.85)
+		+ _aa1_haircut_units(599, 0.9)
+		+ _aa1_haircut_units(500, 0.7)
+		+ _aa1_haircut_units(7500, 0.6)
+	)
+	_expect_equal(
+		_economy.call("net_worth_cents"),
+		expected_nw,
+		"AA1: NW is cash + hidden market × liquidity haircut"
+	)
+	_expect_equal(
+		_economy.call("net_worth_cents") != (
+			100_000 + _inventory_service.call("inventory_cogs_cents")
+		),
+		true,
+		"AA1: NW is not cash + COGS"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"AA1: Sandbox still awards none"
+	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_net_worth_cents")),
+		expected_nw,
+		"AA1: peak net worth records the haircut formula"
+	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_day")),
+		1,
+		"AA1: days survived starts at day 1"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		false,
+		"AA1: Sandbox stays incomplete after recording bests"
+	)
+	_expect_equal(
+		_captured_campaign_won.is_empty(),
+		true,
+		"AA1: Sandbox does not emit campaign_won"
+	)
+
+	_economy.set("balance_cents", 50_000)
+	_game_state.call("evaluate_campaign_win")
+	_expect_equal(
+		int(_game_state.get("sandbox_best_net_worth_cents")),
+		expected_nw,
+		"AA1: peak net worth is high water when cash drops"
+	)
+
+	_game_state.set("current_day", 12)
+	_game_state.call("evaluate_campaign_win")
+	_expect_equal(
+		int(_game_state.get("sandbox_best_day")),
+		12,
+		"AA1: longest days survived updates"
+	)
+	_game_state.set("current_day", 4)
+	_game_state.call("evaluate_campaign_win")
+	_expect_equal(
+		int(_game_state.get("sandbox_best_day")),
+		12,
+		"AA1: days survived is high water"
+	)
+
+	_demand_signals.call("apply_hype_event", &"AA-SKIE-BLST", 3, 2.0)
+	_economy.set("balance_cents", 100_000)
+	_game_state.call("evaluate_campaign_win")
+	var hyped_nw: int = _economy.call("net_worth_cents")
+	_expect_equal(
+		hyped_nw > expected_nw,
+		true,
+		"AA1: hidden market move changes net worth"
+	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_net_worth_cents")),
+		hyped_nw,
+		"AA1: peak follows the higher haircut value"
+	)
+
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "AA1: save payload")
+	_expect_equal(int(saved.get("campaign_mode", -1)), 3, "AA1: save stores Sandbox")
+	_expect_equal(int(saved.get("sandbox_best_day", 0)), 12, "AA1: save stores best day")
+	_expect_equal(
+		int(saved.get("sandbox_best_net_worth_cents", 0)),
+		hyped_nw,
+		"AA1: save stores peak net worth"
+	)
+	_expect_equal(
+		saved.has("sandbox_best_net_worth_cents"),
+		true,
+		"AA1: save key is net worth, not raw market"
+	)
+
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AA1: gameplay HUD loads")
+	if hud != null:
+		var bests := hud.get_node_or_null("%SandboxBests") as Label
+		var expected_copy := DemandSignalPresenter.sandbox_bests_label(12, hyped_nw)
+		_expect_equal(
+			bests != null and bests.visible and bests.text == expected_copy,
+			true,
+			"AA1: HUD shows peak day and net worth"
+		)
+		_assert_text_has_no_truth(
+			bests.text if bests != null else "",
+			"AA1: HUD sandbox bests"
+		)
+		hud.queue_free()
+
+	_game_state.call("return_to_menu")
+	var menu := _instantiate_main_menu()
+	_expect_equal(menu != null, true, "AA1: main menu loads")
+	if menu != null:
+		menu.call("select_displayed_mode", 3)
+		menu.call("_sync_campaign_copy")
+		var menu_bests := menu.get_node_or_null("%SandboxBests") as Label
+		_expect_equal(
+			menu_bests != null
+			and menu_bests.visible
+			and menu_bests.text == DemandSignalPresenter.sandbox_bests_label(12, hyped_nw),
+			true,
+			"AA1: menu shows Sandbox personal bests"
+		)
+		_assert_text_has_no_truth(
+			menu_bests.text if menu_bests != null else "",
+			"AA1: menu sandbox bests"
+		)
+		root.remove_child(menu)
+		menu.free()
+
+	_game_state.set("sandbox_best_day", 0)
+	_game_state.set("sandbox_best_net_worth_cents", 0)
+	_expect_equal(_game_state.call("restore_save", saved), true, "AA1: restore succeeds")
+	_expect_equal(int(_game_state.get("campaign_mode")), 3, "AA1: restore keeps Sandbox")
+	_expect_equal(
+		int(_game_state.get("sandbox_best_day")),
+		12,
+		"AA1: restore keeps days survived"
+	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_net_worth_cents")),
+		hyped_nw,
+		"AA1: restore keeps peak net worth"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_complete")),
+		false,
+		"AA1: restore keeps Sandbox without a win award"
+	)
+
+	_force_large_shop(40)
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_day", 390)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_captured_campaign_won = {}
+	_expect_equal(_game_state.call("meets_flagship"), true, "AA1: Sandbox can meet Flagship")
+	_expect_equal(_game_state.call("meets_survive_y1"), true, "AA1: Sandbox can meet Survive Y1")
+	_expect_equal(
+		_game_state.call("meets_liquidity_king"),
+		true,
+		"AA1: Sandbox can meet Liquidity king"
+	)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"AA1: Sandbox awards none at win gates"
+	)
+	_expect_equal(_captured_campaign_won.is_empty(), true, "AA1: no campaign_won in Sandbox")
+
+	_game_state.call("return_to_menu")
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 0),
+		true,
+		"AA1: Flagship can be selected after Sandbox"
+	)
+	_game_state.call("start_new_game")
+	var flagship_hud := _instantiate_gameplay_hud()
+	if flagship_hud != null:
+		var hidden := flagship_hud.get_node_or_null("%SandboxBests") as Label
+		_expect_equal(
+			hidden != null and not hidden.visible,
+			true,
+			"AA1: HUD hides personal bests outside Sandbox"
+		)
+		flagship_hud.queue_free()
+	_force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"AA1: Flagship award unchanged"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"flagship",
+		"AA1: Flagship win kind unchanged"
+	)
+
+	_game_state.call("return_to_menu")
+	_expect_equal(_game_state.call("select_campaign_mode", 1), true, "AA1: Survive Y1 selectable")
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 365)
+	_economy.set("balance_cents", 1)
+	_game_state.set("current_reputation", 40)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"AA1: Survive Y1 award unchanged"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"survive_y1",
+		"AA1: Survive Y1 win kind unchanged"
+	)
+
+	_game_state.call("return_to_menu")
+	_expect_equal(_game_state.call("select_campaign_mode", 2), true, "AA1: Liquidity selectable")
+	_game_state.call("start_new_game")
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"AA1: Liquidity king award unchanged"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"liquidity_king",
+		"AA1: Liquidity king win kind unchanged"
+	)
+
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/main_menu.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AA1: %s stays §4.5 clean" % path
+		)
+
+	_reset_sandbox_bests_session()
+	_game_state.call("start_new_game")
+
+
+func _reset_sandbox_bests_session() -> void:
+	_captured_campaign_won = {}
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("return_to_menu")
+	_game_state.set("campaign_complete", false)
+	_game_state.set("campaign_lost", false)
+	_game_state.set("last_prestige", &"")
+	_game_state.set("sandbox_best_day", 0)
+	_game_state.set("sandbox_best_net_worth_cents", 0)
+	_game_state.call("select_ironman", false)
+	_game_state.call("select_campaign_mode", 0)
+
+
+func _clear_owned_inventory() -> void:
+	var model: InventoryModel = _inventory_service.get("model")
+	model.stock_lots.clear()
+	model.cards.clear()
+	model.slabs.clear()
+
+
+func _aa1_haircut_units(market_cents: int, haircut: float) -> int:
+	return roundi(float(market_cents) * haircut)
 
 
 func _test_ironman_menu_toggle_default_off() -> void:

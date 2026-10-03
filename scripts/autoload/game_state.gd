@@ -31,7 +31,7 @@ var campaign_mode: CampaignMode = CampaignMode.FLAGSHIP
 var campaign_complete: bool = false
 var last_prestige: StringName = &""
 var sandbox_best_day: int = 0
-var sandbox_best_cash_cents: int = 0
+var sandbox_best_net_worth_cents: int = 0
 var campaign_lost: bool = false
 var last_lose_reason: StringName = &""
 var loan_shark_recovery_used: bool = false
@@ -41,6 +41,7 @@ var ironman_enabled: bool = false
 var missed_rent_weeks: int = 0
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
+var _suppress_sandbox_bests: bool = false
 var _win_signals_bound: bool = false
 
 
@@ -53,6 +54,8 @@ func _ensure_win_signals() -> void:
 		return
 	if not EventBus.cash_changed.is_connected(_on_cash_changed_maybe_win):
 		EventBus.cash_changed.connect(_on_cash_changed_maybe_win)
+	if not EventBus.inventory_changed.is_connected(_on_inventory_changed_maybe_bests):
+		EventBus.inventory_changed.connect(_on_inventory_changed_maybe_bests)
 	if not EventBus.shop_layout_changed.is_connected(_on_layout_changed_maybe_win):
 		EventBus.shop_layout_changed.connect(_on_layout_changed_maybe_win)
 	_win_signals_bound = true
@@ -80,11 +83,13 @@ func start_new_game() -> void:
 	missed_rent_weeks = 0
 	_unpaid_wages_this_settle = false
 	_suppress_lose_eval = false
+	_suppress_sandbox_bests = true
 	is_game_active = true
 	shop.reset(balance_config)
 	Economy.reset()
 	InventoryService.reset()
 	DemandSignals.reset()
+	_suppress_sandbox_bests = false
 	BeatDirector.reset()
 	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
@@ -448,11 +453,20 @@ func evaluate_campaign_win() -> bool:
 			return false
 
 
+func has_sandbox_personal_bests() -> bool:
+	return sandbox_best_day > 0 or sandbox_best_net_worth_cents > 0
+
+
 func _record_sandbox_personal_bests() -> void:
-	if campaign_mode != CampaignMode.SANDBOX:
+	# AA1 / systems §9.2: Sandbox high water only. Peak net worth + longest day.
+	# Still no win awards. Career high-water survives new games and save/load.
+	if _suppress_sandbox_bests or campaign_mode != CampaignMode.SANDBOX:
 		return
 	sandbox_best_day = maxi(sandbox_best_day, current_day)
-	sandbox_best_cash_cents = maxi(sandbox_best_cash_cents, Economy.balance_cents)
+	sandbox_best_net_worth_cents = maxi(
+		sandbox_best_net_worth_cents,
+		Economy.net_worth_cents()
+	)
 
 
 func _award_campaign(mode: StringName) -> bool:
@@ -595,10 +609,15 @@ func _award_loss(reason: StringName) -> bool:
 
 
 func _on_cash_changed_maybe_win(_balance_cents: int) -> void:
+	_record_sandbox_personal_bests()
 	if current_phase == DayPhase.SETTLE:
 		return
 	evaluate_campaign_win()
 	evaluate_campaign_lose()
+
+
+func _on_inventory_changed_maybe_bests(_sku: StringName, _quantity: int) -> void:
+	_record_sandbox_personal_bests()
 
 
 func _on_layout_changed_maybe_win() -> void:
@@ -630,7 +649,7 @@ func capture_save() -> Dictionary:
 		"campaign_complete": campaign_complete,
 		"last_prestige": String(last_prestige),
 		"sandbox_best_day": sandbox_best_day,
-		"sandbox_best_cash_cents": sandbox_best_cash_cents,
+		"sandbox_best_net_worth_cents": sandbox_best_net_worth_cents,
 		"campaign_lost": campaign_lost,
 		"last_lose_reason": String(last_lose_reason),
 		"loan_shark_recovery_used": loan_shark_recovery_used,
@@ -669,7 +688,12 @@ func restore_save(data: Dictionary) -> bool:
 	missed_rent_weeks = int(data.get("missed_rent_weeks", 0))
 	_unpaid_wages_this_settle = false
 	sandbox_best_day = int(data.get("sandbox_best_day", sandbox_best_day))
-	sandbox_best_cash_cents = int(data.get("sandbox_best_cash_cents", sandbox_best_cash_cents))
+	sandbox_best_net_worth_cents = int(
+		data.get(
+			"sandbox_best_net_worth_cents",
+			data.get("sandbox_best_cash_cents", sandbox_best_net_worth_cents)
+		)
+	)
 	Economy.restore_payday_loan_days(int(data.get("payday_loan_days_remaining", 0)))
 	var saved_prestige := StringName(data.get("last_prestige", &""))
 	if not saved_prestige.is_empty():
