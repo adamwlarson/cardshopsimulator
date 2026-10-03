@@ -93,3 +93,4 @@
 |------|----------|
 | 2026-10-03 | Drafted post AP1 SHIPPED #72 @ `dbf2f918`. Lean **AQ1 Better marketplace lead**. Fee cut / drift / HUD / STOP parked. Camera off-switch hard-parked. |
 | 2026-10-03 | PM adopted **AQ1**. Park AQ2/AQ3/AQ4. Hard-park camera off-switch. Soft catalog CLOSED. Fees / HUD / STOP stay parked. One extra marketplace lead at 40% of today's basis when Rep ≥ 75. Draft sha256 `39049612`. |
+| 2026-10-03 | PM adopted **AQ1**. Spec on main `c1459dd7`. Spike [AQ1 better marketplace lead](https://cursor.com/agents/bc-cd6c0319-f83c-574a-9ff1-c49746e032cd). Park AQ2/AQ3/AQ4. No Art. Soft catalog CLOSED. Draft sha256 `39049612`. |
