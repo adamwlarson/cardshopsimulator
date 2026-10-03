@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AE v1 — post AD1
 
-**Status:** **AE1 ADOPTED** 2026-10-03 — Impulse shelf. Park AE2/AE4. Hard-park AE3 camera off-switch. Soft catalog CLOSED. AC1 notice-only and AD1 rank-not-weight stay.  
+**Status:** **AE1 SHIPPED** 2026-10-03 — merged #61 @ `d31d6539` (reviewed `6d62a1b8`). Impulse shelf. QA PASS-with-notes. Soft OK MVP stays Soft. Park AE2/AE4. Hard-park AE3. Soft catalog CLOSED.  
 **Author:** CSS Designer  
 **Date:** 2026-10-03  
 **Depends on:** pick-ad (AD1 location ladder SHIPPED #60 @ `b32e162d`, rank-not-weight); Soft catalog CLOSED  
@@ -83,3 +83,5 @@
 |------|----------|
 | 2026-10-03 | Drafted post AD1 SHIPPED. Lean **AE1 Impulse shelf**. Stocker / HUD / STOP parked. Soft reopeners hard-parked. AC1/AD1 weights stay Soft OK. |
 | 2026-10-03 | PM adopted **AE1**. Park AE2/AE4. Hard-park AE3. Soft catalog CLOSED. AC1 notice-only and AD1 rank-not-weight stay. |
+| 2026-10-03 | **AE1 SHIPPED** #61 @ `d31d6539` (tip `6d62a1b8`). QA PASS-with-notes. Rank/notice only. Soft OK MVP stays Soft. Soft catalog CLOSED. |
+| 2026-10-03 | PM locked **AE1 GO** (Impulse shelf). Park AE2/AE4. Hard-park AE3 Soft. Soft catalog CLOSED. AC1/AD1 Soft OK stays Soft. Synced main @ `98e9d7ef`; Eng spike `bc-22d60aa7` launching. |
