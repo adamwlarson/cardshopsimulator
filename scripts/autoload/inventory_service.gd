@@ -564,6 +564,7 @@ func apply_daily_shrink(rate: float) -> Dictionary:
 		return {
 			"rate": rate,
 			"cogs_cents": 0,
+			"target_loss_cents": 0,
 			"loss_cents": 0,
 			"units_removed": 0,
 		}
@@ -579,6 +580,7 @@ func apply_daily_shrink(rate: float) -> Dictionary:
 	return {
 		"rate": rate,
 		"cogs_cents": cogs,
+		"target_loss_cents": loss,
 		"loss_cents": loss_cents,
 		"units_removed": units,
 	}

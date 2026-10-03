@@ -146,6 +146,16 @@ func roll_floor_attendance() -> int:
 	return noshows
 
 
+func has_floor_staff_on_duty() -> bool:
+	# AK1: Cashier, Specialist, or Stocker on duty for the open day.
+	# The Owner does not count as floor staff.
+	return (
+		has_cashier_on_duty()
+		or has_specialist_on_duty()
+		or has_stocker_on_duty()
+	)
+
+
 func shrink_rate() -> float:
 	var base := 0.002
 	var unstaffed := 0.005
@@ -153,7 +163,7 @@ func shrink_rate() -> float:
 		base = _config.shrink_daily_base
 		unstaffed = _config.shrink_unstaffed_add
 	var rate := base
-	if not has_cashier_on_duty():
+	if not has_floor_staff_on_duty():
 		rate += unstaffed
 	else:
 		for member: StaffMember in staff:

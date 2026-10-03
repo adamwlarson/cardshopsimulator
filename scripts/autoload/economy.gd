@@ -209,9 +209,9 @@ func _settle_shrink() -> void:
 		"cogs_cents": int(applied.get("cogs_cents", 0)),
 		"loss_cents": int(applied.get("loss_cents", 0)),
 		"units_removed": int(applied.get("units_removed", 0)),
-		"understaffed": GameState.shop.is_floor_understaffed()
-			or not GameState.shop.has_cashier_on_duty(),
-		"staff_on_floor": GameState.shop.has_cashier_on_duty(),
+		"target_loss_cents": int(applied.get("target_loss_cents", 0)),
+		"understaffed": not GameState.shop.has_floor_staff_on_duty(),
+		"staff_on_floor": GameState.shop.has_floor_staff_on_duty(),
 		"theft_ring": DemandSignals.has_theft_ring(),
 		"theft_bias": _on_duty_theft_bias(),
 		"cameras_active": GameState.shop.has_active_cameras(),
