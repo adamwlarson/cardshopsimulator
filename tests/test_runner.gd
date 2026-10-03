@@ -16686,7 +16686,10 @@ func _test_stocker_section_45_and_parked() -> void:
 	_expect_equal(
 		FileAccess.get_file_as_string(
 			"res://docs/design/next-eng-sot-pick-ae-v1.md"
-		).contains("not a sell-probability weight"),
+		).contains("browse rank / notice")
+		and FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ae-v1.md"
+		).contains("Soft OK MVP stays Soft"),
 		true,
 		"AF1: AE1 Soft OK notes stay"
 	)
