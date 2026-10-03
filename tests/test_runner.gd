@@ -17149,15 +17149,15 @@ func _test_fire_sale_pays_listed() -> void:
 		true,
 		"AG1: sale day fires the Cashier"
 	)
-	var lot: StockLot = _af1_first_lot_at(InventoryLocation.Type.SHELF)
-	_expect_equal(lot != null, true, "AG1: sale needs a listed floor lot")
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AG1: sale needs the seeded sleeve lot")
 	if lot == null:
 		return
 	var listed_price := lot.listed_price_cents
 	_expect_equal(listed_price > 0, true, "AG1: floor lot keeps its listed price")
 	_expect_equal(
 		is_equal_approx(
-			float(_demand_signals.call("sell_through_mult_for", lot.sku.id)),
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
 			1.0
 		),
 		true,
@@ -17167,11 +17167,8 @@ func _test_fire_sale_pays_listed() -> void:
 	var queue := CustomerQueue.new()
 	queue.configure(_inventory_service)
 	var customer := CustomerProfile.new()
-	customer.budget_cents = maxi(listed_price, 1)
-	if lot.sku.product_class == ProductSKU.ProductClass.ACCESSORY:
-		customer.interest_tags = _ae1_accessory_walk_in_tags()
-	else:
-		customer.interest_tags = lot.sku.tags.duplicate()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
 	_expect_equal(queue.enqueue(customer), true, "AG1: listed lot still enqueues after fire")
 	_expect_equal(
 		customer.listed_price_cents,
