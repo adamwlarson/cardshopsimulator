@@ -13505,6 +13505,8 @@ func _test_sandbox_personal_bests() -> void:
 		"AA1: Sandbox can be selected"
 	)
 	_game_state.call("start_new_game")
+	_game_state.set("sandbox_best_day", 0)
+	_game_state.set("sandbox_best_net_worth_cents", 0)
 	_clear_owned_inventory()
 	_economy.set("balance_cents", 100_000)
 	var shelf := InventoryLocation.new(InventoryLocation.Type.SHELF)
