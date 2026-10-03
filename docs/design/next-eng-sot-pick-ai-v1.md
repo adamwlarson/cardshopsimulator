@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AI v1 — post AH1
 
-**Status:** **AI1 ADOPTED** 2026-10-03 — Low-rep quiet floor, band 0–24 only. Park AI2/AI4. Hard-park AI3 camera off-switch. Soft catalog CLOSED. Do not turn walkouts, Fire, or the Stocker into a sell weight. AC1/AD1/AE1 stay rank or notice.
+**Status:** **AI1 SHIPPED** 2026-10-03 — squash-merged #65 @ `ea2bd0d4` (reviewed `a0226acf`). QA PASS-with-notes, harness 128/0/3. Empty door at Rep ≤24 stays Soft OK. Park AI2/AI4. Hard-park AI3. Soft catalog CLOSED. Not a sell weight.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-ah (AH1 Register walkouts SHIPPED #64 @ `982259fe`); Soft catalog CLOSED
@@ -86,3 +86,5 @@
 | 2026-10-03 | PM adopted **AI1**. Park AI2/AI4. Hard-park AI3. Soft catalog CLOSED. Walkouts and Fire stay off the sell roll. Draft sha256 `775fc87f`. |
 | 2026-10-03 | PM adopted **AI1**. Park AI2/AI4. Hard-park AI3. Soft catalog CLOSED. Synced main @ `61df7704`; Eng spike `bc-2dc718aa` launching. Eng/QA bar matches SoT. Holding for tip-freeze. |
 | 2026-10-03 | Tip-frozen [PR #65](https://github.com/adamwlarson/cardshopsimulator/pull/65) @ `a0226acf`. Eng reviews that SHA only. QA holds. |
+| 2026-10-03 | Eng APPROVE-with-notes #65 @ `a0226acf`. Designer SoT-ok: empty door at Rep ≤24 is intentional (live baseline 1 → half = 0). QA formal. |
+| 2026-10-03 | QA PASS-with-notes #65 @ `a0226acf`. Harness 128/0/3. Squash-merged @ `ea2bd0d4`. Branch `cursor/ai1-low-rep-quiet-floor-72df` deleted. Soft catalog CLOSED. Not a sell weight. |
