@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AD v1 — post AC1
 
-**Status:** **AD1 ADOPTED** 2026-10-03 — Case / binder / backstock display ladder. Park AD2/AD4. Hard-park AD3 camera off-switch. Soft catalog CLOSED. AC1 notice-only stays.  
+**Status:** **AD1 SHIPPED** #60 @ `b32e162d` (tip `85011dc2`) — Case / binder / backstock display ladder, rank-not-weight. Park AD2/AD4. Hard-park AD3 camera off-switch. Soft catalog CLOSED. AC1 notice-only stays. Soft OK MVP: SHELF 1.0 / ONLINE_HOLD 0.0, backstock lot still offered, sale removes first visible copy, find_listed_sku_offer does not rank case.  
 **Author:** CSS Designer  
 **Date:** 2026-10-03  
 **Depends on:** pick-ac (AC1 Sightline SHIPPED #59 @ `5c9bab43`, notice-only); Soft catalog CLOSED  
@@ -85,3 +85,5 @@ Stocker auto-moves backstock → floor (systems §6.1).
 |------|----------|
 | 2026-10-03 | Drafted post AC1 SHIPPED. Lean **AD1 location display ladder**. Stocker / HUD / STOP parked. Soft reopeners hard-parked. |
 | 2026-10-03 | PM adopted **AD1**. Park AD2/AD4. Hard-park AD3. Soft catalog CLOSED. AC1 notice-only stays. |
+| 2026-10-03 | PM locked **AD1 GO** (location display ladder). Park AD2/AD4. Hard-park AD3 Soft. AC1 notice-only stays. Soft catalog CLOSED. No Art. Synced main @ `8a5df031`; Eng spike `bc-3a012466` launching. |
+| 2026-10-03 | **AD1 SHIPPED** #60 @ `b32e162d` (tip `85011dc2`). QA PASS-with-notes. Rank-not-weight SoT-ok. Soft OK MVP notes stay Soft. Soft catalog CLOSED. |
