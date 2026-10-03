@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AH v1 — post AG1
 
-**Status:** **AH1 ADOPTED** 2026-10-03 — Register walkouts. Park AH2/AH4. Hard-park AH3 camera off-switch. Soft catalog CLOSED. Do not turn Fire or the Stocker into a sell weight. AC1/AD1/AE1 stay rank or notice.
+**Status:** **AH1 ADOPTED** 2026-10-03 — Register walkouts. Spec on main @ `fbdad4e8`. Eng spike `bc-c9e88571`. Park AH2/AH4. Hard-park AH3. Soft catalog CLOSED.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-ag (AG1 Fire staff SHIPPED #63 @ `f4987e8d`); Soft catalog CLOSED
@@ -86,3 +86,5 @@
 |------|----------|
 | 2026-10-03 | Drafted post AG1 SHIPPED #63 @ `f4987e8d`. Lean **AH1 Register walkouts**. HUD / STOP parked. Soft reopeners hard-parked. Fire and Stocker stay off the sell roll. |
 | 2026-10-03 | PM adopted **AH1**. Park AH2/AH4. Hard-park AH3. Soft catalog CLOSED. Fire and Stocker stay off the sell roll. Draft sha256 `0bf9ca40`. |
+| 2026-10-03 | PM locked **AH1 GO**. Synced main @ `fbdad4e8`; Eng spike `bc-c9e88571` launching. Eng/QA bar matches SoT. Holding for tip-freeze. |
+| 2026-10-03 | Tip-frozen [PR #64](https://github.com/adamwlarson/cardshopsimulator/pull/64) @ `f037b379`. Eng reviews that SHA only. QA holds. |
