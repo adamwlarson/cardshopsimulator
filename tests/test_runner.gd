@@ -14741,10 +14741,16 @@ func _test_sightline_section_45_and_parked() -> void:
 			false,
 			"AC1: %s has no impulse-shelf bonus" % path
 		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
-		FileAccess.get_file_as_string("res://scripts/ui/hud.gd").contains("net_worth"),
+		hud_src.contains("sandbox_best_net_worth_cents"),
+		true,
+		"AC1: AA1 sandbox bests stay"
+	)
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
 		false,
-		"AC1: no net-worth HUD"
+		"AC1: no live all-modes net-worth HUD"
 	)
 	_expect_equal(
 		FileAccess.get_file_as_string(
