@@ -115,14 +115,14 @@ func _sync_sandbox_bests() -> void:
 		return
 	if (
 		GameState.campaign_mode != GameState.CampaignMode.SANDBOX
-		or (GameState.sandbox_best_day <= 0 and GameState.sandbox_best_cash_cents <= 0)
+		or not GameState.has_sandbox_personal_bests()
 	):
 		bests.hide()
 		return
-	bests.text = "Personal best: day %d · %s" % [
+	bests.text = DemandSignalPresenter.sandbox_bests_label(
 		GameState.sandbox_best_day,
-		DemandSignalPresenter.format_cents(GameState.sandbox_best_cash_cents),
-	]
+		GameState.sandbox_best_net_worth_cents
+	)
 	bests.show()
 
 

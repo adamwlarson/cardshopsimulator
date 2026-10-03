@@ -111,6 +111,19 @@ func active_event() -> MarketEvent:
 	return null
 
 
+func market_cents_for(sku_id: StringName) -> int:
+	# Hidden market used by Economy net-worth math (systems §9.2). Not a UI value.
+	var cents := _market_state.market_cents_for(sku_id)
+	if cents > 0:
+		return cents
+	if InventoryService.model == null:
+		return 0
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null:
+		return 0
+	return sku.base_market_cents
+
+
 func has_fog_flag() -> bool:
 	return _service != null and _service.has_fog_flag()
 

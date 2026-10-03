@@ -165,6 +165,13 @@ static func ironman_toggle_hint() -> String:
 	return "Lose if cash and inventory COGS both fall under $500."
 
 
+static func sandbox_bests_label(best_day: int, best_net_worth_cents: int) -> String:
+	return "Personal best: day %d · %s" % [
+		best_day,
+		format_cents(best_net_worth_cents),
+	]
+
+
 static func event_banner(text: String) -> String:
 	return text.strip_edges()
 
