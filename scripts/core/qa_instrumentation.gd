@@ -122,6 +122,18 @@ func record_cameras_installed(payload: Dictionary) -> void:
 	_emit(&"cameras_installed", payload.duplicate(true))
 
 
+func record_play_table_unlocked(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"play_table_unlocked", payload.duplicate(true))
+
+
+func record_play_table_placed(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"play_table_placed", payload.duplicate(true))
+
+
 func record_market_event_rolled(payload: Dictionary) -> void:
 	if not is_enabled():
 		return

@@ -220,16 +220,46 @@ func active_shrink_multiplier() -> float:
 	return MarketEventService.THEFT_RING_SHRINK_MULT
 
 
+func has_play_table_event_night() -> bool:
+	return (
+		MarketEventService.is_event_night_day(GameState.current_day)
+		and GameState.shop.has_play_table_placed()
+	)
+
+
+func play_table_event_traffic_mult() -> float:
+	if not has_play_table_event_night():
+		return 1.0
+	return MarketEventService.EVENT_NIGHT_TRAFFIC_MULT
+
+
+func play_table_event_whale_weight_mult() -> float:
+	if not has_play_table_event_night():
+		return 1.0
+	return MarketEventService.EVENT_NIGHT_WHALE_WEIGHT_MULT
+
+
+func circulation_traffic_mult() -> float:
+	if GameState.shop.layout.has_circulation():
+		return 1.0
+	return MarketEventService.BLOCKED_PATH_TRAFFIC_MULT
+
+
 func active_event_traffic_mult() -> float:
+	var mult := 1.0
 	if has_convention_weekend():
-		return MarketEventService.CONVENTION_TRAFFIC_MULT
-	return 1.0
+		mult *= MarketEventService.CONVENTION_TRAFFIC_MULT
+	mult *= play_table_event_traffic_mult()
+	mult *= circulation_traffic_mult()
+	return mult
 
 
 func active_event_whale_weight_mult() -> float:
+	var mult := 1.0
 	if has_convention_weekend():
-		return MarketEventService.CONVENTION_WHALE_WEIGHT_MULT
-	return 1.0
+		mult *= MarketEventService.CONVENTION_WHALE_WEIGHT_MULT
+	mult *= play_table_event_whale_weight_mult()
+	return mult
 
 
 func customer_spawn_wait_seconds(base_interval: float, shop_tier: int) -> float:
@@ -358,6 +388,8 @@ func calendar_telegraph_text() -> String:
 	var active := event_banner_text()
 	if not active.is_empty():
 		return active
+	if has_play_table_event_night():
+		return "Calendar: Event night — play table drawing a crowd"
 	if MarketEventService.is_convention_telegraph_day(GameState.current_day):
 		return "Calendar: Convention weekend incoming"
 	return ""
@@ -1114,6 +1146,8 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		"shady_width_mult": shady_width_mult(),
 		"traffic_mult": active_event_traffic_mult(),
 		"whale_weight_mult": active_event_whale_weight_mult(),
+		"play_table_placed": GameState.shop.has_play_table_placed(),
+		"event_night": MarketEventService.is_event_night_day(GameState.current_day),
 		"calendar_day": MarketEventService.is_convention_calendar_day(
 			GameState.current_day
 		),

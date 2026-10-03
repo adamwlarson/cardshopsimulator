@@ -39,10 +39,12 @@ var specialist_on_duty: bool = false
 var last_noshow_count: int = 0
 var last_shrink_rate: float = 0.0
 var cameras_owned: bool = false
+var play_table_owned: bool = false
 var layout := ShopLayout.new()
 var floor_grid: ShopGrid = ShopGrid.small_default()
 var _config: BalanceConfig
 var _attendance_rng := RandomNumberGenerator.new()
+var _play_table_overlay_blocked: Dictionary = {}
 
 
 func reset(config: BalanceConfig) -> void:
@@ -57,6 +59,8 @@ func reset(config: BalanceConfig) -> void:
 	last_noshow_count = 0
 	last_shrink_rate = 0.0
 	cameras_owned = false
+	play_table_owned = false
+	_play_table_overlay_blocked.clear()
 	_attendance_rng.seed = STAFF_ATTENDANCE_SEED
 	layout.reset_small()
 	floor_grid = ShopGrid.small_default()
@@ -309,6 +313,80 @@ func install_cameras() -> bool:
 	return true
 
 
+func has_play_table() -> bool:
+	return play_table_owned or layout.has_play_table()
+
+
+func has_play_table_placed() -> bool:
+	return layout.has_play_table()
+
+
+func play_table_cash_cost_cents() -> int:
+	if _config != null:
+		return maxi(0, _config.play_table_cash_cents)
+	return 1_000_000
+
+
+func play_table_rep_required() -> int:
+	if _config != null:
+		return maxi(0, _config.play_table_rep)
+	return 50
+
+
+func cash_meets_play_table(cash_cents: int) -> bool:
+	return cash_cents >= play_table_cash_cost_cents()
+
+
+func rep_meets_play_table(reputation: int) -> bool:
+	return reputation >= play_table_rep_required()
+
+
+func can_unlock_play_table(cash_cents: int, reputation: int) -> bool:
+	return (
+		not has_play_table()
+		and cash_meets_play_table(cash_cents)
+		and rep_meets_play_table(reputation)
+	)
+
+
+func unlock_play_table() -> bool:
+	if play_table_owned:
+		return false
+	play_table_owned = true
+	return true
+
+
+func place_play_table(origin: Vector2i) -> StringName:
+	if not play_table_owned:
+		return &"locked"
+	var reason := layout.place_play_table(origin)
+	if reason == &"ok" or reason == &"blocked_path":
+		sync_play_table_blockers()
+	return reason
+
+
+func circulation_patience_scale() -> float:
+	if layout.has_circulation():
+		return 1.0
+	return MarketEventService.BLOCKED_PATH_PATIENCE_SCALE
+
+
+func sync_play_table_blockers() -> void:
+	if floor_grid == null:
+		return
+	for cell: Variant in _play_table_overlay_blocked.keys():
+		floor_grid.blocked.erase(cell)
+	_play_table_overlay_blocked.clear()
+	var table := layout.play_table()
+	if table == null:
+		return
+	for cell: Vector2i in table.occupied_cells():
+		if floor_grid.blocked.has(cell):
+			continue
+		floor_grid.blocked[cell] = true
+		_play_table_overlay_blocked[cell] = true
+
+
 func hire_cashier(cheap: bool) -> StaffMember:
 	if not can_hire():
 		return null
@@ -442,6 +520,7 @@ func to_save() -> Dictionary:
 		"large_lease_signed_day": large_lease_signed_day,
 		"specialist_on_duty": specialist_on_duty,
 		"cameras_owned": cameras_owned,
+		"play_table_owned": play_table_owned or layout.has_play_table(),
 		"layout": layout.to_save(),
 		"staff": staff_rows,
 	}
@@ -462,13 +541,18 @@ func apply_save(data: Dictionary, config: BalanceConfig) -> void:
 	large_lease_signed_day = int(data.get("large_lease_signed_day", -1))
 	specialist_on_duty = bool(data.get("specialist_on_duty", false))
 	cameras_owned = bool(data.get("cameras_owned", false))
+	play_table_owned = bool(data.get("play_table_owned", false))
 	var layout_data: Variant = data.get("layout", {})
 	if layout_data is Dictionary:
 		layout.apply_save(layout_data as Dictionary)
 	else:
 		layout.reset_small()
+	if layout.has_play_table():
+		play_table_owned = true
 	floor_grid = ShopGrid.small_default()
 	floor_grid.expand(grid_width, grid_height)
+	_play_table_overlay_blocked.clear()
+	sync_play_table_blockers()
 	staff.clear()
 	var staff_rows: Array = data.get("staff", [])
 	for row: Variant in staff_rows:

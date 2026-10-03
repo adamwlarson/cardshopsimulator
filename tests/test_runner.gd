@@ -191,6 +191,7 @@ func _initialize() -> void:
 	_test_loan_shark_soft_fail()
 	_test_ironman_optional_lose()
 	_test_sandbox_personal_bests()
+	_test_play_table_event_nights()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -13825,6 +13826,575 @@ func _clear_owned_inventory() -> void:
 
 func _aa1_haircut_units(market_cents: int, haircut: float) -> int:
 	return roundi(float(market_cents) * haircut)
+
+
+func _test_play_table_event_nights() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_play_table_unlock_gates()
+	_test_play_table_two_by_two_placement()
+	_test_play_table_event_night_bump()
+	_test_play_table_path_blocking()
+	_test_play_table_hud_and_section_45()
+	_test_play_table_save_load()
+	_test_play_table_soft_catalog_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _grant_play_table_gates(cash_cents: int = 2_000_000, reputation: int = 50) -> void:
+	_economy.set("balance_cents", cash_cents)
+	_event_bus.call("publish_cash_changed", cash_cents)
+	_game_state.set("current_reputation", reputation)
+	_event_bus.emit_signal("reputation_changed", reputation)
+
+
+func _test_play_table_unlock_gates() -> void:
+	_expect_equal(NORMAL_CONFIG.play_table_cash_cents, 1_000_000, "AB1: cash gate is $10,000")
+	_expect_equal(NORMAL_CONFIG.play_table_rep, 50, "AB1: Rep gate is 50")
+	_expect_equal(EASY_CONFIG.play_table_cash_cents, 1_000_000, "AB1: Easy inherits $10k")
+	_expect_equal(HARD_CONFIG.play_table_rep, 50, "AB1: Hard inherits Rep 50")
+	_expect_equal(
+		NORMAL_CONFIG.play_table_cash_cents < NORMAL_CONFIG.expand_medium_cash_cents,
+		true,
+		"AB1: table cash sits under Medium Sign"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.play_table_rep < NORMAL_CONFIG.expand_medium_rep,
+		true,
+		"AB1: table Rep sits under Medium Sign"
+	)
+
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.has_play_table(), false, "AB1: table starts locked")
+	_expect_equal(shop.has_play_table_placed(), false, "AB1: table starts unplaced")
+	_expect_equal(
+		_game_state.call("can_unlock_play_table"),
+		false,
+		"AB1: Normal start $8k / Rep 40 cannot unlock"
+	)
+	var poor: Dictionary = _game_state.call("unlock_play_table")
+	_expect_equal(bool(poor.get("ok", true)), false, "AB1: unlock refused at start")
+
+	_grant_play_table_gates(2_000_000, 40)
+	_expect_equal(
+		_game_state.call("can_unlock_play_table"),
+		false,
+		"AB1: cash without Rep 50 cannot unlock"
+	)
+	var low_rep: Dictionary = _game_state.call("unlock_play_table")
+	_expect_equal(
+		String(low_rep.get("reason", "")),
+		"insufficient_reputation",
+		"AB1: low Rep reason"
+	)
+	_expect_equal(shop.has_play_table(), false, "AB1: low Rep does not own table")
+
+	_grant_play_table_gates(500_000, 80)
+	_expect_equal(
+		_game_state.call("can_unlock_play_table"),
+		false,
+		"AB1: Rep without $10k cannot unlock"
+	)
+	var low_cash: Dictionary = _game_state.call("unlock_play_table")
+	_expect_equal(
+		String(low_cash.get("reason", "")),
+		"insufficient_cash",
+		"AB1: low cash reason"
+	)
+
+	_game_state.call("start_floor")
+	_grant_play_table_gates()
+	_expect_equal(
+		_game_state.call("can_unlock_play_table"),
+		false,
+		"AB1: FLOOR cannot unlock a layout fixture"
+	)
+	_game_state.call("start_new_game")
+	_grant_play_table_gates()
+	_expect_equal(
+		_game_state.call("can_unlock_play_table"),
+		true,
+		"AB1: PREP + $10k + Rep 50 can unlock"
+	)
+	var cash_before: int = int(_economy.get("balance_cents"))
+	_qa.set_force_enabled(true)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa.clear()
+	_qa_autoload.call("clear")
+	var unlocked: Dictionary = _game_state.call("unlock_play_table")
+	_expect_equal(bool(unlocked.get("ok", false)), true, "AB1: unlock succeeds")
+	_expect_equal(shop.has_play_table(), true, "AB1: shop owns the table")
+	_expect_equal(shop.has_play_table_placed(), true, "AB1: unlock places the table")
+	_expect_equal(
+		cash_before - int(_economy.get("balance_cents")),
+		1_000_000,
+		"AB1: unlock spends $10,000"
+	)
+	_expect_equal(
+		_game_state.call("can_unlock_play_table"),
+		false,
+		"AB1: cannot unlock a second table"
+	)
+	var again: Dictionary = _game_state.call("unlock_play_table")
+	_expect_equal(bool(again.get("ok", true)), false, "AB1: second unlock refused")
+	_expect_equal(
+		String(again.get("reason", "")),
+		"already_owned",
+		"AB1: second table reason is already_owned"
+	)
+	var saw_unlock := false
+	for event: Dictionary in _qa_autoload.call("get_events"):
+		if String(event.get("event", "")) != "play_table_unlocked":
+			continue
+		saw_unlock = true
+		_assert_payload_has_no_truth(event.get("payload", {}), "AB1 play_table_unlocked")
+	_expect_equal(saw_unlock, true, "AB1: instrumentation records unlock")
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_play_table_two_by_two_placement() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_grant_play_table_gates()
+	var shop := _game_state.get("shop") as ShopState
+	var unlocked: Dictionary = _game_state.call("unlock_play_table")
+	_expect_equal(bool(unlocked.get("ok", false)), true, "AB1: place-on-unlock succeeds")
+	var table := shop.layout.play_table()
+	_expect_equal(table != null, true, "AB1: layout has play_table fixture")
+	if table == null:
+		return
+	_expect_equal(table.size, ShopLayout.PLAY_TABLE_SIZE, "AB1: footprint is 2×2")
+	_expect_equal(table.occupied_cells().size(), 4, "AB1: table occupies four tiles")
+	_expect_equal(
+		table.origin,
+		ShopLayout.PLAY_TABLE_DEFAULT_ORIGIN,
+		"AB1: default origin matches authored 2×2 island"
+	)
+	_expect_equal(table.movable, true, "AB1: placed table can be rearranged")
+	_expect_equal(shop.layout.has_circulation(), true, "AB1: default place keeps circulation")
+	var preview := shop.layout.preview_place_play_table(Vector2i(5, 5))
+	_expect_equal(preview, &"already_placed", "AB1: only one table")
+	var second: Dictionary = _game_state.call("place_play_table", Vector2i(5, 5))
+	_expect_equal(bool(second.get("ok", true)), false, "AB1: GameState rejects a second place")
+
+	var packed: PackedScene = load("res://scenes/shop/shop_floor.tscn") as PackedScene
+	_expect_equal(packed != null, true, "AB1: shop_floor loads for presenter")
+	if packed == null:
+		return
+	var floor: Node = packed.instantiate()
+	root.add_child(floor)
+	var presenter := floor.get_node_or_null("PlayTablePresenter") as PlayTablePresenter
+	_expect_equal(presenter != null, true, "AB1: PlayTablePresenter is instanced")
+	if presenter != null:
+		presenter.sync_from_shop()
+		_expect_equal(presenter.table_visible(), true, "AB1: placed table is visible")
+		var node := presenter.table_node()
+		_expect_equal(node != null, true, "AB1: authored PlayTable node is reused")
+		if node != null:
+			_expect_equal(
+				node.position.is_equal_approx(Vector3(2.7, 0, -4.5)),
+				true,
+				"AB1: default place keeps B09 island world pose"
+			)
+			_expect_equal(
+				node.get_node_or_null("PlayTableCollider") != null,
+				true,
+				"AB1: primitive collider is attached"
+			)
+		_expect_equal(
+			FileAccess.get_file_as_string(
+				"res://scripts/shop/play_table_presenter.gd"
+			).contains("true_market"),
+			false,
+			"AB1: presenter has no true_market"
+		)
+	floor.queue_free()
+
+
+func _test_play_table_event_night_bump() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		MarketEventService.EVENT_NIGHT_TRAFFIC_MULT < MarketEventService.CONVENTION_TRAFFIC_MULT,
+		true,
+		"AB1: event-night traffic is below convention ×2"
+	)
+	_expect_equal(
+		MarketEventService.EVENT_NIGHT_WHALE_WEIGHT_MULT
+		< MarketEventService.CONVENTION_WHALE_WEIGHT_MULT,
+		true,
+		"AB1: event-night whale bump is below convention ×2.5"
+	)
+	_expect_equal(
+		is_equal_approx(MarketEventService.EVENT_NIGHT_TRAFFIC_MULT, 1.25),
+		true,
+		"AB1: event-night traffic is ×1.25"
+	)
+	_expect_equal(
+		is_equal_approx(MarketEventService.EVENT_NIGHT_WHALE_WEIGHT_MULT, 1.4),
+		true,
+		"AB1: event-night whale weight is ×1.4"
+	)
+	_expect_equal(
+		MarketEventService.is_event_night_day(6)
+		and MarketEventService.is_event_night_day(7),
+		true,
+		"AB1: Sat/Sun are event nights"
+	)
+	_expect_equal(
+		MarketEventService.is_event_night_day(3),
+		false,
+		"AB1: mid-week is not an event night"
+	)
+
+	_game_state.set("current_day", 6)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_traffic_mult")), 1.0),
+		true,
+		"AB1: weekend without table has no traffic bump"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_whale_weight_mult")), 1.0),
+		true,
+		"AB1: weekend without table has no whale bump"
+	)
+	_expect_equal(
+		_demand_signals.call("has_play_table_event_night"),
+		false,
+		"AB1: event night flag needs the table placed"
+	)
+
+	_grant_play_table_gates()
+	var unlocked: Dictionary = _game_state.call("unlock_play_table")
+	_expect_equal(bool(unlocked.get("ok", false)), true, "AB1: weekend unlock places table")
+	_expect_equal(shop.has_play_table_placed(), true, "AB1: table is placed for bump")
+	_expect_equal(
+		_demand_signals.call("has_play_table_event_night"),
+		true,
+		"AB1: weekend + placed table is an event night"
+	)
+	var night_traffic := float(_demand_signals.call("active_event_traffic_mult"))
+	var night_whale := float(_demand_signals.call("active_event_whale_weight_mult"))
+	_expect_equal(
+		is_equal_approx(night_traffic, MarketEventService.EVENT_NIGHT_TRAFFIC_MULT),
+		true,
+		"AB1: placed table on weekend raises traffic ×1.25"
+	)
+	_expect_equal(
+		is_equal_approx(night_whale, MarketEventService.EVENT_NIGHT_WHALE_WEIGHT_MULT),
+		true,
+		"AB1: placed table on weekend raises whale weight ×1.4"
+	)
+	_expect_equal(
+		night_traffic < MarketEventService.CONVENTION_TRAFFIC_MULT,
+		true,
+		"AB1: table bump stays under convention traffic"
+	)
+	_expect_equal(
+		night_whale < MarketEventService.CONVENTION_WHALE_WEIGHT_MULT,
+		true,
+		"AB1: table bump stays under convention whales"
+	)
+
+	var night_wait := float(
+		_demand_signals.call("customer_spawn_wait_seconds", 12.0, 0)
+	)
+	_game_state.set("current_day", 3)
+	_expect_equal(
+		_demand_signals.call("has_play_table_event_night"),
+		false,
+		"AB1: weekday with table is not an event night"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_traffic_mult")), 1.0),
+		true,
+		"AB1: weekday with table keeps traffic 1.0"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_whale_weight_mult")), 1.0),
+		true,
+		"AB1: weekday with table keeps whale 1.0"
+	)
+	var weekday_wait := float(
+		_demand_signals.call("customer_spawn_wait_seconds", 12.0, 0)
+	)
+	_expect_equal(night_wait < weekday_wait, true, "AB1: event night spawns faster")
+
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale: Dictionary = {}
+	for archetype: Dictionary in catalog.archetypes:
+		if StringName(archetype.get("id", "")) == &"whale":
+			whale = archetype
+	_game_state.set("current_day", 6)
+	var baseline_whale := catalog.weight_for(whale, 80, NORMAL_CONFIG)
+	var night_weight := catalog.weight_for(
+		whale,
+		80,
+		NORMAL_CONFIG,
+		float(_demand_signals.call("active_event_whale_weight_mult"))
+	)
+	_expect_equal(night_weight > baseline_whale, true, "AB1: whale weight rises on event night")
+	_expect_equal(
+		is_equal_approx(
+			night_weight,
+			baseline_whale * MarketEventService.EVENT_NIGHT_WHALE_WEIGHT_MULT
+		),
+		true,
+		"AB1: whale weight uses the event-night pack mult"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(
+				whale,
+				10,
+				NORMAL_CONFIG,
+				float(_demand_signals.call("active_event_whale_weight_mult"))
+			),
+			0.0
+		),
+		true,
+		"AB1: event night does not bypass the low-rep whale gate"
+	)
+
+	var started: Variant = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION
+	)
+	_expect_equal(started != null, true, "AB1: convention still starts with a table")
+	_expect_equal(
+		float(_demand_signals.call("active_event_traffic_mult"))
+		> MarketEventService.CONVENTION_TRAFFIC_MULT,
+		true,
+		"AB1: convention plus table stacks above convention-only"
+	)
+	_expect_equal(
+		float(_demand_signals.call("play_table_event_traffic_mult"))
+		< MarketEventService.CONVENTION_TRAFFIC_MULT,
+		true,
+		"AB1: table-only scalar stays below convention"
+	)
+	_demand_signals.call("start_pack_event", &"")
+	_demand_signals.call("reset")
+
+
+func _test_play_table_path_blocking() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_grant_play_table_gates()
+	var shop := _game_state.get("shop") as ShopState
+	var unlocked: Dictionary = _game_state.call("unlock_play_table")
+	_expect_equal(bool(unlocked.get("ok", false)), true, "AB1: unlock for path test")
+	_expect_equal(shop.layout.has_circulation(), true, "AB1: default table keeps the aisle")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("circulation_traffic_mult")), 1.0),
+		true,
+		"AB1: open aisle keeps circulation traffic 1.0"
+	)
+
+	var blocked_origin := Vector2i(4, 0)
+	_expect_equal(
+		shop.layout.preview_move(ShopLayout.PLAY_TABLE_ID, blocked_origin),
+		&"blocked_path",
+		"AB1: covering the entrance reports blocked_path"
+	)
+	var moved: Dictionary = _game_state.call(
+		"rearrange_fixture",
+		ShopLayout.PLAY_TABLE_ID,
+		blocked_origin
+	)
+	_expect_equal(bool(moved.get("ok", false)), true, "AB1: play table may occupy a blocking tile")
+	_expect_equal(
+		String(moved.get("reason", "")),
+		"blocked_path",
+		"AB1: blocking rearrange still names blocked_path"
+	)
+	_expect_equal(shop.layout.has_circulation(), false, "AB1: entrance block loses circulation")
+	_expect_equal(
+		shop.layout.play_table().origin,
+		blocked_origin,
+		"AB1: blocking table stays on the entrance tiles"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("circulation_traffic_mult")),
+			MarketEventService.BLOCKED_PATH_TRAFFIC_MULT
+		),
+		true,
+		"AB1: blocked path uses systems §7.2 traffic cut"
+	)
+	_expect_equal(
+		is_equal_approx(
+			shop.circulation_patience_scale(),
+			MarketEventService.BLOCKED_PATH_PATIENCE_SCALE
+		),
+		true,
+		"AB1: blocked path uses existing timeout frustration"
+	)
+	_expect_equal(
+		shop.floor_grid.is_walkable(blocked_origin),
+		false,
+		"AB1: NPC grid marks the blocked entrance"
+	)
+	_expect_equal(
+		shop.layout.circulation_path().is_empty(),
+		true,
+		"AB1: existing circulation path is empty when the aisle is blocked"
+	)
+
+	var binder_block: Dictionary = _game_state.call(
+		"rearrange_fixture",
+		&"binder_rack",
+		Vector2i(7, 1)
+	)
+	_expect_equal(bool(binder_block.get("ok", true)), false, "AB1: other fixtures still cannot block")
+	_expect_equal(
+		StringName(binder_block.get("reason", &"")),
+		&"blocked_path",
+		"AB1: binder still uses existing blocked_path reject"
+	)
+
+
+func _test_play_table_hud_and_section_45() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AB1: HUD loads for play table")
+	if hud == null:
+		return
+	var open_button := hud.get_node_or_null("%OpenPlayTableButton") as Button
+	_expect_equal(open_button != null, true, "AB1: Play table button present")
+	if open_button != null:
+		_expect_equal(
+			open_button.text.contains("$10,000.00") and open_button.text.contains("Rep 50"),
+			true,
+			"AB1: button shows cash and Rep gate"
+		)
+		_expect_equal(open_button.disabled, true, "AB1: start gate disables the button")
+		_assert_text_has_no_truth(open_button.text, "AB1 play table button")
+	_grant_play_table_gates()
+	Callable(hud, "_sync_play_table_button").call()
+	_expect_equal(
+		open_button != null and not open_button.disabled,
+		true,
+		"AB1: gates enable the button"
+	)
+	Callable(hud, "_open_play_table_confirm").call()
+	var body := hud.get_node_or_null("%PlayTableConfirmBody") as Label
+	_expect_equal(body != null, true, "AB1: confirm body present")
+	if body != null:
+		_assert_text_has_no_truth(body.text, "AB1 play table confirm")
+		_expect_equal(body.text.to_lower().contains("true_market"), false, "AB1 confirm no truth")
+	Callable(hud, "_confirm_play_table").call()
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.has_play_table_placed(), true, "AB1: HUD confirm places the table")
+	_expect_equal(
+		open_button != null and open_button.text == "Play table placed",
+		true,
+		"AB1: HUD shows placed after unlock"
+	)
+	_expect_equal(open_button.disabled, true, "AB1: button disables once placed")
+
+	_game_state.set("current_day", 6)
+	Callable(hud, "_sync_event_banner").call()
+	var banner := hud.get_node_or_null("%EventBannerLabel") as Label
+	_expect_equal(banner != null, true, "AB1: event banner present")
+	if banner != null:
+		_expect_equal(
+			banner.text.contains("Event night") and banner.text.contains("play table"),
+			true,
+			"AB1: banner names the event night"
+		)
+		_assert_text_has_no_truth(banner.text, "AB1 event-night banner")
+	_assert_text_has_no_truth(
+		DemandSignals.calendar_telegraph_text(),
+		"AB1 calendar telegraph"
+	)
+	hud.queue_free()
+
+
+func _test_play_table_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_grant_play_table_gates()
+	var unlocked: Dictionary = _game_state.call("unlock_play_table")
+	_expect_equal(bool(unlocked.get("ok", false)), true, "AB1: unlock for save")
+	_game_state.set("current_day", 6)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "AB1 play table save")
+	var shop_row: Dictionary = saved.get("shop", {})
+	_expect_equal(bool(shop_row.get("play_table_owned", false)), true, "AB1 save writes owned")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		(_game_state.get("shop") as ShopState).has_play_table(),
+		false,
+		"AB1: new game clears the table"
+	)
+	_expect_equal(_game_state.call("restore_save", saved), true, "AB1: restore accepts save")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.has_play_table(), true, "AB1: restore re-owns the table")
+	_expect_equal(shop.has_play_table_placed(), true, "AB1: restore keeps it placed")
+	_expect_equal(
+		shop.layout.play_table().size,
+		Vector2i(2, 2),
+		"AB1: restored footprint stays 2×2"
+	)
+	_game_state.set("current_day", 6)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("active_event_traffic_mult")),
+			MarketEventService.EVENT_NIGHT_TRAFFIC_MULT
+		),
+		true,
+		"AB1: restored table still bumps event-night traffic"
+	)
+
+
+func _test_play_table_soft_catalog_untouched() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AB1: Soft _ensure_priceable_sku stays parked"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("play_table"),
+		false,
+		"AB1: play table stays out of the event catalog"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AB1: cameras stay owned≡active (no off-switch)"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/shop/play_table_presenter.gd",
+		"res://scripts/autoload/game_state.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AB1: %s stays §4.5 clean" % path
+		)
+		_expect_equal(
+			source.contains("tournament"),
+			false,
+			"AB1: %s has no tournament mini-game" % path
+		)
 
 
 func _test_ironman_menu_toggle_default_off() -> void:

@@ -129,6 +129,10 @@ enum Difficulty {
 @export var camera_attention: int = 8
 ## Theft-ring shrink multiplier while cameras are owned/active (vs ×3).
 @export var camera_theft_shrink_mult: float = 1.5
+## AB1 play table: cash + Rep gate, same shape as Medium/Large Sign.
+## $10k + Rep 50 sits under Medium ($15k / Rep 55) and above cameras ($2.5k).
+@export var play_table_cash_cents: int = 1_000_000
+@export var play_table_rep: int = 50
 
 
 func is_rent_due_day(day: int) -> bool:

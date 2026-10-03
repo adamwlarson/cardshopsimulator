@@ -107,7 +107,10 @@ func spawn_for(customer: CustomerProfile) -> CustomerNpc:
 	npc.configure(customer)
 	npc.set_floor_state(FloorState.SPAWN)
 	npc.set_intent(CustomerIntentIcon.Intent.BROWSE)
-	_apply_patience_scale(customer, BROWSE_PATIENCE_SCALE)
+	_apply_patience_scale(
+		customer,
+		BROWSE_PATIENCE_SCALE * _circulation_patience_scale()
+	)
 	var parent: Node = _npc_parent if _npc_parent != null else self
 	parent.add_child(npc)
 	npc.position = _entrance
@@ -258,7 +261,7 @@ func _tick_browse_dwell(npc: CustomerNpc, delta: float) -> void:
 
 
 func _enter_approach(npc: CustomerNpc) -> void:
-	_apply_patience_scale(npc.customer, 1.0)
+	_apply_patience_scale(npc.customer, _circulation_patience_scale())
 	_flip_intent_once(npc)
 	_set_state(npc, FloorState.APPROACH)
 	_walk_to(npc, _slot_for(npc.customer))
@@ -283,7 +286,7 @@ func _try_enter_resolve(npc: CustomerNpc) -> void:
 
 
 func _enter_exit(npc: CustomerNpc) -> void:
-	_apply_patience_scale(npc.customer, 1.0)
+	_apply_patience_scale(npc.customer, _circulation_patience_scale())
 	_set_desk_ready(npc.customer, false)
 	_set_state(npc, FloorState.EXIT)
 	_walk_to(npc, _entrance)
@@ -413,6 +416,16 @@ func _apply_patience_scale(customer: CustomerProfile, scale: float) -> void:
 	if customer == null:
 		return
 	customer.patience_tick_scale = scale
+
+
+func _circulation_patience_scale() -> float:
+	var gs := _autoload("GameState")
+	if gs == null:
+		return 1.0
+	var shop := gs.get("shop") as ShopState
+	if shop == null:
+		return 1.0
+	return shop.circulation_patience_scale()
 
 
 func _despawn(npc: CustomerNpc) -> void:

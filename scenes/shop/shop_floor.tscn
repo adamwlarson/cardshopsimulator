@@ -1,4 +1,4 @@
-[gd_scene load_steps=41 format=3]
+[gd_scene load_steps=42 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/day_clock.gd" id="1_clock"]
 [ext_resource type="Script" path="res://scripts/customers/customer_spawner.gd" id="2_customers"]
@@ -39,6 +39,7 @@
 [ext_resource type="Script" path="res://scripts/shop/staff_presenter.gd" id="35_staff"]
 [ext_resource type="PackedScene" path="res://assets/props/shop/fixtures/prop_security_camera_01/prop_security_camera_01.glb" id="38_sec_cam"]
 [ext_resource type="Script" path="res://scripts/shop/security_cameras.gd" id="39_sec_cams"]
+[ext_resource type="Script" path="res://scripts/shop/play_table_presenter.gd" id="40_play_table"]
 
 [sub_resource type="Environment" id="Environment_shop"]
 background_mode = 1
@@ -81,6 +82,9 @@ visible = false
 
 [node name="FloorExtent" type="Node3D" parent="."]
 script = ExtResource("34_extent")
+
+[node name="PlayTablePresenter" type="Node3D" parent="."]
+script = ExtResource("40_play_table")
 
 [node name="Fixtures" type="Node3D" parent="."]
 
