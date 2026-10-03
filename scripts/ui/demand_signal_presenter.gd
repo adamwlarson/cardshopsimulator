@@ -150,9 +150,19 @@ static func game_over_body(payload: Dictionary) -> String:
 		"reputation":
 			return "Reputation hit zero. The shop is closed."
 		"ironman":
-			return "Destitution closed the shop."
+			return (
+				"Ironman: cash under $500 and inventory COGS under $500 closed the shop."
+			)
 		_:
 			return "The shop went bankrupt."
+
+
+static func ironman_toggle_label() -> String:
+	return "Ironman"
+
+
+static func ironman_toggle_hint() -> String:
+	return "Lose if cash and inventory COGS both fall under $500."
 
 
 static func event_banner(text: String) -> String:

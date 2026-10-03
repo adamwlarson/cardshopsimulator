@@ -105,8 +105,11 @@ enum Difficulty {
 @export var loan_shark_days: int = 40
 @export var loan_shark_rep_hit: int = 10
 @export var missed_rent_weeks_to_lose: int = 2
+## Z1 / systems §9.1 #4: menu opt-in default. Stay false on Easy/Normal/Hard.
+## Do not turn Ironman on by default for Hard. Live toggle is GameState.ironman_enabled.
 @export var ironman_destitution_default: bool = false
-## systems §9.1 optional ironman: cash < $500 and inventory COGS < $500.
+## Dual-floor lose when Ironman is on: cash < $500 and inventory COGS < $500.
+## Do not rebalance these floors.
 @export var ironman_cash_cents: int = 50_000
 @export var ironman_cogs_cents: int = 50_000
 
@@ -187,8 +190,5 @@ func loan_shark_terms() -> Dictionary:
 
 
 func meets_ironman_destitution(cash_cents: int, cogs_cents: int) -> bool:
-	return (
-		ironman_destitution_default
-		and cash_cents < ironman_cash_cents
-		and cogs_cents < ironman_cogs_cents
-	)
+	# Floors only. GameState.ironman_enabled is the player opt-in gate.
+	return cash_cents < ironman_cash_cents and cogs_cents < ironman_cogs_cents

@@ -40,9 +40,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -300.0
-offset_top = -290.0
+offset_top = -330.0
 offset_right = 300.0
-offset_bottom = 290.0
+offset_bottom = 330.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StylePanel")
@@ -146,6 +146,23 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.74, 0.72, 1)
 theme_override_font_sizes/font_size = 13
 text = "Own a Large shop, hit high reputation, and bank a deep reserve."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="IronmanToggle" type="CheckButton" parent="Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.72, 0.82, 0.78, 1)
+theme_override_font_sizes/font_size = 16
+text = "Ironman"
+
+[node name="IronmanHint" type="Label" parent="Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.7, 0.68, 1)
+theme_override_font_sizes/font_size = 13
+text = "Lose if cash and inventory COGS both fall under $500."
 horizontal_alignment = 1
 autowrap_mode = 2
 
