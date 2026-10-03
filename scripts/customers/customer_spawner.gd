@@ -46,6 +46,8 @@ func spawn_customer() -> bool:
 		return false
 	# AI1: read Rep at this roll. Quiet floor (≤24) halves the baseline
 	# count (round down, floor 0). Next roll at ≥25 uses baseline again.
+	# AM1: 25–49 is that named baseline — today's count and today's whale
+	# weight. Stay under 50 and it does not get better than that.
 	# AJ1: the same live Rep feeds the catalog. High-rep (≥75) whale
 	# ×1.5 is applied after event bumps. Not a sell weight.
 	var count := CustomerSpawnPolicy.spawn_count(GameState.current_reputation)

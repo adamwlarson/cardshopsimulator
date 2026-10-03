@@ -203,6 +203,7 @@ func _initialize() -> void:
 	_test_high_rep_whale_bias()
 	_test_daily_shrink_settle()
 	_test_sealed_floor_theft_premium()
+	_test_mid_band_baseline()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -19781,6 +19782,575 @@ func _al1_sealed_walk_in_tags() -> Array[StringName]:
 	var tags: Array[StringName] = []
 	tags.append(&"sealed")
 	return tags
+
+
+func _test_mid_band_baseline() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_mid_band_named_gate()
+	_test_mid_band_whale_weight_is_today()
+	_test_mid_band_same_seed_25_and_49()
+	_test_mid_band_quiet_and_high_stay_shipped()
+	_test_mid_band_sale_pays_listed()
+	_test_mid_band_walkouts_fire_shrink_stay_shipped()
+	_test_mid_band_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_mid_band_named_gate() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.MID_BAND_MIN_REP,
+		25,
+		"AM1: locked mid-band floor is Rep 25"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.MID_BAND_MAX_REP,
+		49,
+		"AM1: locked mid-band ceiling is Rep 49"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_mid_band(25),
+		true,
+		"AM1: Rep 25 is mid-band baseline"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_mid_band(49),
+		true,
+		"AM1: Rep 49 is mid-band baseline"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_mid_band(24),
+		false,
+		"AM1: Rep 24 is not mid-band"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_mid_band(50),
+		false,
+		"AM1: Rep 50 is not a new mid-band bonus"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT,
+		1,
+		"AM1: live baseline stays one customer per roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(25, 1),
+		1,
+		"AM1: baseline 1 at Rep 25 stays 1"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(49, 1),
+		1,
+		"AM1: baseline 1 at Rep 49 stays 1"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(25, 5),
+		5,
+		"AM1: 5 at Rep 25 stays today's baseline count"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(49, 5),
+		5,
+		"AM1: 5 at Rep 49 stays today's baseline count"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(25, 5),
+		CustomerSpawnPolicy.spawn_count(49, 5),
+		"AM1: same baseline at Rep 25 and Rep 49"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(25, 5),
+		CustomerSpawnPolicy.spawn_count(50, 5),
+		"AM1: Rep 50 keeps today's count — no 25–49 exclusive spawn boost"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(49, 3),
+		CustomerSpawnPolicy.spawn_count(74, 3),
+		"AM1: 50–74 stays today's spawn count"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(25), 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(49), 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(50), 1.0),
+		true,
+		"AM1: mid-band whale pack is identity — no extra multiplier"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not policy_src.contains("MID_BAND_WHALE")
+		and not policy_src.contains("MID_BAND_COUNT_MULT")
+		and not policy_src.contains("MID_BAND_SPAWN_MULT")
+		and not policy_src.contains("MID_BAND_WEIGHT_MULT"),
+		true,
+		"AM1: named gate has no mid-band multiplier constant"
+	)
+
+
+func _test_mid_band_whale_weight_is_today() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	_expect_equal(whale.is_empty(), false, "AM1: whale archetype is loaded")
+	_expect_equal(
+		is_equal_approx(float(whale.get("weight_normal", 0.0)), 2.0)
+		and is_equal_approx(float(whale.get("reputation_weight_mid", 0.0)), 0.25),
+		true,
+		"AM1: today's whale mid-table stays weight 2.0 × 0.25"
+	)
+	var today_normal := (
+		float(whale.get("weight_normal", 0.0))
+		* float(whale.get("reputation_weight_mid", 0.0))
+		* NORMAL_CONFIG.whale_weight_mult
+	)
+	_expect_equal(
+		is_equal_approx(today_normal, 0.5),
+		true,
+		"AM1: today's Normal whale weight is 0.5"
+	)
+	var at_25 := catalog.weight_for(whale, 25, NORMAL_CONFIG)
+	var at_49 := catalog.weight_for(whale, 49, NORMAL_CONFIG)
+	var at_50 := catalog.weight_for(whale, 50, NORMAL_CONFIG)
+	var at_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	_expect_equal(at_25 > 0.0, true, "AM1: Rep 25 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(at_25, today_normal) and is_equal_approx(at_49, today_normal),
+		true,
+		"AM1: Rep 25 and Rep 49 keep today's whale weight"
+	)
+	_expect_equal(
+		is_equal_approx(at_25, at_49),
+		true,
+		"AM1: same seed weight at Rep 25 equals Rep 49"
+	)
+	_expect_equal(
+		is_equal_approx(at_25, at_50) and is_equal_approx(at_25, at_74),
+		true,
+		"AM1: 50–74 stays today's whale weight — no 25–49 exclusive boost"
+	)
+	var convention_mult := MarketEventService.CONVENTION_WHALE_WEIGHT_MULT
+	var play_table_mult := MarketEventService.EVENT_NIGHT_WHALE_WEIGHT_MULT
+	var stacked_mult := convention_mult * play_table_mult
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 25, NORMAL_CONFIG, convention_mult),
+			catalog.weight_for(whale, 49, NORMAL_CONFIG, convention_mult)
+		)
+		and is_equal_approx(
+			catalog.weight_for(whale, 25, NORMAL_CONFIG, convention_mult),
+			at_25 * convention_mult
+		),
+		true,
+		"AM1: Convention still bumps 25 and 49 the same"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 25, NORMAL_CONFIG, play_table_mult),
+			catalog.weight_for(whale, 49, NORMAL_CONFIG, play_table_mult)
+		)
+		and is_equal_approx(
+			catalog.weight_for(whale, 25, NORMAL_CONFIG, play_table_mult),
+			at_25 * play_table_mult
+		),
+		true,
+		"AM1: play-table still bumps 25 and 49 the same"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 25, NORMAL_CONFIG, stacked_mult),
+			catalog.weight_for(whale, 49, NORMAL_CONFIG, stacked_mult)
+		),
+		true,
+		"AM1: stacked bumps stay equal across the mid-band"
+	)
+	var easy_25 := catalog.weight_for(whale, 25, EASY_CONFIG)
+	var easy_49 := catalog.weight_for(whale, 49, EASY_CONFIG)
+	var hard_25 := catalog.weight_for(whale, 25, HARD_CONFIG)
+	var hard_49 := catalog.weight_for(whale, 49, HARD_CONFIG)
+	_expect_equal(
+		is_equal_approx(easy_25, easy_49) and is_equal_approx(hard_25, hard_49),
+		true,
+		"AM1: Easy/Hard keep 25 == 49 after their whale scalars"
+	)
+	var collector := _aj1_archetype(catalog, &"collector")
+	var collector_25 := catalog.weight_for(collector, 25, NORMAL_CONFIG)
+	var collector_49 := catalog.weight_for(collector, 49, NORMAL_CONFIG)
+	_expect_equal(
+		is_equal_approx(collector_25, collector_49),
+		true,
+		"AM1: non-whale mid-table weights stay equal at 25 and 49"
+	)
+
+
+func _test_mid_band_same_seed_25_and_49() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_25 := catalog.roll_spawn(SEED, 25, NORMAL_CONFIG, BASELINE)
+	var at_49 := catalog.roll_spawn(SEED, 49, NORMAL_CONFIG, BASELINE)
+	var at_50 := catalog.roll_spawn(SEED, 50, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_25.size(), 5, "AM1: same seed at Rep 25 keeps today's count")
+	_expect_equal(at_49.size(), 5, "AM1: same seed at Rep 49 keeps today's count")
+	_expect_equal(
+		at_25.size(),
+		at_49.size(),
+		"AM1: same seed at Rep 25 and Rep 49 spawn the same count"
+	)
+	_expect_equal(
+		",".join(_aj1_ids(at_25)),
+		",".join(_aj1_ids(at_49)),
+		"AM1: same seed at Rep 25 and Rep 49 keeps today's mid-band roll"
+	)
+	_expect_equal(
+		at_25.size(),
+		at_50.size(),
+		"AM1: same seed at Rep 50 keeps today's count"
+	)
+	_expect_equal(
+		",".join(_aj1_ids(at_25)),
+		",".join(_aj1_ids(at_50)),
+		"AM1: same seed at Rep 50 stays on today's mid-band roll"
+	)
+
+
+func _test_mid_band_quiet_and_high_stay_shipped() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_24 := catalog.roll_spawn(SEED, 24, NORMAL_CONFIG, BASELINE)
+	var at_25 := catalog.roll_spawn(SEED, 25, NORMAL_CONFIG, BASELINE)
+	_expect_equal(
+		CustomerSpawnPolicy.QUIET_FLOOR_MAX_REP == 24
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5)
+		and CustomerSpawnPolicy.is_quiet_floor(24)
+		and not CustomerSpawnPolicy.is_quiet_floor(25),
+		true,
+		"AM1/AI1: quiet floor stays Rep 24"
+	)
+	_expect_equal(at_24.size(), 2, "AM1/AI1: same seed at Rep 24 is half, rounded down")
+	_expect_equal(
+		at_24.size() == int(floor(float(at_25.size()) * 0.5)),
+		true,
+		"AM1/AI1: Rep 24 count is half of Rep 25, rounded down"
+	)
+	_expect_equal(
+		catalog.weight_for(whale, 24, NORMAL_CONFIG),
+		0.0,
+		"AM1/AI1: Rep 24 whale weight is 0 before bumps"
+	)
+	_expect_equal(
+		_ai1_whale_count(at_24),
+		0,
+		"AM1/AI1: same seed at Rep 24 still spawns no whales"
+	)
+	var convention_mult := MarketEventService.CONVENTION_WHALE_WEIGHT_MULT
+	var play_table_mult := MarketEventService.EVENT_NIGHT_WHALE_WEIGHT_MULT
+	_expect_equal(
+		catalog.weight_for(whale, 24, NORMAL_CONFIG, convention_mult),
+		0.0,
+		"AM1/AI1: Convention does not bypass the quiet-floor whale gate"
+	)
+	_expect_equal(
+		catalog.weight_for(whale, 24, NORMAL_CONFIG, play_table_mult),
+		0.0,
+		"AM1/AI1: play-table bump does not bypass the quiet-floor whale gate"
+	)
+	var at_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var at_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(
+		CustomerSpawnPolicy.HIGH_REP_MIN_REP == 75
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5)
+		and CustomerSpawnPolicy.is_high_rep(75)
+		and not CustomerSpawnPolicy.is_high_rep(74),
+		true,
+		"AM1/AJ1: high-rep gate stays Rep 75 / ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(at_75, at_74 * 1.5),
+		true,
+		"AM1/AJ1: same seed at Rep 75 is ×1.5 of Rep 74"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 75, NORMAL_CONFIG, convention_mult),
+			catalog.weight_for(whale, 74, NORMAL_CONFIG, convention_mult) * 1.5
+		),
+		true,
+		"AM1/AJ1: ×1.5 is after the Convention bump"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(25, 5),
+		"AM1/AJ1: high band does not change spawn count versus mid-band"
+	)
+	var high_table_stacked := (
+		float(whale.get("weight_normal", 0.0))
+		* float(whale.get("reputation_weight_high", 0.0))
+		* NORMAL_CONFIG.whale_weight_mult
+		* 1.5
+	)
+	_expect_equal(
+		is_equal_approx(at_75, at_74 * 1.5)
+		and not is_equal_approx(at_75, high_table_stacked),
+		true,
+		"AM1/AJ1: ×1.5 is versus today's mid-table weight, not stacked on the high row"
+	)
+
+
+func _test_mid_band_sale_pays_listed() -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 25)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AM1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AM1: listed price stays set at mid-band")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AM1: sell_through_mult_for stays 1.0 at Rep 25"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AM1: listed lot still enqueues at Rep 25")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AM1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AM1: live sell still resolves at mid-band")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AM1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AM1: customer_sale ledger is the listed price"
+	)
+	_game_state.set("current_reputation", 49)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AM1: sell_through_mult_for stays 1.0 at Rep 49"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "mid_band")
+		and not _function_body_contains(queue_src, "func sell_listed()", "whale")
+		and not _function_body_contains(queue_src, "func sell_listed()", "spawn_count")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"mid_band"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"whale"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"reputation"
+		),
+		true,
+		"AM1: mid-band baseline is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_mid_band_walkouts_fire_shrink_stay_shipped() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and NORMAL_CONFIG.register_walkout_rep_cap == 3
+		and shop.register_walkout_rep_hit() == 1
+		and shop.register_walkout_rep_cap() == 3,
+		true,
+		"AM1/AH1: walkout scalars stay Rep −1 / cap 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5
+		and NORMAL_CONFIG.fire_popular_roster_age == 3
+		and shop.fire_rep_hit() == 5
+		and shop.fire_popular_roster_age() == 3,
+		true,
+		"AM1/AG1: Fire scalars stay Rep −5 at roster age 3"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005)
+		and is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AM1/AK1/AL1: daily shrink 0.2%/0.7% and floor-sealed +0.3% stay"
+	)
+	_expect_equal(_game_state.call("start_floor"), true, "AM1/AH1: walkout day opens")
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(
+		bool(_game_state.call("register_is_covered")),
+		false,
+		"AM1/AH1: Owner at Attention 0 still does not cover"
+	)
+	var queue := _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AM1/AH1: waiter enqueues")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout") >= 1, true, "AM1/AH1: uncovered leave is a walkout")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AM1/AH1: walkout math stays Rep −1"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AM1/AG1: hire Cashier to age")
+	_ag1_run_floor_days(3)
+	_expect_equal(shop.staff[0].roster_age, 3, "AM1/AG1: Cashier is popular")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AM1/AG1: Fire a popular Cashier"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 5,
+		"AM1/AG1: popular Fire still drops Rep 5 once"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_mid_band_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("mid_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("moq")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("distributor_moq"),
+		false,
+		"AM1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AM1: Soft _ensure_priceable_sku stays parked"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AM1: cameras stay owned≡active (no off-switch)"
+	)
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	_expect_equal(
+		not balance_src.contains("mid_band")
+		and not balance_src.contains("MID_BAND")
+		and not balance_src.contains("fee_cut")
+		and not balance_src.contains("better_lead"),
+		true,
+		"AM1: mid-band gate lives on spawn policy, not BalanceConfig"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_min, 0.30)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_max, 0.40),
+		true,
+		"AM1: marketplace fees and distributor leads stay as shipped"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_archetype_catalog.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AM1: %s stays §4.5 clean" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AM1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		hud_src.contains("sandbox_best_net_worth_cents"),
+		true,
+		"AM1: AA1 sandbox bests stay"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	var catalog_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_archetype_catalog.gd"
+	)
+	_expect_equal(
+		spawn_src.contains("CustomerSpawnPolicy.spawn_count")
+		and spawn_src.contains("current_reputation")
+		and policy_src.contains("MID_BAND_MIN_REP")
+		and policy_src.contains("func is_mid_band")
+		and catalog_src.contains("is_mid_band"),
+		true,
+		"AM1: spawn roll reads live Rep and names the 25–49 baseline gate"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "mid_band")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "quiet")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AM1: AI1/AJ1/AH1/AG1/AK1 stay off the sell roll"
+	)
+	_game_state.call("start_new_game")
 
 
 func _test_high_rep_whale_gate() -> void:
