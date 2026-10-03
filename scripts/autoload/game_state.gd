@@ -40,6 +40,9 @@ var loan_shark_offer_pending: bool = false
 var ironman_enabled: bool = false
 var missed_rent_weeks: int = 0
 var last_fire_rep_delta: int = 0
+var last_register_walkout_rep_delta: int = 0
+var register_walkout_count_today: int = 0
+var register_walkout_rep_spent_today: int = 0
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
 var _suppress_sandbox_bests: bool = false
@@ -83,6 +86,9 @@ func start_new_game() -> void:
 	loan_shark_offer_pending = false
 	missed_rent_weeks = 0
 	last_fire_rep_delta = 0
+	last_register_walkout_rep_delta = 0
+	register_walkout_count_today = 0
+	register_walkout_rep_spent_today = 0
 	_unpaid_wages_this_settle = false
 	_suppress_lose_eval = false
 	_suppress_sandbox_bests = true
@@ -149,6 +155,9 @@ func advance_day() -> bool:
 	attention_remaining = balance_config.attention_pool
 	pending_floor_skip_seconds = 0.0
 	shop.reset_daily_attendance()
+	last_register_walkout_rep_delta = 0
+	register_walkout_count_today = 0
+	register_walkout_rep_spent_today = 0
 	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
 	EventBus.attention_changed.emit(attention_remaining)
@@ -408,6 +417,28 @@ func note_rent_missed() -> void:
 
 func note_unpaid_wage() -> void:
 	_unpaid_wages_this_settle = true
+
+
+func register_is_covered() -> bool:
+	return shop.register_is_covered(attention_remaining)
+
+
+func apply_register_walkout_rep() -> int:
+	# AH1: −1 Rep per walkout, once, capped at −3 per day.
+	# Further walkouts still leave; they do not drop more Rep.
+	last_register_walkout_rep_delta = 0
+	register_walkout_count_today += 1
+	var hit := shop.register_walkout_rep_hit()
+	var cap := shop.register_walkout_rep_cap()
+	if hit <= 0 or register_walkout_rep_spent_today >= cap:
+		return 0
+	var applied := mini(hit, cap - register_walkout_rep_spent_today)
+	if applied <= 0:
+		return 0
+	register_walkout_rep_spent_today += applied
+	last_register_walkout_rep_delta = -applied
+	adjust_reputation(-applied)
+	return -applied
 
 
 func fire_staff(index: int) -> StaffMember:
@@ -757,6 +788,8 @@ func capture_save() -> Dictionary:
 		"loan_shark_recovery_used": loan_shark_recovery_used,
 		"ironman_enabled": ironman_enabled,
 		"missed_rent_weeks": missed_rent_weeks,
+		"register_walkout_count_today": register_walkout_count_today,
+		"register_walkout_rep_spent_today": register_walkout_rep_spent_today,
 		"payday_loan_days_remaining": Economy.payday_loan_days_remaining(),
 		"shop": shop.to_save(),
 		"inventory": inventory,
@@ -789,6 +822,15 @@ func restore_save(data: Dictionary) -> bool:
 	loan_shark_offer_pending = false
 	missed_rent_weeks = int(data.get("missed_rent_weeks", 0))
 	last_fire_rep_delta = 0
+	last_register_walkout_rep_delta = 0
+	register_walkout_count_today = maxi(
+		0,
+		int(data.get("register_walkout_count_today", 0))
+	)
+	register_walkout_rep_spent_today = maxi(
+		0,
+		int(data.get("register_walkout_rep_spent_today", 0))
+	)
 	_unpaid_wages_this_settle = false
 	sandbox_best_day = int(data.get("sandbox_best_day", sandbox_best_day))
 	sandbox_best_net_worth_cents = int(

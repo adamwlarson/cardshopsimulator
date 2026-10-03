@@ -15,7 +15,9 @@ func _ready() -> void:
 	_queue.configure(
 		InventoryService,
 		GameState.adjust_reputation,
-		GameState.spend_attention
+		GameState.spend_attention,
+		GameState.register_is_covered,
+		GameState.apply_register_walkout_rep
 	)
 	_queue.queue_changed.connect(_on_queue_changed)
 	add_child(_queue)
@@ -26,6 +28,8 @@ func _ready() -> void:
 	EventBus.day_phase_changed.connect(_on_phase_changed)
 	EventBus.shop_layout_changed.connect(_on_shop_layout_changed)
 	EventBus.market_event_changed.connect(_on_market_event_changed)
+	EventBus.staff_changed.connect(_on_coverage_changed)
+	EventBus.attention_changed.connect(_on_attention_coverage_changed)
 	EventBus.customer_action_requested.connect(_on_customer_action_requested)
 	EventBus.scripted_customer_requested.connect(_on_scripted_customer_requested)
 	_queue.customer_finished.connect(_on_customer_finished)
@@ -178,3 +182,17 @@ func _on_customer_finished(
 	outcome: StringName
 ) -> void:
 	EventBus.customer_resolved.emit(customer, outcome)
+
+
+func _on_coverage_changed() -> void:
+	_resolve_uncovered_register()
+
+
+func _on_attention_coverage_changed(_remaining: int) -> void:
+	_resolve_uncovered_register()
+
+
+func _resolve_uncovered_register() -> void:
+	if GameState.current_phase != GameState.DayPhase.FLOOR:
+		return
+	_queue.resolve_register_walkouts()
