@@ -96,3 +96,4 @@
 | 2026-10-03 | PM adopted **AR1**. Park AR2/AR3/AR4. Hard-park camera off-switch. Soft catalog CLOSED. Fees / HUD / STOP stay parked. Overnight class-band drift, never shown. Draft sha256 `85281e87`. |
 | 2026-10-03 | PM adopted **AR1**. Spec on main `4add953f`. Spike [AR1 daily true_market drift](https://cursor.com/agents/bc-5195d136-d5af-5618-82ce-393a8b9c61f8). Park AR2/AR3/AR4. No Art. Soft catalog CLOSED. Draft sha256 `85281e87`. |
 | 2026-10-03 | Tip-frozen PR #74 @ `8f104626` (branch `cursor/ar1-daily-market-drift-61f8`). Five files, no docs. Settle night drifts hidden market by class band after shrink and before named events. |
+| 2026-10-03 | Eng APPROVE #74 @ `8f104626`. No Soft notes. Formal released. Drift stays hidden. Fee stays 8%. Door spawn stays as shipped. |
