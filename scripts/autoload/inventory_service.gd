@@ -369,7 +369,8 @@ func find_listed_sku_offer(sku_id: StringName, budget_cents: int) -> Dictionary:
 			return _offer_for(
 				model.get_sku(slab.card_ref.sku_id),
 				slab.listed_price_cents,
-				slab.location
+				slab.location,
+				true
 			)
 	for card: CardInstance in model.cards:
 		if (
@@ -423,12 +424,13 @@ func find_listed_offer(
 			slab.listed_price_cents > 0
 			and slab.listed_price_cents <= budget_cents
 			and slab.location.type == InventoryLocation.Type.CASE
-			and _matches_interest(slab_sku, interest_tags)
+			and _matches_slab_interest(slab_sku, interest_tags, slab.location)
 		):
 			return _offer_for(
 				slab_sku,
 				slab.listed_price_cents,
-				slab.location
+				slab.location,
+				true
 			)
 	return {}
 
@@ -566,16 +568,48 @@ func _matches_interest(
 	return false
 
 
+func _matches_slab_interest(
+	sku: ProductSKU,
+	interest_tags: Array[StringName],
+	location: InventoryLocation
+) -> bool:
+	if _matches_interest(sku, interest_tags):
+		return true
+	# AC1 walk-in notice: door-adjacent graded CASE stock is visible
+	# even when the underlying single's tags do not match.
+	return _walk_in_notices_graded_case(location)
+
+
+func _walk_in_notices_graded_case(location: InventoryLocation) -> bool:
+	return (
+		location != null
+		and location.type == InventoryLocation.Type.CASE
+		and GameState.shop.has_sightline_display_bonus()
+	)
+
+
+func _graded_case_display_bonus(location: InventoryLocation) -> float:
+	if location == null or location.type != InventoryLocation.Type.CASE:
+		return 1.0
+	if not GameState.shop.has_sightline_display_bonus():
+		return 1.0
+	return GameState.shop.sightline_display_bonus_mult()
+
+
 func _offer_for(
 	sku: ProductSKU,
 	listed_price_cents: int,
-	location: InventoryLocation
+	location: InventoryLocation,
+	is_graded_case: bool = false
 ) -> Dictionary:
 	return {
 		"sku_id": sku.id,
 		"display_name": sku.display_name,
 		"listed_price_cents": listed_price_cents,
 		"location": location,
+		"display_bonus": (
+			_graded_case_display_bonus(location) if is_graded_case else 1.0
+		),
 	}
 
 

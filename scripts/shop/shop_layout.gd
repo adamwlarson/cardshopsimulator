@@ -2,6 +2,8 @@ class_name ShopLayout
 extends RefCounted
 
 const DEFAULT_ENTRANCE := Vector2i(4, 0)
+const DISPLAY_CASE_ID := &"display_case"
+const SIGHTLINE_TILES := 3
 const PLAY_TABLE_ID := &"play_table"
 const PLAY_TABLE_SIZE := Vector2i(2, 2)
 const PLAY_TABLE_DEFAULT_ORIGIN := Vector2i(2, 4)
@@ -34,8 +36,8 @@ func reset_small() -> void:
 	counter.movable = false
 	fixtures.append(counter)
 	var display_case := _make_fixture(
-		&"display_case",
-		&"display_case",
+		DISPLAY_CASE_ID,
+		DISPLAY_CASE_ID,
 		"High-value display case",
 		Vector2i(6, 4),
 		Vector2i(2, 1)
@@ -78,6 +80,21 @@ func movable_fixtures() -> Array[ShopFixture]:
 		if fixture.movable:
 			result.append(fixture)
 	return result
+
+
+func display_case() -> ShopFixture:
+	return fixture_by_id(DISPLAY_CASE_ID)
+
+
+func entrance_tile_distance(origin: Vector2i) -> int:
+	return absi(origin.x - entrance.x) + absi(origin.y - entrance.y)
+
+
+func has_sightline_display_bonus(max_tiles: int = SIGHTLINE_TILES) -> bool:
+	var showcase := display_case()
+	if showcase == null:
+		return false
+	return entrance_tile_distance(showcase.origin) <= maxi(0, max_tiles)
 
 
 func has_play_table() -> bool:
