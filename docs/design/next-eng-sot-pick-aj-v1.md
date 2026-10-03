@@ -84,3 +84,5 @@
 |------|----------|
 | 2026-10-03 | Drafted post AI1 SHIPPED #65 @ `ea2bd0d4`. Lean **AJ1 High-rep whale bias**. Fees / HUD / STOP parked. Soft reopeners hard-parked. Quiet floor, walkouts, and Fire stay off the sell roll. |
 | 2026-10-03 | PM adopted **AJ1**. Park AJ2/AJ4. Hard-park AJ3. Soft catalog CLOSED. Quiet floor, walkouts, and Fire stay off the sell roll. Draft sha256 `b612ba8a`. |
+| 2026-10-03 | PM adopted **AJ1**. Park AJ2/AJ4. Hard-park AJ3. Soft catalog CLOSED. Synced main @ `425af091`; Eng spike `bc-422f84a5` launching. Eng/QA bar matches SoT (×1.5 vs 74 after bumps; no stack on high-band table; AI1 still zeros whales at ≤24). Holding for tip-freeze. |
+| 2026-10-03 | Tip-frozen [PR #66](https://github.com/adamwlarson/cardshopsimulator/pull/66) @ `311010fe`. 4 files, no docs. Eng reviews that SHA only. QA holds. |
