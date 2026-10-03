@@ -23063,9 +23063,10 @@ func _test_daily_market_drift_no_ui_leak() -> void:
 	_qa_autoload.call("set_force_enabled", true)
 	_qa_autoload.call("clear")
 	var _shown: PriceConfirmSignal = _demand_signals.call(
-		"refresh_price_signal",
-		price_dto,
-		listed
+		"price_signal",
+		sealed,
+		listed,
+		_inventory_service.call("location_for", sealed)
 	)
 	var qa_truth := 0
 	for event: Dictionary in _qa_autoload.call("get_events"):
