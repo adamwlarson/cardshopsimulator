@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AC v1 — post AB1
 
-**Status:** **AC1 ADOPTED** 2026-10-03 — Sightline display_bonus. Park AC2/AC4. Hard-park AC3 camera off-switch. Soft catalog CLOSED.  
+**Status:** **AC1 SHIPPED** #59 @ `5c9bab43` (tip `0eb107ed`) — Sightline display_bonus, notice-only. Park AC2/AC4. Hard-park AC3 camera off-switch. Soft catalog CLOSED. Soft OK MVP: ×1.15 is not on the live sell roll; sightline check is duplicated.  
 **Author:** CSS Designer  
 **Date:** 2026-10-03  
 **Depends on:** pick-ab (AB1 Play table SHIPPED #58 @ `b75bf2af`); Soft catalog CLOSED  
@@ -84,3 +84,5 @@ Per PM: park unless a stronger shop-layout or decision bite exists. Sightline is
 |------|----------|
 | 2026-10-03 | Drafted post AB1 SHIPPED. Lean **AC1 Sightline display_bonus**. Soft reopeners hard-parked. Net-worth HUD / STOP parked. |
 | 2026-10-03 | PM adopted **AC1**. Park AC2/AC4. Hard-park AC3. Soft catalog CLOSED. |
+| 2026-10-03 | PM locked **AC1 GO** (Sightline display_bonus). Park AC2/AC4. Hard-park AC3 Soft. Soft catalog CLOSED. No Art. Synced main @ `6f494ca2`; Eng spike `bc-8722c903` launching. |
+| 2026-10-03 | **AC1 SHIPPED** #59 @ `5c9bab43` (tip `0eb107ed`). QA PASS-with-notes. Notice-only SoT-ok. ×1.15 not on live sell roll stays Soft OK MVP. Soft catalog CLOSED. |
