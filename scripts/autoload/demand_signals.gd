@@ -622,6 +622,103 @@ func marketplace_ask_cents(basis_cents: int, configured_rate: float = 0.0) -> in
 	return MarketplaceLeadPolicy.ask_cents(basis_cents, configured_rate)
 
 
+func auction_snipe_attention(configured: int = 0) -> int:
+	return AuctionSnipePolicy.attention_cost(configured)
+
+
+func auction_snipe_comp_width(configured: float = 0.0) -> float:
+	return AuctionSnipePolicy.comp_width(configured)
+
+
+func auction_snipe_flag(seed: int, day: int) -> bool:
+	return AuctionSnipePolicy.flag_on(seed, day)
+
+
+func auction_snipe_should_offer(
+	seed: int,
+	day: int,
+	named_event_live: bool = false
+) -> bool:
+	return AuctionSnipePolicy.should_offer(seed, day, named_event_live)
+
+
+func auction_snipe_ask_cents(
+	basis_cents: int,
+	seed: int,
+	day: int,
+	configured_width: float = 0.0
+) -> int:
+	return AuctionSnipePolicy.ask_cents(basis_cents, seed, day, configured_width)
+
+
+func open_auction_snipe() -> BuyConfirmSignal:
+	return buy_signal_for_id(AuctionSnipePolicy.offer_id(GameState.current_day))
+
+
+func roll_auction_snipe(
+	seed: int,
+	day: int,
+	named_event_live: bool = false
+) -> BuyConfirmSignal:
+	if not AuctionSnipePolicy.should_offer(seed, day, named_event_live):
+		return null
+	var opportunity := _make_auction_snipe(seed, day)
+	if opportunity == null or not opportunity.is_valid():
+		return null
+	return _signal_for_opportunity(opportunity)
+
+
+func auction_snipe_can_bid(dto: BuyConfirmSignal) -> bool:
+	if dto == null or not AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
+		return false
+	if _closed_opportunity_ids.has(dto.opportunity_id):
+		return false
+	var ask := maxi(dto.lot_total_cents, dto.unit_cost_cents * maxi(1, dto.quantity))
+	if GameState.attention_remaining < auction_snipe_attention():
+		return false
+	if not Economy.can_afford(ask):
+		return false
+	return dto.space_required <= dto.space_free
+
+
+func bid_auction_snipe(dto: BuyConfirmSignal) -> bool:
+	if dto == null or not AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
+		return false
+	if _closed_opportunity_ids.has(dto.opportunity_id):
+		return false
+	var opportunity := _existing_opportunity(dto.opportunity_id)
+	if opportunity == null or not opportunity.is_valid():
+		return false
+	var attention_cost := auction_snipe_attention()
+	var buy_qty := maxi(1, opportunity.quantity)
+	var ask := opportunity.unit_cost_cents * buy_qty
+	if GameState.attention_remaining < attention_cost:
+		return false
+	if not Economy.can_afford(ask):
+		return false
+	if not GameState.consume_attention(attention_cost):
+		return false
+	var shown_midpoint := (dto.shown_comp_low_cents + dto.shown_comp_high_cents) / 2
+	var purchased := InventoryService.confirm_stock_purchase(
+		opportunity.sku_id,
+		buy_qty,
+		opportunity.unit_cost_cents,
+		shown_midpoint - opportunity.unit_cost_cents,
+		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+	)
+	if not purchased:
+		_refund_attention(attention_cost)
+		return false
+	_closed_opportunity_ids[opportunity.id] = true
+	return true
+
+
+func decline_auction_snipe(dto: BuyConfirmSignal) -> bool:
+	if dto == null or not AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
+		return false
+	return dismiss_buy_opportunity(dto.opportunity_id)
+
+
 func _ensure_regulars_bus() -> void:
 	if EventBus.customer_resolved.is_connected(_on_customer_resolved_regulars):
 		return
@@ -636,6 +733,8 @@ func _on_customer_resolved_regulars(
 
 
 func confirm_buy(dto: BuyConfirmSignal, requested_count: int = -1) -> bool:
+	if dto != null and AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
+		return bid_auction_snipe(dto)
 	if dto == null or not dto.can_confirm:
 		return false
 	if is_inspect_mandatory(dto) and not dto.inspected:
@@ -887,10 +986,56 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 	# AQ1: read live Rep when today's marketplace list is prepared.
 	# Rep ≥ 75 appends one extra lead. Rep ≤ 74 keeps today's list.
 	opportunities.append_array(_high_rep_marketplace_leads(opportunities))
+	# AS1: prep roll lives here. Seeded auction flag offers one snipe.
+	# A live named settle event forces the flag on for this prep.
+	var snipe := _prep_auction_snipe()
+	if snipe != null:
+		opportunities.append(snipe)
 	for opportunity: BuyOpportunity in opportunities:
 		if not _closed_opportunity_ids.has(opportunity.id):
 			result.append(opportunity)
 	return result
+
+
+func _prep_auction_snipe() -> BuyOpportunity:
+	var day := GameState.current_day
+	var event_live := active_event() != null
+	if not AuctionSnipePolicy.should_offer(AuctionSnipePolicy.RUN_SEED, day, event_live):
+		return null
+	return _make_auction_snipe(AuctionSnipePolicy.RUN_SEED, day)
+
+
+func _make_auction_snipe(seed: int, day: int) -> BuyOpportunity:
+	var sku_id := AuctionSnipePolicy.DEFAULT_SKU_ID
+	if InventoryService.model == null:
+		return null
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null:
+		return null
+	var ask_cents := AuctionSnipePolicy.ask_cents(
+		market_cents_for(sku_id),
+		seed,
+		day
+	)
+	if ask_cents <= 0:
+		return null
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = AuctionSnipePolicy.offer_id(day)
+	opportunity.sku_id = sku_id
+	opportunity.display_name = sku.display_name
+	opportunity.offer_label = AuctionSnipePolicy.OFFER_LABEL
+	opportunity.channel = DemandSignalService.Channel.AUCTION
+	opportunity.unit_cost_cents = ask_cents
+	opportunity.quantity = 1
+	opportunity.space_required = 1
+	return opportunity
+
+
+func _refund_attention(amount: int) -> void:
+	if amount <= 0:
+		return
+	GameState.attention_remaining += amount
+	EventBus.attention_changed.emit(GameState.attention_remaining)
 
 
 func _high_rep_marketplace_leads(today: Array[BuyOpportunity]) -> Array[BuyOpportunity]:
@@ -1000,6 +1145,12 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 		)
 	_service.apply_inspect_state(dto)
 	_service.refresh_confirm_gate(dto)
+	if AuctionSnipePolicy.is_snipe_id(opportunity.id):
+		if not dto.inspected:
+			dto.condition_cue = AuctionSnipePolicy.CONDITION_CUE
+		dto.confidence = AuctionSnipePolicy.CONFIDENCE
+		if GameState.attention_remaining < auction_snipe_attention():
+			dto.can_confirm = false
 	return dto
 
 
