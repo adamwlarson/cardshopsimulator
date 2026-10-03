@@ -204,6 +204,7 @@ func _initialize() -> void:
 	_test_daily_shrink_settle()
 	_test_sealed_floor_theft_premium()
 	_test_mid_band_baseline()
+	_test_player_trades_unlock()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1692,6 +1693,10 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 		"res://scripts/economy/online_listing.gd",
 		"res://scripts/economy/online_list_confirm_signal.gd",
 		"res://scripts/economy/online_listing_service.gd",
+		"res://scripts/ui/player_trade_presenter.gd",
+		"res://scripts/economy/player_trade_offer.gd",
+		"res://scripts/economy/player_trade_policy.gd",
+		"res://scripts/economy/player_trade_service.gd",
 	]:
 		var source := FileAccess.get_file_as_string(path)
 		_expect_equal(source.contains("true_market"), false, "%s market truth access" % path)
@@ -20351,6 +20356,623 @@ func _test_mid_band_section_45_and_parked() -> void:
 		"AM1: AI1/AJ1/AH1/AG1/AK1 stay off the sell roll"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_player_trades_unlock() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_player_trade_named_gate()
+	_test_player_trade_same_seed_shows_at_50_not_49()
+	_test_player_trade_accept_swaps_lots_cash_unchanged()
+	_test_player_trade_decline_gone_no_rep_change()
+	_test_player_trade_never_shows_true_market()
+	_test_player_trade_spawn_and_whale_stay_baseline()
+	_test_player_trade_sale_pays_listed()
+	_test_player_trade_shipped_levers_stay()
+	_test_player_trade_section_45_and_parked()
+	_test_player_trade_hud_plain_text()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_player_trade_named_gate() -> void:
+	_expect_equal(
+		PlayerTradePolicy.UNLOCK_REP,
+		50,
+		"AN1: locked player-trade unlock is Rep 50"
+	)
+	_expect_equal(
+		PlayerTradePolicy.is_unlocked(50),
+		true,
+		"AN1: Rep 50 unlocks player trades"
+	)
+	_expect_equal(
+		PlayerTradePolicy.is_unlocked(49),
+		false,
+		"AN1: Rep 49 keeps the trade door shut"
+	)
+	_expect_equal(
+		PlayerTradePolicy.can_offer(50) and not PlayerTradePolicy.can_offer(49),
+		true,
+		"AN1: offer channel follows the Rep 50 gate"
+	)
+	_expect_equal(
+		PlayerTradePolicy.SEEDED_GIVE_SKU,
+		&"AA-DUST-ETB",
+		"AN1: seeded give lot is the owned Dustway ETB"
+	)
+	_expect_equal(
+		PlayerTradePolicy.SEEDED_RECEIVE_SKU,
+		&"AA-SKIE-ETB",
+		"AN1: seeded receive lot is the Skiefall ETB"
+	)
+	_expect_equal(
+		PlayerTradePolicy.SEEDED_CONDITION,
+		"Sealed · NM",
+		"AN1: both sides show sealed NM"
+	)
+
+
+func _test_player_trade_same_seed_shows_at_50_not_49() -> void:
+	_game_state.call("start_new_game")
+	const SEED := 20261003
+	_game_state.set("current_reputation", 50)
+	_event_bus.emit_signal("reputation_changed", 50)
+	var at_50: Variant = _demand_signals.call("roll_player_trade", SEED, 50)
+	_expect_equal(at_50 != null, true, "AN1: same seed at Rep 50 shows a player-trade offer")
+	if at_50 != null:
+		_expect_equal(
+			at_50.get("give_sku_id"),
+			&"AA-DUST-ETB",
+			"AN1: seeded offer asks for one owned Dustway ETB"
+		)
+		_expect_equal(
+			at_50.get("receive_sku_id"),
+			&"AA-SKIE-ETB",
+			"AN1: seeded offer pays one Skiefall ETB"
+		)
+		_expect_equal(
+			at_50.get("give_condition"),
+			"Sealed · NM",
+			"AN1: give side shows condition"
+		)
+		_expect_equal(
+			at_50.get("receive_condition"),
+			"Sealed · NM",
+			"AN1: receive side shows condition"
+		)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 49)
+	_event_bus.emit_signal("reputation_changed", 49)
+	var at_49: Variant = _demand_signals.call("roll_player_trade", SEED, 49)
+	_expect_equal(at_49 == null, true, "AN1: same seed at Rep 49 does not offer")
+	var live_49: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(live_49 == null, true, "AN1: live prep roll at Rep 49 stays shut")
+	_game_state.set("current_reputation", 50)
+	_event_bus.emit_signal("reputation_changed", 50)
+	var live_50: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(live_50 != null, true, "AN1: prep roll reads live Rep 50 and offers")
+
+
+func _test_player_trade_accept_swaps_lots_cash_unchanged() -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 50)
+	_event_bus.emit_signal("reputation_changed", 50)
+	var give_before := int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB"))
+	var receive_before := int(_inventory_service.call("get_stock_quantity", &"AA-SKIE-ETB"))
+	_expect_equal(give_before > 0, true, "AN1: seed inventory owns the Dustway give lot")
+	var cash_before := int(_economy.get("balance_cents"))
+	var ledger_before := _an1_ledger_size()
+	var offer: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(offer != null, true, "AN1: accept path needs the seeded offer")
+	if offer == null:
+		return
+	_expect_equal(
+		bool(_demand_signals.call("player_trade_can_accept", offer)),
+		true,
+		"AN1: seeded offer can be accepted"
+	)
+	_expect_equal(
+		bool(_demand_signals.call("accept_player_trade", offer)),
+		true,
+		"AN1: accept swaps the lots"
+	)
+	_expect_equal(
+		int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB")),
+		give_before - 1,
+		"AN1: given lot leaves"
+	)
+	_expect_equal(
+		int(_inventory_service.call("get_stock_quantity", &"AA-SKIE-ETB")),
+		receive_before + 1,
+		"AN1: received lot enters"
+	)
+	var received: StockLot = _inventory_service.call("get_lot", &"AA-SKIE-ETB")
+	_expect_equal(received != null, true, "AN1: received lot is stocked")
+	if received != null:
+		_expect_equal(
+			received.location != null
+			and received.location.type == InventoryLocation.Type.BACKSTOCK,
+			true,
+			"AN1: received lot is in BACKSTOCK"
+		)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AN1: accept leaves cash unchanged"
+	)
+	_expect_equal(
+		_an1_ledger_size(),
+		ledger_before,
+		"AN1: accept writes no cash ledger"
+	)
+	_expect_equal(
+		_demand_signals.call("open_player_trade") == null,
+		true,
+		"AN1: accepted offer is gone"
+	)
+
+
+func _test_player_trade_decline_gone_no_rep_change() -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 50)
+	_event_bus.emit_signal("reputation_changed", 50)
+	var give_before := int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB"))
+	var receive_before := int(_inventory_service.call("get_stock_quantity", &"AA-SKIE-ETB"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var offer: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(offer != null, true, "AN1: decline path needs the seeded offer")
+	if offer == null:
+		return
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		bool(_demand_signals.call("decline_player_trade", offer)),
+		true,
+		"AN1: decline dismisses the offer"
+	)
+	_expect_equal(
+		_demand_signals.call("open_player_trade") == null,
+		true,
+		"AN1: declined offer is gone"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AN1: decline does not change Rep"
+	)
+	_expect_equal(
+		int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB")),
+		give_before,
+		"AN1: decline leaves the give lot"
+	)
+	_expect_equal(
+		int(_inventory_service.call("get_stock_quantity", &"AA-SKIE-ETB")),
+		receive_before,
+		"AN1: decline does not add the receive lot"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AN1: decline leaves cash unchanged"
+	)
+
+
+func _test_player_trade_never_shows_true_market() -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 50)
+	var offer: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(offer != null, true, "AN1: leak scan needs the seeded offer")
+	if offer == null:
+		return
+	_expect_dto_has_no_truth_fields(offer, "AN1 player-trade offer")
+	var row := PlayerTradePresenter.opportunity_row(offer)
+	var detail := PlayerTradePresenter.detail_summary(offer)
+	var confirm := PlayerTradePresenter.confirm_snapshot(offer)
+	for text: String in [row, detail, confirm, PlayerTradePresenter.detail_title(offer)]:
+		_assert_text_has_no_truth(text, "AN1 player-trade copy")
+		_expect_equal(
+			text.to_lower().contains("true_market"),
+			false,
+			"AN1: offer copy never shows true_market"
+		)
+	_expect_equal(row.contains("Dustway"), true, "AN1: row shows the give SKU")
+	_expect_equal(row.contains("Skiefall"), true, "AN1: row shows the receive SKU")
+	_expect_equal(
+		detail.contains("Sealed · NM") and confirm.contains("Sealed · NM"),
+		true,
+		"AN1: detail and confirm show condition"
+	)
+	_expect_equal(
+		detail.contains("BACKSTOCK") and detail.contains("Cash does not change"),
+		true,
+		"AN1: detail names backstock and the cash rule"
+	)
+
+
+func _test_player_trade_spawn_and_whale_stay_baseline() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_49 := catalog.roll_spawn(SEED, 49, NORMAL_CONFIG, BASELINE)
+	var at_50 := catalog.roll_spawn(SEED, 50, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_49.size(), 5, "AN1: Rep 49 keeps the AM1 spawn count")
+	_expect_equal(at_50.size(), 5, "AN1: Rep 50 keeps the AM1 spawn count")
+	_expect_equal(
+		at_49.size(),
+		at_50.size(),
+		"AN1: same seed spawn count at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		",".join(_aj1_ids(at_49)),
+		",".join(_aj1_ids(at_50)),
+		"AN1: same seed at Rep 50 stays on the AM1 roll"
+	)
+	var weight_49 := catalog.weight_for(whale, 49, NORMAL_CONFIG)
+	var weight_50 := catalog.weight_for(whale, 50, NORMAL_CONFIG)
+	_expect_equal(
+		is_equal_approx(weight_49, weight_50),
+		true,
+		"AN1: whale weight at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(49), 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(50), 1.0),
+		true,
+		"AN1: Rep 50 keeps the AM1 whale pack — no traffic bonus"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(49, 5),
+		CustomerSpawnPolicy.spawn_count(50, 5),
+		"AN1: spawn_count at Rep 50 equals Rep 49"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not policy_src.contains("PLAYER_TRADE")
+		and not policy_src.contains("TRADE_SPAWN")
+		and not policy_src.contains("TRADE_TRAFFIC")
+		and not policy_src.contains("UNLOCK_SPAWN"),
+		true,
+		"AN1: spawn policy has no player-trade traffic bonus"
+	)
+
+
+func _test_player_trade_sale_pays_listed() -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 50)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AN1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AN1: listed price stays set at Rep 50")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AN1: sell_through_mult_for stays 1.0 at Rep 50"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AN1: listed lot still enqueues at Rep 50")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AN1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AN1: live sell still resolves at Rep 50")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AN1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AN1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "player_trade")
+		and not _function_body_contains(queue_src, "func sell_listed()", "whale")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"player_trade"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"reputation"
+		),
+		true,
+		"AN1: player trades are not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_player_trade_shipped_levers_stay() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and NORMAL_CONFIG.register_walkout_rep_cap == 3
+		and shop.register_walkout_rep_hit() == 1
+		and shop.register_walkout_rep_cap() == 3,
+		true,
+		"AN1/AH1: walkout scalars stay Rep −1 / cap 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5
+		and NORMAL_CONFIG.fire_popular_roster_age == 3
+		and shop.fire_rep_hit() == 5
+		and shop.fire_popular_roster_age() == 3,
+		true,
+		"AN1/AG1: Fire scalars stay Rep −5 at roster age 3"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005)
+		and is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AN1/AK1/AL1: daily shrink 0.2%/0.7% and floor-sealed +0.3% stay"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_quiet_floor(24)
+		and not CustomerSpawnPolicy.is_quiet_floor(25)
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"AN1/AI1: quiet floor stays Rep 24"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(75)
+		and not CustomerSpawnPolicy.is_high_rep(74)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AN1/AJ1: high-rep whale pack stays ×1.5 at 75"
+	)
+	_expect_equal(_game_state.call("start_floor"), true, "AN1/AH1: walkout day opens")
+	_game_state.set("attention_remaining", 0)
+	var queue := _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AN1/AH1: waiter enqueues")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout") >= 1, true, "AN1/AH1: uncovered leave is a walkout")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AN1/AH1: walkout math stays Rep −1"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AN1/AG1: hire Cashier to age")
+	_ag1_run_floor_days(3)
+	_expect_equal(shop.staff[0].roster_age, 3, "AN1/AG1: Cashier is popular")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AN1/AG1: Fire a popular Cashier"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 5,
+		"AN1/AG1: popular Fire still drops Rep 5 once"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_player_trade_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("player_trade")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("regulars_return")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"AN1: Soft catalog stays closed"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AN1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AN1: marketplace fees stay as shipped"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AN1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		not hud_src.contains("regulars_return")
+		and not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off"),
+		true,
+		"AN1: no regulars return loop, STOP, or camera off-switch"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/player_trade_presenter.gd",
+		"res://scripts/economy/player_trade_offer.gd",
+		"res://scripts/economy/player_trade_policy.gd",
+		"res://scripts/economy/player_trade_service.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AN1: %s stays §4.5 clean" % path
+		)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func open_player_trade")
+		and demand_src.contains("GameState.current_reputation")
+		and demand_src.contains("PlayerTradeService"),
+		true,
+		"AN1: prep offer roll reads live Rep for player trades"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "player_trade")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "quiet")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AN1: AI1/AJ1/AH1/AG1/AK1/AL1 stay off the sell roll"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_player_trade_hud_plain_text() -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 50)
+	_event_bus.emit_signal("reputation_changed", 50)
+	var cash_before := int(_economy.get("balance_cents"))
+	var give_before := int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB"))
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AN1: HUD loads for the plain-text offer")
+	if hud == null:
+		return
+	var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+	_expect_equal(open_buy != null, true, "AN1: OpenBuyButton still opens prep offers")
+	open_buy.pressed.emit()
+	_expect_equal(
+		_click_player_trade_row(hud),
+		true,
+		"AN1: prep list shows the player-trade row at Rep 50"
+	)
+	var summary := hud.get_node_or_null("%BuySummary") as Label
+	var inspect_button := hud.get_node_or_null("%InspectButton") as Button
+	var buy_button := hud.get_node_or_null("%BuyButton") as Button
+	_expect_equal(summary != null, true, "AN1: trade detail uses the buy summary label")
+	if summary != null:
+		_assert_text_has_no_truth(summary.text, "AN1 HUD trade summary")
+		_expect_equal(
+			summary.text.contains("Dustway") and summary.text.contains("Skiefall"),
+			true,
+			"AN1: HUD names both SKUs"
+		)
+		_expect_equal(
+			summary.text.contains("Sealed · NM"),
+			true,
+			"AN1: HUD shows condition"
+		)
+		_expect_equal(
+			summary.text.to_lower().contains("true_market"),
+			false,
+			"AN1: HUD never shows true_market"
+		)
+	_expect_equal(
+		inspect_button == null or not inspect_button.visible,
+		true,
+		"AN1: trade detail hides Inspect"
+	)
+	_expect_equal(
+		buy_button != null and buy_button.text == "Accept" and not buy_button.disabled,
+		true,
+		"AN1: trade detail Accept is enabled"
+	)
+	buy_button.pressed.emit()
+	var confirm_summary := hud.get_node_or_null("%BuyConfirmSummary") as Label
+	if confirm_summary != null:
+		_assert_text_has_no_truth(confirm_summary.text, "AN1 HUD trade confirm")
+		_expect_equal(
+			confirm_summary.text.contains("Cash does not change"),
+			true,
+			"AN1: confirm restates the cash rule"
+		)
+	var confirm_button := hud.get_node_or_null("%BuyConfirmButton") as Button
+	_expect_equal(confirm_button != null, true, "AN1: confirm button still settles the swap")
+	if confirm_button != null:
+		confirm_button.pressed.emit()
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AN1: HUD accept leaves cash unchanged"
+	)
+	_expect_equal(
+		int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB")),
+		give_before - 1,
+		"AN1: HUD accept removes the given lot"
+	)
+	var received: StockLot = _inventory_service.call("get_lot", &"AA-SKIE-ETB")
+	_expect_equal(
+		received != null
+		and received.location != null
+		and received.location.type == InventoryLocation.Type.BACKSTOCK,
+		true,
+		"AN1: HUD accept puts the received lot in BACKSTOCK"
+	)
+	hud.queue_free()
+	_free_lingering_gameplay_huds()
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 49)
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		open_buy = hud.get_node_or_null("%OpenBuyButton") as Button
+		if open_buy != null:
+			open_buy.pressed.emit()
+		_expect_equal(
+			_click_player_trade_row(hud),
+			false,
+			"AN1: HUD prep list hides player trades at Rep 49"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+	_game_state.call("start_new_game")
+
+
+func _click_player_trade_row(hud: Node) -> bool:
+	var rows := hud.get_node_or_null("%BuyOpportunityRows") as VBoxContainer
+	if rows == null:
+		return false
+	for child: Node in rows.get_children():
+		var row := child as Button
+		if row != null and row.text.begins_with("Player trade ·"):
+			row.pressed.emit()
+			return true
+	return false
+
+
+func _an1_ledger_size() -> int:
+	return (_economy.call("get_ledger") as Array).size()
 
 
 func _test_high_rep_whale_gate() -> void:
