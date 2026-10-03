@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AA v1 — post Z1
 
-**Status:** Adopted **AA1 GO** (Sandbox personal-bests) — Eng CLEAR TO KICK. Park AA2 play-table / AA4 STOP. **Hard-park AA3** camera off-switch Soft. Soft catalog stays CLOSED. No Art.
+**Status:** **AA1 SHIPPED** #57 @ `613dfad0e2b9e7265aa0b3f30052ea5fc2608019` (tip `44076b7a`) — Sandbox personal-bests. Soft catalog CLOSED. Park AA2/AA4. Hard-park AA3. Old-save cash high Soft OK MVP.
 **Author:** CSS Designer  
 **Date:** 2026-10-03  
 **Depends on:** pick-z (Z1 Ironman SHIPPED #56 @ `71c53944`); Soft catalog CLOSED  
@@ -77,7 +77,7 @@ No new systems.
 
 - [x] Choose **AA1**
 - [x] If AA1: Eng vs systems §9.2 Sandbox; no Art; Soft catalog CLOSED
-- [x] Sync this file to main before cloud agent
+- [x] Sync this file to main @ `8aaf628b`
 - [x] Soft catalog stays closed
 
 ---
@@ -88,3 +88,5 @@ No new systems.
 |------|----------|
 | 2026-10-03 | Drafted post Z1 SHIPPED. Lean **AA1 Sandbox personal-bests**. Soft reopeners hard-parked. |
 | 2026-10-03 | PM adopted **AA1 GO** Sandbox personal-bests. Park AA2/AA4. Hard-park AA3 Soft. No Art. |
+| 2026-10-03 | PM locked **AA1 GO** (Sandbox personal-bests). Park AA2/AA4. Hard-park AA3 camera off-switch Soft. Soft catalog CLOSED. No Art. Synced main @ `8aaf628b`; Eng spike launching. |
+| 2026-10-03 | **AA1 SHIPPED** #57 @ `613dfad0e2b9e7265aa0b3f30052ea5fc2608019` — QA PASS-with-notes. Soft catalog CLOSED. Old-save cash high Soft OK MVP. |
