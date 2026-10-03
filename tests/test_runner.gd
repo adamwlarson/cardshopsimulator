@@ -14315,7 +14315,7 @@ func _test_play_table_hud_and_section_45() -> void:
 		)
 		_assert_text_has_no_truth(banner.text, "AB1 event-night banner")
 	_assert_text_has_no_truth(
-		DemandSignals.calendar_telegraph_text(),
+		String(_demand_signals.call("calendar_telegraph_text")),
 		"AB1 calendar telegraph"
 	)
 	hud.queue_free()
