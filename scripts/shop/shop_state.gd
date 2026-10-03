@@ -327,6 +327,52 @@ func location_display_bonus(location: InventoryLocation) -> float:
 	return 0.0
 
 
+func impulse_shelf_tiles() -> int:
+	if _config != null and _config.impulse_shelf_tiles > 0:
+		return _config.impulse_shelf_tiles
+	return ShopLayout.IMPULSE_SHELF_TILES
+
+
+func impulse_shelf_interest_mult() -> float:
+	if _config != null:
+		return maxf(0.0, _config.impulse_shelf_interest)
+	return 1.25
+
+
+func floor_shelf_interest_mult() -> float:
+	if _config != null:
+		return maxf(0.0, _config.floor_shelf_interest)
+	return 1.00
+
+
+func has_impulse_shelf() -> bool:
+	return layout.has_impulse_shelf(impulse_shelf_tiles())
+
+
+func impulse_shelf_interest_at(origin: Vector2i) -> float:
+	# Browse rank / notice only. Live origin read — rearrange updates next call.
+	if layout.counter_tile_distance(origin) <= impulse_shelf_tiles():
+		return impulse_shelf_interest_mult()
+	return floor_shelf_interest_mult()
+
+
+func impulse_shelf_interest(location: InventoryLocation) -> float:
+	# Accessories channel. Not AC1 sightline and not the AD1 location ladder.
+	if location == null:
+		return 0.0
+	match location.type:
+		InventoryLocation.Type.SHELF:
+			var unit := layout.shelf()
+			if unit == null:
+				return floor_shelf_interest_mult()
+			return impulse_shelf_interest_at(unit.origin)
+		InventoryLocation.Type.BACKSTOCK:
+			return 0.0
+		InventoryLocation.Type.ONLINE_HOLD:
+			return 0.0
+	return 0.0
+
+
 func research_cash_cost_cents() -> int:
 	if _config != null:
 		return maxi(0, _config.research_cost_cents)

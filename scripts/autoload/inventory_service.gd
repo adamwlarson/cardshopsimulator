@@ -387,26 +387,68 @@ func find_listed_sku_offer(sku_id: StringName, budget_cents: int) -> Dictionary:
 				card.listed_price_cents,
 				card.location
 			)
-	return {}
+	var best_accessory := {}
+	var best_accessory_interest := -1.0
+	for lot: StockLot in model.stock_lots:
+		if (
+			lot.sku.id != sku_id
+			or lot.qty <= 0
+			or lot.listed_price_cents <= 0
+			or lot.listed_price_cents > budget_cents
+			or not is_in_store_sellable(lot.location)
+			or lot.sku.product_class != ProductSKU.ProductClass.ACCESSORY
+			or not _is_accessory_walk_in_visible(lot.location)
+		):
+			continue
+		var interest := _impulse_shelf_interest(lot.location)
+		if interest > best_accessory_interest:
+			best_accessory_interest = interest
+			best_accessory = _offer_for(
+				lot.sku,
+				lot.listed_price_cents,
+				lot.location
+			)
+	return best_accessory
 
 
 func find_listed_offer(
 	interest_tags: Array[StringName],
 	budget_cents: int
 ) -> Dictionary:
+	var first_sealed := {}
+	var best_accessory := {}
+	var best_accessory_interest := -1.0
 	for lot: StockLot in model.stock_lots:
 		if (
-			lot.qty > 0
-			and lot.listed_price_cents > 0
-			and lot.listed_price_cents <= budget_cents
-			and is_in_store_sellable(lot.location)
-			and _matches_interest(lot.sku, interest_tags)
+			lot.qty <= 0
+			or lot.listed_price_cents <= 0
+			or lot.listed_price_cents > budget_cents
+			or not is_in_store_sellable(lot.location)
+			or not _matches_interest(lot.sku, interest_tags)
 		):
-			return _offer_for(
+			continue
+		if lot.sku.product_class == ProductSKU.ProductClass.ACCESSORY:
+			if not _is_accessory_walk_in_visible(lot.location):
+				continue
+			var interest := _impulse_shelf_interest(lot.location)
+			if interest > best_accessory_interest:
+				best_accessory_interest = interest
+				best_accessory = _offer_for(
+					lot.sku,
+					lot.listed_price_cents,
+					lot.location
+				)
+			continue
+		if first_sealed.is_empty():
+			first_sealed = _offer_for(
 				lot.sku,
 				lot.listed_price_cents,
 				lot.location
 			)
+	if not first_sealed.is_empty():
+		return first_sealed
+	if not best_accessory.is_empty():
+		return best_accessory
 	var best_card_offer := {}
 	var best_card_interest := -1.0
 	for card: CardInstance in model.cards:
@@ -467,6 +509,10 @@ func confirm_customer_sale(sku_id: StringName, sale_price_cents: int) -> bool:
 			and lot.qty > 0
 			and lot.listed_price_cents > 0
 			and is_in_store_sellable(lot.location)
+			and (
+				lot.sku.product_class != ProductSKU.ProductClass.ACCESSORY
+				or _is_accessory_walk_in_visible(lot.location)
+			)
 		):
 			if not remove_stock_from(sku_id, lot.location, 1):
 				return false
@@ -601,8 +647,16 @@ func _location_display_bonus(location: InventoryLocation) -> float:
 	return GameState.shop.location_display_bonus(location)
 
 
+func _impulse_shelf_interest(location: InventoryLocation) -> float:
+	return GameState.shop.impulse_shelf_interest(location)
+
+
 func _is_walk_in_visible(location: InventoryLocation) -> bool:
 	return _location_display_bonus(location) > 0.0
+
+
+func _is_accessory_walk_in_visible(location: InventoryLocation) -> bool:
+	return _impulse_shelf_interest(location) > 0.0
 
 
 func _graded_case_display_bonus(location: InventoryLocation) -> float:
@@ -628,6 +682,11 @@ func _offer_for(
 			_graded_case_display_bonus(location) if is_graded_case else 1.0
 		),
 		"location_display_bonus": _location_display_bonus(location),
+		"impulse_shelf_interest": (
+			_impulse_shelf_interest(location)
+			if sku.product_class == ProductSKU.ProductClass.ACCESSORY
+			else 1.0
+		),
 	}
 
 

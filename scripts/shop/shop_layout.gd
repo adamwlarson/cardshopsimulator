@@ -4,6 +4,9 @@ extends RefCounted
 const DEFAULT_ENTRANCE := Vector2i(4, 0)
 const DISPLAY_CASE_ID := &"display_case"
 const SIGHTLINE_TILES := 3
+const SHELF_ID := &"shelf"
+const COUNTER_ID := &"counter"
+const IMPULSE_SHELF_TILES := 2
 const PLAY_TABLE_ID := &"play_table"
 const PLAY_TABLE_SIZE := Vector2i(2, 2)
 const PLAY_TABLE_DEFAULT_ORIGIN := Vector2i(2, 4)
@@ -95,6 +98,31 @@ func has_sightline_display_bonus(max_tiles: int = SIGHTLINE_TILES) -> bool:
 	if showcase == null:
 		return false
 	return entrance_tile_distance(showcase.origin) <= maxi(0, max_tiles)
+
+
+func shelf() -> ShopFixture:
+	return fixture_by_id(SHELF_ID)
+
+
+func counter() -> ShopFixture:
+	for fixture: ShopFixture in fixtures:
+		if fixture.is_counter:
+			return fixture
+	return fixture_by_id(COUNTER_ID)
+
+
+func counter_tile_distance(origin: Vector2i) -> int:
+	var checkout := counter()
+	if checkout == null:
+		return 1_000_000
+	return absi(origin.x - checkout.origin.x) + absi(origin.y - checkout.origin.y)
+
+
+func has_impulse_shelf(max_tiles: int = IMPULSE_SHELF_TILES) -> bool:
+	var unit := shelf()
+	if unit == null:
+		return false
+	return counter_tile_distance(unit.origin) <= maxi(0, max_tiles)
 
 
 func has_play_table() -> bool:
