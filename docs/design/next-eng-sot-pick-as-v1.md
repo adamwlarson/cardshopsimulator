@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AS v1 — post AR1
 
-**Status:** **AS1 ADOPTED** 2026-10-03 — Auction snipes. Park AS2/AS3/AS4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
+**Status:** **AS1 SHIPPED** 2026-10-03 — squash-merged #75 @ `967ecd37` (reviewed `79263eaa`). Auction snipes. Park AS2/AS3/AS4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-ar (AR1 Daily true_market drift SHIPPED #74 @ `86438938`); Soft catalog CLOSED
@@ -97,3 +97,4 @@
 | 2026-10-03 | PM adopted **AS1**. Spec on main `ff4a3018`. Spike [AS1 auction snipes](https://cursor.com/agents/bc-6163683c-282f-5a9e-96f8-4ec7e6026041). Park AS2/AS3/AS4. No Art. Soft catalog CLOSED. Draft sha256 `b07c675c`. |
 | 2026-10-03 | Tip-frozen PR #75 @ `79263eaa` (branch `cursor/as1-auction-snipes-6041`). Five files, no docs. Prep flag offers one auction snipe. Bid is Attention 10 plus the ask. |
 | 2026-10-03 | Eng APPROVE #75 @ `79263eaa`. No Soft notes. Formal released. Fee stays 8%. Door spawn stays as shipped. |
+| 2026-10-03 | SHIPPED squash-merge #75 @ `967ecd37` (reviewed `79263eaa`). QA PASS, harness 49/0/0. No new Soft note. Winning bid Attention 10 plus 5201¢, Dustway ETB ×1 to backstock. Branch `cursor/as1-auction-snipes-6041` deleted. |
