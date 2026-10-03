@@ -435,7 +435,7 @@ func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
 		count_text,
 	]
 	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
-	_sync_trade_actions(false)
+	_sync_offer_actions()
 	_sync_buy_confirm_gate()
 	_sync_inspect_button()
 	buy_list_panel.hide()
@@ -449,7 +449,7 @@ func _select_player_trade(offer: PlayerTradeOffer) -> void:
 	_trade_offer = offer
 	buy_title.text = PlayerTradePresenter.detail_title(offer)
 	buy_summary.text = PlayerTradePresenter.detail_summary(offer)
-	_sync_trade_actions(true)
+	_sync_offer_actions()
 	_sync_buy_confirm_gate()
 	_sync_inspect_button()
 	buy_list_panel.hide()
@@ -482,6 +482,10 @@ func _confirm_buy() -> void:
 		if not DemandSignals.player_trade_can_accept(_trade_offer):
 			return
 		if DemandSignals.accept_player_trade(_trade_offer):
+			_close_buy()
+		return
+	if _is_auction_snipe():
+		if DemandSignals.bid_auction_snipe(_buy_signal):
 			_close_buy()
 		return
 	if _buy_signal == null or not _buy_signal.can_confirm:
@@ -562,6 +566,9 @@ func _sync_buy_confirm_gate() -> void:
 	if _trade_offer != null:
 		buy_button.disabled = not DemandSignals.player_trade_can_accept(_trade_offer)
 		return
+	if _is_auction_snipe():
+		buy_button.disabled = not DemandSignals.auction_snipe_can_bid(_buy_signal)
+		return
 	buy_button.disabled = _buy_signal == null or not _buy_signal.can_confirm
 
 
@@ -603,7 +610,7 @@ func _close_buy() -> void:
 	buy_confirm_panel.hide()
 	_buy_signal = null
 	_trade_offer = null
-	_sync_trade_actions(false)
+	_sync_offer_actions()
 	_sync_inspect_button()
 	_sync_modal_veil()
 
@@ -622,25 +629,46 @@ func _ensure_trade_decline_button() -> void:
 	_trade_decline_button.custom_minimum_size = Vector2(0.0, 40.0)
 	_trade_decline_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_trade_decline_button.text = "Decline"
-	_trade_decline_button.pressed.connect(_decline_player_trade)
+	_trade_decline_button.pressed.connect(_decline_selected_offer)
 	actions.add_child(_trade_decline_button)
 	if buy_button != null:
 		actions.move_child(_trade_decline_button, buy_button.get_index())
 
 
-func _sync_trade_actions(is_trade: bool) -> void:
+func _sync_offer_actions() -> void:
 	_ensure_trade_decline_button()
+	var is_trade := _trade_offer != null
+	var is_snipe := _is_auction_snipe()
 	if buy_button != null:
-		buy_button.text = "Accept" if is_trade else "Buy"
+		if is_trade:
+			buy_button.text = "Accept"
+		elif is_snipe:
+			buy_button.text = "Bid"
+		else:
+			buy_button.text = "Buy"
 	if _trade_decline_button != null:
-		_trade_decline_button.visible = is_trade
+		_trade_decline_button.visible = is_trade or is_snipe
+
+
+func _is_auction_snipe() -> bool:
+	return (
+		_buy_signal != null
+		and AuctionSnipePolicy.is_snipe_id(_buy_signal.opportunity_id)
+	)
+
+
+func _decline_selected_offer() -> void:
+	if _trade_offer != null:
+		DemandSignals.decline_player_trade(_trade_offer)
+		_close_buy()
+		return
+	if _is_auction_snipe():
+		DemandSignals.decline_auction_snipe(_buy_signal)
+	_close_buy()
 
 
 func _decline_player_trade() -> void:
-	if _trade_offer == null:
-		return
-	DemandSignals.decline_player_trade(_trade_offer)
-	_close_buy()
+	_decline_selected_offer()
 
 
 func _open_price_list() -> void:

@@ -209,6 +209,7 @@ func _initialize() -> void:
 	_test_distributor_moq_worse()
 	_test_better_marketplace_lead()
 	_test_daily_market_drift()
+	_test_auction_snipes()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -23258,6 +23259,565 @@ func _test_daily_market_drift_section_45_and_parked() -> void:
 	_game_state.call("start_new_game")
 
 
+func _test_auction_snipes() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_auction_snipe_named_gate()
+	_test_auction_snipe_same_seed_flag_and_event()
+	_test_auction_snipe_bid_success_and_short_fails()
+	_test_auction_snipe_decline_no_change_no_truth()
+	_test_auction_snipe_door_whale_sale_fee_stay()
+	_test_auction_snipe_shipped_levers_stay()
+	_test_auction_snipe_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_auction_snipe_named_gate() -> void:
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST,
+		10,
+		"AS1: locked bid Attention cost is 10"
+	)
+	_expect_equal(
+		is_equal_approx(AuctionSnipePolicy.COMP_WIDTH, 0.12),
+		true,
+		"AS1: locked auction width is 0.12"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.attention_cost(0),
+		10,
+		"AS1: missing Attention cost falls back to 10"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.attention_cost(-4),
+		10,
+		"AS1: negative Attention cost falls back to 10"
+	)
+	_expect_equal(
+		is_equal_approx(AuctionSnipePolicy.comp_width(0.0), 0.12),
+		true,
+		"AS1: missing comp width falls back to 0.12"
+	)
+	_expect_equal(
+		is_equal_approx(AuctionSnipePolicy.comp_width(-1.0), 0.12),
+		true,
+		"AS1: negative comp width falls back to 0.12"
+	)
+	_expect_equal(
+		int(_demand_signals.call("auction_snipe_attention", 0)),
+		10,
+		"AS1: DemandSignals omitted Attention cost is 10"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("auction_snipe_comp_width", 0.0)), 0.12),
+		true,
+		"AS1: DemandSignals omitted width is 0.12"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.should_offer(AuctionSnipePolicy.RUN_SEED, 1, true),
+		true,
+		"AS1: a live named event forces the auction flag on"
+	)
+	var days := _as1_flag_days(AuctionSnipePolicy.RUN_SEED)
+	_expect_equal(int(days.get("on", 0)) >= 1, true, "AS1: same seed has a flag-on day")
+	_expect_equal(int(days.get("off", 0)) >= 1, true, "AS1: same seed has a flag-off day")
+	if int(days.get("off", 0)) >= 1:
+		_expect_equal(
+			bool(
+				_demand_signals.call(
+					"auction_snipe_should_offer",
+					AuctionSnipePolicy.RUN_SEED,
+					int(days["off"]),
+					true
+				)
+			),
+			true,
+			"AS1: DemandSignals event force overrides a flag-off day"
+		)
+		_expect_equal(
+			bool(
+				_demand_signals.call(
+					"auction_snipe_should_offer",
+					AuctionSnipePolicy.RUN_SEED,
+					int(days["off"]),
+					false
+				)
+			),
+			false,
+			"AS1: quiet day with no live named event uses the seeded flag alone"
+		)
+
+
+func _test_auction_snipe_same_seed_flag_and_event() -> void:
+	const SEED := 20261003
+	var days := _as1_flag_days(SEED)
+	var on_day := int(days.get("on", 0))
+	var off_day := int(days.get("off", 0))
+	_expect_equal(on_day >= 1 and off_day >= 1, true, "AS1: same seed yields both flag days")
+	if on_day < 1 or off_day < 1:
+		return
+	_as1_reset_on(on_day)
+	var on_signals := _as1_snipe_signals()
+	_expect_equal(on_signals.size(), 1, "AS1: a day with the auction flag shows one snipe")
+	var on_snipe := _as1_snipe_signal(on_signals)
+	_expect_equal(on_snipe != null, true, "AS1: flag-on prep roll offers the snipe")
+	if on_snipe != null:
+		_expect_equal(on_snipe.channel, &"auction", "AS1: snipe uses the auction channel")
+		_expect_equal(on_snipe.sku_id, AuctionSnipePolicy.DEFAULT_SKU_ID, "AS1: SKU is visible")
+		_expect_equal(on_snipe.unit_cost_cents > 0, true, "AS1: ask is visible")
+		_expect_equal(on_snipe.confidence, &"medium", "AS1: confidence is Medium")
+		_expect_equal(
+			on_snipe.condition_cue,
+			AuctionSnipePolicy.CONDITION_CUE,
+			"AS1: condition stays the photo cue"
+		)
+		var hidden := int(_demand_signals.call("market_cents_for", on_snipe.sku_id))
+		_expect_equal(hidden > 0, true, "AS1: hidden market basis exists for the ask")
+		_expect_equal(
+			on_snipe.unit_cost_cents,
+			int(
+				_demand_signals.call(
+					"auction_snipe_ask_cents",
+					hidden,
+					SEED,
+					on_day
+				)
+			),
+			"AS1: ask is the seeded steal-or-trap draw"
+		)
+		var spread := on_snipe.shown_comp_high_cents - on_snipe.shown_comp_low_cents
+		_expect_equal(
+			spread,
+			2 * roundi(float(hidden) * AuctionSnipePolicy.COMP_WIDTH * 0.5),
+			"AS1: shown comps use today's auction width 0.12"
+		)
+	_as1_reset_on(off_day)
+	_expect_equal(
+		_as1_snipe_signals().is_empty(),
+		true,
+		"AS1: a day without the flag shows none"
+	)
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") == null,
+		true,
+		"AS1: live prep roll stays shut on a quiet flag-off day"
+	)
+	_demand_signals.call("start_pack_event", MarketEvent.KIND_HYPE)
+	_expect_equal(
+		_demand_signals.call("active_event") != null,
+		true,
+		"AS1: named settle event is live"
+	)
+	var forced := _as1_snipe_signals()
+	_expect_equal(
+		forced.size(),
+		1,
+		"AS1: a live named event forces the flag on for the next prep even when the seed would be off"
+	)
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") != null,
+		true,
+		"AS1: live prep roll reads the forced flag"
+	)
+
+
+func _test_auction_snipe_bid_success_and_short_fails() -> void:
+	var on_day := int(_as1_flag_days(AuctionSnipePolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "AS1: bid path needs a flag-on day")
+	if on_day < 1:
+		return
+	_as1_reset_on(on_day)
+	var snipe: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "AS1: successful bid needs the snipe")
+	if snipe == null:
+		return
+	var sku := snipe.sku_id
+	var ask := snipe.lot_total_cents
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var qty_before := _as1_stock_qty(sku)
+	var back_before := _as1_backstock_qty(sku)
+	_expect_equal(
+		bool(_demand_signals.call("bid_auction_snipe", snipe)),
+		true,
+		"AS1: bid spends Attention and cash"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 10,
+		"AS1: a successful bid drops Attention by 10"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - ask,
+		"AS1: a successful bid drops cash by the ask"
+	)
+	_expect_equal(
+		_as1_stock_qty(sku),
+		qty_before + 1,
+		"AS1: the lot is received"
+	)
+	_expect_equal(
+		_as1_backstock_qty(sku),
+		back_before + 1,
+		"AS1: the lot lands in backstock"
+	)
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") == null,
+		true,
+		"AS1: a successful bid closes the offer"
+	)
+
+	_as1_reset_on(on_day)
+	snipe = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "AS1: Attention-short bid needs the snipe")
+	if snipe == null:
+		return
+	_game_state.set("attention_remaining", 9)
+	var short_att := _as1_offer_snapshot(snipe.sku_id)
+	_expect_equal(
+		bool(_demand_signals.call("bid_auction_snipe", snipe)),
+		false,
+		"AS1: a bid with Attention 9 fails"
+	)
+	_as1_expect_nothing_moved(short_att, "AS1 Attention 9")
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") != null,
+		true,
+		"AS1: Attention-short bid leaves the offer"
+	)
+
+	_as1_reset_on(on_day)
+	snipe = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "AS1: cash-short bid needs the snipe")
+	if snipe == null:
+		return
+	_economy.set("balance_cents", maxi(0, snipe.lot_total_cents - 1))
+	var short_cash := _as1_offer_snapshot(snipe.sku_id)
+	_expect_equal(
+		bool(_demand_signals.call("bid_auction_snipe", snipe)),
+		false,
+		"AS1: a bid with cash short of the ask fails"
+	)
+	_as1_expect_nothing_moved(short_cash, "AS1 cash short")
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") != null,
+		true,
+		"AS1: cash-short bid leaves the offer"
+	)
+
+
+func _test_auction_snipe_decline_no_change_no_truth() -> void:
+	var on_day := int(_as1_flag_days(AuctionSnipePolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "AS1: decline path needs a flag-on day")
+	if on_day < 1:
+		return
+	_as1_reset_on(on_day)
+	var snipe: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "AS1: decline needs the snipe")
+	if snipe == null:
+		return
+	_expect_dto_has_no_truth_fields(snipe, "AS1 auction snipe")
+	var row := DemandSignalPresenter.opportunity_row(snipe)
+	var summary := DemandSignalPresenter.buy_summary(snipe)
+	var snapshot := DemandSignalPresenter.buy_confirm_snapshot(snipe)
+	_expect_equal(row.contains("Ask"), true, "AS1: list row shows the ask")
+	_expect_equal(row.contains(snipe.display_name), true, "AS1: list row shows the SKU")
+	_expect_equal(summary.contains("Ask") or summary.contains("each"), true, "AS1: detail shows the ask")
+	_expect_equal(
+		summary.contains("Photo only"),
+		true,
+		"AS1: detail shows the photo cue"
+	)
+	_expect_equal(summary.contains("Medium"), true, "AS1: detail shows Medium confidence")
+	_expect_equal(summary.contains("Att 10"), true, "AS1: detail shows the Attention cost")
+	for text: String in [row, summary, snapshot]:
+		_assert_text_has_no_truth(text, "AS1 auction snipe copy")
+		_expect_equal(
+			text.to_lower().contains("true_market"),
+			false,
+			"AS1: offer never shows true_market"
+		)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AS1: HUD loads for the snipe row")
+	if hud != null:
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		_expect_equal(open_buy != null, true, "AS1: OpenBuyButton still opens prep offers")
+		if open_buy != null:
+			open_buy.pressed.emit()
+		_expect_equal(_as1_hud_has_snipe_row(hud), true, "AS1: prep list shows the snipe row")
+		_select_buy_on_hud(hud, snipe)
+		var hud_summary := hud.get_node_or_null("%BuySummary") as Label
+		if hud_summary != null:
+			_assert_text_has_no_truth(hud_summary.text, "AS1 HUD snipe summary")
+			_expect_equal(
+				hud_summary.text.to_lower().contains("true_market"),
+				false,
+				"AS1: HUD offer never shows true_market"
+			)
+		hud.free()
+	var before := _as1_offer_snapshot(snipe.sku_id)
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		bool(_demand_signals.call("decline_auction_snipe", snipe)),
+		true,
+		"AS1: decline removes the offer"
+	)
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") == null,
+		true,
+		"AS1: declined offer is gone for the day"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AS1: decline leaves Rep unchanged"
+	)
+	_as1_expect_nothing_moved(before, "AS1 decline")
+
+
+func _test_auction_snipe_door_whale_sale_fee_stay() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_40 := catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, BASELINE)
+	var at_75 := catalog.roll_spawn(SEED, 75, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_40.size(), 5, "AS1: door spawn count stays as shipped")
+	_expect_equal(at_75.size(), at_40.size(), "AS1: high-rep door spawn count stays as shipped")
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"AS1: spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AS1/AJ1: high-rep whale pack stays ×1.5"
+	)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "AS1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"AS1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AS1: marketplace fee stays 8%"
+	)
+	_game_state.call("start_new_game")
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AS1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AS1: listed price stays set")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AS1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AS1: listed lot still enqueues")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AS1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AS1: live sell still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AS1: a completed sale still pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AS1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "auction")
+		and not _function_body_contains(queue_src, "func sell_listed()", "snipe")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"auction"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"snipe"
+		),
+		true,
+		"AS1: auction snipes are not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_auction_snipe_shipped_levers_stay() -> void:
+	_game_state.call("start_new_game")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.market_drift_sealed_low, 0.98)
+		and is_equal_approx(NORMAL_CONFIG.market_drift_sealed_high, 1.02),
+		true,
+		"AS1/AR1: daily hidden market drift stays as shipped"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.is_high_rep(75) and not MarketplaceLeadPolicy.is_high_rep(74),
+		true,
+		"AS1/AQ1: marketplace leads stay at Rep 75"
+	)
+	_expect_equal(
+		PlayerTradePolicy.is_unlocked(50) and not PlayerTradePolicy.is_unlocked(49),
+		true,
+		"AS1/AN1: player trades stay unlocked at Rep 50"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.is_unlocked(50) and not RegularsReturnPolicy.is_unlocked(49),
+		true,
+		"AS1/AO1: Regulars return stays unlocked at Rep 50"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.is_worse_moq(24) and not DistributorMoqPolicy.is_worse_moq(25),
+		true,
+		"AS1/AP1: distributor MOQ stays worse at Rep 24"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005)
+		and is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AS1/AK1/AL1: shrink stays 0.2%/0.7% and floor-sealed +0.3%"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(75)
+		and not CustomerSpawnPolicy.is_high_rep(74)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AS1/AJ1: high-rep whale pack stays ×1.5 at 75"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AS1: marketplace fee stays 8%"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_auction_snipe_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("shady_trunk")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("auction_snipe"),
+		false,
+		"AS1: Soft catalog stays closed"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AS1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AS1: marketplace fee stays 8% — this is not a fee cut"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AS1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("true_market"),
+		true,
+		"AS1: HUD has no STOP, camera off-switch, or true_market"
+	)
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	_expect_equal(
+		not balance_src.contains("auction_snipe")
+		and not balance_src.contains("fee_cut")
+		and not balance_src.contains("true_market"),
+		true,
+		"AS1: snipe knobs live on the policy, not BalanceConfig"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/auction_snipe_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AS1: %s stays §4.5 clean" % path
+		)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func _prep_auction_snipe")
+		and demand_src.contains("func _open_opportunities")
+		and demand_src.contains("AuctionSnipePolicy"),
+		true,
+		"AS1: auction flag is rolled where prep already lives"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "auction")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "snipe")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "drift")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "moq")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "regulars")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "quiet")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AS1: AC1 through AR1 stay off the sell roll"
+	)
+	_game_state.call("start_new_game")
+
+
 func _ar1_run_nights(night_count: int, rng_seed: int) -> Dictionary:
 	_ar1_reset_no_event()
 	_ar1_bind_graded()
@@ -23349,6 +23909,98 @@ func _ar1_text_shows_hidden_cents(text: String, hidden_cents: int) -> bool:
 	if text.contains(raw):
 		return true
 	return text.contains(DemandSignalPresenter.format_cents(hidden_cents))
+
+
+func _as1_reset_on(day: int) -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", day)
+
+
+func _as1_flag_days(seed: int) -> Dictionary:
+	var on_day := 0
+	var off_day := 0
+	for day: int in range(1, 25):
+		var flag_on := bool(_demand_signals.call("auction_snipe_flag", seed, day))
+		if flag_on and on_day == 0:
+			on_day = day
+		if not flag_on and off_day == 0:
+			off_day = day
+		if on_day > 0 and off_day > 0:
+			break
+	return {"on": on_day, "off": off_day}
+
+
+func _as1_snipe_signals() -> Array[BuyConfirmSignal]:
+	var result: Array[BuyConfirmSignal] = []
+	for dto: BuyConfirmSignal in _demand_signals.call("open_buy_signals"):
+		if dto != null and AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
+			result.append(dto)
+	return result
+
+
+func _as1_snipe_signal(signals: Array[BuyConfirmSignal]) -> BuyConfirmSignal:
+	for dto: BuyConfirmSignal in signals:
+		if dto != null:
+			return dto
+	return null
+
+
+func _as1_stock_qty(sku_id: StringName) -> int:
+	return _an1_stock_qty(sku_id)
+
+
+func _as1_backstock_qty(sku_id: StringName) -> int:
+	var total := 0
+	for lot: StockLot in _inventory_service.call("get_lots", sku_id):
+		if lot != null and lot.location != null:
+			if lot.location.type == InventoryLocation.Type.BACKSTOCK:
+				total += lot.qty
+	return total
+
+
+func _as1_offer_snapshot(sku_id: StringName) -> Dictionary:
+	return {
+		"attention": int(_game_state.get("attention_remaining")),
+		"cash": int(_economy.get("balance_cents")),
+		"qty": _as1_stock_qty(sku_id),
+		"backstock": _as1_backstock_qty(sku_id),
+	}
+
+
+func _as1_expect_nothing_moved(before: Dictionary, label: String) -> void:
+	var sku := AuctionSnipePolicy.DEFAULT_SKU_ID
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		int(before.get("attention", -1)),
+		"%s leaves Attention unchanged" % label
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		int(before.get("cash", -1)),
+		"%s leaves cash unchanged" % label
+	)
+	_expect_equal(
+		_as1_stock_qty(sku),
+		int(before.get("qty", -1)),
+		"%s leaves lots unchanged" % label
+	)
+	_expect_equal(
+		_as1_backstock_qty(sku),
+		int(before.get("backstock", -1)),
+		"%s leaves backstock unchanged" % label
+	)
+
+
+func _as1_hud_has_snipe_row(hud: Node) -> bool:
+	var rows := hud.get_node_or_null("%BuyOpportunityRows") as VBoxContainer
+	if rows == null:
+		return false
+	for child: Node in rows.get_children():
+		var row := child as Button
+		if row != null and row.text.begins_with("Auction"):
+			return true
+	return false
 
 
 func _aq1_reset_at(reputation: int) -> void:

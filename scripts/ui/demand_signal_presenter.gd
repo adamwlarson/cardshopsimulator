@@ -329,6 +329,8 @@ static func buy_summary(dto: BuyConfirmSignal) -> String:
 	]
 	if dto.channel == &"distributor":
 		lines.append("Minimum: ×%d" % dto.quantity)
+	if AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
+		lines.append("Bid · Att %d" % AuctionSnipePolicy.attention_cost())
 	lines.append_array(PackedStringArray([
 		"Comp range: %s – %s" % [
 			format_cents(dto.shown_comp_low_cents),
@@ -423,6 +425,8 @@ static func buy_confirm_snapshot(dto: BuyConfirmSignal) -> String:
 	]
 	if dto.channel == &"distributor":
 		lines.append("Minimum: ×%d" % dto.quantity)
+	if AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
+		lines.append("Bid · Att %d" % AuctionSnipePolicy.attention_cost())
 	lines.append_array(PackedStringArray([
 		"%s–%s · %s · %s" % [
 			format_cents(dto.shown_comp_low_cents),
