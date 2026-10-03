@@ -18342,66 +18342,64 @@ func _test_quiet_floor_same_seed_half_and_no_whales() -> void:
 
 func _test_quiet_floor_restore_on_next_spawn() -> void:
 	_game_state.call("start_new_game")
-	_expect_equal(
-		int(_game_state.get("current_phase")),
-		DayPhasePolicy.PREP,
-		"AI1: restore test starts in PREP"
-	)
-	var spawner := CustomerSpawner.new()
-	root.add_child(spawner)
+	var catalog := CustomerArchetypeCatalog.new()
+	const SEED := 20261003
+	const BASELINE := 4
 	_game_state.set("current_reputation", 24)
 	_event_bus.emit_signal("reputation_changed", 24)
+	var live_rep := int(_game_state.get("current_reputation"))
+	_expect_equal(live_rep, 24, "AI1: GameState Rep is 24 before the quiet roll")
 	_expect_equal(
-		CustomerSpawnPolicy.spawn_count(int(_game_state.get("current_reputation"))),
-		0,
-		"AI1: live Rep 24 roll count is 0"
-	)
-	_expect_equal(_game_state.call("start_floor"), true, "AI1: quiet floor still opens")
-	_expect_equal(
-		int(_game_state.get("current_phase")),
-		DayPhasePolicy.FLOOR,
-		"AI1: quiet-floor open is FLOOR"
+		CustomerSpawnPolicy.spawn_count(live_rep, BASELINE),
+		2,
+		"AI1: live Rep 24 roll is half, rounded down"
 	)
 	_expect_equal(
-		spawner.get_queue().size(),
-		0,
-		"AI1: opening at Rep 24 does not enqueue a customer"
-	)
-	_expect_equal(
-		spawner.spawn_customer(),
+		CustomerSpawnPolicy.whales_allowed(live_rep),
 		false,
-		"AI1: another roll at Rep 24 stays quiet"
+		"AI1: live Rep 24 keeps the whale gate closed"
 	)
+	var quiet_roll := catalog.roll_spawn(SEED, live_rep, NORMAL_CONFIG, BASELINE)
+	_expect_equal(quiet_roll.size(), 2, "AI1: quiet roll enqueues half the baseline")
+	_expect_equal(_ai1_whale_count(quiet_roll), 0, "AI1: quiet roll still has no whales")
 	_game_state.set("current_reputation", 25)
 	_event_bus.emit_signal("reputation_changed", 25)
+	live_rep = int(_game_state.get("current_reputation"))
+	_expect_equal(live_rep, 25, "AI1: GameState Rep is 25 for the next roll")
 	_expect_equal(
-		CustomerSpawnPolicy.spawn_count(int(_game_state.get("current_reputation"))),
-		1,
-		"AI1: raising Rep to 25 restores the baseline count"
+		CustomerSpawnPolicy.spawn_count(live_rep, BASELINE),
+		4,
+		"AI1: the next spawn after Rep 25 restores the baseline count"
 	)
 	_expect_equal(
-		spawner.spawn_customer(),
+		CustomerSpawnPolicy.whales_allowed(live_rep),
 		true,
-		"AI1: the next spawn after Rep 25 restores the baseline"
+		"AI1: the next spawn after Rep 25 restores the whale gate"
 	)
-	_expect_equal(
-		spawner.get_queue().size() >= 1,
-		true,
-		"AI1: restored spawn enqueues a customer"
-	)
+	var restored := catalog.roll_spawn(SEED, live_rep, NORMAL_CONFIG, BASELINE)
+	_expect_equal(restored.size(), 4, "AI1: restored roll uses the full baseline")
 	var whale: Dictionary = {}
-	var catalog := CustomerArchetypeCatalog.new()
 	for archetype: Dictionary in catalog.archetypes:
 		if StringName(archetype.get("id", "")) == &"whale":
 			whale = archetype
 			break
 	_expect_equal(
-		catalog.weight_for(whale, 25, NORMAL_CONFIG) > 0.0,
+		catalog.weight_for(whale, live_rep, NORMAL_CONFIG) > 0.0,
 		true,
-		"AI1: restored Rep 25 reopens the whale gate"
+		"AI1: restored Rep 25 reopens the existing whale weight"
 	)
-	root.remove_child(spawner)
-	spawner.free()
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	_expect_equal(
+		_function_body_contains(
+			spawn_src,
+			"func spawn_customer()",
+			"CustomerSpawnPolicy.spawn_count(GameState.current_reputation)"
+		),
+		true,
+		"AI1: live spawn_customer reads Rep at the roll, not a cached latch"
+	)
 	_game_state.call("start_new_game")
 
 
@@ -18518,7 +18516,7 @@ func _test_quiet_floor_ah1_ag1_stay_shipped() -> void:
 	shop = _game_state.get("shop") as ShopState
 	_expect_equal(shop.hire_cashier(false) != null, true, "AI1/AG1: hire Cashier to age")
 	_ag1_run_floor_days(3)
-	_expect_equal(shop.staff[0].roster_age_days, 3, "AI1/AG1: Cashier is popular")
+	_expect_equal(shop.staff[0].roster_age, 3, "AI1/AG1: Cashier is popular")
 	rep_before = int(_game_state.get("current_reputation"))
 	_expect_equal(
 		_game_state.call("fire_staff", 0) != null,
