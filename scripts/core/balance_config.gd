@@ -133,6 +133,12 @@ enum Difficulty {
 ## $10k + Rep 50 sits under Medium ($15k / Rep 55) and above cameras ($2.5k).
 @export var play_table_cash_cents: int = 1_000_000
 @export var play_table_rep: int = 50
+## AC1 / systems §7.2: graded CASE whose showcase origin is within
+## `sightline_tiles` of the entrance. ×1.15 is a modest walk-in notice /
+## sell-through bump — one locked tier, not a new sell-chance curve and
+## not multi-sightline. Easy/Hard inherit unless overridden.
+@export var sightline_display_bonus: float = 1.15
+@export var sightline_tiles: int = 3
 
 
 func is_rent_due_day(day: int) -> bool:

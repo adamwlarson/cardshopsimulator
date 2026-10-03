@@ -273,6 +273,23 @@ func rearrange_attention_cost() -> int:
 	return 10
 
 
+func sightline_tiles() -> int:
+	if _config != null and _config.sightline_tiles > 0:
+		return _config.sightline_tiles
+	return ShopLayout.SIGHTLINE_TILES
+
+
+func sightline_display_bonus_mult() -> float:
+	# Floor at 1.0 so a missing/zero config cannot invert into a penalty.
+	if _config != null:
+		return maxf(1.0, _config.sightline_display_bonus)
+	return 1.15
+
+
+func has_sightline_display_bonus() -> bool:
+	return layout.has_sightline_display_bonus(sightline_tiles())
+
+
 func research_cash_cost_cents() -> int:
 	if _config != null:
 		return maxi(0, _config.research_cost_cents)

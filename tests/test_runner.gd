@@ -192,6 +192,7 @@ func _initialize() -> void:
 	_test_ironman_optional_lose()
 	_test_sandbox_personal_bests()
 	_test_play_table_event_nights()
+	_test_sightline_display_bonus()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -14395,6 +14396,411 @@ func _test_play_table_soft_catalog_untouched() -> void:
 			false,
 			"AB1: %s has no tournament mini-game" % path
 		)
+
+
+func _test_sightline_display_bonus() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_sightline_multiplier_lock()
+	_test_sightline_inside_three_tiles()
+	_test_sightline_outside_three_tiles()
+	_test_sightline_rearrange_crosses_boundary()
+	_test_sightline_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_sightline_multiplier_lock() -> void:
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.sightline_display_bonus, 1.15),
+		true,
+		"AC1: locked display_bonus is ×1.15"
+	)
+	_expect_equal(NORMAL_CONFIG.sightline_tiles, 3, "AC1: sightline is 3 tiles")
+	_expect_equal(
+		is_equal_approx(EASY_CONFIG.sightline_display_bonus, 1.15),
+		true,
+		"AC1: Easy inherits ×1.15"
+	)
+	_expect_equal(
+		is_equal_approx(HARD_CONFIG.sightline_display_bonus, 1.15),
+		true,
+		"AC1: Hard inherits ×1.15"
+	)
+	_expect_equal(EASY_CONFIG.sightline_tiles, 3, "AC1: Easy inherits 3 tiles")
+	_expect_equal(HARD_CONFIG.sightline_tiles, 3, "AC1: Hard inherits 3 tiles")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		is_equal_approx(shop.sightline_display_bonus_mult(), 1.15),
+		true,
+		"AC1: ShopState exposes the locked ×1.15"
+	)
+	_expect_equal(shop.sightline_tiles(), 3, "AC1: ShopState exposes 3-tile radius")
+
+
+func _test_sightline_inside_three_tiles() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var layout := shop.layout
+	var showcase := layout.display_case()
+	_expect_equal(showcase != null, true, "AC1: existing display_case fixture")
+	var near := _legal_case_origin_at_distance(layout, 3)
+	_expect_equal(
+		near != Vector2i(-1, -1),
+		true,
+		"AC1: a legal origin exists at exactly 3 tiles"
+	)
+	if near == Vector2i(-1, -1):
+		return
+	showcase.origin = near
+	_expect_equal(
+		layout.entrance_tile_distance(showcase.origin),
+		3,
+		"AC1: parked case origin is 3 tiles from the door"
+	)
+	_expect_equal(
+		layout.has_sightline_display_bonus(),
+		true,
+		"AC1: ≤3 tiles grants the layout sightline"
+	)
+	_expect_equal(
+		shop.has_sightline_display_bonus(),
+		true,
+		"AC1: ShopState sightline follows the case origin"
+	)
+	_seed_listed_empress_slab()
+	var case_location := InventoryLocation.new(InventoryLocation.Type.CASE)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("display_bonus")),
+			1.15
+		),
+		true,
+		"AC1: door-adjacent case applies ×1.15"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("display_bonus_for_graded_case", case_location)),
+			1.15
+		),
+		true,
+		"AC1: graded CASE stock gets ×1.15 sell-through"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-052")),
+			1.15
+		),
+		true,
+		"AC1: sell_through_mult_for multiplies the locked bonus"
+	)
+	var binder := InventoryLocation.new(InventoryLocation.Type.BINDER)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("display_bonus_for_graded_case", binder)),
+			1.0
+		),
+		true,
+		"AC1: binder stock does not get the case sightline bonus"
+	)
+	var walk_in: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_graded_walk_in_tags(),
+		20_000
+	)
+	_expect_equal(walk_in.is_empty(), false, "AC1: walk-ins notice door slabs")
+	_expect_equal(
+		StringName(walk_in.get("sku_id", &"")),
+		&"AA-SKIE-052",
+		"AC1: noticed stock is the graded CASE slab"
+	)
+	_expect_equal(
+		is_equal_approx(float(walk_in.get("display_bonus", 0.0)), 1.15),
+		true,
+		"AC1: offer locks display_bonus at ×1.15"
+	)
+	_assert_payload_has_no_truth(walk_in, "AC1 inside-3 offer")
+
+
+func _test_sightline_outside_three_tiles() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var layout := shop.layout
+	var showcase := layout.display_case()
+	_expect_equal(
+		layout.entrance_tile_distance(showcase.origin),
+		6,
+		"AC1: default case origin (6,4) is 6 tiles from the door"
+	)
+	_expect_equal(
+		layout.has_sightline_display_bonus(),
+		false,
+		"AC1: buried default case has no sightline"
+	)
+	_seed_listed_empress_slab()
+	var case_location := InventoryLocation.new(InventoryLocation.Type.CASE)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("display_bonus")), 1.0),
+		true,
+		"AC1: buried case display_bonus is 1.0"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("display_bonus_for_graded_case", case_location)),
+			1.0
+		),
+		true,
+		"AC1: same graded CASE stock gets no bonus in the back"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-052")),
+			1.0
+		),
+		true,
+		"AC1: sell-through stays 1.0 when the case is buried"
+	)
+	var missed: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_graded_walk_in_tags(),
+		20_000
+	)
+	_expect_equal(
+		missed.is_empty(),
+		true,
+		"AC1: walk-ins do not notice the same slab in the back"
+	)
+	var far := _legal_case_origin_at_distance(layout, 4)
+	_expect_equal(
+		far != Vector2i(-1, -1),
+		true,
+		"AC1: a legal origin exists at 4 tiles"
+	)
+	if far == Vector2i(-1, -1):
+		return
+	showcase.origin = far
+	_expect_equal(
+		layout.entrance_tile_distance(showcase.origin),
+		4,
+		"AC1: 4-tile origin is outside the radius"
+	)
+	_expect_equal(
+		shop.has_sightline_display_bonus(),
+		false,
+		"AC1: 4 tiles is no bonus"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-052")),
+			1.0
+		),
+		true,
+		"AC1: 4-tile sell-through stays 1.0"
+	)
+
+
+func _test_sightline_rearrange_crosses_boundary() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var layout := shop.layout
+	_seed_listed_empress_slab()
+	_expect_equal(
+		shop.has_sightline_display_bonus(),
+		false,
+		"AC1: rearrange starts from the buried default case"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-052")),
+			1.0
+		),
+		true,
+		"AC1: pre-rearrange sell-through is 1.0"
+	)
+	var near := _legal_case_origin_at_distance(layout, 3)
+	_expect_equal(near != Vector2i(-1, -1), true, "AC1: rearrange can park at 3 tiles")
+	if near == Vector2i(-1, -1):
+		return
+	var moved_in: Dictionary = _game_state.call(
+		"rearrange_fixture",
+		&"display_case",
+		near
+	)
+	_expect_equal(bool(moved_in.get("ok", false)), true, "AC1: rearrange to 3 tiles succeeds")
+	_expect_equal(
+		layout.display_case().origin,
+		near,
+		"AC1: case origin updates on rearrange"
+	)
+	_expect_equal(
+		shop.has_sightline_display_bonus(),
+		true,
+		"AC1: bonus applies on the rearrange that crosses in"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-052")),
+			1.15
+		),
+		true,
+		"AC1: sell-through flips to ×1.15 after the inward rearrange"
+	)
+	var noticed: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_graded_walk_in_tags(),
+		20_000
+	)
+	_expect_equal(noticed.is_empty(), false, "AC1: walk-ins notice after the inward rearrange")
+	_assert_payload_has_no_truth(moved_in, "AC1 rearrange-in payload")
+	var far := _legal_case_origin_at_distance(layout, 4)
+	_expect_equal(far != Vector2i(-1, -1), true, "AC1: rearrange can bury at 4 tiles")
+	if far == Vector2i(-1, -1):
+		return
+	var moved_out: Dictionary = _game_state.call(
+		"rearrange_fixture",
+		&"display_case",
+		far
+	)
+	_expect_equal(bool(moved_out.get("ok", false)), true, "AC1: rearrange to 4 tiles succeeds")
+	_expect_equal(
+		shop.has_sightline_display_bonus(),
+		false,
+		"AC1: bonus drops on the rearrange that crosses out"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-052")),
+			1.0
+		),
+		true,
+		"AC1: sell-through returns to 1.0 after the outward rearrange"
+	)
+	var missed: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_graded_walk_in_tags(),
+		20_000
+	)
+	_expect_equal(
+		missed.is_empty(),
+		true,
+		"AC1: walk-ins miss the same slab after it is buried again"
+	)
+	_assert_payload_has_no_truth(moved_out, "AC1 rearrange-out payload")
+
+
+func _test_sightline_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("sightline")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("display_bonus"),
+		false,
+		"AC1: Soft catalog stays closed (no sightline event)"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AC1: Soft _ensure_priceable_sku stays parked"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AC1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		shop_src.contains("stocker") == false
+		and FileAccess.get_file_as_string(
+			"res://scripts/autoload/game_state.gd"
+		).contains("stocker") == false,
+		true,
+		"AC1: stocker deepen stays parked"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/shop/shop_layout.gd",
+		"res://scripts/autoload/inventory_service.gd",
+		"res://scripts/autoload/demand_signals.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AC1: %s stays §4.5 clean" % path
+		)
+		_expect_equal(
+			source.contains("impulse_shelf") or source.contains("impulse-shelf"),
+			false,
+			"AC1: %s has no impulse-shelf bonus" % path
+		)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://scripts/ui/hud.gd").contains("net_worth"),
+		false,
+		"AC1: no net-worth HUD"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/shop/shop_layout.gd"
+		).contains("SIGHTLINE_TIER")
+		or FileAccess.get_file_as_string(
+			"res://scripts/core/balance_config.gd"
+		).contains("sightline_display_bonus_far"),
+		false,
+		"AC1: no multi-tier sightlines"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ab-v1.md"
+		).contains("Soft OK MVP"),
+		true,
+		"AC1: #58 Soft OK notes stay in the AB1 spec"
+	)
+
+
+func _seed_listed_empress_slab() -> SlabInstance:
+	var existing: SlabInstance = _inventory_service.call("get_slab", &"AA-SKIE-052")
+	if existing != null:
+		existing.listed_price_cents = maxi(1, existing.listed_price_cents)
+		if existing.location == null or existing.location.type != InventoryLocation.Type.CASE:
+			existing.location = InventoryLocation.new(InventoryLocation.Type.CASE)
+		return existing
+	var slab: SlabInstance = _inventory_service.call(
+		"receive_slab",
+		&"AA-SKIE-052",
+		&"Prism",
+		10.0,
+		3_000,
+		InventoryLocation.new(InventoryLocation.Type.CASE)
+	)
+	_expect_equal(slab != null, true, "AC1: Empress slab seeds into CASE")
+	if slab != null:
+		slab.listed_price_cents = 7_500
+	return slab
+
+
+func _graded_walk_in_tags() -> Array[StringName]:
+	var tags: Array[StringName] = []
+	tags.append(&"graded")
+	return tags
+
+
+func _legal_case_origin_at_distance(layout: ShopLayout, distance: int) -> Vector2i:
+	for y: int in layout.height:
+		for x: int in layout.width:
+			var origin := Vector2i(x, y)
+			if layout.entrance_tile_distance(origin) != distance:
+				continue
+			if layout.preview_move(&"display_case", origin) == &"ok":
+				return origin
+	return Vector2i(-1, -1)
 
 
 func _test_ironman_menu_toggle_default_off() -> void:

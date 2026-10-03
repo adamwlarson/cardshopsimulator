@@ -162,6 +162,27 @@ func active_event_sell_through_mult() -> float:
 	return active_event_demand_mult()
 
 
+func display_bonus() -> float:
+	# Live layout read — rearrange or the next tick sees the new origin.
+	if GameState.shop.has_sightline_display_bonus():
+		return GameState.shop.sightline_display_bonus_mult()
+	return 1.0
+
+
+func display_bonus_for_graded_case(location: InventoryLocation) -> float:
+	if location == null or location.type != InventoryLocation.Type.CASE:
+		return 1.0
+	return display_bonus()
+
+
+func sell_through_mult_for(sku_id: StringName) -> float:
+	var mult := active_event_sell_through_mult()
+	var slab: SlabInstance = InventoryService.get_slab(sku_id)
+	if slab != null:
+		mult *= display_bonus_for_graded_case(slab.location)
+	return mult
+
+
 func active_event_buylist_mult() -> float:
 	if not has_recession_week():
 		return 1.0
