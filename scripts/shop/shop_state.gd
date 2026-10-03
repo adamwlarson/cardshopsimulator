@@ -37,6 +37,7 @@ var medium_lease_signed_day: int = -1
 var large_lease_signed_day: int = -1
 var specialist_on_duty: bool = false
 var last_noshow_count: int = 0
+var last_stocker_restock_count: int = 0
 var last_shrink_rate: float = 0.0
 var cameras_owned: bool = false
 var play_table_owned: bool = false
@@ -57,6 +58,7 @@ func reset(config: BalanceConfig) -> void:
 	large_lease_signed_day = -1
 	specialist_on_duty = false
 	last_noshow_count = 0
+	last_stocker_restock_count = 0
 	last_shrink_rate = 0.0
 	cameras_owned = false
 	play_table_owned = false
@@ -185,6 +187,33 @@ func specialist_wage_cents() -> int:
 	if _config != null and _config.specialist_wage_cents > 0:
 		return _config.specialist_wage_cents
 	return 14_000
+
+
+func stocker_count() -> int:
+	var count := 0
+	for member: StaffMember in staff:
+		if member.is_stocker():
+			count += 1
+	return count
+
+
+func stocker_wage_cents() -> int:
+	if _config != null and _config.stocker_wage_cents > 0:
+		return _config.stocker_wage_cents
+	return 7_000
+
+
+func stocker_restock_lots_per_day() -> int:
+	if _config != null and _config.stocker_restock_lots_per_day > 0:
+		return _config.stocker_restock_lots_per_day
+	return 4
+
+
+func has_stocker_on_duty() -> bool:
+	for member: StaffMember in staff:
+		if member.is_stocker() and member.on_duty_today:
+			return true
+	return false
 
 
 func staff_cap() -> int:
@@ -505,6 +534,15 @@ func hire_specialist() -> StaffMember:
 	return member
 
 
+func hire_stocker() -> StaffMember:
+	if not can_hire():
+		return null
+	var member := _make_stocker()
+	staff.append(member)
+	_emit_staff_changed()
+	return member
+
+
 func fire_staff(index: int) -> StaffMember:
 	if index < 0 or index >= staff.size():
 		return null
@@ -732,6 +770,16 @@ func _make_specialist() -> StaffMember:
 	member.role = &"specialist"
 	member.display_name = "Specialist"
 	member.wage_cents = specialist_wage_cents()
+	member.reliability = CASHIER_RELIABILITY
+	member.theft_bias = false
+	return member
+
+
+func _make_stocker() -> StaffMember:
+	var member := StaffMember.new()
+	member.role = &"stocker"
+	member.display_name = "Stocker"
+	member.wage_cents = stocker_wage_cents()
 	member.reliability = CASHIER_RELIABILITY
 	member.theft_bias = false
 	return member

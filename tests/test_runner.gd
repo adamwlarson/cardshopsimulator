@@ -195,6 +195,7 @@ func _initialize() -> void:
 	_test_sightline_display_bonus()
 	_test_location_display_ladder()
 	_test_impulse_shelf()
+	_test_stocker_restock_loop()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -14717,12 +14718,22 @@ func _test_sightline_section_45_and_parked() -> void:
 		"AC1: cameras stay owned≡active (no off-switch)"
 	)
 	_expect_equal(
-		shop_src.contains("stocker") == false
-		and FileAccess.get_file_as_string(
-			"res://scripts/autoload/game_state.gd"
-		).contains("stocker") == false,
+		not _function_body_contains(
+			FileAccess.get_file_as_string(
+				"res://scripts/autoload/demand_signals.gd"
+			),
+			"func display_bonus()",
+			"stocker"
+		)
+		and not _function_body_contains(
+			FileAccess.get_file_as_string(
+				"res://scripts/autoload/demand_signals.gd"
+			),
+			"func sell_through_mult_for(",
+			"stocker"
+		),
 		true,
-		"AC1: stocker deepen stays parked"
+		"AC1: stocker restock is not folded into sightline sell/notice"
 	)
 	for path: String in [
 		"res://scripts/ui/hud.gd",
@@ -15267,12 +15278,22 @@ func _test_location_ladder_section_45_and_parked() -> void:
 		"AD1: cameras stay owned≡active (no off-switch)"
 	)
 	_expect_equal(
-		shop_src.contains("stocker") == false
-		and FileAccess.get_file_as_string(
-			"res://scripts/autoload/game_state.gd"
-		).contains("stocker") == false,
+		not _function_body_contains(
+			FileAccess.get_file_as_string(
+				"res://scripts/autoload/demand_signals.gd"
+			),
+			"func location_display_bonus(",
+			"stocker"
+		)
+		and not _function_body_contains(
+			FileAccess.get_file_as_string(
+				"res://scripts/autoload/demand_signals.gd"
+			),
+			"func walk_in_interest(",
+			"stocker"
+		),
 		true,
-		"AD1: stocker deepen stays parked"
+		"AD1: stocker restock is not folded into the location ladder"
 	)
 	for path: String in [
 		"res://scripts/ui/hud.gd",
@@ -15949,12 +15970,22 @@ func _test_impulse_shelf_section_45_and_parked() -> void:
 		"AE1: cameras stay owned≡active (no off-switch)"
 	)
 	_expect_equal(
-		shop_src.contains("stocker") == false
-		and FileAccess.get_file_as_string(
-			"res://scripts/autoload/game_state.gd"
-		).contains("stocker") == false,
+		not _function_body_contains(
+			FileAccess.get_file_as_string(
+				"res://scripts/autoload/demand_signals.gd"
+			),
+			"func impulse_shelf_interest(",
+			"stocker"
+		)
+		and not _function_body_contains(
+			FileAccess.get_file_as_string(
+				"res://scripts/autoload/demand_signals.gd"
+			),
+			"func sell_through_mult_for(",
+			"stocker"
+		),
 		true,
-		"AE1: stocker deepen stays parked"
+		"AE1: stocker restock is not folded into impulse rank or sell weight"
 	)
 	for path: String in [
 		"res://scripts/ui/hud.gd",
@@ -16157,6 +16188,571 @@ func _legal_shelf_origin_beyond(layout: ShopLayout, max_tiles: int) -> Vector2i:
 		if origin != Vector2i(-1, -1):
 			return origin
 	return Vector2i(-1, -1)
+
+
+func _test_stocker_restock_loop() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_stocker_budget_and_role_lock()
+	_test_stocker_on_duty_moves_backstock()
+	_test_stocker_absent_no_auto_restock()
+	_test_stocker_off_duty_no_auto_restock()
+	_test_stocker_owner_can_rearrange()
+	_test_stocker_prefers_impulse_and_case()
+	_test_stocker_sale_pays_listed()
+	_test_stocker_ac1_ad1_ae1_unchanged()
+	_test_stocker_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_stocker_budget_and_role_lock() -> void:
+	_expect_equal(
+		NORMAL_CONFIG.stocker_restock_lots_per_day,
+		4,
+		"AF1: locked daily restock budget is 4 lots"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.stocker_wage_cents,
+		7_000,
+		"AF1: locked Stocker wage is $70/day"
+	)
+	_expect_equal(
+		EASY_CONFIG.stocker_restock_lots_per_day == 4
+		and EASY_CONFIG.stocker_wage_cents == 7_000,
+		true,
+		"AF1: Easy inherits the Stocker budget and wage"
+	)
+	_expect_equal(
+		HARD_CONFIG.stocker_restock_lots_per_day == 4
+		and HARD_CONFIG.stocker_wage_cents == 7_000,
+		true,
+		"AF1: Hard inherits the Stocker budget and wage"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		shop.stocker_restock_lots_per_day() == 4
+		and shop.stocker_wage_cents() == 7_000,
+		true,
+		"AF1: ShopState exposes the locked Stocker scalars"
+	)
+	_expect_equal(shop.hire_stocker() != null, true, "AF1: hire Stocker under Small cap")
+	_expect_equal(shop.stocker_count(), 1, "AF1: roster has one Stocker")
+	_expect_equal(shop.staff[0].role, &"stocker", "AF1: hired role is stocker")
+	_expect_equal(shop.staff[0].is_stocker(), true, "AF1: StaffMember.is_stocker")
+	_expect_equal(shop.staff[0].wage_cents, 7_000, "AF1: Stocker wage from BalanceConfig")
+	_expect_equal(shop.staff[0].visual_scene_path(), "", "AF1: Stocker is domain-only (no mesh)")
+	_expect_equal(shop.has_stocker_on_duty(), true, "AF1: hired Stocker is on duty")
+	_expect_equal(shop.hire_stocker() == null, true, "AF1: Small cap blocks second Stocker")
+	_expect_equal(shop.hire_cashier(false) == null, true, "AF1: Small cap blocks cashier after Stocker")
+	var cash_before := int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 7_000,
+		"AF1: Stocker wage posts at SETTLE"
+	)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "AF1 stocker save payload")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"AF1: restore_save accepts a Stocker snapshot"
+	)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.stocker_count(), 1, "AF1: save/load restores Stocker")
+	_expect_equal(shop.staff[0].role, &"stocker", "AF1: restored role is stocker")
+	_expect_equal(shop.has_stocker_on_duty(), true, "AF1: restored Stocker is on duty")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AF1: gameplay HUD loads for Stocker")
+	if hud != null:
+		var open_staff := hud.get_node_or_null("%OpenStaffButton") as Button
+		var hire_stocker := hud.get_node_or_null("%HireStockerButton") as Button
+		_expect_equal(open_staff != null, true, "AF1: Staff hire button present")
+		if open_staff != null:
+			open_staff.pressed.emit()
+		_expect_equal(
+			hire_stocker != null and hire_stocker.text.contains("$70.00"),
+			true,
+			"AF1: Staff panel shows the $70 Stocker wage"
+		)
+		_expect_equal(
+			hire_stocker != null and hire_stocker.disabled,
+			true,
+			"AF1: HUD stocker hire disables at Small cap"
+		)
+		root.remove_child(hud)
+		hud.free()
+	_game_state.call("start_new_game")
+
+
+func _test_stocker_on_duty_moves_backstock() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_af1_move_shelf_lots_to(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.BACKSTOCK) >= 1,
+		true,
+		"AF1: seeded day has backstock after the setup move"
+	)
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.SHELF),
+		0,
+		"AF1: floor shelf is empty so space exists"
+	)
+	_expect_equal(shop.hire_stocker() != null, true, "AF1: hire Stocker for the seeded day")
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"AF1: seeded day opens the floor"
+	)
+	_expect_equal(
+		shop.last_stocker_restock_count >= 1,
+		true,
+		"AF1: on-duty Stocker moves at least one backstock lot"
+	)
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.SHELF) >= 1,
+		true,
+		"AF1: a backstock lot lands on a valid floor location"
+	)
+	_expect_equal(
+		shop.last_stocker_restock_count <= shop.stocker_restock_lots_per_day(),
+		true,
+		"AF1: restock stays inside the locked daily budget"
+	)
+
+
+func _test_stocker_absent_no_auto_restock() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_af1_move_shelf_lots_to(InventoryLocation.Type.BACKSTOCK)
+	var backstock_before := _af1_count_lots_at(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(shop.has_stocker_on_duty(), false, "AF1: owner-only has no Stocker")
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"AF1: owner-only day still opens"
+	)
+	_expect_equal(
+		shop.last_stocker_restock_count,
+		0,
+		"AF1: no Stocker means no auto-restock"
+	)
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.BACKSTOCK),
+		backstock_before,
+		"AF1: backstock lots stay put without a Stocker"
+	)
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.SHELF),
+		0,
+		"AF1: the empty shelf stays empty without a Stocker"
+	)
+
+
+func _test_stocker_off_duty_no_auto_restock() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_af1_move_shelf_lots_to(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(shop.hire_stocker() != null, true, "AF1: hired Stocker can be marked off duty")
+	shop.staff[0].on_duty_today = false
+	_expect_equal(shop.has_stocker_on_duty(), false, "AF1: off-duty Stocker is not on duty")
+	var backstock_before := _af1_count_lots_at(InventoryLocation.Type.BACKSTOCK)
+	var moved := StockerRestock.new().apply(shop)
+	_expect_equal(moved, 0, "AF1: off-duty Stocker does not auto-restock")
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.BACKSTOCK),
+		backstock_before,
+		"AF1: backstock is unchanged when the Stocker is off duty"
+	)
+
+
+func _test_stocker_owner_can_rearrange() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_af1_move_shelf_lots_to(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(shop.has_stocker_on_duty(), false, "AF1: rearrange test is owner-only")
+	var lot: StockLot = _af1_first_lot_at(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(lot != null, true, "AF1: owner has a backstock lot to move by hand")
+	if lot == null:
+		return
+	var sku_id: StringName = lot.sku.id
+	_expect_equal(
+		bool(_inventory_service.call(
+			"move_stock_to",
+			sku_id,
+			lot.location,
+			InventoryLocation.new(InventoryLocation.Type.SHELF),
+			lot.qty
+		)),
+		true,
+		"AF1: owner can still rearrange by hand without a Stocker"
+	)
+	_expect_equal(
+		_af1_lot_type_for(sku_id),
+		InventoryLocation.Type.SHELF,
+		"AF1: the manual move lands on the floor"
+	)
+
+
+func _test_stocker_prefers_impulse_and_case() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var near := _legal_shelf_origin_within(shop.layout, 2)
+	_expect_equal(near != Vector2i(-1, -1), true, "AF1: impulse origin exists")
+	if near == Vector2i(-1, -1):
+		return
+	shop.layout.shelf().origin = near
+	_af1_move_shelf_lots_to(InventoryLocation.Type.BACKSTOCK)
+	var card := _af1_first_card_at(InventoryLocation.Type.BINDER)
+	_expect_equal(card != null, true, "AF1: a binder single exists to prefer CASE")
+	if card != null:
+		_inventory_service.call(
+			"move_card_to",
+			card,
+			InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+		)
+	_expect_equal(shop.has_impulse_shelf(), true, "AF1: empty impulse shelf is the prefer target")
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.SHELF),
+		0,
+		"AF1: impulse shelf starts empty"
+	)
+	_expect_equal(shop.hire_stocker() != null, true, "AF1: hire Stocker for priority day")
+	_expect_equal(_game_state.call("start_floor"), true, "AF1: priority day opens")
+	_expect_equal(
+		shop.last_stocker_restock_count >= 1,
+		true,
+		"AF1: priority day still moves at least one lot"
+	)
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.SHELF, ProductSKU.ProductClass.ACCESSORY) >= 1,
+		true,
+		"AF1: empty impulse shelf is filled before a plain shelf leftover"
+	)
+	if card != null:
+		_expect_equal(
+			card.location.type,
+			InventoryLocation.Type.CASE,
+			"AF1: empty CASE slots take the backstock single before BINDER"
+		)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("walk_in_interest_for", &"ACC-SLV-60")),
+			1.25
+		),
+		true,
+		"AF1: restocked sleeves keep AE1 impulse rank ×1.25"
+	)
+	if card != null:
+		_expect_equal(
+			is_equal_approx(
+				float(_demand_signals.call("walk_in_interest_for", card.sku_id)),
+				1.20
+			),
+			true,
+			"AF1: restocked single keeps AD1 CASE rank ×1.20"
+		)
+
+
+func _test_stocker_sale_pays_listed() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_af1_move_shelf_lots_to(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(shop.hire_stocker() != null, true, "AF1: sale day hires a Stocker")
+	_expect_equal(_game_state.call("start_floor"), true, "AF1: sale day opens")
+	var lot: StockLot = _af1_first_lot_at(InventoryLocation.Type.SHELF)
+	_expect_equal(lot != null, true, "AF1: sale needs a restocked floor lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AF1: restocked lot keeps its listed price")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", lot.sku.id)),
+			1.0
+		),
+		true,
+		"AF1: sell_through_mult_for stays 1.0 after restock"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 1)
+	if lot.sku.product_class == ProductSKU.ProductClass.ACCESSORY:
+		customer.interest_tags = _ae1_accessory_walk_in_tags()
+	else:
+		customer.interest_tags = lot.sku.tags.duplicate()
+	_expect_equal(queue.enqueue(customer), true, "AF1: restocked lot still enqueues")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AF1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AF1: live sell still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AF1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AF1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var restock_src := FileAccess.get_file_as_string(
+		"res://scripts/shop/stocker_restock.gd"
+	)
+	_expect_equal(
+		queue_src.contains("stocker") == false
+		and queue_src.contains("stocker_restock") == false,
+		true,
+		"AF1: CustomerQueue.sell_listed does not apply a Stocker sell weight"
+	)
+	_expect_equal(
+		restock_src.contains("listed_price") == false
+		and restock_src.contains("sale_price") == false
+		and restock_src.contains("sell_through") == false,
+		true,
+		"AF1: restock is placement only — it does not touch sale cash"
+	)
+	queue.free()
+
+
+func _test_stocker_ac1_ad1_ae1_unchanged() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.sightline_display_bonus, 1.15)
+		and is_equal_approx(shop.sightline_display_bonus_mult(), 1.15)
+		and shop.sightline_tiles() == 3,
+		true,
+		"AF1/AC1: sightline display_bonus stays ×1.15 / 3 tiles"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.case_display_bonus, 1.20)
+		and is_equal_approx(NORMAL_CONFIG.binder_display_bonus, 1.00)
+		and is_equal_approx(NORMAL_CONFIG.backstock_display_bonus, 0.00)
+		and is_equal_approx(shop.case_display_bonus(), 1.20)
+		and is_equal_approx(shop.binder_display_bonus(), 1.00)
+		and is_equal_approx(shop.backstock_display_bonus(), 0.00),
+		true,
+		"AF1/AD1: case/binder/backstock ladder stays ×1.20 / ×1.00 / ×0.00"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.impulse_shelf_interest, 1.25)
+		and is_equal_approx(NORMAL_CONFIG.floor_shelf_interest, 1.00)
+		and NORMAL_CONFIG.impulse_shelf_tiles == 2
+		and is_equal_approx(shop.impulse_shelf_interest_mult(), 1.25)
+		and is_equal_approx(shop.floor_shelf_interest_mult(), 1.00)
+		and shop.impulse_shelf_tiles() == 2,
+		true,
+		"AF1/AE1: impulse / floor shelf stay ×1.25 / ×1.00 / 2 tiles"
+	)
+	var ac1_near := _legal_case_origin_at_distance(shop.layout, 3)
+	if ac1_near != Vector2i(-1, -1):
+		shop.layout.display_case().origin = ac1_near
+		var slab := _seed_listed_empress_slab()
+		if slab != null:
+			_expect_equal(
+				shop.has_sightline_display_bonus(),
+				true,
+				"AF1/AC1: door-adjacent case notice still applies"
+			)
+			_expect_equal(
+				is_equal_approx(float(_demand_signals.call("display_bonus")), 1.15),
+				true,
+				"AF1/AC1: DemandSignals.display_bonus stays the sightline number"
+			)
+			_expect_equal(
+				is_equal_approx(
+					float(_demand_signals.call(
+						"location_display_bonus",
+						InventoryLocation.new(InventoryLocation.Type.CASE)
+					)),
+					1.20
+				),
+				true,
+				"AF1/AD1: CASE location ladder stays ×1.20"
+			)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func display_bonus()")
+		and demand_src.contains("func location_display_bonus(")
+		and demand_src.contains("func impulse_shelf_interest("),
+		true,
+		"AF1: AC1 / AD1 / AE1 stay distinct APIs"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func display_bonus()", "stocker")
+		and not _function_body_contains(
+			demand_src,
+			"func location_display_bonus(",
+			"stocker"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func impulse_shelf_interest(",
+			"stocker"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"stocker"
+		),
+		true,
+		"AF1: stocker is not folded into AC1/AD1/AE1 sell or notice weights"
+	)
+
+
+func _test_stocker_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("stocker")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("sightline")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("display_bonus")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("impulse_shelf"),
+		false,
+		"AF1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AF1: Soft _ensure_priceable_sku stays parked"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AF1: cameras stay owned≡active (no off-switch)"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/shop/shop_layout.gd",
+		"res://scripts/shop/stocker_restock.gd",
+		"res://scripts/autoload/inventory_service.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AF1: %s stays §4.5 clean" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AF1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		hud_src.contains("sandbox_best_net_worth_cents"),
+		true,
+		"AF1: AA1 sandbox bests stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ac-v1.md"
+		).contains("×1.15 is not on the live sell roll"),
+		true,
+		"AF1: AC1 Soft OK notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ad-v1.md"
+		).contains("rank-not-weight"),
+		true,
+		"AF1: AD1 Soft OK notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ae-v1.md"
+		).contains("not a sell-probability weight"),
+		true,
+		"AF1: AE1 Soft OK notes stay"
+	)
+
+
+func _af1_move_shelf_lots_to(location_type: InventoryLocation.Type) -> void:
+	var dest := InventoryLocation.new(location_type)
+	var lots: Array[StockLot] = []
+	for lot: StockLot in _inventory_service.get("model").stock_lots:
+		if (
+			lot != null
+			and lot.qty > 0
+			and lot.location != null
+			and lot.location.type == InventoryLocation.Type.SHELF
+		):
+			lots.append(lot)
+	for lot: StockLot in lots:
+		_inventory_service.call(
+			"move_stock_to",
+			lot.sku.id,
+			lot.location,
+			dest,
+			lot.qty
+		)
+
+
+func _af1_count_lots_at(
+	location_type: InventoryLocation.Type,
+	product_class: int = -1
+) -> int:
+	var count := 0
+	for lot: StockLot in _inventory_service.get("model").stock_lots:
+		if lot == null or lot.qty <= 0 or lot.location == null:
+			continue
+		if lot.location.type != location_type:
+			continue
+		if product_class >= 0 and int(lot.sku.product_class) != product_class:
+			continue
+		count += 1
+	return count
+
+
+func _af1_first_lot_at(location_type: InventoryLocation.Type) -> StockLot:
+	for lot: StockLot in _inventory_service.get("model").stock_lots:
+		if (
+			lot != null
+			and lot.qty > 0
+			and lot.location != null
+			and lot.location.type == location_type
+		):
+			return lot
+	return null
+
+
+func _af1_first_card_at(location_type: InventoryLocation.Type) -> CardInstance:
+	for card: CardInstance in _inventory_service.get("model").cards:
+		if card != null and card.location != null and card.location.type == location_type:
+			return card
+	return null
+
+
+func _af1_lot_type_for(sku_id: StringName) -> int:
+	var lot: StockLot = _inventory_service.call("get_lot", sku_id)
+	if lot == null or lot.location == null:
+		return -1
+	return lot.location.type
 
 
 func _test_ironman_menu_toggle_default_off() -> void:
