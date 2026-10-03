@@ -84,3 +84,5 @@
 |------|----------|
 | 2026-10-03 | Drafted post AH1 SHIPPED #64 @ `982259fe`. Lean **AI1 Low-rep quiet floor**. High band / HUD / STOP parked. Soft reopeners hard-parked. Walkouts and Fire stay off the sell roll. |
 | 2026-10-03 | PM adopted **AI1**. Park AI2/AI4. Hard-park AI3. Soft catalog CLOSED. Walkouts and Fire stay off the sell roll. Draft sha256 `775fc87f`. |
+| 2026-10-03 | PM adopted **AI1**. Park AI2/AI4. Hard-park AI3. Soft catalog CLOSED. Synced main @ `61df7704`; Eng spike `bc-2dc718aa` launching. Eng/QA bar matches SoT. Holding for tip-freeze. |
+| 2026-10-03 | Tip-frozen [PR #65](https://github.com/adamwlarson/cardshopsimulator/pull/65) @ `a0226acf`. Eng reviews that SHA only. QA holds. |
