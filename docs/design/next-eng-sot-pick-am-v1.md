@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AM v1 — post AL1
 
-**Status:** **AM1 ADOPTED** 2026-10-03 — Mid-band baseline, band 25–49 only. Park AM2/AM4. Hard-park AM3 camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn shrink, whale bias, the quiet floor, walkouts, or Fire into a sell weight. AI1 and AJ1 stay as shipped.
+**Status:** **AM1 SHIPPED** 2026-10-03 — squash-merged #69 @ `e7a2b830`. Mid-band baseline, band 25–49 only. Park AM2/AM4. Hard-park AM3 camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn shrink, whale bias, the quiet floor, walkouts, or Fire into a sell weight. AI1 and AJ1 stay as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-al (AL1 Sealed-on-floor theft premium SHIPPED #68 @ `d6b1dda1`); Soft catalog CLOSED
