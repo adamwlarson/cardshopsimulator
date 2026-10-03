@@ -1,6 +1,6 @@
 # Next Eng SoT Pick Z v1 — post Y1
 
-**Status:** Adopted **Z1 GO** (Ironman optional lose) — Eng CLEAR TO KICK. Park Z2 Sandbox PB / Z4 STOP. **Hard-park Z3** camera off-switch Soft. Soft catalog stays CLOSED. No Art.
+**Status:** **Z1 SHIPPED** #56 @ `71c53944e63a7ff26119f819be108115689f35dc` (tip `a4e76643`) — Ironman optional lose. Soft catalog CLOSED. Park Z2/Z4. Hard-park Z3. Docs Hard-default line Soft OK MVP.
 **Author:** CSS Designer  
 **Date:** 2026-10-03  
 **Depends on:** pick-y (Y1 STOP locked; cool-down re-smoke PASS @ `44bb5043`); Soft catalog CLOSED  
@@ -19,7 +19,7 @@
 
 ---
 
-## Option Z1 — Ironman optional lose (ex-Y2) — **LEAN GO**
+## Option Z1 — Ironman optional lose (ex-Y2) — **GO (locked)**
 
 **Player fantasy:** Opt into a harder lose floor — run out of cash *and* stock value and you're done.
 
@@ -76,8 +76,8 @@ No new systems.
 ## PM checklist
 
 - [x] Choose **Z1**
-- [x] If Z1: Eng vs systems §9.1 #4; no Art; Soft catalog CLOSED
-- [x] Sync this file to main before cloud agent
+- [x] Eng vs systems §9.1 #4; no Art; Soft catalog CLOSED
+- [x] Sync this file to main @ `f160c085`
 - [x] Soft catalog stays closed
 
 ---
@@ -87,4 +87,5 @@ No new systems.
 | When | Decision |
 |------|----------|
 | 2026-10-03 | Drafted post Y1 cool-down PASS. Lean **Z1 Ironman**. Soft reopeners hard-parked. |
-| 2026-10-03 | PM adopted **Z1 GO** Ironman optional lose. Park Z2/Z4. Hard-park Z3 Soft. No Art. |
+| 2026-10-03 | PM locked **Z1 GO** (Ironman optional lose). Park Z2/Z4. Hard-park Z3 camera off-switch Soft. Soft catalog CLOSED. No Art. Synced main @ `f160c085`; Eng spike launching. |
+| 2026-10-03 | **Z1 SHIPPED** #56 @ `71c53944e63a7ff26119f819be108115689f35dc` — QA PASS-with-notes. Soft catalog CLOSED. Docs ironman_destitution_default Hard line Soft OK MVP. |
