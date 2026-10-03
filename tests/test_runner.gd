@@ -201,6 +201,7 @@ func _initialize() -> void:
 	_test_register_walkouts()
 	_test_low_rep_quiet_floor()
 	_test_high_rep_whale_bias()
+	_test_daily_shrink_settle()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -18736,6 +18737,452 @@ func _test_high_rep_whale_bias() -> void:
 	_qa.set_force_enabled(false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
+
+
+func _test_daily_shrink_settle() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_daily_shrink_locked_rates()
+	_test_daily_shrink_staffed_vs_empty()
+	_test_daily_shrink_owner_only()
+	_test_daily_shrink_specialist_and_stocker()
+	_test_daily_shrink_theft_ring_still_stacks()
+	_test_daily_shrink_sale_pays_listed()
+	_test_daily_shrink_shipped_packs_unchanged()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_daily_shrink_locked_rates() -> void:
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005),
+		true,
+		"AK1: locked settle rates stay 0.2% base / +0.5% empty-floor"
+	)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.is_owner_only(), true, "AK1: Normal start is Owner-only")
+	_expect_equal(
+		shop.has_floor_staff_on_duty(),
+		false,
+		"AK1: Owner is not floor staff"
+	)
+	_expect_equal(
+		is_equal_approx(shop.shrink_rate(), 0.007),
+		true,
+		"AK1: Owner-only shrink rate is the empty-floor 0.7%"
+	)
+	_expect_equal(shop.hire_cashier(false) != null, true, "AK1: hire Cashier")
+	_expect_equal(
+		shop.has_floor_staff_on_duty(),
+		true,
+		"AK1: on-duty Cashier counts as floor staff"
+	)
+	_expect_equal(
+		is_equal_approx(shop.shrink_rate(), 0.002),
+		true,
+		"AK1: staffed Cashier shrink rate is 0.2% only"
+	)
+
+
+func _test_daily_shrink_staffed_vs_empty() -> void:
+	var staffed := _ak1_settle_shrink(&"cashier")
+	var empty := _ak1_settle_shrink(&"none")
+	_expect_equal(staffed.is_empty(), false, "AK1: staffed settle is instrumented")
+	_expect_equal(empty.is_empty(), false, "AK1: empty-floor settle is instrumented")
+	var staffed_cogs := int(staffed.get("cogs_cents", 0))
+	var empty_cogs := int(empty.get("cogs_cents", 0))
+	_expect_equal(staffed_cogs > 0, true, "AK1: seed inventory has COGS")
+	_expect_equal(
+		staffed_cogs,
+		empty_cogs,
+		"AK1: same seed keeps on-hand COGS for staffed vs empty"
+	)
+	_expect_equal(
+		is_equal_approx(float(staffed.get("rate", 0.0)), 0.002)
+		and is_equal_approx(float(staffed.get("base_rate", 0.0)), 0.002),
+		true,
+		"AK1: staffed settle rate is 0.2%"
+	)
+	_expect_equal(
+		is_equal_approx(float(empty.get("rate", 0.0)), 0.007)
+		and is_equal_approx(float(empty.get("base_rate", 0.0)), 0.007),
+		true,
+		"AK1: empty-floor settle rate is 0.7%"
+	)
+	_expect_equal(
+		int(staffed.get("target_loss_cents", -1)),
+		roundi(float(staffed_cogs) * 0.002),
+		"AK1: staffed target is 0.2% of on-hand COGS"
+	)
+	_expect_equal(
+		int(empty.get("target_loss_cents", -1)),
+		roundi(float(empty_cogs) * 0.007),
+		"AK1: empty-floor target is 0.7% of on-hand COGS"
+	)
+	_expect_equal(
+		int(staffed.get("units_removed", 0)) > 0
+		and int(staffed.get("loss_cents", 0)) > 0,
+		true,
+		"AK1: staffed settle removes lots"
+	)
+	_expect_equal(
+		int(empty.get("units_removed", 0)) > 0
+		and int(empty.get("loss_cents", 0)) > int(staffed.get("loss_cents", 0)),
+		true,
+		"AK1: empty floor removes more lot COGS than staffed"
+	)
+	_expect_equal(
+		bool(staffed.get("staff_on_floor", false)),
+		true,
+		"AK1: staffed payload flags staff_on_floor"
+	)
+	_expect_equal(
+		bool(empty.get("staff_on_floor", true)),
+		false,
+		"AK1: empty-floor payload flags staff_on_floor false"
+	)
+	_expect_equal(
+		bool(staffed.get("theft_ring", true)) == false
+		and bool(empty.get("theft_ring", true)) == false
+		and is_equal_approx(float(staffed.get("shrink_mult", 0.0)), 1.0)
+		and is_equal_approx(float(empty.get("shrink_mult", 0.0)), 1.0),
+		true,
+		"AK1: baseline settle is not a Theft ring day"
+	)
+
+
+func _test_daily_shrink_owner_only() -> void:
+	var owner := _ak1_settle_shrink(&"owner")
+	var empty := _ak1_settle_shrink(&"none")
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.is_owner_only(), true, "AK1: Owner-only fixture has no hired staff")
+	_expect_equal(
+		shop.has_cashier_on_duty()
+		or shop.has_specialist_on_duty()
+		or shop.has_stocker_on_duty(),
+		false,
+		"AK1: Owner-only has no Cashier, Specialist, or Stocker"
+	)
+	_expect_equal(
+		is_equal_approx(float(owner.get("rate", 0.0)), 0.007),
+		true,
+		"AK1: Owner-only settle rate matches empty-floor 0.7%"
+	)
+	_expect_equal(
+		int(owner.get("target_loss_cents", -1)),
+		int(empty.get("target_loss_cents", -2)),
+		"AK1: Owner-only target loss matches the empty-floor target"
+	)
+	_expect_equal(
+		int(owner.get("cogs_cents", 0)),
+		int(empty.get("cogs_cents", -1)),
+		"AK1: Owner-only uses the same seeded COGS"
+	)
+	_expect_equal(
+		bool(owner.get("staff_on_floor", true)),
+		false,
+		"AK1: Owner-only payload is not staff_on_floor"
+	)
+
+
+func _test_daily_shrink_specialist_and_stocker() -> void:
+	var specialist := _ak1_settle_shrink(&"specialist")
+	var stocker := _ak1_settle_shrink(&"stocker")
+	var cashier_off := _ak1_settle_shrink(&"cashier_off")
+	_expect_equal(
+		is_equal_approx(float(specialist.get("rate", 0.0)), 0.002)
+		and bool(specialist.get("staff_on_floor", false)),
+		true,
+		"AK1: Specialist-only keeps the staffed 0.2% rate"
+	)
+	_expect_equal(
+		int(specialist.get("target_loss_cents", -1)),
+		roundi(float(int(specialist.get("cogs_cents", 0))) * 0.002),
+		"AK1: Specialist-only target is 0.2% of on-hand COGS"
+	)
+	_expect_equal(
+		is_equal_approx(float(stocker.get("rate", 0.0)), 0.002)
+		and bool(stocker.get("staff_on_floor", false)),
+		true,
+		"AK1: Stocker-only keeps the staffed 0.2% rate"
+	)
+	_expect_equal(
+		int(stocker.get("target_loss_cents", -1)),
+		roundi(float(int(stocker.get("cogs_cents", 0))) * 0.002),
+		"AK1: Stocker-only target is 0.2% of on-hand COGS"
+	)
+	_expect_equal(
+		is_equal_approx(float(cashier_off.get("rate", 0.0)), 0.007)
+		and bool(cashier_off.get("staff_on_floor", true)) == false,
+		true,
+		"AK1: Cashier hired but off duty is the empty-floor 0.7%"
+	)
+
+
+func _test_daily_shrink_theft_ring_still_stacks() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AK1/O1: hire Cashier")
+	var staffed_base := shop.shrink_rate()
+	_expect_equal(
+		is_equal_approx(staffed_base, 0.002),
+		true,
+		"AK1/O1: staffed base stays 0.2% before the ring"
+	)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_economy.call("effective_shrink_rate")),
+			staffed_base * MarketEventService.THEFT_RING_SHRINK_MULT
+		),
+		true,
+		"AK1/O1: Theft ring still stacks ×3 after the daily settle rate"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_economy.call("_settle_shrink")
+	var theft := _last_shrink_applied()
+	_expect_equal(bool(theft.get("theft_ring", false)), true, "AK1/O1: payload still flags the ring")
+	_expect_equal(
+		is_equal_approx(
+			float(theft.get("shrink_mult", 0.0)),
+			MarketEventService.THEFT_RING_SHRINK_MULT
+		),
+		true,
+		"AK1/O1: instrumentation still records shrink_mult ×3"
+	)
+	_demand_signals.call("apply_event_save", {})
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_daily_shrink_sale_pays_listed() -> void:
+	_game_state.call("start_new_game")
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AK1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AK1: listed price stays set")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AK1: sell_through_mult_for stays 1.0"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AK1: listed lot still enqueues")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AK1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AK1: completed sale still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AK1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AK1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "shrink")
+		and not _function_body_contains(queue_src, "func sell_listed()", "whale")
+		and not _function_body_contains(queue_src, "func sell_listed()", "walkout")
+		and not _function_body_contains(queue_src, "func sell_listed()", "fire")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"shrink"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"whale"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"walkout"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"fire"
+		),
+		true,
+		"AK1: shrink is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_daily_shrink_shipped_packs_unchanged() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		CustomerSpawnPolicy.HIGH_REP_MIN_REP == 75
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AK1/AJ1: high-rep whale bias stays Rep 75 / ×1.5"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.QUIET_FLOOR_MAX_REP == 24
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5)
+		and CustomerSpawnPolicy.spawn_count(24, 5) == 2
+		and CustomerSpawnPolicy.whales_allowed(24) == false,
+		true,
+		"AK1/AI1: quiet floor stays ×0.5 spawn and whale weight 0"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and NORMAL_CONFIG.register_walkout_rep_cap == 3
+		and shop.register_walkout_rep_hit() == 1
+		and shop.register_walkout_rep_cap() == 3,
+		true,
+		"AK1/AH1: walkout scalars stay Rep −1 / cap 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5
+		and NORMAL_CONFIG.fire_popular_roster_age == 3
+		and shop.fire_rep_hit() == 5
+		and shop.fire_popular_roster_age() == 3,
+		true,
+		"AK1/AG1: Fire scalars stay Rep −5 at roster age 3"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_min, 0.30)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_max, 0.40),
+		true,
+		"AK1: marketplace fees stay as shipped"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AK1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		not balance_src.contains("fee_cut")
+		and not balance_src.contains("better_lead"),
+		true,
+		"AK1: marketplace fee cuts stay parked"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "quiet")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AK1: AJ1/AI1/AH1/AG1 stay off the sell roll"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_archetype_catalog.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/core/balance_config.gd",
+		"res://scripts/autoload/economy.gd",
+		"res://scripts/autoload/inventory_service.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AK1: %s stays §4.5 clean" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AK1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth"),
+		false,
+		"AK1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AK1: Soft _ensure_priceable_sku stays parked"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/economy/market_event_service.gd"
+		).contains("THEFT_RING_SHRINK_MULT := 3.0"),
+		true,
+		"AK1/O1: shipped Theft ring ×3 stays"
+	)
+	_game_state.call("start_new_game")
+
+
+func _ak1_settle_shrink(staff_role: StringName) -> Dictionary:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	match staff_role:
+		&"cashier":
+			_expect_equal(shop.hire_cashier(false) != null, true, "AK1: hire Cashier")
+		&"specialist":
+			_expect_equal(shop.hire_specialist() != null, true, "AK1: hire Specialist")
+		&"stocker":
+			_expect_equal(shop.hire_stocker() != null, true, "AK1: hire Stocker")
+		&"cashier_off":
+			_expect_equal(shop.hire_cashier(false) != null, true, "AK1: hire off-duty Cashier")
+			if shop.staff.size() > 0:
+				shop.staff[0].on_duty_today = false
+		&"owner", &"none":
+			pass
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_economy.call("_settle_shrink")
+	return _last_shrink_applied()
 
 
 func _test_high_rep_whale_gate() -> void:
