@@ -407,15 +407,23 @@ func find_listed_offer(
 				lot.listed_price_cents,
 				lot.location
 			)
+	var best_card_offer := {}
+	var best_card_interest := -1.0
 	for card: CardInstance in model.cards:
 		var sku := model.get_sku(card.sku_id)
 		if (
 			card.listed_price_cents > 0
 			and card.listed_price_cents <= budget_cents
 			and is_in_store_sellable(card.location)
+			and _is_walk_in_visible(card.location)
 			and _matches_interest(sku, interest_tags)
 		):
-			return _offer_for(sku, card.listed_price_cents, card.location)
+			var interest := _location_display_bonus(card.location)
+			if interest > best_card_interest:
+				best_card_interest = interest
+				best_card_offer = _offer_for(sku, card.listed_price_cents, card.location)
+	if not best_card_offer.is_empty():
+		return best_card_offer
 	for slab: SlabInstance in model.slabs:
 		if slab.card_ref == null:
 			continue
@@ -446,6 +454,7 @@ func confirm_customer_sale(sku_id: StringName, sale_price_cents: int) -> bool:
 			card.sku_id == sku_id
 			and card.listed_price_cents > 0
 			and is_in_store_sellable(card.location)
+			and _is_walk_in_visible(card.location)
 		):
 			if not model.remove_card(card):
 				return false
@@ -588,6 +597,14 @@ func _walk_in_notices_graded_case(location: InventoryLocation) -> bool:
 	)
 
 
+func _location_display_bonus(location: InventoryLocation) -> float:
+	return GameState.shop.location_display_bonus(location)
+
+
+func _is_walk_in_visible(location: InventoryLocation) -> bool:
+	return _location_display_bonus(location) > 0.0
+
+
 func _graded_case_display_bonus(location: InventoryLocation) -> float:
 	if location == null or location.type != InventoryLocation.Type.CASE:
 		return 1.0
@@ -610,6 +627,7 @@ func _offer_for(
 		"display_bonus": (
 			_graded_case_display_bonus(location) if is_graded_case else 1.0
 		),
+		"location_display_bonus": _location_display_bonus(location),
 	}
 
 

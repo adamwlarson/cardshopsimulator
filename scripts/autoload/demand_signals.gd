@@ -183,6 +183,18 @@ func sell_through_mult_for(sku_id: StringName) -> float:
 	return mult
 
 
+func location_display_bonus(location: InventoryLocation) -> float:
+	return GameState.shop.location_display_bonus(location)
+
+
+func walk_in_interest(location: InventoryLocation) -> float:
+	return location_display_bonus(location)
+
+
+func walk_in_interest_for(sku_id: StringName) -> float:
+	return walk_in_interest(InventoryService.location_for(sku_id))
+
+
 func active_event_buylist_mult() -> float:
 	if not has_recession_week():
 		return 1.0
