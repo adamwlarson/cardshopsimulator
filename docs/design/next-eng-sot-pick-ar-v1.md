@@ -94,3 +94,4 @@
 |------|----------|
 | 2026-10-03 | Drafted post AQ1 SHIPPED #73 @ `059ebf76`. Lean **AR1 Daily true_market drift**. Fee cut / auction / HUD / STOP parked. Camera off-switch hard-parked. |
 | 2026-10-03 | PM adopted **AR1**. Park AR2/AR3/AR4. Hard-park camera off-switch. Soft catalog CLOSED. Fees / HUD / STOP stay parked. Overnight class-band drift, never shown. Draft sha256 `85281e87`. |
+| 2026-10-03 | PM adopted **AR1**. Spec on main `4add953f`. Spike [AR1 daily true_market drift](https://cursor.com/agents/bc-5195d136-d5af-5618-82ce-393a8b9c61f8). Park AR2/AR3/AR4. No Art. Soft catalog CLOSED. Draft sha256 `85281e87`. |
