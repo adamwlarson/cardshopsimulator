@@ -202,6 +202,7 @@ func _initialize() -> void:
 	_test_low_rep_quiet_floor()
 	_test_high_rep_whale_bias()
 	_test_daily_shrink_settle()
+	_test_sealed_floor_theft_premium()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -19183,6 +19184,603 @@ func _ak1_settle_shrink(staff_role: StringName) -> Dictionary:
 	_qa_autoload.call("clear")
 	_economy.call("_settle_shrink")
 	return _last_shrink_applied()
+
+
+func _test_sealed_floor_theft_premium() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_sealed_floor_premium_lock()
+	_test_sealed_floor_vs_backstock()
+	_test_sealed_floor_skips_non_sealed()
+	_test_sealed_floor_ak1_rates_unchanged()
+	_test_sealed_floor_theft_ring_skips_premium()
+	_test_sealed_floor_sale_pays_listed()
+	_test_sealed_floor_shipped_packs_unchanged()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_sealed_floor_premium_lock() -> void:
+	_expect_equal(
+		is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AL1: locked floor-sealed premium stays 0.3%"
+	)
+	_expect_equal(
+		InventoryLocation.new(InventoryLocation.Type.SHELF).is_open_floor()
+		and InventoryLocation.new(InventoryLocation.Type.CASE).is_open_floor()
+		and InventoryLocation.new(InventoryLocation.Type.BINDER).is_open_floor(),
+		true,
+		"AL1: SHELF, CASE, and BINDER are open floor"
+	)
+	_expect_equal(
+		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK).is_open_floor()
+		or InventoryLocation.new(InventoryLocation.Type.ONLINE_HOLD).is_open_floor(),
+		false,
+		"AL1: BACKSTOCK and ONLINE_HOLD are not open floor"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005),
+		true,
+		"AL1: AK1 day rates stay 0.2% base / +0.5% empty-floor"
+	)
+
+
+func _test_sealed_floor_vs_backstock() -> void:
+	var floor_before := _al1_seed_sealed_cogs(false)
+	var floor_settle := _al1_settle_seed(&"cashier", false)
+	var floor_after := int(floor_settle.get("sealed_after_cents", 0))
+	var back_before := _al1_seed_sealed_cogs(true)
+	var back_settle := _al1_settle_seed(&"cashier", true)
+	var back_after := int(back_settle.get("sealed_after_cents", 0))
+	_expect_equal(floor_before > 0, true, "AL1: seed has sealed COGS on the floor")
+	_expect_equal(
+		floor_before,
+		back_before,
+		"AL1: same seed sealed COGS before floor vs backstock settle"
+	)
+	_expect_equal(
+		int(floor_settle.get("cogs_cents", 0)),
+		int(back_settle.get("cogs_cents", -1)),
+		"AL1: same on-hand COGS for the paired seed settle"
+	)
+	_expect_equal(
+		int(floor_settle.get("floor_sealed_cogs_cents", 0)),
+		floor_before,
+		"AL1: floor snapshot is that sealed lot COGS"
+	)
+	_expect_equal(
+		int(back_settle.get("floor_sealed_cogs_cents", -1)),
+		0,
+		"AL1: backstock sealed is not floor sealed"
+	)
+	var premium_target := roundi(float(floor_before) * InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM)
+	_expect_equal(
+		int(floor_settle.get("floor_sealed_target_cents", -1)),
+		premium_target,
+		"AL1: floor premium target is 0.3% of that sealed COGS"
+	)
+	_expect_equal(
+		int(back_settle.get("floor_sealed_target_cents", -1)),
+		0,
+		"AL1: backstock sealed takes no premium target"
+	)
+	_expect_equal(
+		int(back_settle.get("floor_sealed_loss_cents", -1)),
+		0,
+		"AL1: backstock sealed takes no extra lot removal"
+	)
+	var floor_sealed_loss := floor_before - floor_after
+	var back_sealed_loss := back_before - back_after
+	var extra := floor_sealed_loss - back_sealed_loss
+	_expect_equal(
+		extra > 0,
+		true,
+		"AL1: floor sealed loses more COGS than the same sealed in backstock"
+	)
+	_expect_equal(
+		int(floor_settle.get("floor_sealed_units_removed", 0)) > 0
+		and int(floor_settle.get("floor_sealed_loss_cents", 0)) > 0,
+		true,
+		"AL1: extra take is lot removal from those floor sealed lots"
+	)
+	_expect_equal(
+		_al1_misses_target_by_less_than_one_lot(extra, premium_target, floor_before),
+		true,
+		"AL1: extra floor sealed loss is about 0.3% of that sealed COGS"
+	)
+	_expect_equal(
+		is_equal_approx(float(floor_settle.get("rate", 0.0)), 0.002)
+		and is_equal_approx(float(back_settle.get("rate", 0.0)), 0.002),
+		true,
+		"AL1: paired seed settle stays on the staffed AK1 day rate"
+	)
+	_expect_equal(
+		int(floor_settle.get("accessory_delta_cents", -1)),
+		int(back_settle.get("accessory_delta_cents", -2)),
+		"AL1: floor accessories do not take the sealed premium"
+	)
+
+
+func _test_sealed_floor_skips_non_sealed() -> void:
+	var settle := _al1_settle_non_sealed_floor(&"cashier")
+	_expect_equal(settle.is_empty(), false, "AL1: non-sealed floor settle is instrumented")
+	_expect_equal(
+		int(settle.get("floor_sealed_cogs_cents", -1)),
+		0,
+		"AL1: accessories/singles/graded on the floor are not floor-sealed COGS"
+	)
+	_expect_equal(
+		int(settle.get("floor_sealed_target_cents", -1)) == 0
+		and int(settle.get("floor_sealed_loss_cents", -1)) == 0
+		and int(settle.get("floor_sealed_units_removed", -1)) == 0,
+		true,
+		"AL1: singles, graded, and accessories never take the 0.3% premium"
+	)
+	var replay: Dictionary = settle.get("ak1_class_loss_cents", {})
+	_expect_equal(
+		int(settle.get("accessory_delta_cents", 0)),
+		int(replay.get("accessory", -1)),
+		"AL1: floor accessories lose only the AK1 day-rate take"
+	)
+	_expect_equal(
+		int(settle.get("single_delta_cents", 0)),
+		int(replay.get("single", -1)),
+		"AL1: floor singles lose only the AK1 day-rate take"
+	)
+	_expect_equal(
+		int(settle.get("graded_delta_cents", 0)),
+		int(replay.get("graded", -1)),
+		"AL1: floor graded lose only the AK1 day-rate take"
+	)
+	_expect_equal(
+		int(settle.get("backstock_sealed_delta_cents", -1)),
+		int(replay.get("sealed", -2)),
+		"AL1: backstock sealed still takes the day rate only"
+	)
+
+
+func _test_sealed_floor_ak1_rates_unchanged() -> void:
+	var staffed := _ak1_settle_shrink(&"cashier")
+	var empty := _ak1_settle_shrink(&"none")
+	var owner := _ak1_settle_shrink(&"owner")
+	_expect_equal(
+		is_equal_approx(float(staffed.get("rate", 0.0)), 0.002)
+		and int(staffed.get("target_loss_cents", -1))
+		== roundi(float(int(staffed.get("cogs_cents", 0))) * 0.002),
+		true,
+		"AL1: staffed AK1 target stays 0.2% of all on-hand COGS"
+	)
+	_expect_equal(
+		is_equal_approx(float(empty.get("rate", 0.0)), 0.007)
+		and int(empty.get("target_loss_cents", -1))
+		== roundi(float(int(empty.get("cogs_cents", 0))) * 0.007),
+		true,
+		"AL1: empty-floor AK1 target stays 0.7% of all on-hand COGS"
+	)
+	_expect_equal(
+		is_equal_approx(float(owner.get("rate", 0.0)), 0.007)
+		and bool(owner.get("staff_on_floor", true)) == false,
+		true,
+		"AL1: Owner-only still uses the empty-floor 0.7%"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(staffed.get("floor_sealed_premium_rate", 0.0)),
+			InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM
+		)
+		and is_equal_approx(
+			float(empty.get("floor_sealed_premium_rate", 0.0)),
+			InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM
+		),
+		true,
+		"AL1: premium stays 0.3% on staffed and empty-floor days"
+	)
+
+
+func _test_sealed_floor_theft_ring_skips_premium() -> void:
+	var baseline := _al1_settle_seed(&"cashier", false)
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AL1/O1: hire Cashier")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_expect_equal(
+		is_equal_approx(
+			float(_economy.call("effective_shrink_rate")),
+			0.002 * MarketEventService.THEFT_RING_SHRINK_MULT
+		),
+		true,
+		"AL1/O1: theft ring still multiplies only the AK1 day rate"
+	)
+	_economy.call("_settle_shrink")
+	var theft := _last_shrink_applied()
+	_expect_equal(bool(theft.get("theft_ring", false)), true, "AL1/O1: payload flags the ring")
+	_expect_equal(
+		is_equal_approx(float(theft.get("rate", 0.0)), 0.006)
+		and is_equal_approx(float(theft.get("base_rate", 0.0)), 0.002)
+		and is_equal_approx(
+			float(theft.get("shrink_mult", 0.0)),
+			MarketEventService.THEFT_RING_SHRINK_MULT
+		),
+		true,
+		"AL1/O1: a theft-ring day is (day rate × 3)"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(theft.get("floor_sealed_premium_rate", 0.0)),
+			InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM
+		),
+		true,
+		"AL1/O1: theft ring does not multiply the 0.3% premium"
+	)
+	_expect_equal(
+		int(theft.get("floor_sealed_cogs_cents", 0)),
+		int(baseline.get("floor_sealed_cogs_cents", -1)),
+		"AL1/O1: same floor-sealed COGS on the paired seed"
+	)
+	_expect_equal(
+		int(theft.get("floor_sealed_target_cents", -1)),
+		int(baseline.get("floor_sealed_target_cents", -2)),
+		"AL1/O1: premium target stays 0.3% of floor-sealed COGS, not ×3"
+	)
+	_expect_equal(
+		int(theft.get("target_loss_cents", -1)),
+		roundi(float(int(theft.get("cogs_cents", 0))) * 0.006),
+		"AL1/O1: AK1 target is the multiplied day rate of all on-hand COGS"
+	)
+	_demand_signals.call("apply_event_save", {})
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_sealed_floor_sale_pays_listed() -> void:
+	_game_state.call("start_new_game")
+	var lot: StockLot = _inventory_service.call("get_lot", &"AA-SKIE-BLST")
+	_expect_equal(lot != null, true, "AL1: sale needs the seeded sealed lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AL1: listed price stays set")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-BLST")),
+			1.0
+		),
+		true,
+		"AL1: sell_through_mult_for stays 1.0"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _al1_sealed_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AL1: listed sealed lot still enqueues")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AL1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AL1: completed sale still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AL1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AL1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "shrink")
+		and not _function_body_contains(queue_src, "func sell_listed()", "whale")
+		and not _function_body_contains(queue_src, "func sell_listed()", "walkout")
+		and not _function_body_contains(queue_src, "func sell_listed()", "fire")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"shrink"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"floor_sealed"
+		),
+		true,
+		"AL1: shrink premium is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_sealed_floor_shipped_packs_unchanged() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		CustomerSpawnPolicy.HIGH_REP_MIN_REP == 75
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AL1/AJ1: high-rep whale bias stays Rep 75 / ×1.5"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.QUIET_FLOOR_MAX_REP == 24
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"AL1/AI1: quiet floor stays ×0.5 spawn"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and shop.register_walkout_rep_cap() == 3,
+		true,
+		"AL1/AH1: walkout scalars stay Rep −1 / cap 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5
+		and shop.fire_popular_roster_age() == 3,
+		true,
+		"AL1/AG1: Fire scalars stay Rep −5 at roster age 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.stocker_restock_lots_per_day == 4,
+		true,
+		"AL1/AF1: Stocker placement stays 4 lots / day"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AL1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		not balance_src.contains("fee_cut")
+		and not balance_src.contains("better_lead"),
+		true,
+		"AL1: marketplace fee cuts stay parked"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "quiet")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AL1: AJ1/AI1/AH1/AG1 stay off the sell roll"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_archetype_catalog.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/core/balance_config.gd",
+		"res://scripts/autoload/economy.gd",
+		"res://scripts/autoload/inventory_service.gd",
+		"res://scripts/inventory/inventory_model.gd",
+		"res://scripts/inventory/location.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AL1: %s stays §4.5 clean" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AL1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth"),
+		false,
+		"AL1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AL1: Soft _ensure_priceable_sku stays parked"
+	)
+	_game_state.call("start_new_game")
+
+
+func _al1_settle_seed(staff_role: StringName, sealed_to_backstock: bool) -> Dictionary:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	if sealed_to_backstock:
+		_al1_move_seed_sealed_to_backstock()
+	var shop := _game_state.get("shop") as ShopState
+	if staff_role == &"cashier":
+		_expect_equal(shop.hire_cashier(false) != null, true, "AL1: hire Cashier")
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var accessories_before := int(_al1_class_cogs().get("accessory", 0))
+	var sealed_before := _al1_sealed_cogs_cents()
+	_economy.call("_settle_shrink")
+	var applied := _last_shrink_applied()
+	applied["sealed_before_cents"] = sealed_before
+	applied["sealed_after_cents"] = _al1_sealed_cogs_cents()
+	applied["accessory_delta_cents"] = (
+		accessories_before - int(_al1_class_cogs().get("accessory", 0))
+	)
+	return applied
+
+
+func _al1_settle_non_sealed_floor(staff_role: StringName) -> Dictionary:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_al1_move_seed_sealed_to_backstock()
+	_al1_place_graded_on_case()
+	var before := _al1_class_cogs()
+	var shop := _game_state.get("shop") as ShopState
+	if staff_role == &"cashier":
+		_expect_equal(shop.hire_cashier(false) != null, true, "AL1: hire Cashier")
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_economy.call("_settle_shrink")
+	var applied := _last_shrink_applied()
+	var after := _al1_class_cogs()
+	applied["accessory_delta_cents"] = int(before.get("accessory", 0)) - int(after.get("accessory", 0))
+	applied["single_delta_cents"] = int(before.get("single", 0)) - int(after.get("single", 0))
+	applied["graded_delta_cents"] = int(before.get("graded", 0)) - int(after.get("graded", 0))
+	applied["backstock_sealed_delta_cents"] = (
+		int(before.get("sealed", 0)) - int(after.get("sealed", 0))
+	)
+	applied["ak1_class_loss_cents"] = _al1_replay_ak1_class_loss(
+		staff_role,
+		int(applied.get("target_loss_cents", 0))
+	)
+	return applied
+
+
+func _al1_replay_ak1_class_loss(staff_role: StringName, target_loss_cents: int) -> Dictionary:
+	_game_state.call("start_new_game")
+	_al1_move_seed_sealed_to_backstock()
+	_al1_place_graded_on_case()
+	var shop := _game_state.get("shop") as ShopState
+	if staff_role == &"cashier":
+		shop.hire_cashier(false)
+	var model: InventoryModel = _inventory_service.get("model")
+	var before := _al1_class_cogs()
+	model.apply_shrink_loss(target_loss_cents)
+	var after := _al1_class_cogs()
+	return {
+		"accessory": int(before.get("accessory", 0)) - int(after.get("accessory", 0)),
+		"single": int(before.get("single", 0)) - int(after.get("single", 0)),
+		"graded": int(before.get("graded", 0)) - int(after.get("graded", 0)),
+		"sealed": int(before.get("sealed", 0)) - int(after.get("sealed", 0)),
+	}
+
+
+func _al1_seed_sealed_cogs(sealed_to_backstock: bool) -> int:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	if sealed_to_backstock:
+		_al1_move_seed_sealed_to_backstock()
+	return _al1_sealed_cogs_cents()
+
+
+func _al1_place_graded_on_case() -> void:
+	var slab: SlabInstance = _inventory_service.call(
+		"receive_slab",
+		&"AA-BASE-088",
+		&"PSA",
+		10.0,
+		5_000,
+		InventoryLocation.new(InventoryLocation.Type.CASE)
+	)
+	_expect_equal(slab != null, true, "AL1: place graded CASE stock")
+
+
+func _al1_move_seed_sealed_to_backstock() -> void:
+	var model: InventoryModel = _inventory_service.get("model")
+	var dest := InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+	for lot: StockLot in model.stock_lots.duplicate():
+		if (
+			lot.sku == null
+			or lot.sku.product_class != ProductSKU.ProductClass.SEALED
+			or lot.location == null
+			or lot.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			continue
+		_expect_equal(
+			bool(_inventory_service.call(
+				"move_stock_to",
+				lot.sku.id,
+				lot.location,
+				dest,
+				lot.qty
+			)),
+			true,
+			"AL1: move seed sealed to backstock"
+		)
+
+
+func _al1_sealed_cogs_cents() -> int:
+	var total := 0
+	var model: InventoryModel = _inventory_service.get("model")
+	for lot: StockLot in model.stock_lots:
+		if lot.sku != null and lot.sku.product_class == ProductSKU.ProductClass.SEALED:
+			total += lot.total_cost_cents()
+	return total
+
+
+func _al1_class_cogs() -> Dictionary:
+	var model: InventoryModel = _inventory_service.get("model")
+	var sealed := 0
+	var accessory := 0
+	for lot: StockLot in model.stock_lots:
+		if lot.sku == null:
+			continue
+		if lot.sku.product_class == ProductSKU.ProductClass.SEALED:
+			sealed += lot.total_cost_cents()
+		elif lot.sku.product_class == ProductSKU.ProductClass.ACCESSORY:
+			accessory += lot.total_cost_cents()
+	var singles := 0
+	for card: CardInstance in model.cards:
+		singles += card.acquired_cost_cents
+	var graded := 0
+	for slab: SlabInstance in model.slabs:
+		graded += slab.acquired_cost_cents
+	return {
+		"sealed": sealed,
+		"accessory": accessory,
+		"single": singles,
+		"graded": graded,
+	}
+
+
+func _al1_misses_target_by_less_than_one_lot(
+	actual_extra_cents: int,
+	target_extra_cents: int,
+	sealed_cogs_cents: int
+) -> bool:
+	var lot_cents := _al1_cheapest_seed_sealed_unit_cents()
+	if lot_cents <= 0:
+		lot_cents = maxi(1, sealed_cogs_cents)
+	return absi(actual_extra_cents - target_extra_cents) < lot_cents
+
+
+func _al1_cheapest_seed_sealed_unit_cents() -> int:
+	return 2_000
+
+
+func _al1_sealed_walk_in_tags() -> Array[StringName]:
+	var tags: Array[StringName] = []
+	tags.append(&"sealed")
+	return tags
 
 
 func _test_high_rep_whale_gate() -> void:

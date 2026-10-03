@@ -20,3 +20,8 @@ func _init(location_type: Type = Type.BACKSTOCK, location_slot_id: int = -1) -> 
 
 func duplicate_location() -> InventoryLocation:
 	return InventoryLocation.new(type, slot_id)
+
+
+func is_open_floor() -> bool:
+	# AL1: SHELF, CASE, or BINDER. BACKSTOCK and ONLINE_HOLD are not floor.
+	return type in [Type.SHELF, Type.CASE, Type.BINDER]

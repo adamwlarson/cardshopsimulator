@@ -559,7 +559,14 @@ func inventory_cogs_cents() -> int:
 	return model.inventory_cogs_cents()
 
 
+func floor_sealed_cogs_cents() -> int:
+	if model == null:
+		return 0
+	return model.floor_sealed_cogs_cents()
+
+
 func apply_daily_shrink(rate: float) -> Dictionary:
+	var premium_rate := InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM
 	if model == null:
 		return {
 			"rate": rate,
@@ -567,15 +574,27 @@ func apply_daily_shrink(rate: float) -> Dictionary:
 			"target_loss_cents": 0,
 			"loss_cents": 0,
 			"units_removed": 0,
+			"floor_sealed_cogs_cents": 0,
+			"floor_sealed_premium_rate": premium_rate,
+			"floor_sealed_target_cents": 0,
+			"floor_sealed_loss_cents": 0,
+			"floor_sealed_units_removed": 0,
 		}
 	var cogs := model.inventory_cogs_cents()
+	var floor_sealed_cogs := model.floor_sealed_cogs_cents()
 	var loss := maxi(0, roundi(float(cogs) * rate))
 	if loss == 0 and rate > 0.0:
 		loss = 1
 	var applied := model.apply_shrink_loss(loss)
 	var loss_cents := int(applied.get("loss_cents", 0))
 	var units := int(applied.get("units_removed", 0))
-	if units > 0:
+	# AL1: extra 0.3% of this settle's floor-sealed COGS, taken from those
+	# lots after the AK1 day-rate pass. Theft ring must not multiply this.
+	var premium := maxi(0, roundi(float(floor_sealed_cogs) * premium_rate))
+	var premium_applied: Dictionary = model.apply_shrink_loss(premium, true)
+	var premium_loss := int(premium_applied.get("loss_cents", 0))
+	var premium_units := int(premium_applied.get("units_removed", 0))
+	if units + premium_units > 0:
 		EventBus.publish_inventory_changed(&"shrink", model.unit_count())
 	return {
 		"rate": rate,
@@ -583,6 +602,11 @@ func apply_daily_shrink(rate: float) -> Dictionary:
 		"target_loss_cents": loss,
 		"loss_cents": loss_cents,
 		"units_removed": units,
+		"floor_sealed_cogs_cents": floor_sealed_cogs,
+		"floor_sealed_premium_rate": premium_rate,
+		"floor_sealed_target_cents": premium,
+		"floor_sealed_loss_cents": premium_loss,
+		"floor_sealed_units_removed": premium_units,
 	}
 
 

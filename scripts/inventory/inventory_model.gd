@@ -3,6 +3,9 @@ extends RefCounted
 
 const CASE_CARD_WEIGHT := 1
 const CASE_SLAB_WEIGHT := 2
+## AL1: extra settle take from sealed lots on the open floor only.
+## Stacks after the AK1 day rate. Theft ring does not multiply this.
+const FLOOR_SEALED_SHRINK_PREMIUM := 0.003
 
 var balance_config: BalanceConfig
 var catalog: Dictionary = {}
@@ -102,6 +105,14 @@ func inventory_cogs_cents() -> int:
 	return total
 
 
+func floor_sealed_cogs_cents() -> int:
+	var total := 0
+	for lot: StockLot in stock_lots:
+		if _is_floor_sealed_lot(lot):
+			total += lot.total_cost_cents()
+	return total
+
+
 func unit_count() -> int:
 	var total := 0
 	for lot: StockLot in stock_lots:
@@ -111,7 +122,7 @@ func unit_count() -> int:
 	return total
 
 
-func apply_shrink_loss(loss_cents: int) -> Dictionary:
+func apply_shrink_loss(loss_cents: int, floor_sealed_only: bool = false) -> Dictionary:
 	var removed_cents := 0
 	var units_removed := 0
 	if loss_cents <= 0:
@@ -121,7 +132,7 @@ func apply_shrink_loss(loss_cents: int) -> Dictionary:
 		}
 	var remaining := loss_cents
 	while remaining > 0 and unit_count() > 1:
-		var target := _cheapest_shrink_target()
+		var target := _cheapest_shrink_target(floor_sealed_only)
 		if target.is_empty():
 			break
 		var kind := StringName(target.get("kind", &""))
@@ -200,16 +211,20 @@ func _first_backstock_target(sku_id: StringName) -> Resource:
 	return null
 
 
-func _cheapest_shrink_target() -> Dictionary:
+func _cheapest_shrink_target(floor_sealed_only: bool = false) -> Dictionary:
 	var best: Dictionary = {}
 	var best_cost := 1_000_000_000
 	for lot: StockLot in stock_lots:
 		if lot.qty <= 0 or _is_online_hold(lot.location):
 			continue
+		if floor_sealed_only and not _is_floor_sealed_lot(lot):
+			continue
 		var cost := maxi(1, lot.unit_cost_cents())
 		if cost < best_cost:
 			best_cost = cost
 			best = {"kind": &"lot", "lot": lot, "cost_cents": cost}
+	if floor_sealed_only:
+		return best
 	for card: CardInstance in cards:
 		if _is_online_hold(card.location):
 			continue
@@ -225,6 +240,17 @@ func _cheapest_shrink_target() -> Dictionary:
 			best_cost = cost
 			best = {"kind": &"slab", "slab": slab, "cost_cents": cost}
 	return best
+
+
+func _is_floor_sealed_lot(lot: StockLot) -> bool:
+	return (
+		lot != null
+		and lot.qty > 0
+		and lot.sku != null
+		and lot.sku.product_class == ProductSKU.ProductClass.SEALED
+		and lot.location != null
+		and lot.location.is_open_floor()
+	)
 
 
 func add_stock(
