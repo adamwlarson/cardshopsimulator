@@ -189,6 +189,7 @@ func settle_day(day: int) -> void:
 	settle_payday_loan()
 	online_listings.tick_shipping()
 	_settle_shrink()
+	DemandSignals.apply_daily_market_drift()
 	DemandSignals.roll_settle_events()
 
 
