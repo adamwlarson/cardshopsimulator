@@ -5,6 +5,9 @@ const FLOOR_PHASE := 1
 ## systems §5.3 band 0–24. Integer gate: Rep ≤ 24 is quiet, Rep ≥ 25 is baseline.
 const QUIET_FLOOR_MAX_REP := 24
 const QUIET_FLOOR_COUNT_MULT := 0.5
+## systems §5.3 band 75–100. Integer gate: Rep ≥ 75 is high, Rep ≤ 74 is today's weight.
+const HIGH_REP_MIN_REP := 75
+const HIGH_REP_WHALE_WEIGHT_MULT := 1.5
 ## One customer per live timer roll. Quiet floor halves this (round down, floor 0).
 const BASELINE_SPAWN_COUNT := 1
 
@@ -15,6 +18,10 @@ static func can_spawn(phase: int) -> bool:
 
 static func is_quiet_floor(reputation: int) -> bool:
 	return reputation <= QUIET_FLOOR_MAX_REP
+
+
+static func is_high_rep(reputation: int) -> bool:
+	return reputation >= HIGH_REP_MIN_REP
 
 
 ## Spawn count for one roll. Rep is read here, not cached across rolls.
@@ -33,3 +40,15 @@ static func spawn_count(
 
 static func whales_allowed(reputation: int) -> bool:
 	return not is_quiet_floor(reputation)
+
+
+## AJ1: high-rep whale pack. Applied after Convention / play-table bumps.
+## Quiet floor already zeroed the whale; this must not revive it.
+## Rep ≤ 74 returns 1.0 so today's weight (including bumps) is unchanged.
+static func high_rep_whale_weight_mult(reputation: int) -> float:
+	if not whales_allowed(reputation):
+		return 1.0
+	if is_high_rep(reputation):
+		return HIGH_REP_WHALE_WEIGHT_MULT
+	return 1.0
+

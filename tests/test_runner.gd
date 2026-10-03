@@ -200,6 +200,7 @@ func _initialize() -> void:
 	_test_fire_staff()
 	_test_register_walkouts()
 	_test_low_rep_quiet_floor()
+	_test_high_rep_whale_bias()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -18716,6 +18717,602 @@ func _test_quiet_floor_section_45_and_parked() -> void:
 		"AI1: AH1 walkout notes stay"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_high_rep_whale_bias() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_high_rep_whale_gate()
+	_test_high_rep_whale_weight_after_bumps()
+	_test_high_rep_same_seed_keeps_mid_and_quiet()
+	_test_high_rep_reads_rep_at_roll()
+	_test_high_rep_sale_pays_listed()
+	_test_high_rep_walkouts_and_fire_stay_shipped()
+	_test_high_rep_ac1_through_ai1_unchanged()
+	_test_high_rep_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_high_rep_whale_gate() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.HIGH_REP_MIN_REP,
+		75,
+		"AJ1: locked high-rep gate is Rep 75"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AJ1: locked high-rep whale scalar is ×1.5"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(75),
+		true,
+		"AJ1: Rep 75 is high"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(74),
+		false,
+		"AJ1: Rep 74 is today's whale weight"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(75), 1.5),
+		true,
+		"AJ1: Rep 75 whale pack is ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(74), 1.0),
+		true,
+		"AJ1: Rep 74 whale pack is ×1.0"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(24), 1.0),
+		true,
+		"AJ1: quiet-floor pack stays ×1.0 so it cannot revive a zeroed whale"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 3),
+		3,
+		"AJ1: high band does not change spawn count"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(74, 3),
+		3,
+		"AJ1: Rep 74 keeps today's spawn count"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.QUIET_FLOOR_MAX_REP,
+		24,
+		"AJ1/AI1: quiet floor stays Rep 24"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(24, 5),
+		2,
+		"AJ1/AI1: Rep 24 still halves spawn, rounded down"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.whales_allowed(24),
+		false,
+		"AJ1/AI1: Rep 24 still closes the whale gate"
+	)
+
+
+func _test_high_rep_whale_weight_after_bumps() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	_expect_equal(whale.is_empty(), false, "AJ1: whale archetype is loaded")
+	var at_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var at_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	var at_40 := catalog.weight_for(whale, 40, NORMAL_CONFIG)
+	var at_25 := catalog.weight_for(whale, 25, NORMAL_CONFIG)
+	_expect_equal(at_74 > 0.0, true, "AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(at_74, at_40) and is_equal_approx(at_74, at_25),
+		true,
+		"AJ1: Rep 74 stays on today's mid-band whale weight"
+	)
+	_expect_equal(
+		is_equal_approx(at_75, at_74 * 1.5),
+		true,
+		"AJ1: same seed at Rep 75 is ×1.5 of Rep 74"
+	)
+	var convention_mult := MarketEventService.CONVENTION_WHALE_WEIGHT_MULT
+	var play_table_mult := MarketEventService.EVENT_NIGHT_WHALE_WEIGHT_MULT
+	var stacked_mult := convention_mult * play_table_mult
+	var at_74_con := catalog.weight_for(whale, 74, NORMAL_CONFIG, convention_mult)
+	var at_75_con := catalog.weight_for(whale, 75, NORMAL_CONFIG, convention_mult)
+	var at_74_table := catalog.weight_for(whale, 74, NORMAL_CONFIG, play_table_mult)
+	var at_75_table := catalog.weight_for(whale, 75, NORMAL_CONFIG, play_table_mult)
+	var at_74_stack := catalog.weight_for(whale, 74, NORMAL_CONFIG, stacked_mult)
+	var at_75_stack := catalog.weight_for(whale, 75, NORMAL_CONFIG, stacked_mult)
+	_expect_equal(
+		is_equal_approx(at_74_con, at_74 * convention_mult),
+		true,
+		"AJ1: Rep 74 still takes the Convention whale bump"
+	)
+	_expect_equal(
+		is_equal_approx(at_74_table, at_74 * play_table_mult),
+		true,
+		"AJ1: Rep 74 still takes the play-table whale bump"
+	)
+	_expect_equal(
+		is_equal_approx(at_75_con, at_74_con * 1.5),
+		true,
+		"AJ1: ×1.5 is after the Convention bump"
+	)
+	_expect_equal(
+		is_equal_approx(at_75_table, at_74_table * 1.5),
+		true,
+		"AJ1: ×1.5 is after the play-table bump"
+	)
+	_expect_equal(
+		is_equal_approx(at_75_stack, at_74_stack * 1.5),
+		true,
+		"AJ1: ×1.5 is after stacked Convention and play-table bumps"
+	)
+	_expect_equal(
+		catalog.weight_for(whale, 24, NORMAL_CONFIG),
+		0.0,
+		"AJ1/AI1: Rep 24 whale weight is 0 before bumps"
+	)
+	_expect_equal(
+		catalog.weight_for(whale, 24, NORMAL_CONFIG, convention_mult),
+		0.0,
+		"AJ1/AI1: Convention does not bypass the quiet-floor whale gate"
+	)
+	_expect_equal(
+		catalog.weight_for(whale, 24, NORMAL_CONFIG, play_table_mult),
+		0.0,
+		"AJ1/AI1: play-table bump does not bypass the quiet-floor whale gate"
+	)
+	_expect_equal(
+		catalog.weight_for(whale, 24, NORMAL_CONFIG, stacked_mult),
+		0.0,
+		"AJ1/AI1: stacked bumps still cannot revive a quiet-floor whale"
+	)
+	var easy_74 := catalog.weight_for(whale, 74, EASY_CONFIG)
+	var easy_75 := catalog.weight_for(whale, 75, EASY_CONFIG)
+	var hard_74 := catalog.weight_for(whale, 74, HARD_CONFIG)
+	var hard_75 := catalog.weight_for(whale, 75, HARD_CONFIG)
+	_expect_equal(
+		is_equal_approx(easy_75, easy_74 * 1.5)
+		and is_equal_approx(hard_75, hard_74 * 1.5),
+		true,
+		"AJ1: Easy/Hard keep the locked ×1.5 ratio after their whale scalars"
+	)
+	var collector := _aj1_archetype(catalog, &"collector")
+	var flipper := _aj1_archetype(catalog, &"flipper")
+	var collector_74 := catalog.weight_for(collector, 74, NORMAL_CONFIG)
+	var collector_75 := catalog.weight_for(collector, 75, NORMAL_CONFIG)
+	var flipper_74 := catalog.weight_for(flipper, 74, NORMAL_CONFIG)
+	var flipper_75 := catalog.weight_for(flipper, 75, NORMAL_CONFIG)
+	_expect_equal(
+		is_equal_approx(collector_75, collector_74 * 1.5),
+		false,
+		"AJ1: collector stays on the shipped high table, not the whale pack"
+	)
+	_expect_equal(
+		is_equal_approx(flipper_75, flipper_74 * 1.5),
+		false,
+		"AJ1: flipper stays on the shipped high table, not the whale pack"
+	)
+
+
+func _test_high_rep_same_seed_keeps_mid_and_quiet() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_74 := catalog.roll_spawn(SEED, 74, NORMAL_CONFIG, BASELINE)
+	var at_40 := catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, BASELINE)
+	var at_24 := catalog.roll_spawn(SEED, 24, NORMAL_CONFIG, BASELINE)
+	var at_25 := catalog.roll_spawn(SEED, 25, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_74.size(), 5, "AJ1: same seed at Rep 74 keeps today's count")
+	_expect_equal(
+		",".join(_aj1_ids(at_74)),
+		",".join(_aj1_ids(at_40)),
+		"AJ1: same seed at Rep 74 keeps today's mid-band roll"
+	)
+	_expect_equal(at_24.size(), 2, "AJ1/AI1: same seed at Rep 24 is half, rounded down")
+	_expect_equal(
+		at_24.size() == int(floor(float(at_25.size()) * 0.5)),
+		true,
+		"AJ1/AI1: Rep 24 count is half of Rep 25, rounded down"
+	)
+	_expect_equal(
+		_ai1_whale_count(at_24),
+		0,
+		"AJ1/AI1: same seed at Rep 24 still spawns no whales"
+	)
+	var whale := _aj1_whale_archetype(catalog)
+	var convention_mult := MarketEventService.CONVENTION_WHALE_WEIGHT_MULT
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 75, NORMAL_CONFIG, convention_mult),
+			catalog.weight_for(whale, 74, NORMAL_CONFIG, convention_mult) * 1.5
+		),
+		true,
+		"AJ1: same seed weight at Rep 75 is ×1.5 of Rep 74 after Convention"
+	)
+
+
+func _test_high_rep_reads_rep_at_roll() -> void:
+	_game_state.call("start_new_game")
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	_game_state.set("current_reputation", 74)
+	_event_bus.emit_signal("reputation_changed", 74)
+	var live_rep := int(_game_state.get("current_reputation"))
+	_expect_equal(live_rep, 74, "AJ1: GameState Rep is 74 before the mid roll")
+	var mid_live := catalog.weight_for(whale, live_rep, NORMAL_CONFIG)
+	_expect_equal(mid_live > 0.0, true, "AJ1: live Rep 74 keeps today's whale weight")
+	_game_state.set("current_reputation", 75)
+	_event_bus.emit_signal("reputation_changed", 75)
+	live_rep = int(_game_state.get("current_reputation"))
+	_expect_equal(live_rep, 75, "AJ1: GameState Rep is 75 for the next roll")
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, live_rep, NORMAL_CONFIG),
+			mid_live * 1.5
+		),
+		true,
+		"AJ1: the next spawn after Rep 75 applies ×1.5 without a day latch"
+	)
+	_game_state.set("current_reputation", 24)
+	_event_bus.emit_signal("reputation_changed", 24)
+	live_rep = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		catalog.weight_for(whale, live_rep, NORMAL_CONFIG),
+		0.0,
+		"AJ1: a later quiet-floor roll still zeros whale weight"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	_expect_equal(
+		_function_body_contains(
+			spawn_src,
+			"func spawn_customer()",
+			"CustomerSpawnPolicy.spawn_count(GameState.current_reputation)"
+		)
+		and _function_body_contains(
+			spawn_src,
+			"func _spawn_one_customer()",
+			"GameState.current_reputation"
+		),
+		true,
+		"AJ1: live spawn reads Rep at the roll, not a cached latch"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_high_rep_sale_pays_listed() -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 75)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AJ1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AJ1: listed price stays set at high Rep")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AJ1: sell_through_mult_for stays 1.0 at Rep 75"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AJ1: listed lot still enqueues at Rep 75")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AJ1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AJ1: live sell still resolves at high Rep")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AJ1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AJ1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "high_rep")
+		and not _function_body_contains(queue_src, "func sell_listed()", "whale")
+		and not _function_body_contains(queue_src, "func sell_listed()", "spawn_count")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"high_rep"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"whale"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"reputation"
+		),
+		true,
+		"AJ1: high-rep whale bias is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_high_rep_walkouts_and_fire_stay_shipped() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and NORMAL_CONFIG.register_walkout_rep_cap == 3
+		and shop.register_walkout_rep_hit() == 1
+		and shop.register_walkout_rep_cap() == 3,
+		true,
+		"AJ1/AH1: walkout scalars stay Rep −1 / cap 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5
+		and NORMAL_CONFIG.fire_popular_roster_age == 3
+		and shop.fire_rep_hit() == 5
+		and shop.fire_popular_roster_age() == 3,
+		true,
+		"AJ1/AG1: Fire scalars stay Rep −5 at roster age 3"
+	)
+	_expect_equal(_game_state.call("start_floor"), true, "AJ1/AH1: walkout day opens")
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(
+		bool(_game_state.call("register_is_covered")),
+		false,
+		"AJ1/AH1: Owner at Attention 0 still does not cover"
+	)
+	var queue := _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AJ1/AH1: waiter enqueues")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout") >= 1, true, "AJ1/AH1: uncovered leave is a walkout")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AJ1/AH1: walkout math stays Rep −1"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AJ1/AG1: hire Cashier to age")
+	_ag1_run_floor_days(3)
+	_expect_equal(shop.staff[0].roster_age, 3, "AJ1/AG1: Cashier is popular")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AJ1/AG1: Fire a popular Cashier"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 5,
+		"AJ1/AG1: popular Fire still drops Rep 5 once"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_high_rep_ac1_through_ai1_unchanged() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.sightline_display_bonus, 1.15)
+		and is_equal_approx(shop.sightline_display_bonus_mult(), 1.15)
+		and shop.sightline_tiles() == 3,
+		true,
+		"AJ1/AC1: sightline display_bonus stays ×1.15 / 3 tiles"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.case_display_bonus, 1.20)
+		and is_equal_approx(NORMAL_CONFIG.binder_display_bonus, 1.00)
+		and is_equal_approx(NORMAL_CONFIG.backstock_display_bonus, 0.00)
+		and is_equal_approx(shop.case_display_bonus(), 1.20)
+		and is_equal_approx(shop.binder_display_bonus(), 1.00)
+		and is_equal_approx(shop.backstock_display_bonus(), 0.00),
+		true,
+		"AJ1/AD1: case/binder/backstock ladder stays ×1.20 / ×1.00 / ×0.00"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.impulse_shelf_interest, 1.25)
+		and is_equal_approx(NORMAL_CONFIG.floor_shelf_interest, 1.00)
+		and NORMAL_CONFIG.impulse_shelf_tiles == 2
+		and is_equal_approx(shop.impulse_shelf_interest_mult(), 1.25)
+		and is_equal_approx(shop.floor_shelf_interest_mult(), 1.00)
+		and shop.impulse_shelf_tiles() == 2,
+		true,
+		"AJ1/AE1: impulse / floor shelf stay ×1.25 / ×1.00 / 2 tiles"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.stocker_restock_lots_per_day == 4
+		and shop.stocker_restock_lots_per_day() == 4,
+		true,
+		"AJ1/AF1: Stocker budget stays 4 lots/day"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.QUIET_FLOOR_MAX_REP == 24
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5)
+		and CustomerSpawnPolicy.spawn_count(24, 5) == 2
+		and CustomerSpawnPolicy.whales_allowed(24) == false,
+		true,
+		"AJ1/AI1: quiet floor stays ×0.5 spawn and whale weight 0"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func display_bonus()")
+		and demand_src.contains("func location_display_bonus(")
+		and demand_src.contains("func impulse_shelf_interest("),
+		true,
+		"AJ1: AC1 / AD1 / AE1 stay distinct APIs"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func display_bonus()", "high_rep")
+		and not _function_body_contains(demand_src, "func location_display_bonus(", "high_rep")
+		and not _function_body_contains(demand_src, "func impulse_shelf_interest(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "whale")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "spawn_count")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire"),
+		true,
+		"AJ1: high-rep whale bias is not folded into AC1–AI1 sell weights"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_high_rep_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("high_rep")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("whale_bias")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("moq")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("distributor_moq"),
+		false,
+		"AJ1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AJ1: Soft _ensure_priceable_sku stays parked"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AJ1: cameras stay owned≡active (no off-switch)"
+	)
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	_expect_equal(
+		balance_src.contains("moq") == false
+		and balance_src.contains("distributor_moq") == false
+		and shop_src.contains("moq") == false,
+		true,
+		"AJ1: distributor MOQ stays out"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_min, 0.30)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_max, 0.40)
+		and not balance_src.contains("fee_cut")
+		and not balance_src.contains("better_lead"),
+		true,
+		"AJ1: marketplace fees and distributor leads stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005),
+		true,
+		"AJ1: daily shrink stays as shipped"
+	)
+	_expect_equal(
+		not balance_src.contains("high_rep_whale")
+		and not balance_src.contains("HIGH_REP_WHALE"),
+		true,
+		"AJ1: high-rep whale pack lives on spawn policy, not BalanceConfig"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_archetype_catalog.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AJ1: %s stays §4.5 clean" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AJ1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		hud_src.contains("sandbox_best_net_worth_cents"),
+		true,
+		"AJ1: AA1 sandbox bests stay"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	var catalog_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_archetype_catalog.gd"
+	)
+	_expect_equal(
+		spawn_src.contains("CustomerSpawnPolicy.spawn_count")
+		and spawn_src.contains("current_reputation")
+		and policy_src.contains("HIGH_REP_WHALE_WEIGHT_MULT")
+		and catalog_src.contains("high_rep_whale_weight_mult"),
+		true,
+		"AJ1: spawn roll reads live Rep and applies the locked whale pack after bumps"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ai-v1.md"
+		).contains("Low-rep quiet floor"),
+		true,
+		"AJ1: AI1 Soft OK notes stay"
+	)
+	_game_state.call("start_new_game")
+
+
+func _aj1_whale_archetype(catalog: CustomerArchetypeCatalog) -> Dictionary:
+	return _aj1_archetype(catalog, &"whale")
+
+
+func _aj1_archetype(catalog: CustomerArchetypeCatalog, archetype_id: StringName) -> Dictionary:
+	for archetype: Dictionary in catalog.archetypes:
+		if StringName(archetype.get("id", "")) == archetype_id:
+			return archetype
+	return {}
+
+
+func _aj1_ids(rolled: Array[Dictionary]) -> PackedStringArray:
+	var ids := PackedStringArray()
+	for archetype: Dictionary in rolled:
+		ids.append(String(archetype.get("id", "")))
+	return ids
 
 
 func _ai1_whale_count(rolled: Array[Dictionary]) -> int:
