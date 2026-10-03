@@ -89,6 +89,9 @@ func get_stock_quantity(sku_id: StringName) -> int:
 
 
 func inventory_cogs_cents() -> int:
+	# Z1 / systems §9.1 #4 Ironman COGS: acquired cost of sealed + accessories
+	# (stock lots), singles (cards), and graded (slabs). Not liquidity-haircut
+	# net worth. Gate lives in GameState.bankruptcy_reason().
 	var total := 0
 	for lot: StockLot in stock_lots:
 		total += lot.total_cost_cents()

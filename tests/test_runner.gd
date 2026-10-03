@@ -102,6 +102,7 @@ func _initialize() -> void:
 	_test_pricing_spread()
 	_test_stock_lot_unit_cost()
 	_test_inventory_mutations_and_capacity()
+	_test_inventory_cogs_acquired_cost_sum()
 	_test_balance_seed_inventory()
 	_test_buy_opportunity_picker_seed()
 	_test_price_editor_inventory_picker()
@@ -188,6 +189,7 @@ func _initialize() -> void:
 	_test_liquidity_king_win_award()
 	_test_campaign_mode_picker()
 	_test_loan_shark_soft_fail()
+	_test_ironman_optional_lose()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -211,6 +213,33 @@ func _test_stock_lot_unit_cost() -> void:
 	lot.acquired_cost_avg_cents = 250
 	_expect_equal(lot.unit_cost_cents(), 250, "weighted unit cost")
 	_expect_equal(lot.total_cost_cents(), 1000, "lot total cost")
+
+
+func _test_inventory_cogs_acquired_cost_sum() -> void:
+	var inventory := InventoryModel.new(BalanceConfig.new())
+	var shelf := InventoryLocation.new(InventoryLocation.Type.SHELF)
+	var binder := InventoryLocation.new(InventoryLocation.Type.BINDER)
+	var case_location := InventoryLocation.new(InventoryLocation.Type.CASE)
+	_expect_equal(inventory.inventory_cogs_cents(), 0, "Z1: empty inventory COGS is 0")
+	_expect_equal(inventory.add_stock(&"AA-SKIE-BLST", 1, 100, shelf), true, "Z1: sealed acquired cost")
+	_expect_equal(inventory.add_stock(&"ACC-SLV-60", 1, 50, shelf), true, "Z1: accessory acquired cost")
+	var card := CardInstance.new(&"AA-BASE-088", 80, binder)
+	_expect_equal(inventory.add_card(card), true, "Z1: singles acquired cost")
+	var slab_card := CardInstance.new(&"AA-SKIE-052", 0)
+	var slab := SlabInstance.new(
+		slab_card,
+		&"Prism Grade",
+		10.0,
+		"CERT-Z1",
+		70,
+		case_location
+	)
+	_expect_equal(inventory.add_slab(slab), true, "Z1: graded acquired cost")
+	_expect_equal(
+		inventory.inventory_cogs_cents(),
+		300,
+		"Z1: COGS sums sealed + singles + graded + accessories at acquired cost"
+	)
 
 
 func _test_inventory_mutations_and_capacity() -> void:
@@ -1170,6 +1199,15 @@ func _test_difficulty_balance_ordering() -> void:
 	)
 	_expect_equal(cash_is_ordered, true, "starting cash difficulty ordering")
 	_expect_equal(HARD_CONFIG.loan_shark_enabled, false, "hard loan shark access")
+	_expect_equal(EASY_CONFIG.ironman_destitution_default, false, "Z1: Easy Ironman default off")
+	_expect_equal(NORMAL_CONFIG.ironman_destitution_default, false, "Z1: Normal Ironman default off")
+	_expect_equal(HARD_CONFIG.ironman_destitution_default, false, "Z1: Hard Ironman default off")
+	_expect_equal(EASY_CONFIG.ironman_cash_cents, 50_000, "Z1: Easy cash floor stays $500")
+	_expect_equal(NORMAL_CONFIG.ironman_cash_cents, 50_000, "Z1: Normal cash floor stays $500")
+	_expect_equal(HARD_CONFIG.ironman_cash_cents, 50_000, "Z1: Hard cash floor stays $500")
+	_expect_equal(EASY_CONFIG.ironman_cogs_cents, 50_000, "Z1: Easy COGS floor stays $500")
+	_expect_equal(NORMAL_CONFIG.ironman_cogs_cents, 50_000, "Z1: Normal COGS floor stays $500")
+	_expect_equal(HARD_CONFIG.ironman_cogs_cents, 50_000, "Z1: Hard COGS floor stays $500")
 	_expect_equal(NORMAL_CONFIG.start_cash_cents, 800_000, "normal starting cash")
 	_expect_equal(NORMAL_CONFIG.start_reputation, 40, "normal starting reputation")
 	_expect_equal(NORMAL_CONFIG.rent_small_weekly_cents, 120_000, "normal weekly rent")
@@ -13404,6 +13442,356 @@ func _trigger_rent_bankruptcy(label: String) -> void:
 		true,
 		"W1 %s: SETTLE runs the rent miss" % label
 	)
+
+
+func _test_ironman_optional_lose() -> void:
+	_test_ironman_menu_toggle_default_off()
+	_test_ironman_on_dual_floor_lose_once()
+	_test_ironman_off_does_not_dual_floor_lose()
+	_test_ironman_partial_floors_do_not_lose()
+	_test_ironman_loan_shark_path_unchanged()
+	_test_ironman_hard_default_off_and_shark_still_instant()
+	_test_ironman_hud_names_reason()
+	_test_ironman_save_load()
+	_game_state.call("return_to_menu")
+	_game_state.call("select_ironman", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_ironman_menu_toggle_default_off() -> void:
+	_reset_ironman_session(NORMAL_CONFIG)
+	_expect_equal(
+		_game_state.call("select_ironman", false),
+		true,
+		"Z1: menu can set Ironman off"
+	)
+	_expect_equal(
+		bool(_game_state.get("ironman_enabled")),
+		false,
+		"Z1: Ironman starts off"
+	)
+	var menu := _instantiate_main_menu()
+	_expect_equal(menu != null, true, "Z1: main menu instantiates")
+	var toggle := menu.get_node_or_null("%IronmanToggle") as CheckButton if menu != null else null
+	var hint := menu.get_node_or_null("%IronmanHint") as Label if menu != null else null
+	_expect_equal(toggle != null, true, "Z1: Ironman toggle is on new-game")
+	_expect_equal(
+		toggle != null and toggle.text == "Ironman",
+		true,
+		"Z1: toggle is player-facing Ironman"
+	)
+	_expect_equal(
+		toggle != null and toggle.button_pressed == false,
+		true,
+		"Z1: toggle default is off"
+	)
+	_expect_equal(
+		hint != null
+		and hint.text.contains("$500")
+		and hint.text.contains("COGS"),
+		true,
+		"Z1: hint names cash and inventory COGS floors"
+	)
+	_assert_text_has_no_truth(toggle.text if toggle != null else "", "Z1: Ironman toggle")
+	_assert_text_has_no_truth(hint.text if hint != null else "", "Z1: Ironman hint")
+	if toggle != null:
+		toggle.button_pressed = true
+		toggle.toggled.emit(true)
+	_expect_equal(
+		bool(_game_state.get("ironman_enabled")),
+		true,
+		"Z1: toggle opts into Ironman"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		bool(_game_state.get("ironman_enabled")),
+		true,
+		"Z1: start_new_game keeps Ironman on"
+	)
+	_expect_equal(
+		_game_state.call("select_ironman", false),
+		false,
+		"Z1: mid-run Ironman switch is rejected"
+	)
+	_expect_equal(
+		bool(_game_state.get("ironman_enabled")),
+		true,
+		"Z1: mid-run Ironman stays on"
+	)
+	if menu != null:
+		root.remove_child(menu)
+		menu.free()
+
+
+func _test_ironman_on_dual_floor_lose_once() -> void:
+	_reset_ironman_session(NORMAL_CONFIG)
+	_expect_equal(_game_state.call("select_ironman", true), true, "Z1 on: opt in")
+	_game_state.call("start_new_game")
+	_set_dual_floor_state(49_900, 49_900)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_lose"),
+		true,
+		"Z1 on: dual-floor lose fires"
+	)
+	_expect_equal(bool(_game_state.get("campaign_lost")), true, "Z1 on: campaign is lost")
+	_expect_equal(
+		String(_game_state.get("last_lose_reason")),
+		"ironman",
+		"Z1 on: reason is ironman"
+	)
+	_expect_equal(
+		bool(_game_state.get("loan_shark_offer_pending")),
+		false,
+		"Z1 on: dual-floor lose skips loan shark"
+	)
+	_expect_equal(
+		_captured_loan_shark.is_empty(),
+		true,
+		"Z1 on: loan_shark_offered does not fire"
+	)
+	_expect_equal(
+		String(_captured_campaign_lost.get("reason", "")),
+		"ironman",
+		"Z1 on: campaign_lost names ironman"
+	)
+	_assert_payload_has_no_truth(_captured_campaign_lost, "Z1 on: lose payload")
+	_captured_campaign_lost = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_lose"),
+		false,
+		"Z1 on: dual-floor lose fires once"
+	)
+	_expect_equal(
+		_captured_campaign_lost.is_empty(),
+		true,
+		"Z1 on: second eval does not re-emit lose"
+	)
+
+
+func _test_ironman_off_does_not_dual_floor_lose() -> void:
+	_reset_ironman_session(NORMAL_CONFIG)
+	_expect_equal(_game_state.call("select_ironman", false), true, "Z1 off: stay off")
+	_game_state.call("start_new_game")
+	_set_dual_floor_state(49_900, 49_900)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_lose"),
+		false,
+		"Z1 off: dual-floor does not lose"
+	)
+	_expect_equal(bool(_game_state.get("campaign_lost")), false, "Z1 off: campaign stays live")
+	_expect_equal(
+		String(_game_state.get("last_lose_reason")),
+		"",
+		"Z1 off: no lose reason"
+	)
+	_expect_equal(
+		_captured_campaign_lost.is_empty(),
+		true,
+		"Z1 off: campaign_lost does not fire"
+	)
+
+
+func _test_ironman_partial_floors_do_not_lose() -> void:
+	_reset_ironman_session(NORMAL_CONFIG)
+	_expect_equal(_game_state.call("select_ironman", true), true, "Z1 partial: opt in")
+	_game_state.call("start_new_game")
+	_set_dual_floor_state(49_900, 50_000)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_lose"),
+		false,
+		"Z1: cash under floor with COGS at floor does not lose"
+	)
+	_set_dual_floor_state(50_000, 49_900)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_lose"),
+		false,
+		"Z1: COGS under floor with cash at floor does not lose"
+	)
+	_expect_equal(bool(_game_state.get("campaign_lost")), false, "Z1: both floors required")
+
+
+func _test_ironman_loan_shark_path_unchanged() -> void:
+	_reset_ironman_session(NORMAL_CONFIG)
+	_expect_equal(_game_state.call("select_ironman", false), true, "Z1 shark: Ironman off")
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("Z1 Ironman off shark")
+	_expect_equal(
+		bool(_game_state.get("loan_shark_offer_pending")),
+		true,
+		"Z1 off: first bankruptcy still offers loan shark"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_lost")),
+		false,
+		"Z1 off: shark offer is not game over"
+	)
+	_expect_equal(_game_state.call("refuse_loan_shark"), true, "Z1 off: refuse still works")
+	_expect_equal(
+		String(_game_state.get("last_lose_reason")),
+		"refused_loan_shark",
+		"Z1 off: refuse reason unchanged"
+	)
+
+	_reset_ironman_session(NORMAL_CONFIG)
+	_expect_equal(_game_state.call("select_ironman", true), true, "Z1 shark: Ironman on")
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("Z1 Ironman on shark")
+	_expect_equal(
+		bool(_game_state.get("loan_shark_offer_pending")),
+		true,
+		"Z1 on: missed-rent bankruptcy still offers loan shark"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_lost")),
+		false,
+		"Z1 on: high-COGS rent miss is not Ironman lose"
+	)
+	_expect_equal(_game_state.call("accept_loan_shark"), true, "Z1 on: Accept still applies")
+	_expect_equal(
+		_economy.call("has_active_payday_loan"),
+		true,
+		"Z1 on: Accept still starts the drain"
+	)
+
+
+func _test_ironman_hard_default_off_and_shark_still_instant() -> void:
+	_reset_ironman_session(HARD_CONFIG)
+	_expect_equal(
+		HARD_CONFIG.ironman_destitution_default,
+		false,
+		"Z1 Hard: default stays off"
+	)
+	_expect_equal(
+		bool(_game_state.get("ironman_enabled")),
+		false,
+		"Z1 Hard: session Ironman stays off"
+	)
+	_game_state.call("start_new_game")
+	_set_dual_floor_state(0, 0)
+	_expect_equal(
+		_game_state.call("evaluate_campaign_lose"),
+		false,
+		"Z1 Hard: dual-floor does not lose when off"
+	)
+	_game_state.call("start_new_game")
+	_trigger_rent_bankruptcy("Z1 Hard shark")
+	_expect_equal(
+		bool(_game_state.get("loan_shark_offer_pending")),
+		false,
+		"Z1 Hard: loan shark still disabled"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_lost")),
+		true,
+		"Z1 Hard: first bankruptcy is still instant over"
+	)
+
+
+func _test_ironman_hud_names_reason() -> void:
+	_reset_ironman_session(NORMAL_CONFIG)
+	_expect_equal(_game_state.call("select_ironman", true), true, "Z1 HUD: opt in")
+	_game_state.call("start_new_game")
+	_set_dual_floor_state(49_900, 49_900)
+	_expect_equal(_game_state.call("evaluate_campaign_lose"), true, "Z1 HUD: lose fires")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "Z1 HUD: gameplay HUD loads")
+	if hud == null:
+		return
+	var offer := hud.get_node_or_null("%LoanShark") as PanelContainer
+	var over := hud.get_node_or_null("%GameOver") as PanelContainer
+	var title := hud.get_node_or_null("%GameOverTitle") as Label
+	var body := hud.get_node_or_null("%GameOverBody") as Label
+	_expect_equal(offer == null or not offer.visible, true, "Z1 HUD: no loan shark modal")
+	_expect_equal(over != null and over.visible, true, "Z1 HUD: game over shows")
+	_expect_equal(
+		title != null and title.text == "Game over",
+		true,
+		"Z1 HUD: title is Game over"
+	)
+	_expect_equal(
+		body != null
+		and body.text.contains("Ironman")
+		and body.text.contains("$500")
+		and body.text.contains("COGS"),
+		true,
+		"Z1 HUD: body names Ironman cash and inventory COGS floors"
+	)
+	_assert_text_has_no_truth(body.text if body != null else "", "Z1 HUD game over body")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.ironman_toggle_hint(),
+		"Z1 HUD Ironman hint"
+	)
+	hud.queue_free()
+
+
+func _test_ironman_save_load() -> void:
+	_reset_ironman_session(NORMAL_CONFIG)
+	_expect_equal(_game_state.call("select_ironman", true), true, "Z1 save: opt in")
+	_game_state.call("start_new_game")
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(bool(saved.get("ironman_enabled", false)), true, "Z1 save: toggle persists")
+	_assert_payload_has_no_truth(saved, "Z1 save payload")
+	_game_state.call("return_to_menu")
+	_expect_equal(_game_state.call("select_ironman", false), true, "Z1 save: turn off")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		bool(_game_state.get("ironman_enabled")),
+		false,
+		"Z1 save: new game follows current toggle"
+	)
+	_expect_equal(_game_state.call("restore_save", saved), true, "Z1 save: restore succeeds")
+	_expect_equal(
+		bool(_game_state.get("ironman_enabled")),
+		true,
+		"Z1 save: restore keeps Ironman on"
+	)
+
+
+func _reset_ironman_session(config: BalanceConfig) -> void:
+	_captured_loan_shark = {}
+	_captured_loan_shark_outcome = &""
+	_captured_campaign_lost = {}
+	_game_state.call("set_balance_config", config)
+	_game_state.call("return_to_menu")
+	_game_state.set("campaign_complete", false)
+	_game_state.set("campaign_lost", false)
+	_game_state.set("last_lose_reason", &"")
+	_game_state.set("loan_shark_recovery_used", false)
+	_game_state.set("loan_shark_offer_pending", false)
+	_game_state.set("missed_rent_weeks", 0)
+	_game_state.set("_unpaid_wages_this_settle", false)
+	_game_state.call("select_ironman", false)
+
+
+func _set_dual_floor_state(cash_cents: int, cogs_cents: int) -> void:
+	var model: InventoryModel = _inventory_service.get("model")
+	model.stock_lots.clear()
+	model.cards.clear()
+	model.slabs.clear()
+	if cogs_cents > 0:
+		var shelf := InventoryLocation.new(InventoryLocation.Type.SHELF)
+		_expect_equal(
+			model.add_stock(&"AA-SKIE-BLST", 1, cogs_cents, shelf),
+			true,
+			"Z1: seed acquired-cost lot at %d" % cogs_cents
+		)
+	_expect_equal(
+		_inventory_service.call("inventory_cogs_cents"),
+		cogs_cents,
+		"Z1: inventory COGS is acquired cost %d" % cogs_cents
+	)
+	_economy.set("balance_cents", cash_cents)
+	_game_state.set("current_reputation", 40)
+	_game_state.set("missed_rent_weeks", 0)
+	_game_state.set("_unpaid_wages_this_settle", false)
+	_game_state.set("loan_shark_offer_pending", false)
+	_game_state.set("campaign_lost", false)
+	_game_state.set("campaign_complete", false)
+	_game_state.set("last_lose_reason", &"")
+	_game_state.set("is_game_active", true)
+	_captured_loan_shark = {}
+	_captured_campaign_lost = {}
 
 
 func _j1_comp_width(dto: Resource) -> int:

@@ -36,6 +36,8 @@ var campaign_lost: bool = false
 var last_lose_reason: StringName = &""
 var loan_shark_recovery_used: bool = false
 var loan_shark_offer_pending: bool = false
+## Z1 opt-in. Default off on Easy/Normal/Hard. Menu / new-game only.
+var ironman_enabled: bool = false
 var missed_rent_weeks: int = 0
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
@@ -356,6 +358,14 @@ func select_campaign_mode(mode: CampaignMode) -> bool:
 	return true
 
 
+func select_ironman(enabled: bool) -> bool:
+	# Mid-run switch is out of scope. Menu / new-game only. Default off.
+	if is_game_active:
+		return false
+	ironman_enabled = enabled
+	return true
+
+
 func campaign_id(mode: CampaignMode) -> StringName:
 	match mode:
 		CampaignMode.SURVIVE_Y1:
@@ -478,8 +488,13 @@ func bankruptcy_reason() -> StringName:
 		and missed_rent_weeks >= maxi(1, balance_config.missed_rent_weeks_to_lose)
 	):
 		return &"missed_rent"
+	# Z1 / systems §9.1 #4: Ironman lose when cash < $500 AND inventory COGS
+	# < $500. COGS is InventoryService.inventory_cogs_cents() — acquired cost
+	# of sealed, singles, graded, and accessories, not liquidity-haircut NW.
+	# Off → existing lose rules only (cash < 0 / missed rent / Rep ≤ 0).
 	if (
-		balance_config != null
+		ironman_enabled
+		and balance_config != null
 		and balance_config.meets_ironman_destitution(
 			Economy.balance_cents,
 			InventoryService.inventory_cogs_cents()
@@ -520,7 +535,9 @@ func evaluate_campaign_lose() -> bool:
 	var reason := bankruptcy_reason()
 	if reason == &"":
 		return false
-	if can_offer_loan_shark():
+	# Ironman dual-floor is a named lose, not a loan-shark bankruptcy.
+	# Existing cash/rent/rep shark path stays unchanged.
+	if reason != &"ironman" and can_offer_loan_shark():
 		return _offer_loan_shark(reason)
 	return _award_loss(reason)
 
@@ -617,6 +634,7 @@ func capture_save() -> Dictionary:
 		"campaign_lost": campaign_lost,
 		"last_lose_reason": String(last_lose_reason),
 		"loan_shark_recovery_used": loan_shark_recovery_used,
+		"ironman_enabled": ironman_enabled,
 		"missed_rent_weeks": missed_rent_weeks,
 		"payday_loan_days_remaining": Economy.payday_loan_days_remaining(),
 		"shop": shop.to_save(),
@@ -646,6 +664,7 @@ func restore_save(data: Dictionary) -> bool:
 	campaign_lost = bool(data.get("campaign_lost", false))
 	last_lose_reason = StringName(data.get("last_lose_reason", &""))
 	loan_shark_recovery_used = bool(data.get("loan_shark_recovery_used", false))
+	ironman_enabled = bool(data.get("ironman_enabled", false))
 	loan_shark_offer_pending = false
 	missed_rent_weeks = int(data.get("missed_rent_weeks", 0))
 	_unpaid_wages_this_settle = false

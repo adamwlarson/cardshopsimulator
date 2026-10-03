@@ -496,6 +496,7 @@ func listed_price_for(sku_id: StringName) -> int:
 
 
 func inventory_cogs_cents() -> int:
+	# Z1 Ironman uses this sum: sealed/singles/graded/accessories at acquired cost.
 	if model == null:
 		return 0
 	return model.inventory_cogs_cents()

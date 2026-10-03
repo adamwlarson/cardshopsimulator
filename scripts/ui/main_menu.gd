@@ -13,6 +13,7 @@ const MODE_BUTTON_NAMES: Array[String] = [
 
 func _ready() -> void:
 	_bind_mode_picker()
+	_bind_ironman_toggle()
 	_sync_campaign_copy()
 
 
@@ -41,6 +42,27 @@ func _on_mode_button_pressed(mode: int) -> void:
 	select_displayed_mode(mode)
 
 
+func select_ironman(enabled: bool) -> bool:
+	if not GameState.select_ironman(enabled):
+		_sync_ironman_toggle()
+		return false
+	_sync_ironman_toggle()
+	return true
+
+
+func _bind_ironman_toggle() -> void:
+	var toggle := get_node_or_null("%IronmanToggle") as CheckButton
+	if toggle == null:
+		return
+	toggle.text = DemandSignalPresenter.ironman_toggle_label()
+	if not toggle.toggled.is_connected(_on_ironman_toggled):
+		toggle.toggled.connect(_on_ironman_toggled)
+
+
+func _on_ironman_toggled(enabled: bool) -> void:
+	select_ironman(enabled)
+
+
 func _sync_campaign_copy() -> void:
 	var campaign := get_node_or_null("%CampaignLabel") as Label
 	if campaign != null:
@@ -51,6 +73,7 @@ func _sync_campaign_copy() -> void:
 	if blurb != null:
 		blurb.text = GameState.campaign_goal_copy()
 	_sync_mode_buttons()
+	_sync_ironman_toggle()
 	_sync_sandbox_bests()
 	var prestige := get_node_or_null("%PrestigeLabel") as Label
 	if prestige == null:
@@ -75,6 +98,15 @@ func _sync_mode_buttons() -> void:
 		if button == null:
 			continue
 		button.set_pressed_no_signal(MODE_ORDER[index] == selected)
+
+
+func _sync_ironman_toggle() -> void:
+	var toggle := get_node_or_null("%IronmanToggle") as CheckButton
+	if toggle != null:
+		toggle.set_pressed_no_signal(GameState.ironman_enabled)
+	var hint := get_node_or_null("%IronmanHint") as Label
+	if hint != null:
+		hint.text = DemandSignalPresenter.ironman_toggle_hint()
 
 
 func _sync_sandbox_bests() -> void:
