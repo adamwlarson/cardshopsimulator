@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AN v1 — post AM1
 
-**Status:** **AN1 ADOPTED** 2026-10-03 — Player trades unlock, Rep ≥ 50. Park AN2/AN4. Hard-park AN3 camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, shrink, walkouts, or Fire into a sell weight. AM1 spawn math stays as shipped.
+**Status:** **AN1 SHIPPED** 2026-10-03 — squash-merged #70 @ `ae1647ba`. Player trades unlock, Rep ≥ 50. Park AN2/AN4. Hard-park AN3 camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, shrink, walkouts, or Fire into a sell weight. AM1 spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-am (AM1 Mid-band baseline SHIPPED #69 @ `e7a2b830`); Soft catalog CLOSED
