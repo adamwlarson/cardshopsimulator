@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AB v1 — post AA1
 
-**Status:** **AB1 ADOPTED** 2026-10-03 — Play table event nights. Park AB2/AB4. Hard-park AB3 camera off-switch. Soft catalog CLOSED.  
+**Status:** **AB1 SHIPPED** #58 @ `b75bf2af` (tip `129dc702`) — Play table event nights. Park AB2/AB4. Hard-park AB3 camera off-switch. Soft catalog CLOSED. Soft OK MVP: first-frame flash, HUD blocked-path duplicate, blocked default origin still spends, path assert is patience not a walkout.  
 **Author:** CSS Designer  
 **Date:** 2026-10-03  
 **Depends on:** pick-aa (AA1 Sandbox PBs SHIPPED #57 @ `613dfad0`); Soft catalog CLOSED  
@@ -89,3 +89,5 @@ No new systems.
 |------|----------|
 | 2026-10-03 | Drafted post AA1 SHIPPED. Lean **AB1 Play table event nights**. Soft reopeners hard-parked. |
 | 2026-10-03 | PM adopted **AB1**. Park AB2/AB4. Hard-park AB3. Soft catalog CLOSED. |
+| 2026-10-03 | **AB1 SHIPPED** #58 @ `b75bf2af` (tip `129dc702`). QA PASS-with-notes. Soft OK MVP notes stay Soft. Soft catalog CLOSED. |
+| 2026-10-03 | PM locked **AB1 GO** (Play table event nights). Park AB2/AB4. Hard-park AB3 Soft. Soft catalog CLOSED. No Art. Synced main @ `a1f0e4db`; Eng spike `bc-75e3893d` launching. |
