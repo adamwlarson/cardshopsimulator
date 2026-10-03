@@ -205,6 +205,7 @@ func _initialize() -> void:
 	_test_sealed_floor_theft_premium()
 	_test_mid_band_baseline()
 	_test_player_trades_unlock()
+	_test_regulars_return()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -20957,6 +20958,654 @@ func _test_player_trade_hud_plain_text() -> void:
 		hud.queue_free()
 	_free_lingering_gameplay_huds()
 	_game_state.call("start_new_game")
+
+
+func _test_regulars_return() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_regulars_return_named_gate()
+	_test_regulars_return_same_seed_queues_at_50_not_49()
+	_test_regulars_return_walkout_refuse_and_cap()
+	_test_regulars_return_tagged_sale_path_no_truth()
+	_test_regulars_return_one_shot_then_next_sale()
+	_test_regulars_return_spawn_and_whale_stay_baseline()
+	_test_regulars_return_sale_pays_listed()
+	_test_regulars_return_shipped_levers_stay()
+	_test_regulars_return_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_regulars_return_named_gate() -> void:
+	_expect_equal(
+		RegularsReturnPolicy.UNLOCK_REP,
+		50,
+		"AO1: locked Regulars unlock is Rep 50"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.QUEUE_CAP,
+		1,
+		"AO1: locked Regulars cap is one queued return"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.ARCHETYPE_ID,
+		&"regular",
+		"AO1: return uses the existing Regular archetype"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.is_unlocked(50),
+		true,
+		"AO1: Rep 50 unlocks Regulars return"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.is_unlocked(49),
+		false,
+		"AO1: Rep 49 keeps Regulars return shut"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.can_queue(50, 0) and not RegularsReturnPolicy.can_queue(49, 0),
+		true,
+		"AO1: queue channel follows the Rep 50 gate"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.can_queue(50, 1),
+		false,
+		"AO1: a second listed sale cannot queue past cap 1"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.unlock_rep(0),
+		50,
+		"AO1: missing or 0 unlock falls back to Rep 50"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.unlock_rep(-4),
+		50,
+		"AO1: negative unlock falls back to Rep 50"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.unlock_rep(),
+		50,
+		"AO1: omitted unlock stays Rep 50"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.queue_cap(0),
+		1,
+		"AO1: missing or 0 cap falls back to 1"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.queue_cap(-2),
+		1,
+		"AO1: negative cap falls back to 1"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.queue_cap(),
+		1,
+		"AO1: omitted cap stays 1"
+	)
+	_expect_equal(
+		int(_demand_signals.call("regulars_unlock_rep", 0)),
+		50,
+		"AO1: DemandSignals unlock fallback is Rep 50"
+	)
+	_expect_equal(
+		int(_demand_signals.call("regulars_queue_cap", 0)),
+		1,
+		"AO1: DemandSignals cap fallback is 1"
+	)
+	_ao1_reset_at(50)
+	_demand_signals.call("configure_regulars_return", 0, 0)
+	_expect_equal(
+		bool(_demand_signals.call("note_regulars_listed_sale", 50)),
+		true,
+		"AO1: configured 0/0 still queues at Rep 50"
+	)
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"AO1: configured 0/0 still caps at one"
+	)
+	_expect_equal(
+		bool(_demand_signals.call("note_regulars_listed_sale", 50)),
+		false,
+		"AO1: configured 0/0 does not queue a second Regular"
+	)
+
+
+func _test_regulars_return_same_seed_queues_at_50_not_49() -> void:
+	_ao1_reset_at(50)
+	_expect_equal(_game_state.call("start_floor"), true, "AO1: day-1 floor opens at Rep 50")
+	_expect_equal(
+		_captured_scripted_customer == null,
+		true,
+		"AO1: no Regular is waiting before a listed sale"
+	)
+	var sold_50 := _ao1_sell_listed()
+	_expect_equal(sold_50 != null, true, "AO1: listed sale at Rep 50 completes")
+	if sold_50 != null:
+		_event_bus.emit_signal("customer_resolved", sold_50, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"AO1: same listed sale at Rep 50 queues one Regular"
+	)
+	_expect_equal(_game_state.call("start_settle"), true, "AO1: day-1 settle at Rep 50")
+	_expect_equal(_game_state.call("advance_day"), true, "AO1: day-1 advances at Rep 50")
+	_game_state.set("current_reputation", 50)
+	_captured_scripted_customer = null
+	_expect_equal(_game_state.call("start_floor"), true, "AO1: next floor opens at Rep 50")
+	_expect_equal(
+		_captured_scripted_customer != null,
+		true,
+		"AO1: next floor open tags one Regular after the Rep 50 sale"
+	)
+	if _captured_scripted_customer != null:
+		_expect_equal(
+			_captured_scripted_customer.archetype_id,
+			&"regular",
+			"AO1: next-floor customer is tagged Regular"
+		)
+		_expect_equal(
+			_captured_scripted_customer.is_regular_return,
+			true,
+			"AO1: next-floor Regular is the queued return"
+		)
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"AO1: the return is consumed on floor open"
+	)
+	_ao1_reset_at(49)
+	_expect_equal(_game_state.call("start_floor"), true, "AO1: day-1 floor opens at Rep 49")
+	var sold_49 := _ao1_sell_listed()
+	_expect_equal(sold_49 != null, true, "AO1: same listed sale at Rep 49 completes")
+	if sold_49 != null:
+		_event_bus.emit_signal("customer_resolved", sold_49, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"AO1: same listed sale at Rep 49 queues nothing"
+	)
+	_expect_equal(_game_state.call("start_settle"), true, "AO1: day-1 settle at Rep 49")
+	_expect_equal(_game_state.call("advance_day"), true, "AO1: day-1 advances at Rep 49")
+	_captured_scripted_customer = null
+	_expect_equal(_game_state.call("start_floor"), true, "AO1: next floor opens at Rep 49")
+	_expect_equal(
+		_captured_scripted_customer == null,
+		true,
+		"AO1: next floor open stays empty after the Rep 49 sale"
+	)
+
+
+func _test_regulars_return_walkout_refuse_and_cap() -> void:
+	_ao1_reset_at(50)
+	_expect_equal(_game_state.call("start_floor"), true, "AO1: walkout day opens")
+	_game_state.set("attention_remaining", 0)
+	var walk_queue := _ah1_hooked_queue()
+	var waiter := _ah1_waiting_buyer()
+	_expect_equal(walk_queue.enqueue(waiter), true, "AO1: waiter enqueues for walkout")
+	walk_queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout") >= 1, true, "AO1: uncovered leave is a walkout")
+	_event_bus.emit_signal("customer_resolved", waiter, &"walkout")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"AO1: a walkout queues nothing"
+	)
+	walk_queue.free()
+	var refuse_queue := CustomerQueue.new()
+	refuse_queue.configure(_inventory_service)
+	var refused := _ao1_listed_buyer()
+	_expect_equal(refuse_queue.enqueue(refused), true, "AO1: refuse path enqueues")
+	_expect_equal(refuse_queue.refuse(), true, "AO1: refuse resolves")
+	_event_bus.emit_signal("customer_resolved", refused, &"refused")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"AO1: a refuse queues nothing"
+	)
+	refuse_queue.free()
+	var first := _ao1_sell_listed()
+	_expect_equal(first != null, true, "AO1: first listed sale still completes")
+	if first != null:
+		_event_bus.emit_signal("customer_resolved", first, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"AO1: first listed sale queues one Regular"
+	)
+	var second := _ao1_sell_listed()
+	_expect_equal(second != null, true, "AO1: second listed sale still completes")
+	if second != null:
+		_event_bus.emit_signal("customer_resolved", second, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"AO1: a second listed sale does not queue a second Regular"
+	)
+	_event_bus.emit_signal("customer_resolved", first, &"walkout")
+	_event_bus.emit_signal("customer_resolved", second, &"refused")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"AO1: walkout or refuse the same day does not add another Regular"
+	)
+
+
+func _test_regulars_return_tagged_sale_path_no_truth() -> void:
+	_ao1_reset_at(50)
+	_expect_equal(
+		bool(_demand_signals.call("note_regulars_listed_sale", 50)),
+		true,
+		"AO1: sale-path scan needs one queued Regular"
+	)
+	var returning: CustomerProfile = _demand_signals.call("take_regular_return")
+	_expect_equal(returning != null, true, "AO1: queued return builds a Regular")
+	if returning == null:
+		return
+	_expect_equal(returning.archetype_id, &"regular", "AO1: return is tagged Regular")
+	_expect_equal(returning.is_regular_return, true, "AO1: return flag is set")
+	_expect_equal(returning.display_name, "Regular", "AO1: return uses Regular display")
+	_expect_equal(
+		returning.desired_skus.is_empty(),
+		true,
+		"AO1: return has no new want table"
+	)
+	_expect_equal(
+		",".join(_ao1_tag_ids(returning.interest_tags)),
+		",".join(_ao1_tag_ids(_ao1_regular_catalog_tags())),
+		"AO1: return keeps the shipped Regular interest tags"
+	)
+	_expect_dto_has_no_truth_fields(returning, "AO1 Regular return")
+	_expect_equal(
+		String(returning.display_name).to_lower().contains("true_market"),
+		false,
+		"AO1: Regular display never shows true_market"
+	)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AO1: sale path needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	_expect_equal(queue.enqueue(returning), true, "AO1: Regular uses the existing sale path")
+	_expect_equal(
+		returning.listed_price_cents,
+		listed_price,
+		"AO1: Regular copies the listed price — no new price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AO1: Regular listed sale still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AO1: Regular sale pays the listed price"
+	)
+	queue.free()
+
+
+func _test_regulars_return_one_shot_then_next_sale() -> void:
+	_ao1_reset_at(50)
+	_expect_equal(
+		bool(_demand_signals.call("note_regulars_listed_sale", 50)),
+		true,
+		"AO1: one-shot path queues from a listed sale"
+	)
+	_captured_scripted_customer = null
+	_expect_equal(_game_state.call("start_floor"), true, "AO1: floor open consumes the return")
+	var returning := _captured_scripted_customer
+	_expect_equal(returning != null, true, "AO1: floor open releases the Regular")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"AO1: the return does not queue another visit by itself"
+	)
+	if returning != null:
+		_event_bus.emit_signal("customer_resolved", returning, &"arrived")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"AO1: Regular arrival is not a listed sale"
+	)
+	var next_sale := _ao1_sell_listed()
+	_expect_equal(next_sale != null, true, "AO1: the next listed sale still completes")
+	if next_sale != null:
+		_event_bus.emit_signal("customer_resolved", next_sale, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"AO1: the next listed sale can queue again"
+	)
+
+
+func _test_regulars_return_spawn_and_whale_stay_baseline() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_49 := catalog.roll_spawn(SEED, 49, NORMAL_CONFIG, BASELINE)
+	var at_50 := catalog.roll_spawn(SEED, 50, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_49.size(), 5, "AO1: Rep 49 keeps the AM1 spawn count")
+	_expect_equal(at_50.size(), 5, "AO1: Rep 50 keeps the AM1 spawn count")
+	_expect_equal(
+		at_49.size(),
+		at_50.size(),
+		"AO1: same seed spawn count at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		",".join(_aj1_ids(at_49)),
+		",".join(_aj1_ids(at_50)),
+		"AO1: same seed at Rep 50 stays on the AM1 roll"
+	)
+	var weight_49 := catalog.weight_for(whale, 49, NORMAL_CONFIG)
+	var weight_50 := catalog.weight_for(whale, 50, NORMAL_CONFIG)
+	_expect_equal(
+		is_equal_approx(weight_49, weight_50),
+		true,
+		"AO1: whale weight at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(49), 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.high_rep_whale_weight_mult(50), 1.0),
+		true,
+		"AO1: Rep 50 keeps the AM1 whale pack — no traffic bonus"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(49, 5),
+		CustomerSpawnPolicy.spawn_count(50, 5),
+		"AO1: spawn_count at Rep 50 equals Rep 49"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	_expect_equal(
+		not policy_src.contains("REGULAR_RETURN")
+		and not policy_src.contains("regulars_return")
+		and not policy_src.contains("RETURN_SPAWN")
+		and not policy_src.contains("RETURN_TRAFFIC"),
+		true,
+		"AO1: spawn policy has no Regulars door-roll bonus"
+	)
+	_expect_equal(
+		not _function_body_contains(spawn_src, "func spawn_customer()", "regulars")
+		and not _function_body_contains(spawn_src, "func _spawn_one_customer()", "regulars")
+		and not _function_body_contains(spawn_src, "func spawn_customer()", "take_regular"),
+		true,
+		"AO1: door spawn path does not consume the Regulars queue"
+	)
+
+
+func _test_regulars_return_sale_pays_listed() -> void:
+	_ao1_reset_at(50)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AO1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AO1: listed price stays set at Rep 50")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AO1: sell_through_mult_for stays 1.0 at Rep 50"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := _ao1_listed_buyer()
+	_expect_equal(queue.enqueue(customer), true, "AO1: listed lot still enqueues at Rep 50")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AO1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AO1: live sell still resolves at Rep 50")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AO1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AO1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "regulars")
+		and not _function_body_contains(queue_src, "func sell_listed()", "whale")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"regulars"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"reputation"
+		),
+		true,
+		"AO1: Regulars return is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_regulars_return_shipped_levers_stay() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and NORMAL_CONFIG.register_walkout_rep_cap == 3
+		and shop.register_walkout_rep_hit() == 1
+		and shop.register_walkout_rep_cap() == 3,
+		true,
+		"AO1/AH1: walkout scalars stay Rep −1 / cap 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5
+		and NORMAL_CONFIG.fire_popular_roster_age == 3
+		and shop.fire_rep_hit() == 5
+		and shop.fire_popular_roster_age() == 3,
+		true,
+		"AO1/AG1: Fire scalars stay Rep −5 at roster age 3"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005)
+		and is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AO1/AK1/AL1: daily shrink 0.2%/0.7% and floor-sealed +0.3% stay"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_quiet_floor(24)
+		and not CustomerSpawnPolicy.is_quiet_floor(25)
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"AO1/AI1: quiet floor stays Rep 24"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(75)
+		and not CustomerSpawnPolicy.is_high_rep(74)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AO1/AJ1: high-rep whale pack stays ×1.5 at 75"
+	)
+	_expect_equal(
+		PlayerTradePolicy.is_unlocked(50) and not PlayerTradePolicy.is_unlocked(49),
+		true,
+		"AO1/AN1: player trades stay unlocked at Rep 50"
+	)
+	_expect_equal(_game_state.call("start_floor"), true, "AO1/AH1: walkout day opens")
+	_game_state.set("attention_remaining", 0)
+	var queue := _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AO1/AH1: waiter enqueues")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout") >= 1, true, "AO1/AH1: uncovered leave is a walkout")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AO1/AH1: walkout math stays Rep −1"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AO1/AG1: hire Cashier to age")
+	_ag1_run_floor_days(3)
+	_expect_equal(shop.staff[0].roster_age, 3, "AO1/AG1: Cashier is popular")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AO1/AG1: Fire a popular Cashier"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 5,
+		"AO1/AG1: popular Fire still drops Rep 5 once"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_regulars_return_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("regulars_return")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("distributor_moq"),
+		false,
+		"AO1: Soft catalog stays closed"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AO1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_min, 0.30)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_max, 0.40),
+		true,
+		"AO1: marketplace fees and distributor MOQ stay as shipped"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AO1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		not hud_src.contains("regulars_return")
+		and not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off"),
+		true,
+		"AO1: HUD has no Regulars loop, STOP, or camera off-switch"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/customers/regulars_return_policy.gd",
+		"res://scripts/customers/regulars_return_service.gd",
+		"res://scripts/customers/customer_profile.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AO1: %s stays §4.5 clean" % path
+		)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func take_regular_return")
+		and demand_src.contains("GameState.current_reputation")
+		and demand_src.contains("RegularsReturnService"),
+		true,
+		"AO1: listed-sale queue reads live Rep for Regulars"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "regulars")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "quiet")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AO1: AI1/AJ1/AH1/AG1/AK1/AL1 stay off the sell roll"
+	)
+	_game_state.call("start_new_game")
+
+
+func _ao1_reset_at(reputation: int) -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", reputation)
+	_event_bus.emit_signal("reputation_changed", reputation)
+	_captured_scripted_customer = null
+
+
+func _ao1_listed_buyer() -> CustomerProfile:
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	var listed_price := lot.listed_price_cents if lot != null else 599
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	return customer
+
+
+func _ao1_sell_listed() -> CustomerProfile:
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := _ao1_listed_buyer()
+	var sold := queue.enqueue(customer) and queue.sell_listed()
+	queue.free()
+	if sold:
+		return customer
+	return null
+
+
+func _ao1_tag_ids(tags: Array[StringName]) -> PackedStringArray:
+	var ids := PackedStringArray()
+	for tag: StringName in tags:
+		ids.append(String(tag))
+	return ids
+
+
+func _ao1_regular_catalog_tags() -> Array[StringName]:
+	var tags: Array[StringName] = []
+	var catalog := CustomerArchetypeCatalog.new()
+	for archetype: Dictionary in catalog.archetypes:
+		if StringName(archetype.get("id", "")) != RegularsReturnPolicy.ARCHETYPE_ID:
+			continue
+		for tag: Variant in archetype.get("interest_tags", []):
+			tags.append(StringName(tag))
+		return tags
+	return tags
 
 
 func _click_player_trade_row(hud: Node) -> bool:

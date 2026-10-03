@@ -10,6 +10,11 @@ var _scripted_opportunities: Array[BuyOpportunity] = []
 var _event_service := MarketEventService.new()
 var _active_event: MarketEvent
 var _player_trades := PlayerTradeService.new()
+var _regulars := RegularsReturnService.new()
+
+
+func _ready() -> void:
+	_ensure_regulars_bus()
 
 
 func reset() -> void:
@@ -17,6 +22,8 @@ func reset() -> void:
 	_closed_opportunity_ids.clear()
 	_scripted_opportunities.clear()
 	_player_trades.reset()
+	_regulars.reset()
+	_ensure_regulars_bus()
 	_event_service.reset(MarketEventService.EVENT_RNG_SEED)
 	_active_event = null
 	for value: Variant in InventoryService.model.catalog.values():
@@ -516,6 +523,53 @@ func accept_player_trade(offer: PlayerTradeOffer) -> bool:
 
 func decline_player_trade(offer: PlayerTradeOffer) -> bool:
 	return _player_trades.decline(offer, GameState.current_day)
+
+
+func configure_regulars_return(unlock_rep: int, queue_cap: int) -> void:
+	_regulars.configure(unlock_rep, queue_cap)
+
+
+func regulars_queued_count() -> int:
+	return _regulars.queued_count()
+
+
+func regulars_unlock_rep(configured: int = RegularsReturnPolicy.UNLOCK_REP) -> int:
+	return RegularsReturnPolicy.unlock_rep(configured)
+
+
+func regulars_queue_cap(configured: int = RegularsReturnPolicy.QUEUE_CAP) -> int:
+	return RegularsReturnPolicy.queue_cap(configured)
+
+
+func note_regulars_listed_sale(reputation: int = -1) -> bool:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return _regulars.note_listed_sale(resolved)
+
+
+func note_regulars_outcome(
+	customer: CustomerProfile,
+	outcome: StringName,
+	reputation: int = -1
+) -> bool:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return _regulars.note_outcome(customer, outcome, resolved)
+
+
+func take_regular_return() -> CustomerProfile:
+	return _regulars.take_floor_return()
+
+
+func _ensure_regulars_bus() -> void:
+	if EventBus.customer_resolved.is_connected(_on_customer_resolved_regulars):
+		return
+	EventBus.customer_resolved.connect(_on_customer_resolved_regulars)
+
+
+func _on_customer_resolved_regulars(
+	customer: CustomerProfile,
+	outcome: StringName
+) -> void:
+	_regulars.note_outcome(customer, outcome, GameState.current_reputation)
 
 
 func confirm_buy(dto: BuyConfirmSignal) -> bool:

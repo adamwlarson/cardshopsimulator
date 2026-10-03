@@ -27,6 +27,8 @@ enum TradeIntent {
 @export_range(0, 100_000_000, 1) var listed_price_cents: int = 0
 @export var buylist_signal: BuyConfirmSignal
 @export var beat_id: StringName = &""
+## AO1: queued Regular who comes back next floor. Not a door-roll tag.
+@export var is_regular_return: bool = false
 
 var waited_seconds: float = 0.0
 var has_negotiated: bool = false

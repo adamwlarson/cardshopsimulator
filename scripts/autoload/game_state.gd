@@ -124,7 +124,17 @@ func start_floor() -> bool:
 	_run_stocker_restock()
 	current_phase = DayPhase.FLOOR
 	EventBus.day_phase_changed.emit(current_phase)
+	_release_queued_regular_return()
 	return true
+
+
+func _release_queued_regular_return() -> void:
+	# AO1: one-shot Regular after a listed-price sale at Rep ≥ 50.
+	# Separate from the door roll. Spawn count and whale weight stay shipped.
+	var returning := DemandSignals.take_regular_return()
+	if returning == null:
+		return
+	EventBus.scripted_customer_requested.emit(returning)
 
 
 func _run_stocker_restock() -> int:
