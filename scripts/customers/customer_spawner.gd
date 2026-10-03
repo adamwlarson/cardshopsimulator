@@ -44,6 +44,20 @@ func _process(delta: float) -> void:
 func spawn_customer() -> bool:
 	if not can_spawn_for_phase(GameState.current_phase):
 		return false
+	# AI1: read Rep at this roll. Quiet floor (≤24) halves the baseline
+	# count (round down, floor 0). Next roll at ≥25 uses baseline again.
+	# Whale gate lives on the catalog. Not a sell weight.
+	var count := CustomerSpawnPolicy.spawn_count(GameState.current_reputation)
+	if count <= 0:
+		return false
+	var spawned_any := false
+	for _i in count:
+		if _spawn_one_customer():
+			spawned_any = true
+	return spawned_any
+
+
+func _spawn_one_customer() -> bool:
 	var archetype := _catalog.pick_weighted(
 		GameState.current_reputation,
 		GameState.balance_config,
