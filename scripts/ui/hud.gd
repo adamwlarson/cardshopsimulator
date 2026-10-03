@@ -121,6 +121,8 @@ extends Control
 @onready var game_over_menu_button: Button = get_node_or_null("%GameOverMenuButton") as Button
 
 var _buy_signal: BuyConfirmSignal
+var _trade_offer: PlayerTradeOffer
+var _trade_decline_button: Button
 var _price_signal: PriceConfirmSignal
 var _online_signal: OnlineListConfirmSignal
 var _online_target: Dictionary = {}
@@ -185,6 +187,7 @@ func _ready() -> void:
 	if price_inspect_button != null:
 		price_inspect_button.pressed.connect(_inspect_price_slab)
 	buy_button.pressed.connect(_open_buy_confirm)
+	_ensure_trade_decline_button()
 	%BuyBackButton.pressed.connect(_back_to_buy_detail)
 	%BuyConfirmButton.pressed.connect(_confirm_buy)
 	%OpenPriceButton.pressed.connect(_open_price_list)
@@ -394,8 +397,17 @@ func _open_buy_list() -> void:
 	for child: Node in buy_rows.get_children():
 		buy_rows.remove_child(child)
 		child.queue_free()
+	var trade := DemandSignals.open_player_trade()
 	var signals := DemandSignals.open_buy_signals()
-	buy_empty_label.visible = signals.is_empty()
+	buy_empty_label.visible = trade == null and signals.is_empty()
+	if trade != null:
+		var trade_row := Button.new()
+		trade_row.text = PlayerTradePresenter.opportunity_row(trade)
+		trade_row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		trade_row.custom_minimum_size = Vector2(0.0, 64.0)
+		trade_row.theme_type_variation = &"ListRowButton"
+		trade_row.pressed.connect(_select_player_trade.bind(trade))
+		buy_rows.add_child(trade_row)
 	for dto: BuyConfirmSignal in signals:
 		var row := Button.new()
 		row.text = DemandSignalPresenter.opportunity_row(dto)
@@ -409,6 +421,7 @@ func _open_buy_list() -> void:
 
 
 func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
+	_trade_offer = null
 	_buy_signal = dto
 	buy_title.text = "BUY · %s · %s\n%s ×%d" % [
 		String(_buy_signal.channel).capitalize(),
@@ -417,6 +430,21 @@ func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
 		_buy_signal.quantity,
 	]
 	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
+	_sync_trade_actions(false)
+	_sync_buy_confirm_gate()
+	_sync_inspect_button()
+	buy_list_panel.hide()
+	buy_panel.show()
+	buy_confirm_panel.hide()
+	_sync_modal_veil()
+
+
+func _select_player_trade(offer: PlayerTradeOffer) -> void:
+	_buy_signal = null
+	_trade_offer = offer
+	buy_title.text = PlayerTradePresenter.detail_title(offer)
+	buy_summary.text = PlayerTradePresenter.detail_summary(offer)
+	_sync_trade_actions(true)
 	_sync_buy_confirm_gate()
 	_sync_inspect_button()
 	buy_list_panel.hide()
@@ -426,6 +454,14 @@ func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
 
 
 func _open_buy_confirm() -> void:
+	if _trade_offer != null:
+		if not DemandSignals.player_trade_can_accept(_trade_offer):
+			return
+		buy_confirm_summary.text = PlayerTradePresenter.confirm_snapshot(_trade_offer)
+		buy_panel.hide()
+		buy_confirm_panel.show()
+		_sync_modal_veil()
+		return
 	if _buy_signal == null:
 		return
 	buy_confirm_summary.text = DemandSignalPresenter.buy_confirm_snapshot(
@@ -437,6 +473,12 @@ func _open_buy_confirm() -> void:
 
 
 func _confirm_buy() -> void:
+	if _trade_offer != null:
+		if not DemandSignals.player_trade_can_accept(_trade_offer):
+			return
+		if DemandSignals.accept_player_trade(_trade_offer):
+			_close_buy()
+		return
 	if _buy_signal == null or not _buy_signal.can_confirm:
 		return
 	if not _spend_for_floor(8):
@@ -512,6 +554,9 @@ func _sync_price_inspect_button() -> void:
 func _sync_buy_confirm_gate() -> void:
 	if buy_button == null:
 		return
+	if _trade_offer != null:
+		buy_button.disabled = not DemandSignals.player_trade_can_accept(_trade_offer)
+		return
 	buy_button.disabled = _buy_signal == null or not _buy_signal.can_confirm
 
 
@@ -552,8 +597,45 @@ func _close_buy() -> void:
 	buy_panel.hide()
 	buy_confirm_panel.hide()
 	_buy_signal = null
+	_trade_offer = null
+	_sync_trade_actions(false)
 	_sync_inspect_button()
 	_sync_modal_veil()
+
+
+func _ensure_trade_decline_button() -> void:
+	if _trade_decline_button != null:
+		return
+	if inspect_button == null:
+		return
+	var actions := inspect_button.get_parent() as HBoxContainer
+	if actions == null:
+		return
+	_trade_decline_button = Button.new()
+	_trade_decline_button.name = "TradeDeclineButton"
+	_trade_decline_button.visible = false
+	_trade_decline_button.custom_minimum_size = Vector2(0.0, 40.0)
+	_trade_decline_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_trade_decline_button.text = "Decline"
+	_trade_decline_button.pressed.connect(_decline_player_trade)
+	actions.add_child(_trade_decline_button)
+	if buy_button != null:
+		actions.move_child(_trade_decline_button, buy_button.get_index())
+
+
+func _sync_trade_actions(is_trade: bool) -> void:
+	_ensure_trade_decline_button()
+	if buy_button != null:
+		buy_button.text = "Accept" if is_trade else "Buy"
+	if _trade_decline_button != null:
+		_trade_decline_button.visible = is_trade
+
+
+func _decline_player_trade() -> void:
+	if _trade_offer == null:
+		return
+	DemandSignals.decline_player_trade(_trade_offer)
+	_close_buy()
 
 
 func _open_price_list() -> void:

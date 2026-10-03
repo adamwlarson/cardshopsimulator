@@ -9,12 +9,14 @@ var _closed_opportunity_ids: Dictionary = {}
 var _scripted_opportunities: Array[BuyOpportunity] = []
 var _event_service := MarketEventService.new()
 var _active_event: MarketEvent
+var _player_trades := PlayerTradeService.new()
 
 
 func reset() -> void:
 	_market_state = MarketState.new()
 	_closed_opportunity_ids.clear()
 	_scripted_opportunities.clear()
+	_player_trades.reset()
 	_event_service.reset(MarketEventService.EVENT_RNG_SEED)
 	_active_event = null
 	for value: Variant in InventoryService.model.catalog.values():
@@ -488,6 +490,32 @@ func open_buy_signals() -> Array[BuyConfirmSignal]:
 	for opportunity: BuyOpportunity in _open_opportunities():
 		result.append(_signal_for_opportunity(opportunity))
 	return result
+
+
+func player_trade_seed(day: int = -1) -> int:
+	var resolved_day := day if day >= 0 else GameState.current_day
+	return resolved_day * 7919
+
+
+func open_player_trade() -> PlayerTradeOffer:
+	return roll_player_trade(player_trade_seed(), GameState.current_reputation)
+
+
+func roll_player_trade(seed: int, reputation: int, day: int = -1) -> PlayerTradeOffer:
+	var resolved_day := day if day >= 0 else GameState.current_day
+	return _player_trades.roll_open(seed, reputation, resolved_day)
+
+
+func player_trade_can_accept(offer: PlayerTradeOffer) -> bool:
+	return _player_trades.can_accept(offer)
+
+
+func accept_player_trade(offer: PlayerTradeOffer) -> bool:
+	return _player_trades.accept(offer, GameState.current_day)
+
+
+func decline_player_trade(offer: PlayerTradeOffer) -> bool:
+	return _player_trades.decline(offer, GameState.current_day)
 
 
 func confirm_buy(dto: BuyConfirmSignal) -> bool:
