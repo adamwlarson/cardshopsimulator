@@ -146,6 +146,14 @@ enum Difficulty {
 @export var case_display_bonus: float = 1.20
 @export var binder_display_bonus: float = 1.00
 @export var backstock_display_bonus: float = 0.00
+## AE1 / systems §2.1: accessories on a Shelf whose origin is within
+## `impulse_shelf_tiles` of the Counter. Browse rank / notice only —
+## not a sell-probability weight and not a sale-cash multiplier.
+## Other floor shelf stays ×1.00; backstock stays ×0.00 for walk-ins
+## (online / pull still allowed). Easy/Hard inherit unless overridden.
+@export var impulse_shelf_interest: float = 1.25
+@export var floor_shelf_interest: float = 1.00
+@export var impulse_shelf_tiles: int = 2
 
 
 func is_rent_due_day(day: int) -> bool:

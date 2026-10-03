@@ -192,7 +192,26 @@ func walk_in_interest(location: InventoryLocation) -> float:
 
 
 func walk_in_interest_for(sku_id: StringName) -> float:
+	if _is_accessory_sku(sku_id):
+		return impulse_shelf_interest_for(sku_id)
 	return walk_in_interest(InventoryService.location_for(sku_id))
+
+
+func impulse_shelf_interest(location: InventoryLocation) -> float:
+	return GameState.shop.impulse_shelf_interest(location)
+
+
+func impulse_shelf_interest_for(sku_id: StringName) -> float:
+	if not _is_accessory_sku(sku_id):
+		return 0.0
+	return impulse_shelf_interest(InventoryService.location_for(sku_id))
+
+
+func _is_accessory_sku(sku_id: StringName) -> bool:
+	if InventoryService.model == null:
+		return false
+	var sku := InventoryService.model.get_sku(sku_id)
+	return sku != null and sku.product_class == ProductSKU.ProductClass.ACCESSORY
 
 
 func active_event_buylist_mult() -> float:

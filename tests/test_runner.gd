@@ -194,6 +194,7 @@ func _initialize() -> void:
 	_test_play_table_event_nights()
 	_test_sightline_display_bonus()
 	_test_location_display_ladder()
+	_test_impulse_shelf()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -14737,11 +14738,25 @@ func _test_sightline_section_45_and_parked() -> void:
 			false,
 			"AC1: %s stays §4.5 clean" % path
 		)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
 		_expect_equal(
 			source.contains("impulse_shelf") or source.contains("impulse-shelf"),
 			false,
-			"AC1: %s has no impulse-shelf bonus" % path
+			"AC1: %s has no impulse-shelf HUD/campaign hook" % path
 		)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func display_bonus()")
+		and not _function_body_contains(demand_src, "func display_bonus()", "impulse"),
+		true,
+		"AC1: display_bonus stays sightline-only"
+	)
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("sandbox_best_net_worth_cents"),
@@ -15274,11 +15289,42 @@ func _test_location_ladder_section_45_and_parked() -> void:
 			false,
 			"AD1: %s stays §4.5 clean" % path
 		)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
 		_expect_equal(
 			source.contains("impulse_shelf") or source.contains("impulse-shelf"),
 			false,
-			"AD1: %s has no impulse-shelf bonus" % path
+			"AD1: %s has no impulse-shelf HUD/campaign hook" % path
 		)
+	var location_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		location_src.contains("func location_display_bonus(")
+		and not _function_body_contains(
+			location_src,
+			"func location_display_bonus(",
+			"impulse"
+		),
+		true,
+		"AD1: location_display_bonus stays the case/binder/backstock ladder"
+	)
+	var shop_src_ad1 := FileAccess.get_file_as_string(
+		"res://scripts/shop/shop_state.gd"
+	)
+	_expect_equal(
+		shop_src_ad1.contains("func location_display_bonus(")
+		and not _function_body_contains(
+			shop_src_ad1,
+			"func location_display_bonus(",
+			"impulse"
+		),
+		true,
+		"AD1: ShopState location ladder does not fold in impulse shelf"
+	)
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
@@ -15399,6 +15445,713 @@ func _ad1_location_bonus_reads_sightline(source: String) -> bool:
 	var finish := source.find("\nfunc ", start + 1)
 	var body := source.substr(start, finish - start if finish > start else source.length() - start)
 	return body.contains("sightline")
+
+
+func _function_body_contains(source: String, func_sig: String, needle: String) -> bool:
+	var start := source.find(func_sig)
+	if start < 0:
+		return false
+	var finish := source.find("\nfunc ", start + 1)
+	var body := source.substr(start, finish - start if finish > start else source.length() - start)
+	return body.contains(needle)
+
+
+func _test_impulse_shelf() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_impulse_shelf_multiplier_lock()
+	_test_impulse_shelf_ranks_closer_higher()
+	_test_impulse_shelf_backstock_invisible()
+	_test_impulse_shelf_boundary_updates()
+	_test_impulse_shelf_sale_pays_listed()
+	_test_impulse_shelf_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_impulse_shelf_multiplier_lock() -> void:
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.impulse_shelf_interest, 1.25),
+		true,
+		"AE1: locked impulse-shelf walk-in interest is ×1.25"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.floor_shelf_interest, 1.00),
+		true,
+		"AE1: locked other floor-shelf interest is ×1.00"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.impulse_shelf_tiles,
+		2,
+		"AE1: impulse shelf is 2 Manhattan tiles from the Counter"
+	)
+	_expect_equal(
+		is_equal_approx(EASY_CONFIG.impulse_shelf_interest, 1.25)
+		and is_equal_approx(EASY_CONFIG.floor_shelf_interest, 1.00)
+		and EASY_CONFIG.impulse_shelf_tiles == 2,
+		true,
+		"AE1: Easy inherits the impulse-shelf scalars"
+	)
+	_expect_equal(
+		is_equal_approx(HARD_CONFIG.impulse_shelf_interest, 1.25)
+		and is_equal_approx(HARD_CONFIG.floor_shelf_interest, 1.00)
+		and HARD_CONFIG.impulse_shelf_tiles == 2,
+		true,
+		"AE1: Hard inherits the impulse-shelf scalars"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		is_equal_approx(shop.impulse_shelf_interest_mult(), 1.25)
+		and is_equal_approx(shop.floor_shelf_interest_mult(), 1.00)
+		and shop.impulse_shelf_tiles() == 2,
+		true,
+		"AE1: ShopState exposes the locked impulse-shelf scalars"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.sightline_display_bonus, 1.15)
+		and is_equal_approx(NORMAL_CONFIG.case_display_bonus, 1.20)
+		and is_equal_approx(NORMAL_CONFIG.binder_display_bonus, 1.00)
+		and is_equal_approx(NORMAL_CONFIG.backstock_display_bonus, 0.00),
+		true,
+		"AE1: AC1 ×1.15 and AD1 ladder stay their own locked numbers"
+	)
+	var layout := shop.layout
+	_expect_equal(layout.shelf() != null, true, "AE1: existing 1×2 Shelf fixture is enough")
+	_expect_equal(layout.shelf().size, Vector2i(1, 2), "AE1: primitive Shelf stays 1×2")
+	_expect_equal(layout.counter() != null, true, "AE1: Counter is the impulse origin")
+	_expect_equal(
+		shop.has_impulse_shelf(),
+		false,
+		"AE1: default buried shelf is not impulse"
+	)
+
+
+func _test_impulse_shelf_ranks_closer_higher() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var layout := shop.layout
+	var near := _legal_shelf_origin_at_distance(layout, 2)
+	if near == Vector2i(-1, -1):
+		near = _legal_shelf_origin_within(layout, 2)
+	var far := _legal_shelf_origin_beyond(layout, 2)
+	_expect_equal(near != Vector2i(-1, -1), true, "AE1: a legal origin exists ≤2 tiles from Counter")
+	_expect_equal(far != Vector2i(-1, -1), true, "AE1: a legal origin exists >2 tiles from Counter")
+	if near == Vector2i(-1, -1) or far == Vector2i(-1, -1):
+		return
+	_expect_equal(
+		layout.counter_tile_distance(near) <= 2,
+		true,
+		"AE1: closer origin is within 2 Manhattan tiles of the Counter"
+	)
+	_expect_equal(
+		layout.counter_tile_distance(far) > 2,
+		true,
+		"AE1: farther origin is outside the 2-tile impulse radius"
+	)
+	var close_rank := float(shop.impulse_shelf_interest_at(near))
+	var far_rank := float(shop.impulse_shelf_interest_at(far))
+	_expect_equal(
+		is_equal_approx(close_rank, 1.25),
+		true,
+		"AE1: closer shelf rank is ×1.25"
+	)
+	_expect_equal(
+		is_equal_approx(far_rank, 1.00),
+		true,
+		"AE1: farther floor shelf rank is ×1.00"
+	)
+	_expect_equal(
+		close_rank > far_rank,
+		true,
+		"AE1: closer shelf ranks higher than the same accessory farther away"
+	)
+	_ae1_isolate_sleeves_on_shelf()
+	layout.shelf().origin = far
+	_expect_equal(shop.has_impulse_shelf(), false, "AE1: far shelf is not impulse")
+	_expect_impulse_walk_in(
+		&"ACC-SLV-60",
+		1.00,
+		"AE1: same sleeves on a farther floor shelf are ×1.00",
+		true,
+		"AE1: walk-ins still notice farther-shelf sleeves"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call(
+				"location_display_bonus",
+				InventoryLocation.new(InventoryLocation.Type.SHELF)
+			)),
+			1.00
+		),
+		true,
+		"AE1: AD1 location ladder stays ×1.00 for SHELF"
+	)
+	layout.shelf().origin = near
+	_expect_equal(shop.has_impulse_shelf(), true, "AE1: ≤2-tile shelf is impulse")
+	_expect_impulse_walk_in(
+		&"ACC-SLV-60",
+		1.25,
+		"AE1: same sleeves on the impulse shelf are ×1.25",
+		true,
+		"AE1: walk-ins notice impulse-shelf sleeves"
+	)
+	var impulse_browse: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_ae1_accessory_walk_in_tags(),
+		20_000
+	)
+	_expect_equal(
+		is_equal_approx(float(impulse_browse.get("display_bonus", -1.0)), 1.0),
+		true,
+		"AE1: impulse rank does not write AC1 display_bonus"
+	)
+	_expect_equal(
+		is_equal_approx(float(impulse_browse.get("location_display_bonus", -1.0)), 1.0),
+		true,
+		"AE1: impulse rank does not rewrite AD1 location_display_bonus"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AE1: impulse shelf is notice/rank only — not a sell-through weight"
+	)
+
+
+func _test_impulse_shelf_backstock_invisible() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var shop := _game_state.get("shop") as ShopState
+	var near := _legal_shelf_origin_within(shop.layout, 2)
+	_expect_equal(near != Vector2i(-1, -1), true, "AE1: impulse origin exists for backstock test")
+	if near != Vector2i(-1, -1):
+		shop.layout.shelf().origin = near
+	_ae1_move_all_accessories_to(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("walk_in_interest_for", &"ACC-SLV-60")),
+			0.00
+		),
+		true,
+		"AE1: backstock accessories are ×0.00 to walk-ins"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call(
+				"impulse_shelf_interest",
+				InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+			)),
+			0.00
+		),
+		true,
+		"AE1: BACKSTOCK impulse interest is ×0.00"
+	)
+	var missed: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_ae1_accessory_walk_in_tags(),
+		20_000
+	)
+	_expect_equal(missed.is_empty(), true, "AE1: walk-ins do not browse backstock accessories")
+	_expect_equal(
+		_inventory_service.call("find_listed_sku_offer", &"ACC-SLV-60", 20_000),
+		{},
+		"AE1: targeted walk-in offer also misses backstock sleeves"
+	)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AE1: backstock sleeve lot still exists")
+	if lot == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var listed_price := lot.listed_price_cents
+	var listed_online: Dictionary = _economy.get("online_listings").call(
+		"list_target",
+		_ae1_lot_target(lot),
+		listed_price,
+		{"ship_days": 2}
+	)
+	_expect_equal(
+		bool(listed_online.get("ok", false)),
+		true,
+		"AE1: online list from BACKSTOCK still works"
+	)
+	var hold_found := false
+	for lot_value: Variant in _inventory_service.call("get_lots", &"ACC-SLV-60"):
+		var held := lot_value as StockLot
+		if held != null and held.location.type == InventoryLocation.Type.ONLINE_HOLD:
+			hold_found = true
+			break
+	_expect_equal(
+		hold_found,
+		true,
+		"AE1: listed backstock accessory moves to ONLINE_HOLD"
+	)
+	_qa_autoload.call("clear")
+	_game_state.call("start_new_game")
+	if near != Vector2i(-1, -1):
+		shop = _game_state.get("shop") as ShopState
+		shop.layout.shelf().origin = near
+	_ae1_move_all_accessories_to(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(
+		bool(_inventory_service.call("has_backstock", &"ACC-SLV-60")),
+		true,
+		"AE1: backstock still holds the sleeves"
+	)
+	_expect_equal(
+		bool(_inventory_service.call("pull_from_backstock", &"ACC-SLV-60")),
+		true,
+		"AE1: pull_from_backstock still works for accessories"
+	)
+	var pulled: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(pulled != null, true, "AE1: pulled sleeves still exist")
+	if pulled != null:
+		_expect_equal(
+			pulled.location.type,
+			InventoryLocation.Type.SHELF,
+			"AE1: pull restores accessories to SHELF"
+		)
+		_expect_equal(
+			is_equal_approx(
+				float(_demand_signals.call("walk_in_interest_for", &"ACC-SLV-60")),
+				1.25 if shop.has_impulse_shelf() else 1.00
+			),
+			true,
+			"AE1: pulled sleeves become walk-in visible on the floor shelf"
+		)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_impulse_shelf_boundary_updates() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var layout := shop.layout
+	_ae1_isolate_sleeves_on_shelf()
+	_expect_equal(
+		shop.has_impulse_shelf(),
+		false,
+		"AE1: boundary test starts from the buried default shelf"
+	)
+	_expect_impulse_walk_in(
+		&"ACC-SLV-60",
+		1.00,
+		"AE1: pre-move farther shelf is ×1.00",
+		true,
+		"AE1: walk-ins notice default-shelf sleeves at floor rank"
+	)
+	var near := _legal_shelf_origin_at_distance(layout, 2)
+	if near == Vector2i(-1, -1):
+		near = _legal_shelf_origin_within(layout, 2)
+	_expect_equal(near != Vector2i(-1, -1), true, "AE1: rearrange can park at ≤2 tiles")
+	if near == Vector2i(-1, -1):
+		return
+	var moved_in: Dictionary = _game_state.call("rearrange_fixture", &"shelf", near)
+	_expect_equal(bool(moved_in.get("ok", false)), true, "AE1: rearrange to impulse range succeeds")
+	_expect_equal(layout.shelf().origin, near, "AE1: shelf origin updates on rearrange")
+	_expect_equal(
+		shop.has_impulse_shelf(),
+		true,
+		"AE1: next read after crossing in is impulse"
+	)
+	_expect_impulse_walk_in(
+		&"ACC-SLV-60",
+		1.25,
+		"AE1: next read after the inward rearrange is ×1.25",
+		true,
+		"AE1: walk-ins notice sleeves after the inward rearrange"
+	)
+	var far := _legal_shelf_origin_beyond(layout, 2)
+	_expect_equal(far != Vector2i(-1, -1), true, "AE1: rearrange can park beyond 2 tiles")
+	if far == Vector2i(-1, -1):
+		return
+	var moved_out: Dictionary = _game_state.call("rearrange_fixture", &"shelf", far)
+	_expect_equal(bool(moved_out.get("ok", false)), true, "AE1: rearrange back out succeeds")
+	_expect_equal(
+		shop.has_impulse_shelf(),
+		false,
+		"AE1: next read after crossing out is not impulse"
+	)
+	_expect_impulse_walk_in(
+		&"ACC-SLV-60",
+		1.00,
+		"AE1: next read after the outward rearrange is ×1.00",
+		true,
+		"AE1: walk-ins still notice sleeves after the outward rearrange"
+	)
+	_ae1_move_all_accessories_to(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(
+		bool(_inventory_service.call("has_backstock", &"ACC-SLV-60")),
+		true,
+		"AE1: moving sleeves across the floor/backstock boundary succeeds"
+	)
+	_expect_impulse_walk_in(
+		&"ACC-SLV-60",
+		0.00,
+		"AE1: next read after the stock move is backstock ×0.00",
+		false,
+		"AE1: walk-ins miss sleeves after the stock move"
+	)
+
+
+func _test_impulse_shelf_sale_pays_listed() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var near := _legal_shelf_origin_within(shop.layout, 2)
+	_expect_equal(near != Vector2i(-1, -1), true, "AE1: sale test needs an impulse origin")
+	if near == Vector2i(-1, -1):
+		return
+	shop.layout.shelf().origin = near
+	_ae1_isolate_sleeves_on_shelf()
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AE1: sleeves stay on the impulse shelf")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AE1: sleeves have a listed price")
+	var boosted := int(round(float(listed_price) * 1.25))
+	_expect_equal(
+		boosted != listed_price,
+		true,
+		"AE1: ×1.25 would change cash if it were a sale weight"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("walk_in_interest_for", &"ACC-SLV-60")),
+			1.25
+		),
+		true,
+		"AE1: sale setup is on the impulse shelf"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AE1: sell_through_mult_for stays 1.0 on the impulse shelf"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = 20_000
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AE1: impulse-shelf sleeves still enqueue")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AE1: queue copies the listed price, not a boosted price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AE1: live sell still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AE1: completed sale pays the listed price, not ×1.25"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AE1: customer_sale ledger is the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents() != boosted,
+		true,
+		"AE1: sale cents are not the impulse-bumped figure"
+	)
+	var queue_src := FileAccess.get_file_as_string("res://scripts/customers/customer_queue.gd")
+	var sale_src := FileAccess.get_file_as_string("res://scripts/autoload/inventory_service.gd")
+	_expect_equal(
+		queue_src.contains("impulse_shelf") == false
+		and queue_src.contains("impulse_shelf_interest") == false,
+		true,
+		"AE1: CustomerQueue.sell_listed does not apply impulse ×1.25"
+	)
+	_expect_equal(
+		sale_src.contains("func confirm_customer_sale")
+		and not _function_body_contains(
+			sale_src,
+			"func confirm_customer_sale",
+			"impulse_shelf_interest_mult"
+		)
+		and not _function_body_contains(
+			sale_src,
+			"func confirm_customer_sale",
+			"sale_price_cents *"
+		),
+		true,
+		"AE1: confirm_customer_sale does not multiply the live sell roll"
+	)
+	var ac1_near := _legal_case_origin_at_distance(shop.layout, 3)
+	if ac1_near != Vector2i(-1, -1):
+		shop.layout.display_case().origin = ac1_near
+		var slab := _seed_listed_empress_slab()
+		if slab != null:
+			_expect_equal(
+				shop.has_sightline_display_bonus(),
+				true,
+				"AE1/AC1: door-adjacent case notice still applies"
+			)
+			_expect_equal(
+				is_equal_approx(
+					float(_demand_signals.call("display_bonus")),
+					1.15
+				),
+				true,
+				"AE1/AC1: DemandSignals.display_bonus stays the sightline number"
+			)
+			_expect_equal(
+				is_equal_approx(
+					float(_demand_signals.call(
+						"location_display_bonus",
+						InventoryLocation.new(InventoryLocation.Type.CASE)
+					)),
+					1.20
+				),
+				true,
+				"AE1/AD1: CASE location ladder stays ×1.20"
+			)
+	queue.free()
+
+
+func _test_impulse_shelf_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("sightline")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("display_bonus")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("impulse_shelf")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("impulse-shelf"),
+		false,
+		"AE1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AE1: Soft _ensure_priceable_sku stays parked"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AE1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		shop_src.contains("stocker") == false
+		and FileAccess.get_file_as_string(
+			"res://scripts/autoload/game_state.gd"
+		).contains("stocker") == false,
+		true,
+		"AE1: stocker deepen stays parked"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/shop/shop_layout.gd",
+		"res://scripts/autoload/inventory_service.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AE1: %s stays §4.5 clean" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AE1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		hud_src.contains("sandbox_best_net_worth_cents"),
+		true,
+		"AE1: AA1 sandbox bests stay"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func display_bonus()")
+		and demand_src.contains("func location_display_bonus(")
+		and demand_src.contains("func impulse_shelf_interest("),
+		true,
+		"AE1: sightline, location ladder, and impulse stay distinct APIs"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func display_bonus()", "impulse")
+		and not _function_body_contains(
+			demand_src,
+			"func location_display_bonus(",
+			"impulse"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"impulse"
+		),
+		true,
+		"AE1: impulse is not folded into AC1/AD1 sell or notice weights"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ac-v1.md"
+		).contains("×1.15 is not on the live sell roll"),
+		true,
+		"AE1: AC1 Soft OK notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ad-v1.md"
+		).contains("rank-not-weight"),
+		true,
+		"AE1: AD1 Soft OK notes stay"
+	)
+
+
+func _ae1_accessory_walk_in_tags() -> Array[StringName]:
+	var tags: Array[StringName] = []
+	tags.append(&"accessory")
+	return tags
+
+
+func _ae1_lot_target(lot: StockLot) -> Dictionary:
+	return {
+		"sku_id": lot.sku.id,
+		"display_name": lot.sku.display_name,
+		"quantity": 1,
+		"listed_price_cents": lot.listed_price_cents,
+		"location": lot.location,
+		"lot": lot,
+	}
+
+
+func _ae1_isolate_sleeves_on_shelf() -> void:
+	for sku_id: StringName in [&"ACC-SLV-60", &"ACC-TOP-25"]:
+		var quantity: int = int(_inventory_service.call("total_owned", sku_id))
+		if quantity > 0:
+			_inventory_service.call("remove_stock", sku_id, quantity)
+	_expect_equal(
+		bool(_inventory_service.call(
+			"receive_stock",
+			&"ACC-SLV-60",
+			2,
+			250,
+			InventoryLocation.new(InventoryLocation.Type.SHELF)
+		)),
+		true,
+		"AE1: sleeves seed onto the existing Shelf"
+	)
+	var sku: ProductSKU = _inventory_service.get("model").get_sku(&"ACC-SLV-60")
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	if lot != null and sku != null:
+		lot.listed_price_cents = sku.base_market_cents
+
+
+func _ae1_move_all_accessories_to(location_type: InventoryLocation.Type) -> void:
+	var dest := InventoryLocation.new(location_type)
+	for sku_id: StringName in [&"ACC-SLV-60", &"ACC-TOP-25"]:
+		var lots: Array = _inventory_service.call("get_lots", sku_id)
+		for lot_value: Variant in lots:
+			var lot := lot_value as StockLot
+			if lot == null or lot.qty <= 0:
+				continue
+			if lot.location.type == location_type:
+				continue
+			_inventory_service.call(
+				"move_stock_to",
+				sku_id,
+				lot.location,
+				dest,
+				lot.qty
+			)
+
+
+func _expect_impulse_walk_in(
+	sku_id: StringName,
+	expected_interest: float,
+	interest_label: String,
+	expect_browse: bool,
+	browse_label: String
+) -> void:
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("walk_in_interest_for", sku_id)),
+			expected_interest
+		),
+		true,
+		interest_label
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("impulse_shelf_interest_for", sku_id)),
+			expected_interest
+		),
+		true,
+		"%s (impulse_shelf_interest_for)" % interest_label
+	)
+	var browse: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_ae1_accessory_walk_in_tags(),
+		20_000
+	)
+	if expect_browse:
+		_expect_equal(browse.is_empty(), false, browse_label)
+		_expect_equal(
+			StringName(browse.get("sku_id", &"")),
+			sku_id,
+			"%s sku" % browse_label
+		)
+		_expect_equal(
+			is_equal_approx(
+				float(browse.get("impulse_shelf_interest", -1.0)),
+				expected_interest
+			),
+			true,
+			"%s impulse_shelf_interest" % browse_label
+		)
+		_assert_payload_has_no_truth(browse, browse_label)
+	else:
+		_expect_equal(browse.is_empty(), true, browse_label)
+
+
+func _legal_shelf_origin_at_distance(layout: ShopLayout, distance: int) -> Vector2i:
+	for y: int in layout.height:
+		for x: int in layout.width:
+			var origin := Vector2i(x, y)
+			if layout.counter_tile_distance(origin) != distance:
+				continue
+			if layout.preview_move(&"shelf", origin) == &"ok":
+				return origin
+	return Vector2i(-1, -1)
+
+
+func _legal_shelf_origin_within(layout: ShopLayout, max_tiles: int) -> Vector2i:
+	var exact := _legal_shelf_origin_at_distance(layout, max_tiles)
+	if exact != Vector2i(-1, -1):
+		return exact
+	for distance: int in range(max_tiles, -1, -1):
+		var origin := _legal_shelf_origin_at_distance(layout, distance)
+		if origin != Vector2i(-1, -1):
+			return origin
+	return Vector2i(-1, -1)
+
+
+func _legal_shelf_origin_beyond(layout: ShopLayout, max_tiles: int) -> Vector2i:
+	for distance: int in range(max_tiles + 1, layout.width + layout.height + 1):
+		var origin := _legal_shelf_origin_at_distance(layout, distance)
+		if origin != Vector2i(-1, -1):
+			return origin
+	return Vector2i(-1, -1)
 
 
 func _test_ironman_menu_toggle_default_off() -> void:
