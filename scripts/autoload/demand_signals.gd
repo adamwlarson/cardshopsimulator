@@ -1,6 +1,7 @@
 extends Node
 
 const EVENT_PRICE_BRIDGE := &"event_price_bridge"
+const MARKET_DRIFT_SEED := 20261003
 
 var _market_state := MarketState.new()
 var _service: DemandSignalService
@@ -11,6 +12,7 @@ var _event_service := MarketEventService.new()
 var _active_event: MarketEvent
 var _player_trades := PlayerTradeService.new()
 var _regulars := RegularsReturnService.new()
+var _drift_rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
@@ -25,6 +27,7 @@ func reset() -> void:
 	_regulars.reset()
 	_ensure_regulars_bus()
 	_event_service.reset(MarketEventService.EVENT_RNG_SEED)
+	_drift_rng.seed = MARKET_DRIFT_SEED
 	_active_event = null
 	for value: Variant in InventoryService.model.catalog.values():
 		var sku := value as ProductSKU
@@ -65,6 +68,31 @@ func apply_soft_shelf_signal(sku_id: StringName, through_day: int) -> bool:
 		return false
 	_service.force_demand_band(sku_id, &"steady", through_day)
 	return true
+
+
+func seed_market_drift_rng(rng_seed: int) -> void:
+	_drift_rng.seed = rng_seed
+
+
+func apply_daily_market_drift() -> Dictionary:
+	var config := GameState.balance_config
+	var drifted := 0
+	for sku_id: StringName in _market_state.live_sku_ids():
+		var sku: ProductSKU = null
+		if InventoryService.model != null:
+			sku = InventoryService.model.get_sku(sku_id)
+		var product_class := (
+			sku.product_class if sku != null else ProductSKU.ProductClass.SEALED
+		)
+		var band := (
+			config.market_drift_range(product_class)
+			if config != null
+			else Vector2(0.98, 1.02)
+		)
+		var multiplier := _drift_rng.randf_range(band.x, band.y)
+		if _market_state.apply_multiplier(sku_id, multiplier) > 0:
+			drifted += 1
+	return {"drifted": drifted}
 
 
 func roll_settle_events() -> Dictionary:

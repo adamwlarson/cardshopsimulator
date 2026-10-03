@@ -75,6 +75,15 @@ enum Difficulty {
 @export var negative_event_weight_mult: float = 1.0
 @export var market_drift_low: float = 0.98
 @export var market_drift_high: float = 1.02
+## AR1 class bands. A missing / invalid class pair falls back to sealed, then 0.98–1.02.
+@export var market_drift_accessory_low: float = 0.99
+@export var market_drift_accessory_high: float = 1.01
+@export var market_drift_sealed_low: float = 0.98
+@export var market_drift_sealed_high: float = 1.02
+@export var market_drift_single_low: float = 0.97
+@export var market_drift_single_high: float = 1.03
+@export var market_drift_graded_low: float = 0.96
+@export var market_drift_graded_high: float = 1.04
 
 @export var attention_pool: int = 100
 @export var comp_noise_width_mult: float = 1.0
@@ -234,3 +243,39 @@ func loan_shark_terms() -> Dictionary:
 func meets_ironman_destitution(cash_cents: int, cogs_cents: int) -> bool:
 	# Floors only. GameState.ironman_enabled is the player opt-in gate.
 	return cash_cents < ironman_cash_cents and cogs_cents < ironman_cogs_cents
+
+
+func market_drift_range(product_class: ProductSKU.ProductClass) -> Vector2:
+	var lo := 0.0
+	var hi := 0.0
+	match product_class:
+		ProductSKU.ProductClass.ACCESSORY:
+			lo = market_drift_accessory_low
+			hi = market_drift_accessory_high
+		ProductSKU.ProductClass.SEALED:
+			lo = market_drift_sealed_low
+			hi = market_drift_sealed_high
+		ProductSKU.ProductClass.SINGLE:
+			lo = market_drift_single_low
+			hi = market_drift_single_high
+		ProductSKU.ProductClass.GRADED:
+			lo = market_drift_graded_low
+			hi = market_drift_graded_high
+		_:
+			lo = 0.0
+			hi = 0.0
+	if _is_valid_market_drift_range(lo, hi):
+		return Vector2(lo, hi)
+	return _sealed_market_drift_range()
+
+
+func _sealed_market_drift_range() -> Vector2:
+	if _is_valid_market_drift_range(market_drift_sealed_low, market_drift_sealed_high):
+		return Vector2(market_drift_sealed_low, market_drift_sealed_high)
+	if _is_valid_market_drift_range(market_drift_low, market_drift_high):
+		return Vector2(market_drift_low, market_drift_high)
+	return Vector2(0.98, 1.02)
+
+
+func _is_valid_market_drift_range(lo: float, hi: float) -> bool:
+	return lo > 0.0 and hi >= lo

@@ -208,6 +208,7 @@ func _initialize() -> void:
 	_test_regulars_return()
 	_test_distributor_moq_worse()
 	_test_better_marketplace_lead()
+	_test_daily_market_drift()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -22801,6 +22802,553 @@ func _test_better_marketplace_lead_section_45_and_parked() -> void:
 		"AQ1: AC1 through AP1 stay off the sell roll"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_daily_market_drift() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_daily_market_drift_class_bands()
+	_test_daily_market_drift_same_seed_and_second_night()
+	_test_daily_market_drift_missing_class_falls_back_sealed()
+	_test_daily_market_drift_events_apply_after()
+	_test_daily_market_drift_no_ui_leak()
+	_test_daily_market_drift_sale_pays_listed()
+	_test_daily_market_drift_door_whale_fee_stay()
+	_test_daily_market_drift_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_daily_market_drift_class_bands() -> void:
+	var first := _ar1_run_nights(1, 20261003)
+	_expect_equal(first.get("ok", false), true, "AR1: one no-event settle night runs")
+	_expect_equal(
+		_ar1_within_band(
+			int(first.get("sealed_after", 0)),
+			int(first.get("sealed_before", 0)),
+			0.98,
+			1.02
+		),
+		true,
+		"AR1: sealed hidden market stays inside ×0.98–1.02"
+	)
+	_expect_equal(
+		_ar1_within_band(
+			int(first.get("graded_after", 0)),
+			int(first.get("graded_before", 0)),
+			0.96,
+			1.04
+		),
+		true,
+		"AR1: graded hidden market stays inside ×0.96–1.04"
+	)
+	_expect_equal(
+		int(first.get("listed_after", -1)),
+		int(first.get("listed_before", -2)),
+		"AR1: player-set listed price does not change"
+	)
+	_expect_equal(
+		int(first.get("cash_after", -1)),
+		int(first.get("cash_before", -2)),
+		"AR1: cash does not change"
+	)
+	_expect_equal(
+		bool(first.get("event_active", true)),
+		false,
+		"AR1: the band check settle has no named event"
+	)
+	_expect_equal(
+		int(first.get("sealed_after", 0)) >= 1
+		and int(first.get("graded_after", 0)) >= 1,
+		true,
+		"AR1: drifted cents clamp to at least 1"
+	)
+
+
+func _test_daily_market_drift_same_seed_and_second_night() -> void:
+	const SEED := 20261003
+	var first := _ar1_run_nights(1, SEED)
+	var first_again := _ar1_run_nights(1, SEED)
+	var two := _ar1_run_nights(2, SEED)
+	_expect_equal(first.get("ok", false), true, "AR1: first same-seed night runs")
+	_expect_equal(first_again.get("ok", false), true, "AR1: replay same-seed night runs")
+	_expect_equal(two.get("ok", false), true, "AR1: two-night same-seed path runs")
+	_expect_equal(
+		int(first.get("sealed_after", -1)),
+		int(first_again.get("sealed_after", -2)),
+		"AR1: same seed keeps the sealed hidden market"
+	)
+	_expect_equal(
+		int(first.get("graded_after", -1)),
+		int(first_again.get("graded_after", -2)),
+		"AR1: same seed keeps the graded hidden market"
+	)
+	_expect_equal(
+		int(two.get("sealed_after_one", -1)),
+		int(first.get("sealed_after", -2)),
+		"AR1: the two-night path matches one night after the first settle"
+	)
+	_expect_equal(
+		int(two.get("sealed_after", int(first.get("sealed_after", 0))))
+		!= int(first.get("sealed_after", -1))
+		or int(two.get("graded_after", int(first.get("graded_after", 0))))
+		!= int(first.get("graded_after", -1))
+		or int(two.get("accessory_after", int(first.get("accessory_after", 0))))
+		!= int(first.get("accessory_after", -1))
+		or int(two.get("single_after", int(first.get("single_after", 0))))
+		!= int(first.get("single_after", -1)),
+		true,
+		"AR1: two nights are not identical to one night"
+	)
+	_expect_equal(
+		_ar1_within_band(
+			int(two.get("sealed_after", 0)),
+			int(two.get("sealed_after_one", 0)),
+			0.98,
+			1.02
+		),
+		true,
+		"AR1: the second night drifts sealed again inside ×0.98–1.02"
+	)
+
+
+func _test_daily_market_drift_missing_class_falls_back_sealed() -> void:
+	var config := BalanceConfig.new()
+	var sealed := config.market_drift_range(ProductSKU.ProductClass.SEALED)
+	var graded := config.market_drift_range(ProductSKU.ProductClass.GRADED)
+	_expect_equal(
+		is_equal_approx(sealed.x, 0.98) and is_equal_approx(sealed.y, 1.02),
+		true,
+		"AR1: sealed band defaults to 0.98–1.02"
+	)
+	_expect_equal(
+		is_equal_approx(graded.x, 0.96) and is_equal_approx(graded.y, 1.04),
+		true,
+		"AR1: graded band defaults to 0.96–1.04"
+	)
+	config.market_drift_graded_low = 0.0
+	config.market_drift_graded_high = 0.0
+	var fallback := config.market_drift_range(ProductSKU.ProductClass.GRADED)
+	_expect_equal(
+		is_equal_approx(fallback.x, 0.98) and is_equal_approx(fallback.y, 1.02),
+		true,
+		"AR1: missing class range falls back to sealed 0.98–1.02"
+	)
+	var accessory := config.market_drift_range(ProductSKU.ProductClass.ACCESSORY)
+	_expect_equal(
+		is_equal_approx(accessory.x, 0.99) and is_equal_approx(accessory.y, 1.01),
+		true,
+		"AR1: a present accessory pair is not replaced by the fallback"
+	)
+
+
+func _test_daily_market_drift_events_apply_after() -> void:
+	_ar1_reset_no_event()
+	_ar1_bind_graded()
+	_demand_signals.call("seed_market_drift_rng", 20261003)
+	var titan := &"AA-SKIE-047"
+	var sealed := &"AA-DUST-ETB"
+	var titan_sku := (
+		_inventory_service.get("model") as InventoryModel
+	).get_sku(titan)
+	_expect_equal(titan_sku != null, true, "AR1: Titan is in the live catalog")
+	var sealed_before := _ar1_hidden_cents(sealed)
+	_expect_equal(_game_state.call("start_floor"), true, "AR1: event-order floor opens")
+	_expect_equal(_game_state.call("start_settle"), true, "AR1: event-order settle runs")
+	_expect_equal(
+		_demand_signals.call("active_event") == null,
+		true,
+		"AR1: no named event on the drift night"
+	)
+	_expect_equal(
+		_ar1_within_band(_ar1_hidden_cents(sealed), sealed_before, 0.98, 1.02),
+		true,
+		"AR1: sealed still drifted before any later event"
+	)
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": titan, "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(started != null, true, "AR1: named hype still starts after drift")
+	var expected := maxi(
+		titan_sku.base_market_cents,
+		roundi(float(titan_sku.base_market_cents) * MarketEventService.HYPE_MARKET_MULT)
+	)
+	_expect_equal(
+		_ar1_hidden_cents(titan),
+		expected,
+		"AR1: hype still applies its own modifier after drift"
+	)
+	var economy_src := FileAccess.get_file_as_string("res://scripts/autoload/economy.gd")
+	var shrink_at := economy_src.find("_settle_shrink()")
+	var drift_at := economy_src.find("apply_daily_market_drift")
+	var events_at := economy_src.find("roll_settle_events")
+	_expect_equal(
+		shrink_at >= 0 and drift_at > shrink_at and events_at > drift_at,
+		true,
+		"AR1: settle applies drift after shrink and before named events"
+	)
+	_demand_signals.call("apply_event_save", {})
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_daily_market_drift_no_ui_leak() -> void:
+	var night := _ar1_run_nights(1, 20261003)
+	_expect_equal(night.get("ok", false), true, "AR1: leak scan needs a settle night")
+	var sealed_hidden := int(night.get("sealed_after", 0))
+	var graded_hidden := int(night.get("graded_after", 0))
+	var sealed := &"AA-DUST-ETB"
+	var lot: StockLot = _inventory_service.call("get_lot", sealed)
+	var listed := lot.listed_price_cents if lot != null else 1
+	var price_dto: PriceConfirmSignal = _demand_signals.call(
+		"price_signal",
+		sealed,
+		listed,
+		_inventory_service.call("location_for", sealed)
+	)
+	var buy_dto: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal",
+		sealed,
+		DemandSignalService.Channel.MARKETPLACE,
+		1_200,
+		1,
+		1
+	)
+	_expect_dto_has_no_truth_fields(price_dto, "AR1 price signal")
+	_expect_dto_has_no_truth_fields(buy_dto, "AR1 buy signal")
+	var banner := String(_demand_signals.call("event_banner_text"))
+	var telegraph := String(_demand_signals.call("calendar_telegraph_text"))
+	var price_row := DemandSignalPresenter.priceable_stock_row(price_dto)
+	var price_summary := DemandSignalPresenter.price_summary(price_dto)
+	var buy_row := DemandSignalPresenter.opportunity_row(buy_dto)
+	var buy_summary := DemandSignalPresenter.buy_summary(buy_dto)
+	for text: String in [banner, telegraph, price_row, price_summary, buy_row, buy_summary]:
+		_assert_text_has_no_truth(text, "AR1 player copy")
+		_expect_equal(
+			text.contains("true_market"),
+			false,
+			"AR1: copy never contains true_market"
+		)
+	for notice: String in [banner, telegraph]:
+		_expect_equal(
+			not _ar1_text_shows_hidden_cents(notice, sealed_hidden)
+			and not _ar1_text_shows_hidden_cents(notice, graded_hidden),
+			true,
+			"AR1: notice strings omit the exact hidden cents"
+		)
+	_expect_equal(
+		not _ar1_text_shows_hidden_cents(buy_row, sealed_hidden)
+		and not _ar1_text_shows_hidden_cents(buy_row, graded_hidden),
+		true,
+		"AR1: offer row omits the exact hidden cents"
+	)
+	var hud := _instantiate_gameplay_hud()
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		if banner_label != null:
+			_assert_text_has_no_truth(banner_label.text, "AR1 HUD banner")
+			_expect_equal(
+				not _ar1_text_shows_hidden_cents(banner_label.text, sealed_hidden)
+				and not _ar1_text_shows_hidden_cents(banner_label.text, graded_hidden),
+				true,
+				"AR1: HUD notice omits the exact hidden cents"
+			)
+		hud.queue_free()
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var _shown: PriceConfirmSignal = _demand_signals.call(
+		"price_signal",
+		sealed,
+		listed,
+		_inventory_service.call("location_for", sealed)
+	)
+	var qa_truth := 0
+	for event: Dictionary in _qa_autoload.call("get_events"):
+		if String(event.get("event", "")) != "demand_signal_shown":
+			continue
+		var payload: Dictionary = event.get("payload", {})
+		qa_truth = int(payload.get("true_market_cents", 0))
+	_expect_equal(
+		qa_truth,
+		sealed_hidden,
+		"AR1: noisy comps read the drifted hidden market only on the QA path"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_daily_market_drift_sale_pays_listed() -> void:
+	_ar1_reset_no_event()
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AR1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AR1: sell_through_mult_for stays 1.0"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AR1: listed lot still enqueues")
+	_expect_equal(queue.sell_listed(), true, "AR1: completed sale still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AR1: completed sale pays the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "drift")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"drift"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"apply_daily_market_drift"
+		),
+		true,
+		"AR1: daily drift is not a sell weight"
+	)
+	queue.free()
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_daily_market_drift_door_whale_fee_stay() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.HIGH_REP_MIN_REP == 75
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AR1/AJ1: high-rep whale bias stays Rep 75 / ×1.5"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.QUIET_FLOOR_MAX_REP == 24
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5)
+		and CustomerSpawnPolicy.spawn_count(24, 5) == 2
+		and CustomerSpawnPolicy.whales_allowed(24) == false,
+		true,
+		"AR1/AI1: door spawn stays ×0.5 on the quiet floor"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_min, 0.30)
+		and is_equal_approx(NORMAL_CONFIG.distributor_discount_max, 0.40),
+		true,
+		"AR1: marketplace fee stays 8%"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	var at_40 := catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, 5)
+	var at_75 := catalog.roll_spawn(SEED, 75, NORMAL_CONFIG, 5)
+	_expect_equal(at_40.size(), 5, "AR1: baseline door spawn count stays 5")
+	_expect_equal(at_75.size(), 5, "AR1: high-rep door spawn count stays 5")
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 74, NORMAL_CONFIG) * 1.5,
+			catalog.weight_for(whale, 75, NORMAL_CONFIG)
+		),
+		true,
+		"AR1: whale weight stays the shipped AJ1 pack"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "drift")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "moq")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "regulars")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "high_rep")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "quiet")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AR1: AC1 through AQ1 stay off the sell roll"
+	)
+
+
+func _test_daily_market_drift_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("true_market_drift")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("auction_snipe"),
+		false,
+		"AR1: Soft catalog stays closed"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AR1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AR1: marketplace fee stays 8% — this is not a fee cut"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AR1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("true_market"),
+		true,
+		"AR1: HUD has no STOP, camera off-switch, or true_market"
+	)
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	_expect_equal(
+		not balance_src.contains("fee_cut")
+		and not balance_src.contains("true_market"),
+		true,
+		"AR1: fee cuts stay parked and BalanceConfig does not name true_market"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/ui/player_trade_presenter.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/autoload/economy.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AR1: %s stays §4.5 clean" % path
+		)
+	_game_state.call("start_new_game")
+
+
+func _ar1_run_nights(night_count: int, rng_seed: int) -> Dictionary:
+	_ar1_reset_no_event()
+	_ar1_bind_graded()
+	_demand_signals.call("seed_market_drift_rng", rng_seed)
+	var sealed := &"AA-DUST-ETB"
+	var graded := &"QA-AR1-GRD"
+	var lot: StockLot = _inventory_service.call("get_lot", sealed)
+	if lot == null:
+		return {"ok": false}
+	var accessory := &"ACC-SLV-60"
+	var single := &"AA-BASE-088"
+	var payload := {
+		"ok": true,
+		"sealed_before": _ar1_hidden_cents(sealed),
+		"graded_before": _ar1_hidden_cents(graded),
+		"accessory_before": _ar1_hidden_cents(accessory),
+		"single_before": _ar1_hidden_cents(single),
+		"listed_before": lot.listed_price_cents,
+		"cash_before": int(_economy.get("balance_cents")),
+		"sealed_after_one": 0,
+		"graded_after_one": 0,
+		"accessory_after": 0,
+		"single_after": 0,
+	}
+	for night: int in night_count:
+		if not bool(_game_state.call("start_floor")):
+			payload["ok"] = false
+			return payload
+		if not bool(_game_state.call("start_settle")):
+			payload["ok"] = false
+			return payload
+		if night == 0:
+			payload["sealed_after_one"] = _ar1_hidden_cents(sealed)
+			payload["graded_after_one"] = _ar1_hidden_cents(graded)
+		if night + 1 < night_count:
+			if not bool(_game_state.call("advance_day")):
+				payload["ok"] = false
+				return payload
+	lot = _inventory_service.call("get_lot", sealed)
+	payload["sealed_after"] = _ar1_hidden_cents(sealed)
+	payload["graded_after"] = _ar1_hidden_cents(graded)
+	payload["accessory_after"] = _ar1_hidden_cents(accessory)
+	payload["single_after"] = _ar1_hidden_cents(single)
+	payload["listed_after"] = lot.listed_price_cents if lot != null else -1
+	payload["cash_after"] = int(_economy.get("balance_cents"))
+	payload["event_active"] = _demand_signals.call("active_event") != null
+	return payload
+
+
+func _ar1_reset_no_event() -> void:
+	var config := NORMAL_CONFIG.duplicate() as BalanceConfig
+	config.event_chance_settle = 0.0
+	_game_state.call("set_balance_config", config)
+	_game_state.call("start_new_game")
+
+
+func _ar1_bind_graded() -> void:
+	var model := _inventory_service.get("model") as InventoryModel
+	var sku := ProductSKU.new(
+		&"QA-AR1-GRD",
+		ProductSKU.ProductClass.GRADED,
+		"QA Graded Anchor",
+		10_000
+	)
+	model.catalog[sku.id] = sku
+	(_demand_signals.get("_market_state") as MarketState).update_sku(
+		sku.id,
+		sku.base_market_cents,
+		0.5
+	)
+
+
+func _ar1_hidden_cents(sku_id: StringName) -> int:
+	return (_demand_signals.get("_market_state") as MarketState).market_cents_for(sku_id)
+
+
+func _ar1_within_band(after: int, before: int, lo: float, hi: float) -> bool:
+	if after < 1 or before <= 0:
+		return false
+	var low_cents := maxi(1, int(floor(float(before) * lo)))
+	var high_cents := maxi(1, int(ceil(float(before) * hi)))
+	return after >= low_cents and after <= high_cents
+
+
+func _ar1_text_shows_hidden_cents(text: String, hidden_cents: int) -> bool:
+	if hidden_cents <= 0 or text.is_empty():
+		return false
+	var raw := str(hidden_cents)
+	if text.contains(raw):
+		return true
+	return text.contains(DemandSignalPresenter.format_cents(hidden_cents))
 
 
 func _aq1_reset_at(reputation: int) -> void:

@@ -25,3 +25,20 @@ func market_cents_for(sku_id: StringName) -> int:
 func demand_score_for(sku_id: StringName) -> float:
 	var state: Dictionary = _state_by_sku.get(sku_id, {})
 	return float(state.get("demand_score", 0.0))
+
+
+func live_sku_ids() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for key: Variant in _state_by_sku.keys():
+		ids.append(StringName(key))
+	ids.sort()
+	return ids
+
+
+func apply_multiplier(sku_id: StringName, multiplier: float) -> int:
+	var current := market_cents_for(sku_id)
+	if current <= 0:
+		return 0
+	var next_cents := maxi(1, roundi(float(current) * multiplier))
+	update_sku(sku_id, next_cents, demand_score_for(sku_id))
+	return market_cents_for(sku_id)
