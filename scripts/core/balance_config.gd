@@ -154,6 +154,12 @@ enum Difficulty {
 @export var impulse_shelf_interest: float = 1.25
 @export var floor_shelf_interest: float = 1.00
 @export var impulse_shelf_tiles: int = 2
+## AF1 / systems §6.1: Stocker wage and daily restock budget.
+## While on duty, auto-move up to N BACKSTOCK lots onto a valid floor
+## location (SHELF / CASE / BINDER). Placement only — not a sell weight
+## and not a sale-cash multiplier. Easy/Hard inherit unless overridden.
+@export var stocker_wage_cents: int = 7_000
+@export var stocker_restock_lots_per_day: int = 4
 
 
 func is_rent_due_day(day: int) -> bool:

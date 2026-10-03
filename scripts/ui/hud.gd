@@ -72,6 +72,7 @@ extends Control
 @onready var staff_rows: VBoxContainer = %StaffRows
 @onready var hire_cashier_button: Button = %HireCashierButton
 @onready var hire_specialist_button: Button = %HireSpecialistButton
+@onready var hire_stocker_button: Button = %HireStockerButton
 @onready var beat_confirm: VBoxContainer = %BeatConfirm
 @onready var beat_confirm_title: Label = %BeatConfirmTitle
 @onready var beat_confirm_body: Label = %BeatConfirmBody
@@ -225,6 +226,8 @@ func _ready() -> void:
 		hire_cashier_button.pressed.connect(_hire_from_panel.bind(&"cashier"))
 	if hire_specialist_button != null:
 		hire_specialist_button.pressed.connect(_hire_from_panel.bind(&"specialist"))
+	if hire_stocker_button != null:
+		hire_stocker_button.pressed.connect(_hire_from_panel.bind(&"stocker"))
 	if open_cameras_button != null:
 		open_cameras_button.pressed.connect(_open_cameras_confirm)
 	var camera_back := get_node_or_null("%CameraConfirmBackButton") as Button
@@ -1883,6 +1886,8 @@ func _hire_from_panel(role: StringName) -> void:
 			hired = GameState.shop.hire_cashier(false)
 		&"specialist":
 			hired = GameState.shop.hire_specialist()
+		&"stocker":
+			hired = GameState.shop.hire_stocker()
 		_:
 			return
 	if hired == null:
@@ -1909,8 +1914,12 @@ func _sync_staff_panel() -> void:
 		)
 	if staff_hint != null:
 		staff_hint.text = (
-			"Roster %d / %d. Wages post at SETTLE. Specialist on duty narrows comps and demand bands without Research spend, and lowers Inspect/Research Attention."
-			% [GameState.shop.hired_count(), GameState.shop.staff_cap()]
+			"Roster %d / %d. Wages post at SETTLE. A Stocker on duty hauls backstock onto the floor (%d lots/day). Specialist on duty narrows comps and demand bands without Research spend, and lowers Inspect/Research Attention."
+			% [
+				GameState.shop.hired_count(),
+				GameState.shop.staff_cap(),
+				GameState.shop.stocker_restock_lots_per_day(),
+			]
 		)
 	if hire_cashier_button != null:
 		hire_cashier_button.text = (
@@ -1924,6 +1933,12 @@ func _sync_staff_panel() -> void:
 			% DemandSignalPresenter.format_cents(GameState.shop.specialist_wage_cents())
 		)
 		hire_specialist_button.disabled = not _can_hire_from_panel()
+	if hire_stocker_button != null:
+		hire_stocker_button.text = (
+			"Hire Stocker · %s/day"
+			% DemandSignalPresenter.format_cents(GameState.shop.stocker_wage_cents())
+		)
+		hire_stocker_button.disabled = not _can_hire_from_panel()
 	if staff_rows == null:
 		return
 	for child: Node in staff_rows.get_children():

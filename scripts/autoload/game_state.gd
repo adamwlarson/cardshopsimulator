@@ -112,9 +112,18 @@ func start_floor() -> bool:
 			"on_duty": shop.cashiers_on_duty_count(),
 			"understaffed": shop.is_floor_understaffed(),
 		})
+	_run_stocker_restock()
 	current_phase = DayPhase.FLOOR
 	EventBus.day_phase_changed.emit(current_phase)
 	return true
+
+
+func _run_stocker_restock() -> int:
+	# AF1: one restock pass at floor open, after attendance. No Stocker
+	# on duty → no auto-restock. Owner rearrange stays a manual verb.
+	var restock := StockerRestock.new()
+	shop.last_stocker_restock_count = restock.apply(shop)
+	return shop.last_stocker_restock_count
 
 
 func start_settle() -> bool:
