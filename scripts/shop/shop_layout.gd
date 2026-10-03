@@ -2,6 +2,9 @@ class_name ShopLayout
 extends RefCounted
 
 const DEFAULT_ENTRANCE := Vector2i(4, 0)
+const PLAY_TABLE_ID := &"play_table"
+const PLAY_TABLE_SIZE := Vector2i(2, 2)
+const PLAY_TABLE_DEFAULT_ORIGIN := Vector2i(2, 4)
 
 var width: int = ShopState.SMALL_GRID_WIDTH
 var height: int = ShopState.SMALL_GRID_HEIGHT
@@ -77,6 +80,45 @@ func movable_fixtures() -> Array[ShopFixture]:
 	return result
 
 
+func has_play_table() -> bool:
+	return play_table() != null
+
+
+func play_table() -> ShopFixture:
+	return fixture_by_id(PLAY_TABLE_ID)
+
+
+func preview_place_play_table(origin: Vector2i) -> StringName:
+	if has_play_table():
+		return &"already_placed"
+	if not _footprint_in_bounds(origin, PLAY_TABLE_SIZE):
+		return &"out_of_bounds"
+	var fixture := _make_play_table_fixture(origin)
+	fixtures.append(fixture)
+	var overlap := _has_overlap()
+	var circulation := has_circulation()
+	fixtures.pop_back()
+	if overlap:
+		return &"overlap"
+	if not circulation:
+		return &"blocked_path"
+	return &"ok"
+
+
+func place_play_table(origin: Vector2i) -> StringName:
+	var reason := preview_place_play_table(origin)
+	if reason != &"ok" and reason != &"blocked_path":
+		return reason
+	if has_play_table():
+		return &"already_placed"
+	fixtures.append(_make_play_table_fixture(origin))
+	return reason
+
+
+func allows_blocked_move(fixture: ShopFixture) -> bool:
+	return fixture != null and fixture.kind == PLAY_TABLE_ID
+
+
 func has_circulation() -> bool:
 	return not circulation_path().is_empty()
 
@@ -126,10 +168,11 @@ func preview_move(fixture_id: StringName, new_origin: Vector2i) -> StringName:
 
 func apply_move(fixture_id: StringName, new_origin: Vector2i) -> StringName:
 	var reason := preview_move(fixture_id, new_origin)
-	if reason != &"ok":
+	var fixture := fixture_by_id(fixture_id)
+	if reason != &"ok" and not (reason == &"blocked_path" and allows_blocked_move(fixture)):
 		return reason
-	fixture_by_id(fixture_id).origin = new_origin
-	return &"ok"
+	fixture.origin = new_origin
+	return reason
 
 
 func walkable_tile_count() -> int:
@@ -214,6 +257,19 @@ func _make_fixture(
 	size: Vector2i
 ) -> ShopFixture:
 	return ShopFixture.new(fixture_id, kind, display_name, origin, size)
+
+
+func _make_play_table_fixture(origin: Vector2i) -> ShopFixture:
+	var fixture := _make_fixture(
+		PLAY_TABLE_ID,
+		PLAY_TABLE_ID,
+		"Play table",
+		origin,
+		PLAY_TABLE_SIZE
+	)
+	fixture.movable = true
+	fixture.is_display = false
+	return fixture
 
 
 func _blocked_cells() -> Dictionary:

@@ -247,6 +247,58 @@ func can_rearrange() -> bool:
 	return is_game_active and current_phase == DayPhase.PREP
 
 
+func can_unlock_play_table() -> bool:
+	return (
+		is_game_active
+		and current_phase == DayPhase.PREP
+		and shop.can_unlock_play_table(Economy.balance_cents, current_reputation)
+	)
+
+
+func unlock_play_table() -> Dictionary:
+	var cash_cost := shop.play_table_cash_cost_cents()
+	if shop.has_play_table():
+		return _play_table_result(false, &"already_owned", 0, Vector2i(-1, -1))
+	if not is_game_active or current_phase != DayPhase.PREP:
+		return _play_table_result(false, &"wrong_phase", 0, Vector2i(-1, -1))
+	if not shop.rep_meets_play_table(current_reputation):
+		return _play_table_result(false, &"insufficient_reputation", 0, Vector2i(-1, -1))
+	if not Economy.can_afford(cash_cost):
+		return _play_table_result(false, &"insufficient_cash", 0, Vector2i(-1, -1))
+	if not Economy.record_expense(cash_cost, &"play_table", "Play table"):
+		return _play_table_result(false, &"insufficient_cash", 0, Vector2i(-1, -1))
+	if not shop.unlock_play_table():
+		return _play_table_result(false, &"already_owned", cash_cost, Vector2i(-1, -1))
+	var origin := ShopLayout.PLAY_TABLE_DEFAULT_ORIGIN
+	var placed := shop.place_play_table(origin)
+	if placed != &"ok" and placed != &"blocked_path":
+		var applied_locked := _play_table_result(true, placed, cash_cost, origin)
+		QaInstrumentation.record_play_table_unlocked(applied_locked)
+		EventBus.shop_layout_changed.emit()
+		return applied_locked
+	var applied := _play_table_result(true, &"ok", cash_cost, origin)
+	applied["place_reason"] = String(placed)
+	QaInstrumentation.record_play_table_unlocked(applied)
+	EventBus.shop_layout_changed.emit()
+	return applied
+
+
+func place_play_table(origin: Vector2i) -> Dictionary:
+	if not shop.has_play_table():
+		return _play_table_result(false, &"locked", 0, origin)
+	if not is_game_active or current_phase != DayPhase.PREP:
+		return _play_table_result(false, &"wrong_phase", 0, origin)
+	if shop.has_play_table_placed():
+		return _play_table_result(false, &"already_placed", 0, origin)
+	var reason := shop.place_play_table(origin)
+	var ok := reason == &"ok" or reason == &"blocked_path"
+	var applied := _play_table_result(ok, reason if ok else reason, 0, origin)
+	if ok:
+		QaInstrumentation.record_play_table_placed(applied)
+		EventBus.shop_layout_changed.emit()
+	return applied
+
+
 func rearrange_fixture(fixture_id: StringName, new_origin: Vector2i) -> Dictionary:
 	var cost := shop.rearrange_attention_cost()
 	if not can_rearrange():
@@ -254,15 +306,22 @@ func rearrange_fixture(fixture_id: StringName, new_origin: Vector2i) -> Dictiona
 	if attention_remaining < cost:
 		return _rearrange_result(false, &"insufficient_attention", fixture_id, new_origin, 0)
 	var reason := shop.layout.preview_move(fixture_id, new_origin)
-	if reason != &"ok":
+	var fixture := shop.layout.fixture_by_id(fixture_id)
+	var allow_block := (
+		reason == &"blocked_path"
+		and shop.layout.allows_blocked_move(fixture)
+	)
+	if reason != &"ok" and not allow_block:
 		var rejected := _rearrange_result(false, reason, fixture_id, new_origin, 0)
 		QaInstrumentation.record_rearrange_attempted(rejected)
 		return rejected
 	if not consume_attention(cost):
 		return _rearrange_result(false, &"insufficient_attention", fixture_id, new_origin, 0)
 	shop.layout.apply_move(fixture_id, new_origin)
-	var applied := _rearrange_result(true, &"ok", fixture_id, new_origin, cost)
+	shop.sync_play_table_blockers()
+	var applied := _rearrange_result(true, reason, fixture_id, new_origin, cost)
 	QaInstrumentation.record_rearrange_attempted(applied)
+	EventBus.shop_layout_changed.emit()
 	return applied
 
 
@@ -281,6 +340,24 @@ func _rearrange_result(
 		"origin_y": new_origin.y,
 		"attention_spent": attention_spent,
 		"attention_remaining": attention_remaining,
+		"has_circulation": shop.layout.has_circulation(),
+	}
+
+
+func _play_table_result(
+	ok: bool,
+	reason: StringName,
+	cash_spent_cents: int,
+	origin: Vector2i
+) -> Dictionary:
+	return {
+		"ok": ok,
+		"reason": String(reason),
+		"cash_spent_cents": cash_spent_cents,
+		"origin_x": origin.x,
+		"origin_y": origin.y,
+		"play_table_owned": shop.has_play_table(),
+		"play_table_placed": shop.has_play_table_placed(),
 		"has_circulation": shop.layout.has_circulation(),
 	}
 

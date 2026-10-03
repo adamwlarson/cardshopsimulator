@@ -62,6 +62,11 @@ extends Control
 @onready var camera_confirm_title: Label = get_node_or_null("%CameraConfirmTitle") as Label
 @onready var camera_confirm_body: Label = get_node_or_null("%CameraConfirmBody") as Label
 @onready var camera_confirm_button: Button = get_node_or_null("%CameraConfirmButton") as Button
+@onready var open_play_table_button: Button = get_node_or_null("%OpenPlayTableButton") as Button
+@onready var play_table_confirm_panel: PanelContainer = get_node_or_null("%PlayTableConfirm") as PanelContainer
+@onready var play_table_confirm_title: Label = get_node_or_null("%PlayTableConfirmTitle") as Label
+@onready var play_table_confirm_body: Label = get_node_or_null("%PlayTableConfirmBody") as Label
+@onready var play_table_confirm_button: Button = get_node_or_null("%PlayTableConfirmButton") as Button
 @onready var staff_panel: PanelContainer = %StaffPanel
 @onready var staff_hint: Label = %StaffHint
 @onready var staff_rows: VBoxContainer = %StaffRows
@@ -157,6 +162,7 @@ func _ready() -> void:
 		EventBus.cameras_changed.connect(_on_cameras_changed)
 	EventBus.market_event_changed.connect(_on_market_event_changed)
 	EventBus.reputation_changed.connect(_on_reputation_changed)
+	EventBus.shop_layout_changed.connect(_on_shop_layout_changed)
 	EventBus.campaign_won.connect(_on_campaign_won)
 	EventBus.loan_shark_offered.connect(_on_loan_shark_offered)
 	EventBus.loan_shark_resolved.connect(_on_loan_shark_resolved)
@@ -226,6 +232,13 @@ func _ready() -> void:
 		camera_back.pressed.connect(_close_cameras)
 	if camera_confirm_button != null:
 		camera_confirm_button.pressed.connect(_confirm_cameras)
+	if open_play_table_button != null:
+		open_play_table_button.pressed.connect(_open_play_table_confirm)
+	var play_table_back := get_node_or_null("%PlayTableConfirmBackButton") as Button
+	if play_table_back != null:
+		play_table_back.pressed.connect(_close_play_table)
+	if play_table_confirm_button != null:
+		play_table_confirm_button.pressed.connect(_confirm_play_table)
 	%BeatConfirmBackButton.pressed.connect(_close_beat_confirm)
 	%BeatConfirmButton.pressed.connect(_confirm_beat_choice)
 	open_research_button.pressed.connect(_open_research_list)
@@ -329,6 +342,7 @@ func _update_phase(phase: int) -> void:
 	_close_rearrange()
 	_close_staff()
 	_close_cameras()
+	_close_play_table()
 	if phase == GameState.DayPhase.SETTLE and _showcase_choice_made:
 		showcase_panel.hide()
 	_sync_prep_action_buttons()
@@ -627,6 +641,13 @@ func _close_price() -> void:
 
 func _on_reputation_changed(_reputation: int) -> void:
 	_sync_online_button()
+	_sync_play_table_button()
+
+
+func _on_shop_layout_changed() -> void:
+	_sync_play_table_button()
+	_sync_event_banner()
+	_sync_prep_action_buttons()
 
 
 func _sync_online_button() -> void:
@@ -650,6 +671,7 @@ func _open_online_list() -> void:
 	if open_online_button == null or open_online_button.disabled:
 		return
 	_close_cameras()
+	_close_play_table()
 	_close_online()
 	if online_rows != null:
 		for child: Node in online_rows.get_children():
@@ -1298,6 +1320,7 @@ func _sync_prep_action_buttons() -> void:
 	_sync_staff_panel()
 	_sync_online_button()
 	_sync_cameras_button()
+	_sync_play_table_button()
 	if open_research_button == null or open_rearrange_button == null:
 		return
 	var research_att := GameState.shop.research_attention_cost()
@@ -1357,8 +1380,12 @@ func _sync_prep_action_buttons() -> void:
 			and _selected_rearrange_origin != Vector2i(-1, -1)
 			else &"unchanged"
 		)
+		var preview_ok := preview == &"ok" or (
+			preview == &"blocked_path"
+			and _selected_rearrange_fixture == ShopLayout.PLAY_TABLE_ID
+		)
 		rearrange_confirm_button.disabled = (
-			preview != &"ok"
+			not preview_ok
 			or GameState.attention_remaining < rearrange_att
 			or not GameState.can_rearrange()
 		)
@@ -1368,6 +1395,7 @@ func _open_research_list() -> void:
 	if open_research_button.disabled:
 		return
 	_close_cameras()
+	_close_play_table()
 	_close_research()
 	for child: Node in research_rows.get_children():
 		research_rows.remove_child(child)
@@ -1509,6 +1537,7 @@ func _open_rearrange() -> void:
 	if open_rearrange_button.disabled:
 		return
 	_close_cameras()
+	_close_play_table()
 	_selected_rearrange_fixture = &""
 	_selected_rearrange_origin = Vector2i(-1, -1)
 	_rebuild_rearrange_fixtures()
@@ -1602,6 +1631,10 @@ func _rearrange_preview_text(reason: StringName, cell: Vector2i) -> String:
 				GameState.shop.rearrange_attention_cost(),
 			]
 		&"blocked_path":
+			if _selected_rearrange_fixture == ShopLayout.PLAY_TABLE_ID:
+				return (
+					"This blocks the aisle. Traffic drops and customers get frustrated."
+				)
 			return "Illegal pathing: entrance must reach displays then counter."
 		&"overlap":
 			return "That tile is occupied."
@@ -1703,6 +1736,7 @@ func _open_cameras_confirm() -> void:
 	_close_rearrange()
 	_close_staff()
 	_close_online()
+	_close_play_table()
 	var cash_cost := GameState.shop.camera_cash_cost_cents()
 	var att_cost := GameState.shop.camera_attention_cost()
 	if camera_confirm_title != null:
@@ -1737,12 +1771,96 @@ func _close_cameras() -> void:
 	_sync_modal_veil()
 
 
+func _sync_play_table_button() -> void:
+	if open_play_table_button == null:
+		return
+	var cash_cost := GameState.shop.play_table_cash_cost_cents()
+	var rep_gate := GameState.shop.play_table_rep_required()
+	if GameState.shop.has_play_table():
+		open_play_table_button.text = DemandSignalPresenter.play_table_owned_label()
+		open_play_table_button.disabled = true
+	else:
+		open_play_table_button.text = DemandSignalPresenter.play_table_action_label(
+			cash_cost,
+			rep_gate
+		)
+		open_play_table_button.disabled = not GameState.can_unlock_play_table()
+	if play_table_confirm_button != null:
+		if GameState.shop.has_play_table():
+			play_table_confirm_button.text = DemandSignalPresenter.play_table_owned_label()
+			play_table_confirm_button.disabled = true
+		else:
+			play_table_confirm_button.text = DemandSignalPresenter.play_table_action_label(
+				cash_cost,
+				rep_gate
+			)
+			play_table_confirm_button.disabled = not GameState.can_unlock_play_table()
+	if play_table_confirm_body != null and (
+		play_table_confirm_panel == null or play_table_confirm_panel.visible
+	):
+		play_table_confirm_body.text = _play_table_confirm_copy(cash_cost, rep_gate)
+
+
+func _play_table_confirm_copy(cash_cost: int, rep_gate: int) -> String:
+	return "\n".join([
+		DemandSignalPresenter.play_table_action_label(cash_cost, rep_gate),
+		"Places one 2×2 table. Weekend nights draw more traffic and whales.",
+		"A blocked aisle from the door to the cases to the counter cuts traffic.",
+		"Condition grade and certification stay hidden.",
+	])
+
+
+func _open_play_table_confirm() -> void:
+	if open_play_table_button == null or open_play_table_button.disabled:
+		return
+	if GameState.shop.has_play_table():
+		return
+	_close_research()
+	_close_rearrange()
+	_close_staff()
+	_close_online()
+	_close_cameras()
+	var cash_cost := GameState.shop.play_table_cash_cost_cents()
+	var rep_gate := GameState.shop.play_table_rep_required()
+	if play_table_confirm_title != null:
+		play_table_confirm_title.text = "PLACE PLAY TABLE"
+	if play_table_confirm_body != null:
+		play_table_confirm_body.text = _play_table_confirm_copy(cash_cost, rep_gate)
+	_sync_play_table_button()
+	if play_table_confirm_panel != null:
+		play_table_confirm_panel.show()
+	_sync_modal_veil()
+
+
+func _confirm_play_table() -> void:
+	if not GameState.can_unlock_play_table():
+		_sync_prep_action_buttons()
+		return
+	var result := GameState.unlock_play_table()
+	if not bool(result.get("ok", false)):
+		beat_toast.text = "Play table blocked"
+		beat_toast.show()
+		_sync_prep_action_buttons()
+		return
+	beat_toast.text = "Play table placed — weekend nights get busier"
+	beat_toast.show()
+	_close_play_table()
+	_sync_prep_action_buttons()
+
+
+func _close_play_table() -> void:
+	if play_table_confirm_panel != null:
+		play_table_confirm_panel.hide()
+	_sync_modal_veil()
+
+
 func _open_staff() -> void:
 	if open_staff_button == null or open_staff_button.disabled:
 		return
 	_close_research()
 	_close_rearrange()
 	_close_cameras()
+	_close_play_table()
 	_sync_staff_panel()
 	if staff_panel != null:
 		staff_panel.show()
@@ -1881,6 +1999,7 @@ func _sync_modal_veil() -> void:
 		or (online_list_panel != null and online_list_panel.visible)
 		or (online_confirm_panel != null and online_confirm_panel.visible)
 		or (camera_confirm_panel != null and camera_confirm_panel.visible)
+		or (play_table_confirm_panel != null and play_table_confirm_panel.visible)
 		or (campaign_win_panel != null and campaign_win_panel.visible)
 		or (loan_shark_panel != null and loan_shark_panel.visible)
 		or (game_over_panel != null and game_over_panel.visible)

@@ -119,6 +119,14 @@ static func cameras_owned_label() -> String:
 	return "Cameras on"
 
 
+static func play_table_action_label(cash_cents: int, reputation: int) -> String:
+	return "Play table · %s · Rep %d" % [format_cents(cash_cents), reputation]
+
+
+static func play_table_owned_label() -> String:
+	return "Play table placed"
+
+
 static func loan_shark_title() -> String:
 	return "Loan shark"
 

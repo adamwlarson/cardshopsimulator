@@ -12,6 +12,14 @@ const COUNTERFEIT_SHADY_WIDTH_MULT := 1.35
 const CONVENTION_TRAFFIC_MULT := 2.0
 const CONVENTION_WHALE_WEIGHT_MULT := 2.5
 const CONVENTION_CALENDAR_WEIGHT_MULT := 2.5
+## AB1 event nights: weekend calendar days (one FLOOR session = the night).
+## Modest vs convention ×2 / ×2.5. Only applied while a play table is placed.
+const EVENT_NIGHT_TRAFFIC_MULT := 1.25
+const EVENT_NIGHT_WHALE_WEIGHT_MULT := 1.4
+## systems §7.2: blocked entrance → displays → counter cuts traffic.
+const BLOCKED_PATH_TRAFFIC_MULT := 0.7
+## Existing timeout leave (−Rep) ticks faster when the aisle is blocked.
+const BLOCKED_PATH_PATIENCE_SCALE := 2.0
 ## systems §8 Theft ring: Shrink ×3 for 3 days. Staff coverage on the floor
 ## dampens the base loss rate; wait out still ends the window. Security cameras
 ## (shop unlock) reduce the theft multiplier while owned/active.
@@ -100,6 +108,11 @@ static func convention_calendar_weight_mult(day: int) -> float:
 	if is_convention_calendar_day(day) or is_convention_telegraph_day(day):
 		return CONVENTION_CALENDAR_WEIGHT_MULT
 	return 1.0
+
+
+static func is_event_night_day(day: int) -> bool:
+	# Weekend evenings share the Sat/Sun calendar used by convention.
+	return is_convention_calendar_day(day)
 
 
 func _weight_for(def: Dictionary, config: BalanceConfig, day: int = 0) -> float:
