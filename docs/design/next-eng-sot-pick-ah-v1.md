@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AH v1 — post AG1
 
-**Status:** **AH1 ADOPTED** 2026-10-03 — Register walkouts. Spec on main @ `fbdad4e8`. Eng spike `bc-c9e88571`. Park AH2/AH4. Hard-park AH3. Soft catalog CLOSED.
+**Status:** **AH1 SHIPPED** 2026-10-03 — merged #64 @ `982259fe` (reviewed `f037b379`). Register walkouts. QA PASS-with-notes, harness 163/0/5. Soft OK MVP stays Soft. Park AH2/AH4. Hard-park AH3. Soft catalog CLOSED.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-ag (AG1 Fire staff SHIPPED #63 @ `f4987e8d`); Soft catalog CLOSED
