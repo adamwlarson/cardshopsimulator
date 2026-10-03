@@ -88,3 +88,4 @@
 | 2026-10-03 | PM adopted **AH1**. Park AH2/AH4. Hard-park AH3. Soft catalog CLOSED. Fire and Stocker stay off the sell roll. Draft sha256 `0bf9ca40`. |
 | 2026-10-03 | PM locked **AH1 GO**. Synced main @ `fbdad4e8`; Eng spike `bc-c9e88571` launching. Eng/QA bar matches SoT. Holding for tip-freeze. |
 | 2026-10-03 | Tip-frozen [PR #64](https://github.com/adamwlarson/cardshopsimulator/pull/64) @ `f037b379`. Eng reviews that SHA only. QA holds. |
+| 2026-10-03 | Eng APPROVE-with-notes #64 @ `f037b379`. Designer SoT-ok Soft MVP: only WAITING customers walk (served stay); missing coverage hook fail-opens as covered; config ≤0 falls back to Rep 1 and cap 3; walkout at Rep 0 still spends a cap slot; tests enqueue the line, not the live spawner. Fire stays remove-only. Soft catalog CLOSED. QA formal cleared. |
