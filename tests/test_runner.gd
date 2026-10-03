@@ -20462,8 +20462,8 @@ func _test_player_trade_accept_swaps_lots_cash_unchanged() -> void:
 	_game_state.call("start_new_game")
 	_game_state.set("current_reputation", 50)
 	_event_bus.emit_signal("reputation_changed", 50)
-	var give_before := int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB"))
-	var receive_before := int(_inventory_service.call("get_stock_quantity", &"AA-SKIE-ETB"))
+	var give_before := _an1_stock_qty(&"AA-DUST-ETB")
+	var receive_before := _an1_stock_qty(&"AA-SKIE-ETB")
 	_expect_equal(give_before > 0, true, "AN1: seed inventory owns the Dustway give lot")
 	var cash_before := int(_economy.get("balance_cents"))
 	var ledger_before := _an1_ledger_size()
@@ -20482,12 +20482,12 @@ func _test_player_trade_accept_swaps_lots_cash_unchanged() -> void:
 		"AN1: accept swaps the lots"
 	)
 	_expect_equal(
-		int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB")),
+		_an1_stock_qty(&"AA-DUST-ETB"),
 		give_before - 1,
 		"AN1: given lot leaves"
 	)
 	_expect_equal(
-		int(_inventory_service.call("get_stock_quantity", &"AA-SKIE-ETB")),
+		_an1_stock_qty(&"AA-SKIE-ETB"),
 		receive_before + 1,
 		"AN1: received lot enters"
 	)
@@ -20521,8 +20521,8 @@ func _test_player_trade_decline_gone_no_rep_change() -> void:
 	_game_state.call("start_new_game")
 	_game_state.set("current_reputation", 50)
 	_event_bus.emit_signal("reputation_changed", 50)
-	var give_before := int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB"))
-	var receive_before := int(_inventory_service.call("get_stock_quantity", &"AA-SKIE-ETB"))
+	var give_before := _an1_stock_qty(&"AA-DUST-ETB")
+	var receive_before := _an1_stock_qty(&"AA-SKIE-ETB")
 	var cash_before := int(_economy.get("balance_cents"))
 	var offer: Variant = _demand_signals.call("open_player_trade")
 	_expect_equal(offer != null, true, "AN1: decline path needs the seeded offer")
@@ -20545,12 +20545,12 @@ func _test_player_trade_decline_gone_no_rep_change() -> void:
 		"AN1: decline does not change Rep"
 	)
 	_expect_equal(
-		int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB")),
+		_an1_stock_qty(&"AA-DUST-ETB"),
 		give_before,
 		"AN1: decline leaves the give lot"
 	)
 	_expect_equal(
-		int(_inventory_service.call("get_stock_quantity", &"AA-SKIE-ETB")),
+		_an1_stock_qty(&"AA-SKIE-ETB"),
 		receive_before,
 		"AN1: decline does not add the receive lot"
 	)
@@ -20864,7 +20864,7 @@ func _test_player_trade_hud_plain_text() -> void:
 	_game_state.set("current_reputation", 50)
 	_event_bus.emit_signal("reputation_changed", 50)
 	var cash_before := int(_economy.get("balance_cents"))
-	var give_before := int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB"))
+	var give_before := _an1_stock_qty(&"AA-DUST-ETB")
 	_free_lingering_gameplay_huds()
 	var hud := _instantiate_gameplay_hud()
 	_expect_equal(hud != null, true, "AN1: HUD loads for the plain-text offer")
@@ -20928,7 +20928,7 @@ func _test_player_trade_hud_plain_text() -> void:
 		"AN1: HUD accept leaves cash unchanged"
 	)
 	_expect_equal(
-		int(_inventory_service.call("get_stock_quantity", &"AA-DUST-ETB")),
+		_an1_stock_qty(&"AA-DUST-ETB"),
 		give_before - 1,
 		"AN1: HUD accept removes the given lot"
 	)
@@ -20973,6 +20973,13 @@ func _click_player_trade_row(hud: Node) -> bool:
 
 func _an1_ledger_size() -> int:
 	return (_economy.call("get_ledger") as Array).size()
+
+
+func _an1_stock_qty(sku_id: StringName) -> int:
+	var inventory := _inventory_service.get("model") as InventoryModel
+	if inventory == null:
+		return 0
+	return inventory.get_stock_quantity(sku_id)
 
 
 func _test_high_rep_whale_gate() -> void:
