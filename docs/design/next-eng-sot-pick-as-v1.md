@@ -95,3 +95,4 @@
 | 2026-10-03 | Drafted post AR1 SHIPPED #74 @ `86438938`. Lean **AS1 Auction snipes**. Fee cut / shady trunk / HUD / STOP parked. Camera off-switch hard-parked. |
 | 2026-10-03 | PM adopted **AS1**. Park AS2/AS3/AS4. Hard-park camera off-switch. Soft catalog CLOSED. Fees / HUD / STOP stay parked. One timed auction lot, Attention 10 plus the ask. Draft sha256 `b07c675c`. |
 | 2026-10-03 | PM adopted **AS1**. Spec on main `ff4a3018`. Spike [AS1 auction snipes](https://cursor.com/agents/bc-6163683c-282f-5a9e-96f8-4ec7e6026041). Park AS2/AS3/AS4. No Art. Soft catalog CLOSED. Draft sha256 `b07c675c`. |
+| 2026-10-03 | Tip-frozen PR #75 @ `79263eaa` (branch `cursor/as1-auction-snipes-6041`). Five files, no docs. Prep flag offers one auction snipe. Bid is Attention 10 plus the ask. |
