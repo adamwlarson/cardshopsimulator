@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AG v1 — post AF1
 
-**Status:** **AG1 ADOPTED** 2026-10-03 — Fire staff. Park AG2/AG4. Hard-park AG3 camera off-switch. Soft catalog CLOSED. Stocker stays placement-only. AC1/AD1/AE1 stay rank or notice.
+**Status:** **AG1 SHIPPED** 2026-10-03 — merged #63 @ `f4987e8d` (reviewed `fe11c3bd`). Fire staff. QA PASS-with-notes, harness 137/0/6. Soft OK MVP stays Soft. Park AG2/AG4. Hard-park AG3. Soft catalog CLOSED. Stocker stays placement-only.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-af (AF1 Stocker restock SHIPPED #62 @ `3db75f4a`); Soft catalog CLOSED
@@ -85,3 +85,8 @@
 |------|----------|
 | 2026-10-03 | Drafted post AF1 SHIPPED #62 @ `3db75f4a`. Lean **AG1 Fire staff**. HUD / STOP parked. Soft reopeners hard-parked. Stocker stays placement-only. |
 | 2026-10-03 | PM adopted **AG1**. Park AG2/AG4. Hard-park AG3. Soft catalog CLOSED. AF1 stays placement-only. |
+| 2026-10-03 | PM locked **AG1 GO**. Synced main @ `c380b091`; Eng spike `bc-6ea4ee11` launching. Eng/QA bar matches SoT. Holding for tip-freeze. |
+| 2026-10-03 | Tip-frozen [PR #63](https://github.com/adamwlarson/cardshopsimulator/pull/63) @ `fe11c3bd`. Eng reviews that SHA only. QA holds. |
+| 2026-10-03 | Eng APPROVE-with-notes #63 @ `fe11c3bd`. Designer SoT-ok Soft MVP: roster age ticks each floor open (fire before any open is age 0); one-shot is per stint and does not follow a rehire; Fire button PREP-only, domain verb has no phase check; no-show still ages the roster. Wage stops because they leave the roster. Stocker stays placement-only. Soft catalog CLOSED. QA formal cleared. |
+| 2026-10-03 | PM Soft OK on #63 @ `fe11c3bd`: config ≤0 falls back to Rep 5 and roster age 3; wage assert is ledger 0, not the 8000/14000/7000 amounts. Formal bar unchanged. Designer agrees (matches documented −5 / 3-day gate; skip is the wage stopping, not a cent lock). |
+| 2026-10-03 | QA PASS-with-notes #63 @ `fe11c3bd`. Harness 137/0/6. Squash-merged @ `f4987e8d`. Soft notes stay Soft. Not a sell weight. |
