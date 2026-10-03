@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AJ v1 — post AI1
 
-**Status:** **AJ1 ADOPTED** 2026-10-03 — High-rep whale bias, band 75–100 only. Park AJ2/AJ4. Hard-park AJ3 camera off-switch. Soft catalog CLOSED. Do not turn the quiet floor, walkouts, or Fire into a sell weight. AC1/AD1/AE1 stay rank or notice. AI1 stays as shipped.
+**Status:** **AJ1 SHIPPED** 2026-10-03 — squash-merged #66 @ `ede4d7c8` (reviewed `311010fe`). QA PASS-with-notes, harness 138/0/2. Whales stay on the mid-band row then ×1.5. Park AJ2/AJ4. Hard-park AJ3. Soft catalog CLOSED. Not a sell weight. AI1 stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-ai (AI1 Low-rep quiet floor SHIPPED #65 @ `ea2bd0d4`); Soft catalog CLOSED
@@ -86,3 +86,4 @@
 | 2026-10-03 | PM adopted **AJ1**. Park AJ2/AJ4. Hard-park AJ3. Soft catalog CLOSED. Quiet floor, walkouts, and Fire stay off the sell roll. Draft sha256 `b612ba8a`. |
 | 2026-10-03 | PM adopted **AJ1**. Park AJ2/AJ4. Hard-park AJ3. Soft catalog CLOSED. Synced main @ `425af091`; Eng spike `bc-422f84a5` launching. Eng/QA bar matches SoT (×1.5 vs 74 after bumps; no stack on high-band table; AI1 still zeros whales at ≤24). Holding for tip-freeze. |
 | 2026-10-03 | Tip-frozen [PR #66](https://github.com/adamwlarson/cardshopsimulator/pull/66) @ `311010fe`. 4 files, no docs. Eng reviews that SHA only. QA holds. |
+| 2026-10-03 | QA PASS-with-notes #66 @ `311010fe`. Harness 138/0/2. Designer SoT-ok: mid-band row then ×1.5; whale share of the roll is not required to be ×1.5. Squash-merged @ `ede4d7c8`. Branch deleted. Soft catalog CLOSED. Not a sell weight. |
