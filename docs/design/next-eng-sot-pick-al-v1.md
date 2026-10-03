@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AL v1 — post AK1
 
-**Status:** **AL1 ADOPTED** 2026-10-03 — Sealed-on-floor theft premium. Park AL2/AL4. Hard-park AL3 camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn shrink, whale bias, the quiet floor, walkouts, or Fire into a sell weight. AK1 stays as shipped.
+**Status:** **AL1 SHIPPED** 2026-10-03 — squash-merged #68 @ `d6b1dda1`. Sealed-on-floor theft premium. Park AL2/AL4. Hard-park AL3 camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn shrink, whale bias, the quiet floor, walkouts, or Fire into a sell weight. AK1 stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-ak (AK1 Daily shrink settle SHIPPED #67 @ `8276509c`); Soft catalog CLOSED
