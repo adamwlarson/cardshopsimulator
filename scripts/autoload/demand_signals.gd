@@ -204,6 +204,13 @@ func impulse_shelf_interest(location: InventoryLocation) -> float:
 func impulse_shelf_interest_for(sku_id: StringName) -> float:
 	if not _is_accessory_sku(sku_id):
 		return 0.0
+	var best := -1.0
+	for lot: StockLot in InventoryService.get_lots(sku_id):
+		if lot == null or lot.qty <= 0:
+			continue
+		best = maxf(best, impulse_shelf_interest(lot.location))
+	if best >= 0.0:
+		return best
 	return impulse_shelf_interest(InventoryService.location_for(sku_id))
 
 

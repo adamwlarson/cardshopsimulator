@@ -15709,7 +15709,12 @@ func _test_impulse_shelf_backstock_invisible() -> void:
 		true,
 		"AE1: pull_from_backstock still works for accessories"
 	)
-	var pulled: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	var pulled: StockLot = null
+	for lot_value: Variant in _inventory_service.call("get_lots", &"ACC-SLV-60"):
+		var candidate := lot_value as StockLot
+		if candidate != null and candidate.location.type == InventoryLocation.Type.SHELF:
+			pulled = candidate
+			break
 	_expect_equal(pulled != null, true, "AE1: pulled sleeves still exist")
 	if pulled != null:
 		_expect_equal(
