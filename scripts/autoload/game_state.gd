@@ -39,6 +39,7 @@ var loan_shark_offer_pending: bool = false
 ## Z1 opt-in. Default off on Easy/Normal/Hard. Menu / new-game only.
 var ironman_enabled: bool = false
 var missed_rent_weeks: int = 0
+var last_fire_rep_delta: int = 0
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
 var _suppress_sandbox_bests: bool = false
@@ -81,6 +82,7 @@ func start_new_game() -> void:
 	loan_shark_recovery_used = false
 	loan_shark_offer_pending = false
 	missed_rent_weeks = 0
+	last_fire_rep_delta = 0
 	_unpaid_wages_this_settle = false
 	_suppress_lose_eval = false
 	_suppress_sandbox_bests = true
@@ -104,6 +106,7 @@ func start_floor() -> bool:
 	if not can_progress_day() or not DayPhasePolicy.can_start_floor(current_phase):
 		return false
 	var noshows := shop.roll_floor_attendance()
+	shop.tick_roster_age()
 	if noshows > 0:
 		QaInstrumentation.record_staff_noshow({
 			"day": current_day,
@@ -405,6 +408,19 @@ func note_rent_missed() -> void:
 
 func note_unpaid_wage() -> void:
 	_unpaid_wages_this_settle = true
+
+
+func fire_staff(index: int) -> StaffMember:
+	# AG1: role leaves the roster now. Wage stops on the next settle.
+	# Popular (roster age ≥ 3 floor days) eats Rep −5 once.
+	last_fire_rep_delta = 0
+	var member := shop.fire_staff(index)
+	if member == null:
+		return null
+	last_fire_rep_delta = shop.take_fire_rep_delta(member)
+	if last_fire_rep_delta != 0:
+		adjust_reputation(last_fire_rep_delta)
+	return member
 
 
 func adjust_reputation(delta: int) -> void:
@@ -772,6 +788,7 @@ func restore_save(data: Dictionary) -> bool:
 	ironman_enabled = bool(data.get("ironman_enabled", false))
 	loan_shark_offer_pending = false
 	missed_rent_weeks = int(data.get("missed_rent_weeks", 0))
+	last_fire_rep_delta = 0
 	_unpaid_wages_this_settle = false
 	sandbox_best_day = int(data.get("sandbox_best_day", sandbox_best_day))
 	sandbox_best_net_worth_cents = int(

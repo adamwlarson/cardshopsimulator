@@ -216,6 +216,36 @@ func has_stocker_on_duty() -> bool:
 	return false
 
 
+func fire_rep_hit() -> int:
+	if _config != null and _config.fire_rep_hit > 0:
+		return _config.fire_rep_hit
+	return 5
+
+
+func fire_popular_roster_age() -> int:
+	if _config != null and _config.fire_popular_roster_age > 0:
+		return _config.fire_popular_roster_age
+	return 3
+
+
+func tick_roster_age() -> void:
+	# AG1: one floor day of tenure per floor open. Fire in PREP before
+	# this tick still sees yesterday's age.
+	for member: StaffMember in staff:
+		if member != null:
+			member.roster_age = maxi(0, member.roster_age + 1)
+
+
+func take_fire_rep_delta(member: StaffMember) -> int:
+	# One-shot. Firing the same member again or settling later is 0.
+	if member == null or member.fire_rep_applied:
+		return 0
+	if member.roster_age < fire_popular_roster_age():
+		return 0
+	member.fire_rep_applied = true
+	return -fire_rep_hit()
+
+
 func staff_cap() -> int:
 	var small_cap := 1
 	var medium_cap := 3

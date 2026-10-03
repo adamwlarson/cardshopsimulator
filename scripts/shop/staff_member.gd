@@ -15,6 +15,8 @@ const BODY_HEIGHT := 1.72
 @export var theft_bias: bool = false
 @export var free_days_remaining: int = 0
 @export var on_duty_today: bool = true
+@export var roster_age: int = 0
+@export var fire_rep_applied: bool = false
 
 
 func is_cashier() -> bool:
@@ -48,6 +50,8 @@ func to_save() -> Dictionary:
 		"theft_bias": theft_bias,
 		"free_days_remaining": free_days_remaining,
 		"on_duty_today": on_duty_today,
+		"roster_age": roster_age,
+		"fire_rep_applied": fire_rep_applied,
 	}
 
 
@@ -60,4 +64,6 @@ static func from_save(data: Dictionary) -> StaffMember:
 	member.theft_bias = bool(data.get("theft_bias", false))
 	member.free_days_remaining = int(data.get("free_days_remaining", 0))
 	member.on_duty_today = bool(data.get("on_duty_today", true))
+	member.roster_age = maxi(0, int(data.get("roster_age", 0)))
+	member.fire_rep_applied = bool(data.get("fire_rep_applied", false))
 	return member

@@ -160,6 +160,11 @@ enum Difficulty {
 ## and not a sale-cash multiplier. Easy/Hard inherit unless overridden.
 @export var stocker_wage_cents: int = 7_000
 @export var stocker_restock_lots_per_day: int = 4
+## AG1 / systems §6.3: Fire stops the wage immediately. Roster age is
+## counted in floor days. Age ≥ 3 means the floor already knows them
+## → one-time Rep −5. Age < 3 → Rep unchanged. Easy/Hard inherit.
+@export var fire_rep_hit: int = 5
+@export var fire_popular_roster_age: int = 3
 
 
 func is_rent_due_day(day: int) -> bool:

@@ -196,6 +196,7 @@ func _initialize() -> void:
 	_test_location_display_ladder()
 	_test_impulse_shelf()
 	_test_stocker_restock_loop()
+	_test_fire_staff()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -16756,6 +16757,683 @@ func _af1_lot_type_for(sku_id: StringName) -> int:
 	if lot == null or lot.location == null:
 		return -1
 	return lot.location.type
+
+
+func _test_fire_staff() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_fire_removes_role_and_stops_wage()
+	_test_fire_popular_drops_rep_once()
+	_test_fire_young_does_not_drop_rep()
+	_test_fire_stocker_moves_zero_lots()
+	_test_fire_sale_pays_listed()
+	_test_fire_ac1_ad1_ae1_unchanged()
+	_test_fire_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_fire_removes_role_and_stops_wage() -> void:
+	_expect_equal(NORMAL_CONFIG.fire_rep_hit, 5, "AG1: locked fire Rep hit is 5")
+	_expect_equal(
+		NORMAL_CONFIG.fire_popular_roster_age,
+		3,
+		"AG1: locked popular roster age is 3 floor days"
+	)
+	_expect_equal(
+		EASY_CONFIG.fire_rep_hit == 5
+		and EASY_CONFIG.fire_popular_roster_age == 3
+		and HARD_CONFIG.fire_rep_hit == 5
+		and HARD_CONFIG.fire_popular_roster_age == 3,
+		true,
+		"AG1: Easy/Hard inherit the fire scalars"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		shop.fire_rep_hit() == 5 and shop.fire_popular_roster_age() == 3,
+		true,
+		"AG1: ShopState exposes the locked fire scalars"
+	)
+
+	_expect_equal(shop.hire_cashier(false) != null, true, "AG1: hire Cashier to fire")
+	_expect_equal(shop.cashier_count(), 1, "AG1: Cashier is on the roster")
+	_expect_equal(shop.staff[0].roster_age, 0, "AG1: new hire starts at roster age 0")
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AG1: Fire removes the Cashier"
+	)
+	_expect_equal(shop.cashier_count(), 0, "AG1: fired Cashier leaves the same day")
+	_expect_equal(shop.hired_count(), 0, "AG1: roster is empty after the Cashier fire")
+	var cash_before := int(_economy.get("balance_cents"))
+	_expect_equal(_game_state.call("start_floor"), true, "AG1: floor opens after Cashier fire")
+	_expect_equal(_game_state.call("start_settle"), true, "AG1: settle runs after Cashier fire")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AG1: next settle charges no Cashier wage"
+	)
+	_expect_equal(_ag1_wage_ledger_cents(), 0, "AG1: wage ledger stays empty after Cashier fire")
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "AG1: hire Specialist to fire")
+	_expect_equal(
+		(_game_state.call("fire_staff", 0) as StaffMember).is_specialist(),
+		true,
+		"AG1: Fire returns the named Specialist"
+	)
+	_expect_equal(shop.specialist_count(), 0, "AG1: fired Specialist leaves the same day")
+	_expect_equal(shop.has_specialist_on_duty(), false, "AG1: fire clears Specialist duty")
+	cash_before = int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AG1: next settle charges no Specialist wage"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_stocker() != null, true, "AG1: hire Stocker to fire")
+	_expect_equal(
+		(_game_state.call("fire_staff", 0) as StaffMember).is_stocker(),
+		true,
+		"AG1: Fire returns the named Stocker"
+	)
+	_expect_equal(shop.stocker_count(), 0, "AG1: fired Stocker leaves the same day")
+	_expect_equal(shop.has_stocker_on_duty(), false, "AG1: fire clears Stocker duty")
+	cash_before = int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AG1: next settle charges no Stocker wage"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_stocker() != null, true, "AG1: hire Stocker for save/load age")
+	_expect_equal(_game_state.call("start_floor"), true, "AG1: first floor ages the Stocker")
+	_expect_equal(shop.staff[0].roster_age, 1, "AG1: roster age counts the opened floor day")
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "AG1 fire save payload")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"AG1: restore_save accepts a roster-age snapshot"
+	)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.stocker_count(), 1, "AG1: save/load restores the Stocker")
+	_expect_equal(shop.staff[0].roster_age, 1, "AG1: save/load restores roster age")
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AG1: gameplay HUD loads for Fire")
+	if hud != null:
+		var open_staff := hud.get_node_or_null("%OpenStaffButton") as Button
+		var hire_cashier := hud.get_node_or_null("%HireCashierButton") as Button
+		var hire_specialist := hud.get_node_or_null("%HireSpecialistButton") as Button
+		var hire_stocker := hud.get_node_or_null("%HireStockerButton") as Button
+		_expect_equal(open_staff != null, true, "AG1: Staff panel is still the hire/fire surface")
+		if open_staff != null:
+			open_staff.pressed.emit()
+		_expect_equal(
+			hire_cashier != null
+			and hire_specialist != null
+			and hire_stocker != null,
+			true,
+			"AG1: hire modal is not redone"
+		)
+		_expect_equal(
+			hire_cashier != null and hire_cashier.text.contains("$80.00"),
+			true,
+			"AG1: Cashier hire row is unchanged"
+		)
+		if hire_cashier != null:
+			hire_cashier.pressed.emit()
+		_expect_equal(shop.cashier_count(), 1, "AG1: HUD hire still books a Cashier")
+		var fire := _ag1_hud_fire_button(hud)
+		_expect_equal(fire != null and not fire.disabled, true, "AG1: PREP Fire is enabled")
+		if fire != null:
+			fire.pressed.emit()
+		_expect_equal(shop.cashier_count(), 0, "AG1: HUD Fire removes the Cashier")
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null
+			and toast.text.contains("Fired")
+			and toast.text.contains("wage stops")
+			and not toast.text.contains("Rep"),
+			true,
+			"AG1: young HUD fire stops the wage without a Rep line"
+		)
+		root.remove_child(hud)
+		hud.free()
+	_game_state.call("start_new_game")
+
+
+func _test_fire_popular_drops_rep_once() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AG1: hire Cashier to age")
+	_ag1_run_floor_days(3)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.staff[0].roster_age, 3, "AG1: three floor opens reach roster age 3")
+	var member: StaffMember = shop.staff[0]
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AG1: Fire a popular Cashier"
+	)
+	_expect_equal(shop.hired_count(), 0, "AG1: popular fire still clears the roster")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 5,
+		"AG1: roster age ≥ 3 drops Rep by 5"
+	)
+	_expect_equal(
+		int(_game_state.get("last_fire_rep_delta")),
+		-5,
+		"AG1: popular fire records a −5 delta"
+	)
+	_expect_equal(member.fire_rep_applied, true, "AG1: popular fire consumes the Rep tick")
+	_expect_equal(
+		shop.take_fire_rep_delta(member),
+		0,
+		"AG1: a second take on the same member is 0"
+	)
+	_expect_equal(
+		_game_state.call("fire_staff", 0) == null,
+		true,
+		"AG1: firing again with an empty roster is a no-op"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 5,
+		"AG1: firing again does not tick Rep"
+	)
+	shop.staff.append(member)
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AG1: re-firing the same popular member is allowed"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 5,
+		"AG1: re-firing the same member does not tick Rep again"
+	)
+	_expect_equal(
+		int(_game_state.get("last_fire_rep_delta")),
+		0,
+		"AG1: re-fire records a 0 delta"
+	)
+	var wages_before := _ag1_wage_ledger_cents()
+	_expect_equal(_game_state.call("start_floor"), true, "AG1: later floor still opens")
+	_expect_equal(_game_state.call("start_settle"), true, "AG1: later settle still runs")
+	_expect_equal(
+		shop.take_fire_rep_delta(member),
+		0,
+		"AG1: later settle does not tick fire Rep again"
+	)
+	_expect_equal(
+		_ag1_wage_ledger_cents(),
+		wages_before,
+		"AG1: later settle still charges no wage for the fired role"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://scripts/autoload/economy.gd").contains(
+			"fire_rep"
+		)
+		or FileAccess.get_file_as_string("res://scripts/autoload/economy.gd").contains(
+			"take_fire_rep_delta"
+		),
+		false,
+		"AG1: settle_day does not apply a fire Rep tick"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "AG1: hire Specialist for HUD popular fire")
+	shop.staff[0].roster_age = 3
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AG1: HUD loads for popular Fire")
+	if hud != null:
+		var open_staff := hud.get_node_or_null("%OpenStaffButton") as Button
+		if open_staff != null:
+			open_staff.pressed.emit()
+		rep_before = int(_game_state.get("current_reputation"))
+		var fire := _ag1_hud_fire_button(hud)
+		_expect_equal(fire != null, true, "AG1: popular Fire button exists")
+		if fire != null:
+			fire.pressed.emit()
+		_expect_equal(shop.specialist_count(), 0, "AG1: HUD popular Fire removes Specialist")
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			rep_before - 5,
+			"AG1: HUD popular Fire drops Rep by 5"
+		)
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("Rep -5"),
+			true,
+			"AG1: popular HUD fire names the Rep hit"
+		)
+		root.remove_child(hud)
+		hud.free()
+	_game_state.call("start_new_game")
+
+
+func _test_fire_young_does_not_drop_rep() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AG1: hire Cashier for a same-day fire")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(shop.staff[0].roster_age, 0, "AG1: same-day hire is under 3 floor days")
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AG1: Fire a same-day Cashier"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AG1: roster age 0 does not drop Rep"
+	)
+	_expect_equal(
+		int(_game_state.get("last_fire_rep_delta")),
+		0,
+		"AG1: young fire records a 0 delta"
+	)
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_stocker() != null, true, "AG1: hire Stocker to age twice")
+	_ag1_run_floor_days(2)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.staff[0].roster_age, 2, "AG1: two floor opens are still under 3")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AG1: Fire a two-day Stocker"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AG1: roster age < 3 does not drop Rep"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_fire_stocker_moves_zero_lots() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_af1_move_shelf_lots_to(InventoryLocation.Type.BACKSTOCK)
+	var backstock_before := _af1_count_lots_at(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(
+		backstock_before >= 1,
+		true,
+		"AG1: seeded day has backstock after the setup move"
+	)
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.SHELF),
+		0,
+		"AG1: floor shelf is empty so a live Stocker could restock"
+	)
+	_expect_equal(shop.hire_stocker() != null, true, "AG1: hire Stocker then fire them")
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AG1: Fire the Stocker before floor open"
+	)
+	_expect_equal(shop.has_stocker_on_duty(), false, "AG1: fired Stocker is off the roster")
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"AG1: floor opens after the Stocker fire"
+	)
+	_expect_equal(
+		shop.last_stocker_restock_count,
+		0,
+		"AG1: fired Stocker moves 0 lots"
+	)
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.BACKSTOCK),
+		backstock_before,
+		"AG1: backstock stays put after a Stocker fire"
+	)
+	_expect_equal(
+		_af1_count_lots_at(InventoryLocation.Type.SHELF),
+		0,
+		"AG1: empty shelf stays empty after a Stocker fire"
+	)
+	var lot: StockLot = _af1_first_lot_at(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(lot != null, true, "AG1: owner still has a backstock lot")
+	if lot != null:
+		var sku_id: StringName = lot.sku.id
+		_expect_equal(
+			bool(_inventory_service.call(
+				"move_stock_to",
+				sku_id,
+				lot.location,
+				InventoryLocation.new(InventoryLocation.Type.SHELF),
+				lot.qty
+			)),
+			true,
+			"AG1: owner can still rearrange stock by hand"
+		)
+		_expect_equal(
+			_af1_lot_type_for(sku_id),
+			InventoryLocation.Type.SHELF,
+			"AG1: the manual move lands on the floor"
+		)
+	_game_state.call("start_new_game")
+
+
+func _test_fire_sale_pays_listed() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AG1: sale day hires a Cashier")
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AG1: sale day fires the Cashier"
+	)
+	var lot: StockLot = _af1_first_lot_at(InventoryLocation.Type.SHELF)
+	_expect_equal(lot != null, true, "AG1: sale needs a listed floor lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AG1: floor lot keeps its listed price")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", lot.sku.id)),
+			1.0
+		),
+		true,
+		"AG1: sell_through_mult_for stays 1.0 after fire"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 1)
+	if lot.sku.product_class == ProductSKU.ProductClass.ACCESSORY:
+		customer.interest_tags = _ae1_accessory_walk_in_tags()
+	else:
+		customer.interest_tags = lot.sku.tags.duplicate()
+	_expect_equal(queue.enqueue(customer), true, "AG1: listed lot still enqueues after fire")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AG1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AG1: live sell still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AG1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AG1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	_expect_equal(
+		queue_src.contains("fire_staff") == false
+		and queue_src.contains("roster_age") == false,
+		true,
+		"AG1: CustomerQueue.sell_listed does not apply a fire sell weight"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_fire_ac1_ad1_ae1_unchanged() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.sightline_display_bonus, 1.15)
+		and is_equal_approx(shop.sightline_display_bonus_mult(), 1.15)
+		and shop.sightline_tiles() == 3,
+		true,
+		"AG1/AC1: sightline display_bonus stays ×1.15 / 3 tiles"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.case_display_bonus, 1.20)
+		and is_equal_approx(NORMAL_CONFIG.binder_display_bonus, 1.00)
+		and is_equal_approx(NORMAL_CONFIG.backstock_display_bonus, 0.00)
+		and is_equal_approx(shop.case_display_bonus(), 1.20)
+		and is_equal_approx(shop.binder_display_bonus(), 1.00)
+		and is_equal_approx(shop.backstock_display_bonus(), 0.00),
+		true,
+		"AG1/AD1: case/binder/backstock ladder stays ×1.20 / ×1.00 / ×0.00"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.impulse_shelf_interest, 1.25)
+		and is_equal_approx(NORMAL_CONFIG.floor_shelf_interest, 1.00)
+		and NORMAL_CONFIG.impulse_shelf_tiles == 2
+		and is_equal_approx(shop.impulse_shelf_interest_mult(), 1.25)
+		and is_equal_approx(shop.floor_shelf_interest_mult(), 1.00)
+		and shop.impulse_shelf_tiles() == 2,
+		true,
+		"AG1/AE1: impulse / floor shelf stay ×1.25 / ×1.00 / 2 tiles"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.stocker_restock_lots_per_day == 4
+		and shop.stocker_restock_lots_per_day() == 4,
+		true,
+		"AG1/AF1: Stocker budget stays 4 lots/day"
+	)
+	var ac1_near := _legal_case_origin_at_distance(shop.layout, 3)
+	if ac1_near != Vector2i(-1, -1):
+		shop.layout.display_case().origin = ac1_near
+		var slab := _seed_listed_empress_slab()
+		if slab != null:
+			_expect_equal(
+				shop.has_sightline_display_bonus(),
+				true,
+				"AG1/AC1: door-adjacent case notice still applies"
+			)
+			_expect_equal(
+				is_equal_approx(float(_demand_signals.call("display_bonus")), 1.15),
+				true,
+				"AG1/AC1: DemandSignals.display_bonus stays the sightline number"
+			)
+			_expect_equal(
+				is_equal_approx(
+					float(_demand_signals.call(
+						"location_display_bonus",
+						InventoryLocation.new(InventoryLocation.Type.CASE)
+					)),
+					1.20
+				),
+				true,
+				"AG1/AD1: CASE location ladder stays ×1.20"
+			)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func display_bonus()")
+		and demand_src.contains("func location_display_bonus(")
+		and demand_src.contains("func impulse_shelf_interest("),
+		true,
+		"AG1: AC1 / AD1 / AE1 stay distinct APIs"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func display_bonus()", "fire")
+		and not _function_body_contains(
+			demand_src,
+			"func location_display_bonus(",
+			"fire"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func impulse_shelf_interest(",
+			"fire"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"fire"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"stocker"
+		),
+		true,
+		"AG1: fire is not folded into AC1/AD1/AE1 sell or notice weights"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_fire_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("stocker")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("sightline")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("display_bonus")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("impulse_shelf")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("fire_staff")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("roster_age"),
+		false,
+		"AG1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AG1: Soft _ensure_priceable_sku stays parked"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AG1: cameras stay owned≡active (no off-switch)"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/shop/staff_member.gd",
+		"res://scripts/shop/stocker_restock.gd",
+		"res://scripts/autoload/inventory_service.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AG1: %s stays §4.5 clean" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AG1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		hud_src.contains("sandbox_best_net_worth_cents"),
+		true,
+		"AG1: AA1 sandbox bests stay"
+	)
+	_expect_equal(
+		hud_src.contains("func _hire_from_panel"),
+		true,
+		"AG1: hire modal stays the existing Staff panel"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ac-v1.md"
+		).contains("×1.15 is not on the live sell roll"),
+		true,
+		"AG1: AC1 Soft OK notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ad-v1.md"
+		).contains("rank-not-weight"),
+		true,
+		"AG1: AD1 Soft OK notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ae-v1.md"
+		).contains("browse rank / notice")
+		and FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ae-v1.md"
+		).contains("Soft OK MVP stays Soft"),
+		true,
+		"AG1: AE1 Soft OK notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-af-v1.md"
+		).contains("Placement only"),
+		true,
+		"AG1: AF1 placement-only notes stay"
+	)
+	_game_state.call("start_new_game")
+
+
+func _ag1_run_floor_days(count: int) -> void:
+	for _i: int in count:
+		_expect_equal(
+			_game_state.call("start_floor"),
+			true,
+			"AG1: floor day opens"
+		)
+		_expect_equal(
+			_game_state.call("start_settle"),
+			true,
+			"AG1: floor day settles"
+		)
+		_expect_equal(
+			_game_state.call("advance_day"),
+			true,
+			"AG1: floor day advances"
+		)
+
+
+func _ag1_wage_ledger_cents() -> int:
+	var total := 0
+	for entry: LedgerEntry in _economy.call("get_ledger"):
+		if entry.category == &"wages":
+			total += entry.amount_cents
+	return total
+
+
+func _ag1_hud_fire_button(hud: Node) -> Button:
+	if hud == null:
+		return null
+	var rows := hud.get_node_or_null("%StaffRows") as VBoxContainer
+	if rows == null:
+		return null
+	for child: Node in rows.get_children():
+		if child is HBoxContainer:
+			for nested: Node in child.get_children():
+				var button := nested as Button
+				if button != null and button.text == "Fire":
+					return button
+	return null
 
 
 func _test_ironman_menu_toggle_default_off() -> void:

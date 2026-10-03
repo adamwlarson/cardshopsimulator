@@ -1983,10 +1983,16 @@ func _sync_staff_panel() -> void:
 func _fire_from_panel(index: int) -> void:
 	if GameState.current_phase != GameState.DayPhase.PREP:
 		return
-	var member := GameState.shop.fire_staff(index)
+	var member := GameState.fire_staff(index)
 	if member == null:
 		return
-	beat_toast.text = "Fired %s — wage stops" % member.display_name
+	if GameState.last_fire_rep_delta != 0:
+		beat_toast.text = "Fired %s — wage stops · Rep %d" % [
+			member.display_name,
+			GameState.last_fire_rep_delta,
+		]
+	else:
+		beat_toast.text = "Fired %s — wage stops" % member.display_name
 	beat_toast.show()
 	_sync_staff_panel()
 
