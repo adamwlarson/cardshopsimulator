@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AQ v1 — post AP1
 
-**Status:** **AQ1 ADOPTED** 2026-10-03 — Better marketplace lead at Rep ≥ 75. Park AQ2/AQ3/AQ4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
+**Status:** **AQ1 SHIPPED** 2026-10-03 — squash-merged #73 @ `059ebf76` (reviewed `4622610b`). Better marketplace lead at Rep ≥ 75. Park AQ2/AQ3/AQ4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-ap (AP1 Distributor MOQ SHIPPED #72 @ `dbf2f918`); Soft catalog CLOSED
@@ -96,3 +96,4 @@
 | 2026-10-03 | PM adopted **AQ1**. Spec on main `c1459dd7`. Spike [AQ1 better marketplace lead](https://cursor.com/agents/bc-cd6c0319-f83c-574a-9ff1-c49746e032cd). Park AQ2/AQ3/AQ4. No Art. Soft catalog CLOSED. Draft sha256 `39049612`. |
 | 2026-10-03 | Tip-frozen PR #73 @ `4622610b` (branch `cursor/aq1-marketplace-lead-32cd`). Three files, no docs. Rep 75 adds one extra lead at 40% of today's basis. Rep 74 keeps today's list. |
 | 2026-10-03 | Eng APPROVE #73 @ `4622610b`. No Soft notes. Formal released. Fee stays 8%. Door spawn stays as shipped. |
+| 2026-10-03 | SHIPPED squash-merge #73 @ `059ebf76` (reviewed `4622610b`). QA PASS, harness 60/0/0. No new Soft note. Rep 74 one lead Dustway ETB ×2 at 2400¢. Rep 75 extra ask 1800¢. Branch `cursor/aq1-marketplace-lead-32cd` deleted. |
