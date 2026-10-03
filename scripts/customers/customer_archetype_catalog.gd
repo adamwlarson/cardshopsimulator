@@ -43,6 +43,7 @@ func weight_for(
 ) -> float:
 	var archetype_id := StringName(archetype.get("id", ""))
 	# AI1: quiet floor zeros whale weight before Convention / play-table bumps.
+	# AM1: 25–49 is the named baseline — today's mid-table weight, no extra pack.
 	# AJ1: high-rep ×1.5 is applied after those bumps and cannot revive a zero.
 	# Not a sell weight.
 	if archetype_id == &"whale" and not CustomerSpawnPolicy.whales_allowed(reputation):
@@ -51,11 +52,15 @@ func weight_for(
 	var band_key := "reputation_weight_mid"
 	if CustomerSpawnPolicy.is_quiet_floor(reputation):
 		band_key = "reputation_weight_low"
+	elif CustomerSpawnPolicy.is_mid_band(reputation):
+		# AM1 named gate: 25–49 stays on today's mid table. No extra pack.
+		band_key = "reputation_weight_mid"
 	elif (
 		CustomerSpawnPolicy.is_high_rep(reputation)
 		and archetype_id != &"whale"
 	):
 		# Whales stay on today's mid table so AJ1 ×1.5 is versus Rep ≤ 74.
+		# 50–74 also stays on that mid table (AJ1: no new 50–74 bonus).
 		band_key = "reputation_weight_high"
 	weight *= float(archetype.get(band_key, 1.0))
 	if archetype_id == &"whale":
