@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AO v1 — post AN1
 
-**Status:** **AO1 ADOPTED** 2026-10-03 — Regulars return, Rep ≥ 50. Park AO2/AO3/AO4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
+**Status:** **AO1 SHIPPED** 2026-10-03 — squash-merged #71 @ `b0224aae` (reviewed `2b1f45d6`). Regulars return, Rep ≥ 50. Park AO2/AO3/AO4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-an (AN1 Player trades unlock SHIPPED #70 @ `ae1647ba`); Soft catalog CLOSED
@@ -93,3 +93,4 @@
 |------|----------|
 | 2026-10-03 | Drafted post AN1 SHIPPED #70 @ `ae1647ba`. Lean **AO1 Regulars return**. MOQ / fees / leads / HUD / STOP parked. Camera off-switch hard-parked. |
 | 2026-10-03 | PM adopted **AO1**. Park AO2/AO3/AO4. Hard-park camera off-switch. Soft catalog CLOSED. Fees / HUD / STOP stay parked. No door-spawn bonus. Draft sha256 `5e512c79`. |
+| 2026-10-03 | SHIPPED squash-merge #71 @ `b0224aae` (reviewed `2b1f45d6`). QA PASS-with-notes, harness 79/0/4. Soft: a later listed buy by that Regular may queue one more. Branch `cursor/ao1-regulars-return-bb00` deleted. |
