@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AF v1 — post AE1
 
-**Status:** **AF1 ADOPTED** 2026-10-03 — Stocker restock loop. Park AF2/AF4. Hard-park AF3 camera off-switch. Soft catalog CLOSED. AC1/AD1/AE1 stay rank or notice, not sell weights.  
+**Status:** **AF1 SHIPPED** 2026-10-03 — merged #62 @ `3db75f4a` (reviewed `49fba1e3`). Stocker restock, 4 lots/day. QA PASS-with-notes. Soft OK MVP stays Soft. Park AF2/AF4. Hard-park AF3. Soft catalog CLOSED.  
 **Author:** CSS Designer  
 **Date:** 2026-10-03  
 **Depends on:** pick-ae (AE1 Impulse shelf SHIPPED #61 @ `d31d6539`); Soft catalog CLOSED  
@@ -83,3 +83,6 @@
 |------|----------|
 | 2026-10-03 | Drafted post AE1 SHIPPED. Lean **AF1 Stocker restock loop**. Soft reopeners hard-parked. Sell-weight rewires parked. |
 | 2026-10-03 | PM adopted **AF1**. Park AF2/AF4. Hard-park AF3. Soft catalog CLOSED. AC1/AD1/AE1 stay as shipped. |
+| 2026-10-03 | **AF1 SHIPPED** #62 @ `3db75f4a` (tip `49fba1e3`). QA PASS-with-notes. Placement only, 4 lots/day. Soft OK MVP stays Soft. Soft catalog CLOSED. |
+| 2026-10-03 | PM locked **AF1 GO** (Stocker restock). Park AF2/AF4. Hard-park AF3 Soft. Soft catalog CLOSED. AC1/AD1/AE1 Soft OK stays Soft. Synced main @ `58d136d6`; Eng spike `bc-f9405d05` launching. |
+| 2026-10-03 | Eng APPROVE-with-notes #62 @ `49fba1e3`. Designer SoT-ok Soft MVP: hired Stocker on duty every floor open (no-show cashier-only; off-duty gate unused by day loop); empty impulse = one shelf within 2 tiles with no shelf lot; CASE is next-in-line plus slot check, not a separate empty-case scan; slabs stay backstock if case full. Cap 4 lots inside 3–5. Placement only. AC1/AD1/AE1 unchanged. Soft catalog CLOSED. QA formal cleared. |
