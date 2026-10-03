@@ -93,4 +93,7 @@
 |------|----------|
 | 2026-10-03 | Drafted post AN1 SHIPPED #70 @ `ae1647ba`. Lean **AO1 Regulars return**. MOQ / fees / leads / HUD / STOP parked. Camera off-switch hard-parked. |
 | 2026-10-03 | PM adopted **AO1**. Park AO2/AO3/AO4. Hard-park camera off-switch. Soft catalog CLOSED. Fees / HUD / STOP stay parked. No door-spawn bonus. Draft sha256 `5e512c79`. |
+| 2026-10-03 | PM adopted **AO1**. Spec on main `3c74a72b`. Spike [AO1 regulars return](https://cursor.com/agents/bc-26389376-5c56-5bb2-837a-d6228172bb00). Eng bar locked. Park AO2/AO3/AO4. No Art. Soft catalog CLOSED. Draft sha256 `5e512c79`. |
+| 2026-10-03 | Tip-frozen PR #71 @ `2b1f45d6` (branch `cursor/ao1-regulars-return-bb00`). Six files, no docs. Listed sale at Rep 50 queues one Regular next floor open. Rep 49 queues nothing. |
+| 2026-10-03 | Eng APPROVE-with-notes #71 @ `2b1f45d6`. Designer: Soft OK. Arrival alone does not queue. A later listed buy by that Regular may queue one more. |
 | 2026-10-03 | SHIPPED squash-merge #71 @ `b0224aae` (reviewed `2b1f45d6`). QA PASS-with-notes, harness 79/0/4. Soft: a later listed buy by that Regular may queue one more. Branch `cursor/ao1-regulars-return-bb00` deleted. |
