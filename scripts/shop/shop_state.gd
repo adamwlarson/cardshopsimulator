@@ -290,6 +290,43 @@ func has_sightline_display_bonus() -> bool:
 	return layout.has_sightline_display_bonus(sightline_tiles())
 
 
+func case_display_bonus() -> float:
+	if _config != null:
+		return maxf(0.0, _config.case_display_bonus)
+	return 1.20
+
+
+func binder_display_bonus() -> float:
+	if _config != null:
+		return maxf(0.0, _config.binder_display_bonus)
+	return 1.00
+
+
+func backstock_display_bonus() -> float:
+	if _config != null:
+		return maxf(0.0, _config.backstock_display_bonus)
+	return 0.00
+
+
+func location_display_bonus(location: InventoryLocation) -> float:
+	# Live location-class read — a move or the next tick sees the new type.
+	# Not distance-to-door and not AC1 sightline.
+	if location == null:
+		return 0.0
+	match location.type:
+		InventoryLocation.Type.CASE:
+			return case_display_bonus()
+		InventoryLocation.Type.BINDER:
+			return binder_display_bonus()
+		InventoryLocation.Type.BACKSTOCK:
+			return backstock_display_bonus()
+		InventoryLocation.Type.SHELF:
+			return 1.0
+		InventoryLocation.Type.ONLINE_HOLD:
+			return 0.0
+	return 0.0
+
+
 func research_cash_cost_cents() -> int:
 	if _config != null:
 		return maxi(0, _config.research_cost_cents)

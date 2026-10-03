@@ -193,6 +193,7 @@ func _initialize() -> void:
 	_test_sandbox_personal_bests()
 	_test_play_table_event_nights()
 	_test_sightline_display_bonus()
+	_test_location_display_ladder()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -14807,6 +14808,597 @@ func _legal_case_origin_at_distance(layout: ShopLayout, distance: int) -> Vector
 			if layout.preview_move(&"display_case", origin) == &"ok":
 				return origin
 	return Vector2i(-1, -1)
+
+
+func _test_location_display_ladder() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_location_ladder_multiplier_lock()
+	_test_location_ladder_same_single()
+	_test_location_ladder_move_updates()
+	_test_location_ladder_online_and_pull()
+	_test_ac1_notice_stays_off_live_sell_roll()
+	_test_location_ladder_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_location_ladder_multiplier_lock() -> void:
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.case_display_bonus, 1.20),
+		true,
+		"AD1: locked CASE walk-in interest is ×1.20"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.binder_display_bonus, 1.00),
+		true,
+		"AD1: locked BINDER walk-in interest is ×1.00"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.backstock_display_bonus, 0.00),
+		true,
+		"AD1: locked BACKSTOCK walk-in interest is ×0.00"
+	)
+	_expect_equal(
+		is_equal_approx(EASY_CONFIG.case_display_bonus, 1.20)
+		and is_equal_approx(EASY_CONFIG.binder_display_bonus, 1.00)
+		and is_equal_approx(EASY_CONFIG.backstock_display_bonus, 0.00),
+		true,
+		"AD1: Easy inherits the location ladder"
+	)
+	_expect_equal(
+		is_equal_approx(HARD_CONFIG.case_display_bonus, 1.20)
+		and is_equal_approx(HARD_CONFIG.binder_display_bonus, 1.00)
+		and is_equal_approx(HARD_CONFIG.backstock_display_bonus, 0.00),
+		true,
+		"AD1: Hard inherits the location ladder"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		is_equal_approx(shop.case_display_bonus(), 1.20)
+		and is_equal_approx(shop.binder_display_bonus(), 1.00)
+		and is_equal_approx(shop.backstock_display_bonus(), 0.00),
+		true,
+		"AD1: ShopState exposes the locked ladder"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.sightline_display_bonus, 1.15),
+		true,
+		"AD1: AC1 sightline ×1.15 stays its own locked number"
+	)
+
+
+func _test_location_ladder_same_single() -> void:
+	_game_state.call("start_new_game")
+	var card := _ad1_listed_empress_single(InventoryLocation.Type.CASE)
+	_expect_equal(card != null, true, "AD1: Empress single seeds into CASE")
+	if card == null:
+		return
+	_expect_location_walk_in(
+		card,
+		1.20,
+		"AD1: CASE walk-in interest is ×1.20",
+		true,
+		"AD1: walk-ins browse the CASE single"
+	)
+	_expect_equal(
+		bool(_inventory_service.call(
+			"move_card_to",
+			card,
+			InventoryLocation.new(InventoryLocation.Type.BINDER)
+		)),
+		true,
+		"AD1: same single can move CASE → BINDER"
+	)
+	_expect_location_walk_in(
+		card,
+		1.00,
+		"AD1: BINDER walk-in interest is ×1.00",
+		true,
+		"AD1: walk-ins browse the BINDER single"
+	)
+	_expect_equal(
+		bool(_inventory_service.call(
+			"move_card_to",
+			card,
+			InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+		)),
+		true,
+		"AD1: same single can move BINDER → BACKSTOCK"
+	)
+	_expect_location_walk_in(
+		card,
+		0.00,
+		"AD1: BACKSTOCK walk-in interest is ×0.00",
+		false,
+		"AD1: walk-ins do not browse BACKSTOCK"
+	)
+	_expect_equal(
+		_inventory_service.call("find_listed_sku_offer", card.sku_id, 20_000),
+		{},
+		"AD1: targeted walk-in offer also misses BACKSTOCK"
+	)
+	var case_interest := float(_demand_signals.call(
+		"walk_in_interest",
+		InventoryLocation.new(InventoryLocation.Type.CASE)
+	))
+	var binder_interest := float(_demand_signals.call(
+		"walk_in_interest",
+		InventoryLocation.new(InventoryLocation.Type.BINDER)
+	))
+	var backstock_interest := float(_demand_signals.call(
+		"walk_in_interest",
+		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+	))
+	_expect_equal(
+		case_interest > binder_interest and binder_interest > backstock_interest,
+		true,
+		"AD1: case > binder > backstock"
+	)
+
+
+func _test_location_ladder_move_updates() -> void:
+	_game_state.call("start_new_game")
+	var card := _ad1_listed_empress_single(InventoryLocation.Type.BINDER)
+	_expect_equal(card != null, true, "AD1: move test seeds a BINDER single")
+	if card == null:
+		return
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("walk_in_interest_for", card.sku_id)),
+			1.00
+		),
+		true,
+		"AD1: binder start is ×1.00 before the move"
+	)
+	_expect_equal(
+		bool(_inventory_service.call(
+			"move_card_to",
+			card,
+			InventoryLocation.new(InventoryLocation.Type.CASE)
+		)),
+		true,
+		"AD1: rearrange/move onto CASE succeeds"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("walk_in_interest_for", card.sku_id)),
+			1.20
+		),
+		true,
+		"AD1: next read after the move is CASE ×1.20"
+	)
+	var case_browse: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_ad1_single_walk_in_tags(),
+		20_000
+	)
+	_expect_equal(
+		StringName(case_browse.get("sku_id", &"")),
+		card.sku_id,
+		"AD1: browse follows the moved CASE single"
+	)
+	_expect_equal(
+		is_equal_approx(float(case_browse.get("location_display_bonus", 0.0)), 1.20),
+		true,
+		"AD1: CASE browse offer locks location_display_bonus at ×1.20"
+	)
+	_expect_equal(
+		is_equal_approx(float(case_browse.get("display_bonus", -1.0)), 1.0),
+		true,
+		"AD1: location ladder does not write AC1 display_bonus"
+	)
+	var titan := _inventory_service.call("get_card", &"AA-SKIE-047") as CardInstance
+	_expect_equal(titan != null, true, "AD1: seed Titan staple exists")
+	if titan != null:
+		_expect_equal(
+			bool(_inventory_service.call(
+				"move_card_to",
+				titan,
+				InventoryLocation.new(InventoryLocation.Type.CASE)
+			)),
+			true,
+			"AD1: moving a staple into CASE succeeds"
+		)
+		var staple_tags: Array[StringName] = []
+		staple_tags.append(&"staple")
+		var preferred: Dictionary = _inventory_service.call(
+			"find_listed_offer",
+			staple_tags,
+			20_000
+		)
+		var preferred_location := preferred.get("location") as InventoryLocation
+		_expect_equal(
+			preferred_location != null
+			and preferred_location.type == InventoryLocation.Type.CASE,
+			true,
+			"AD1: walk-in browse prefers CASE over BINDER staples"
+		)
+	_expect_equal(
+		bool(_inventory_service.call(
+			"move_card_to",
+			card,
+			InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+		)),
+		true,
+		"AD1: move onto BACKSTOCK succeeds"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("walk_in_interest_for", card.sku_id)),
+			0.00
+		),
+		true,
+		"AD1: next read after the backstock move is ×0.00"
+	)
+	var missed: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_ad1_single_walk_in_tags(),
+		20_000
+	)
+	_expect_equal(missed.is_empty(), true, "AD1: browse drops the card on the next move")
+	var shop := _game_state.get("shop") as ShopState
+	var near := _legal_case_origin_at_distance(shop.layout, 3)
+	if near != Vector2i(-1, -1):
+		_game_state.call("rearrange_fixture", &"display_case", near)
+		_expect_equal(
+			is_equal_approx(
+				float(_demand_signals.call(
+					"location_display_bonus",
+					InventoryLocation.new(InventoryLocation.Type.CASE)
+				)),
+				1.20
+			),
+			true,
+			"AD1: fixture rearrange does not rewrite the location ladder"
+		)
+		_expect_equal(
+			shop.has_sightline_display_bonus(),
+			true,
+			"AD1: AC1 sightline still flips on fixture rearrange"
+		)
+
+
+func _test_location_ladder_online_and_pull() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var listed := _ad1_listed_empress_single(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(listed != null, true, "AD1: backstock single for online/pull")
+	if listed == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	_expect_equal(
+		bool(_inventory_service.call("has_backstock", listed.sku_id)),
+		true,
+		"AD1: backstock still holds the single"
+	)
+	var listed_online: Dictionary = _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(listed),
+		listed.listed_price_cents,
+		{"ship_days": 2}
+	)
+	_expect_equal(
+		bool(listed_online.get("ok", false)),
+		true,
+		"AD1: online list from BACKSTOCK still works"
+	)
+	_expect_equal(
+		listed.location.type,
+		InventoryLocation.Type.ONLINE_HOLD,
+		"AD1: listed backstock card moves to ONLINE_HOLD"
+	)
+	_qa_autoload.call("clear")
+	_game_state.call("start_new_game")
+	var pull_card := _ad1_listed_empress_single(InventoryLocation.Type.BACKSTOCK)
+	_expect_equal(pull_card != null, true, "AD1: backstock single for pull")
+	if pull_card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	_expect_equal(
+		bool(_inventory_service.call("pull_from_backstock", pull_card.sku_id)),
+		true,
+		"AD1: manual pull from BACKSTOCK still works"
+	)
+	_expect_equal(
+		pull_card.location.type,
+		InventoryLocation.Type.BINDER,
+		"AD1: pull restores the single to BINDER"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("walk_in_interest_for", pull_card.sku_id)),
+			1.00
+		),
+		true,
+		"AD1: pulled single is walk-in visible at binder ×1.00"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_ac1_notice_stays_off_live_sell_roll() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var near := _legal_case_origin_at_distance(shop.layout, 3)
+	_expect_equal(near != Vector2i(-1, -1), true, "AD1/AC1: door-adjacent case origin exists")
+	if near == Vector2i(-1, -1):
+		return
+	shop.layout.display_case().origin = near
+	_expect_equal(
+		shop.has_sightline_display_bonus(),
+		true,
+		"AD1/AC1: parked case is still inside the 3-tile notice radius"
+	)
+	var slab := _seed_listed_empress_slab()
+	_expect_equal(slab != null, true, "AD1/AC1: door slab seeds")
+	if slab == null:
+		return
+	var noticed: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_graded_walk_in_tags(),
+		20_000
+	)
+	_expect_equal(noticed.is_empty(), false, "AD1/AC1: walk-ins still notice door slabs")
+	_expect_equal(
+		StringName(noticed.get("sku_id", &"")),
+		&"AA-SKIE-052",
+		"AD1/AC1: noticed stock is still the graded CASE slab"
+	)
+	_expect_equal(
+		is_equal_approx(float(noticed.get("display_bonus", 0.0)), 1.15),
+		true,
+		"AD1/AC1: offer still locks sightline display_bonus at ×1.15"
+	)
+	_expect_equal(
+		is_equal_approx(float(noticed.get("location_display_bonus", 0.0)), 1.20),
+		true,
+		"AD1/AC1: location ladder stays on the offer as its own field"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("display_bonus")),
+			1.15
+		),
+		true,
+		"AD1/AC1: DemandSignals.display_bonus stays the sightline number"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call(
+				"location_display_bonus",
+				InventoryLocation.new(InventoryLocation.Type.CASE)
+			)),
+			1.20
+		),
+		true,
+		"AD1/AC1: location CASE bonus is not the sightline ×1.15"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-052")),
+			1.15
+		),
+		true,
+		"AD1/AC1: sell_through_mult_for stays AC1 instrumentation"
+	)
+	var listed_price := slab.listed_price_cents
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = 20_000
+	customer.interest_tags = _graded_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AD1/AC1: noticed slab still enqueues")
+	_expect_equal(queue.sell_listed(), true, "AD1/AC1: live sell still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AD1/AC1: live sell roll is listed price, not ×1.15"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AD1/AC1: customer_sale ledger is not multiplied by sightline ×1.15"
+	)
+	_expect_equal(
+		listed_price * 115 / 100 != _ad1_ledger_sale_cents(),
+		true,
+		"AD1/AC1: sale cents are not the sightline-bumped figure"
+	)
+	var queue_src := FileAccess.get_file_as_string("res://scripts/customers/customer_queue.gd")
+	var sale_src := FileAccess.get_file_as_string("res://scripts/autoload/inventory_service.gd")
+	_expect_equal(
+		queue_src.contains("sightline_display_bonus") == false
+		and queue_src.contains("display_bonus") == false,
+		true,
+		"AD1/AC1: CustomerQueue.sell_listed does not apply sightline ×1.15"
+	)
+	_expect_equal(
+		sale_src.contains("func confirm_customer_sale")
+		and not _ad1_confirm_sale_uses_sightline(sale_src),
+		true,
+		"AD1/AC1: confirm_customer_sale does not multiply the live sell roll"
+	)
+	queue.free()
+
+
+func _test_location_ladder_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("sightline")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("display_bonus")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("location_ladder"),
+		false,
+		"AD1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AD1: Soft _ensure_priceable_sku stays parked"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AD1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		shop_src.contains("stocker") == false
+		and FileAccess.get_file_as_string(
+			"res://scripts/autoload/game_state.gd"
+		).contains("stocker") == false,
+		true,
+		"AD1: stocker deepen stays parked"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/shop/shop_layout.gd",
+		"res://scripts/autoload/inventory_service.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AD1: %s stays §4.5 clean" % path
+		)
+		_expect_equal(
+			source.contains("impulse_shelf") or source.contains("impulse-shelf"),
+			false,
+			"AD1: %s has no impulse-shelf bonus" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AD1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ab-v1.md"
+		).contains("Soft OK MVP"),
+		true,
+		"AD1: #58 Soft OK notes stay in the AB1 spec"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ac-v1.md"
+		).contains("×1.15 is not on the live sell roll"),
+		true,
+		"AD1: #59 Soft OK notes stay in the AC1 spec"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func display_bonus()")
+		and demand_src.contains("func location_display_bonus("),
+		true,
+		"AD1: sightline display_bonus and location_display_bonus stay distinct"
+	)
+	_expect_equal(
+		demand_src.contains("has_sightline_display_bonus")
+		and not _ad1_location_bonus_reads_sightline(demand_src),
+		true,
+		"AD1: location ladder does not fold in AC1 sightline"
+	)
+
+
+func _ad1_listed_empress_single(location_type: InventoryLocation.Type) -> CardInstance:
+	return _inventory_service.call(
+		"receive_card",
+		&"AA-SKIE-052",
+		3_000,
+		InventoryLocation.new(location_type),
+		7_500
+	) as CardInstance
+
+
+func _ad1_single_walk_in_tags() -> Array[StringName]:
+	var tags: Array[StringName] = []
+	tags.append(&"legendary")
+	return tags
+
+
+func _expect_location_walk_in(
+	card: CardInstance,
+	expected_interest: float,
+	interest_label: String,
+	expect_browse: bool,
+	browse_label: String
+) -> void:
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("walk_in_interest_for", card.sku_id)),
+			expected_interest
+		),
+		true,
+		interest_label
+	)
+	var browse: Dictionary = _inventory_service.call(
+		"find_listed_offer",
+		_ad1_single_walk_in_tags(),
+		20_000
+	)
+	if expect_browse:
+		_expect_equal(browse.is_empty(), false, browse_label)
+		_expect_equal(
+			StringName(browse.get("sku_id", &"")),
+			card.sku_id,
+			"%s sku" % browse_label
+		)
+		_expect_equal(
+			is_equal_approx(
+				float(browse.get("location_display_bonus", -1.0)),
+				expected_interest
+			),
+			true,
+			"%s location_display_bonus" % browse_label
+		)
+		_assert_payload_has_no_truth(browse, browse_label)
+	else:
+		_expect_equal(browse.is_empty(), true, browse_label)
+
+
+func _ad1_ledger_sale_cents() -> int:
+	var total := 0
+	for entry: LedgerEntry in _economy.call("get_ledger"):
+		if entry.category == &"customer_sale":
+			total += entry.amount_cents
+	return total
+
+
+func _ad1_confirm_sale_uses_sightline(source: String) -> bool:
+	var start := source.find("func confirm_customer_sale")
+	if start < 0:
+		return false
+	var finish := source.find("\nfunc ", start + 1)
+	var body := source.substr(start, finish - start if finish > start else source.length() - start)
+	return (
+		body.contains("sightline_display_bonus")
+		or body.contains("display_bonus_for_graded_case")
+	)
+
+
+func _ad1_location_bonus_reads_sightline(source: String) -> bool:
+	var start := source.find("func location_display_bonus(")
+	if start < 0:
+		return false
+	var finish := source.find("\nfunc ", start + 1)
+	var body := source.substr(start, finish - start if finish > start else source.length() - start)
+	return body.contains("sightline")
 
 
 func _test_ironman_menu_toggle_default_off() -> void:

@@ -139,6 +139,13 @@ enum Difficulty {
 ## not multi-sightline. Easy/Hard inherit unless overridden.
 @export var sightline_display_bonus: float = 1.15
 @export var sightline_tiles: int = 3
+## AD1 / systems §4.2: location-class walk-in browse interest.
+## Distinct from AC1 sightline ×1.15 (notice-only, distance-to-door).
+## Case is a modest showcase premium over binder-as-identity; backstock
+## is invisible to walk-ins (online / pull still allowed). Easy/Hard inherit.
+@export var case_display_bonus: float = 1.20
+@export var binder_display_bonus: float = 1.00
+@export var backstock_display_bonus: float = 0.00
 
 
 func is_rent_due_day(day: int) -> bool:
