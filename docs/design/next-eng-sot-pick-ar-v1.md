@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AR v1 — post AQ1
 
-**Status:** **AR1 ADOPTED** 2026-10-03 — Daily true_market drift. Park AR2/AR3/AR4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
+**Status:** **AR1 SHIPPED** 2026-10-03 — squash-merged #74 @ `86438938` (reviewed `8f104626`). Daily true_market drift. Park AR2/AR3/AR4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-aq (AQ1 Better marketplace lead SHIPPED #73 @ `059ebf76`); Soft catalog CLOSED
@@ -97,3 +97,4 @@
 | 2026-10-03 | PM adopted **AR1**. Spec on main `4add953f`. Spike [AR1 daily true_market drift](https://cursor.com/agents/bc-5195d136-d5af-5618-82ce-393a8b9c61f8). Park AR2/AR3/AR4. No Art. Soft catalog CLOSED. Draft sha256 `85281e87`. |
 | 2026-10-03 | Tip-frozen PR #74 @ `8f104626` (branch `cursor/ar1-daily-market-drift-61f8`). Five files, no docs. Settle night drifts hidden market by class band after shrink and before named events. |
 | 2026-10-03 | Eng APPROVE #74 @ `8f104626`. No Soft notes. Formal released. Drift stays hidden. Fee stays 8%. Door spawn stays as shipped. |
+| 2026-10-03 | SHIPPED squash-merge #74 @ `86438938` (reviewed `8f104626`). QA PASS, harness 63/0/0. No new Soft note. Accessories 599¢→604¢, sealed 4499¢→4451¢, singles 500¢→509¢, graded 10000¢→9966¢. Branch `cursor/ar1-daily-market-drift-61f8` deleted. |
