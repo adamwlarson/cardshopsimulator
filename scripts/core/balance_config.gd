@@ -165,6 +165,12 @@ enum Difficulty {
 ## → one-time Rep −5. Age < 3 → Rep unchanged. Easy/Hard inherit.
 @export var fire_rep_hit: int = 5
 @export var fire_popular_roster_age: int = 3
+## AH1 / systems §5.2: uncovered register walkouts. Each waiting
+## customer who needs service and finds no coverage leaves that step
+## (−1 Rep once). A day cannot drop more than 3 Rep from this rule.
+## Easy/Hard inherit. Not a sell weight and not a listed-price change.
+@export var register_walkout_rep_hit: int = 1
+@export var register_walkout_rep_cap: int = 3
 
 
 func is_rent_due_day(day: int) -> bool:

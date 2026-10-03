@@ -246,6 +246,25 @@ func take_fire_rep_delta(member: StaffMember) -> int:
 	return -fire_rep_hit()
 
 
+func register_walkout_rep_hit() -> int:
+	if _config != null and _config.register_walkout_rep_hit > 0:
+		return _config.register_walkout_rep_hit
+	return 1
+
+
+func register_walkout_rep_cap() -> int:
+	if _config != null and _config.register_walkout_rep_cap > 0:
+		return _config.register_walkout_rep_cap
+	return 3
+
+
+func register_is_covered(attention_remaining: int) -> bool:
+	# AH1: an on-duty Cashier covers the register. The Owner covers
+	# it when Attention is above 0. Specialist and Stocker never do.
+	# Fire only removes that person — it does not change this rule.
+	return has_cashier_on_duty() or attention_remaining > 0
+
+
 func staff_cap() -> int:
 	var small_cap := 1
 	var medium_cap := 3

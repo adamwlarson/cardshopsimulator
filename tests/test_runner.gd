@@ -37,6 +37,7 @@ var _inventory_service: Node
 var _demand_signals: Node
 var _beat_director: Node
 var _qa_autoload: Node
+var _ah1_outcomes: Array[StringName] = []
 
 class FakeCustomerInventory:
 	extends Node
@@ -197,6 +198,7 @@ func _initialize() -> void:
 	_test_impulse_shelf()
 	_test_stocker_restock_loop()
 	_test_fire_staff()
+	_test_register_walkouts()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -17389,6 +17391,781 @@ func _test_fire_section_45_and_parked() -> void:
 		"AG1: AF1 placement-only notes stay"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_register_walkouts() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_register_coverage_roles()
+	_test_register_walkout_seeded_uncovered()
+	_test_register_walkout_cashier_covers()
+	_test_register_walkout_specialist_and_stocker_do_not_cover()
+	_test_register_walkout_rep_cap()
+	_test_register_walkout_patience_stays_timeout()
+	_test_register_walkout_sale_pays_listed()
+	_test_register_walkout_ac1_ad1_ae1_af1_ag1_unchanged()
+	_test_register_walkout_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_register_coverage_roles() -> void:
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit,
+		1,
+		"AH1: locked walkout Rep hit is 1"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_cap,
+		3,
+		"AH1: locked daily walkout Rep cap is 3"
+	)
+	_expect_equal(
+		EASY_CONFIG.register_walkout_rep_hit == 1
+		and EASY_CONFIG.register_walkout_rep_cap == 3
+		and HARD_CONFIG.register_walkout_rep_hit == 1
+		and HARD_CONFIG.register_walkout_rep_cap == 3,
+		true,
+		"AH1: Easy/Hard inherit the walkout scalars"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		shop.register_walkout_rep_hit() == 1
+		and shop.register_walkout_rep_cap() == 3,
+		true,
+		"AH1: ShopState exposes the locked walkout scalars"
+	)
+	_expect_equal(shop.has_cashier_on_duty(), false, "AH1: seeded Normal day has no Cashier")
+	_expect_equal(
+		shop.register_is_covered(0),
+		false,
+		"AH1: Owner at Attention 0 does not cover"
+	)
+	_expect_equal(
+		shop.register_is_covered(1),
+		true,
+		"AH1: Owner with Attention above 0 covers"
+	)
+	_expect_equal(
+		bool(_game_state.call("register_is_covered")),
+		true,
+		"AH1: new-game Owner still has Attention"
+	)
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(
+		bool(_game_state.call("register_is_covered")),
+		false,
+		"AH1: GameState coverage follows Attention 0"
+	)
+
+	_expect_equal(shop.hire_cashier(false) != null, true, "AH1: hire Cashier for coverage")
+	shop.staff[0].on_duty_today = true
+	_expect_equal(shop.has_cashier_on_duty(), true, "AH1: Cashier is on duty")
+	_expect_equal(
+		shop.register_is_covered(0),
+		true,
+		"AH1: on-duty Cashier covers at Attention 0"
+	)
+	shop.staff[0].on_duty_today = false
+	_expect_equal(
+		shop.register_is_covered(0),
+		false,
+		"AH1: off-duty Cashier does not cover"
+	)
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AH1: Fire removes the Cashier"
+	)
+	_expect_equal(
+		shop.register_is_covered(0),
+		false,
+		"AH1: Fire only removes that person's coverage"
+	)
+
+	_expect_equal(shop.hire_specialist() != null, true, "AH1: hire Specialist for coverage lock")
+	_expect_equal(shop.has_specialist_on_duty(), true, "AH1: Specialist is on duty")
+	_expect_equal(
+		shop.register_is_covered(0),
+		false,
+		"AH1: Specialist never covers the register"
+	)
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AH1: Fire the Specialist to free the Small cap"
+	)
+	_expect_equal(shop.hire_stocker() != null, true, "AH1: hire Stocker for coverage lock")
+	_expect_equal(shop.has_stocker_on_duty(), true, "AH1: Stocker is on duty")
+	_expect_equal(
+		shop.register_is_covered(0),
+		false,
+		"AH1: Stocker never covers the register"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_register_walkout_seeded_uncovered() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.has_cashier_on_duty(), false, "AH1: seeded day starts without a Cashier")
+	_expect_equal(_game_state.call("start_floor"), true, "AH1: uncovered seeded day opens")
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(
+		bool(_game_state.call("register_is_covered")),
+		false,
+		"AH1: uncovered seeded day has no register coverage"
+	)
+	var queue := _ah1_hooked_queue()
+	_expect_equal(
+		queue.enqueue(_ah1_waiting_buyer()),
+		true,
+		"AH1: first waiting customer enqueues"
+	)
+	_expect_equal(
+		queue.enqueue(_ah1_waiting_buyer()),
+		true,
+		"AH1: second waiting customer enqueues"
+	)
+	_expect_equal(queue.size(), 2, "AH1: customers are waiting before the walkout tick")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	var walked := _ah1_count_outcome(&"walkout")
+	_expect_equal(walked >= 1, true, "AH1: uncovered seeded day walks at least one customer")
+	_expect_equal(queue.size(), 0, "AH1: uncovered waiting line leaves that step")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - walked,
+		"AH1: each walkout drops Rep by 1"
+	)
+	_expect_equal(
+		int(_game_state.get("register_walkout_count_today")),
+		walked,
+		"AH1: GameState counts today's walkouts"
+	)
+	_expect_equal(_ah1_count_outcome(&"timeout"), 0, "AH1: uncovered leave is a walkout, not patience")
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_register_walkout_cashier_covers() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AH1: same seed hires a Cashier")
+	_expect_equal(_game_state.call("start_floor"), true, "AH1: staffed seeded day opens")
+	shop.staff[0].on_duty_today = true
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(shop.has_cashier_on_duty(), true, "AH1: Cashier stays on duty")
+	_expect_equal(
+		bool(_game_state.call("register_is_covered")),
+		true,
+		"AH1: on-duty Cashier covers at Attention 0"
+	)
+	var queue := _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AH1: staffed day enqueues waiter 1")
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AH1: staffed day enqueues waiter 2")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout"), 0, "AH1: Cashier on duty yields 0 walkouts")
+	_expect_equal(queue.size(), 2, "AH1: staffed line stays waiting")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AH1: staffed day does not drop walkout Rep"
+	)
+	_expect_equal(queue.sell_listed(), true, "AH1: staffed Cashier can still sell at list")
+	queue.free()
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(_game_state.call("start_floor"), true, "AH1: Owner-covered day opens")
+	_game_state.set("attention_remaining", 4)
+	_expect_equal(shop.has_cashier_on_duty(), false, "AH1: Owner-covered day has no Cashier")
+	_expect_equal(
+		bool(_game_state.call("register_is_covered")),
+		true,
+		"AH1: Owner Attention above 0 covers without a Cashier"
+	)
+	queue = _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AH1: Owner-covered day enqueues")
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout"), 0, "AH1: Owner Attention above 0 yields 0 walkouts")
+	_expect_equal(queue.size(), 1, "AH1: Owner-covered customer stays")
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_register_walkout_specialist_and_stocker_do_not_cover() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "AH1: hire Specialist only")
+	_expect_equal(_game_state.call("start_floor"), true, "AH1: Specialist-only day opens")
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(shop.has_specialist_on_duty(), true, "AH1: Specialist is on duty")
+	_expect_equal(shop.has_cashier_on_duty(), false, "AH1: Specialist-only day has no Cashier")
+	var queue := _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AH1: Specialist-only day enqueues")
+	queue.tick_waiting(0.05)
+	_expect_equal(
+		_ah1_count_outcome(&"walkout") >= 1,
+		true,
+		"AH1: Specialist on duty still walks customers out"
+	)
+	_expect_equal(queue.size(), 0, "AH1: Specialist-only line leaves")
+	queue.free()
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_stocker() != null, true, "AH1: hire Stocker only")
+	_expect_equal(_game_state.call("start_floor"), true, "AH1: Stocker-only day opens")
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(shop.has_stocker_on_duty(), true, "AH1: Stocker is on duty")
+	_expect_equal(shop.has_cashier_on_duty(), false, "AH1: Stocker-only day has no Cashier")
+	queue = _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AH1: Stocker-only day enqueues")
+	queue.tick_waiting(0.05)
+	_expect_equal(
+		_ah1_count_outcome(&"walkout") >= 1,
+		true,
+		"AH1: Stocker on duty still walks customers out"
+	)
+	_expect_equal(queue.size(), 0, "AH1: Stocker-only line leaves")
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_register_walkout_rep_cap() -> void:
+	_game_state.call("start_new_game")
+	_expect_equal(_game_state.call("start_floor"), true, "AH1: cap day opens")
+	_game_state.set("attention_remaining", 0)
+	var queue := _ah1_hooked_queue()
+	var waiting := 0
+	for _i: int in 5:
+		if queue.enqueue(_ah1_waiting_buyer()):
+			waiting += 1
+	_expect_equal(waiting, 5, "AH1: five customers wait for the cap test")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout"), 5, "AH1: all five uncovered customers leave")
+	_expect_equal(queue.size(), 0, "AH1: cap does not keep extra customers in line")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 3,
+		"AH1: a day cannot drop more than 3 Rep from walkouts"
+	)
+	_expect_equal(
+		int(_game_state.get("register_walkout_rep_spent_today")),
+		3,
+		"AH1: spent walkout Rep stops at the cap"
+	)
+	_expect_equal(
+		int(_game_state.get("register_walkout_count_today")),
+		5,
+		"AH1: walkout count still records every leave"
+	)
+	_expect_equal(
+		queue.enqueue(_ah1_waiting_buyer()),
+		true,
+		"AH1: a sixth customer can still wait after the cap"
+	)
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout"), 6, "AH1: past-cap customers still walk out")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 3,
+		"AH1: a sixth walkout does not drop more Rep"
+	)
+	_expect_equal(
+		int(_game_state.get("last_register_walkout_rep_delta")),
+		0,
+		"AH1: past-cap walkout records a 0 Rep delta"
+	)
+
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "AH1 walkout save payload")
+	_expect_equal(
+		int(saved.get("register_walkout_rep_spent_today", -1)),
+		3,
+		"AH1: save stores the daily walkout Rep spend"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"AH1: restore_save accepts a walkout snapshot"
+	)
+	_game_state.set("attention_remaining", 0)
+	queue.free()
+	queue = _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AH1: restored day still enqueues")
+	var restored_rep := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout") >= 1, true, "AH1: restored uncovered day still walks")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		restored_rep,
+		"AH1: restored cap still blocks more walkout Rep"
+	)
+	queue.free()
+
+	_game_state.call("start_new_game")
+	_expect_equal(_game_state.call("start_floor"), true, "AH1: reset-day floor opens")
+	_expect_equal(_game_state.call("start_settle"), true, "AH1: reset-day settle runs")
+	_expect_equal(_game_state.call("advance_day"), true, "AH1: a new day resets the cap")
+	_expect_equal(
+		int(_game_state.get("register_walkout_rep_spent_today")),
+		0,
+		"AH1: advance_day clears walkout Rep spend"
+	)
+	_game_state.set("attention_remaining", 0)
+	queue = _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AH1: next day enqueues")
+	rep_before = int(_game_state.get("current_reputation"))
+	queue.tick_waiting(0.05)
+	_expect_equal(_ah1_count_outcome(&"walkout") >= 1, true, "AH1: next day can walk out again")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AH1: a new day applies walkout Rep again"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_register_walkout_patience_stays_timeout() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AH1: patience test needs coverage")
+	_expect_equal(_game_state.call("start_floor"), true, "AH1: patience day opens")
+	shop.staff[0].on_duty_today = true
+	_game_state.set("attention_remaining", 0)
+	var queue := _ah1_hooked_queue()
+	var customer := _ah1_waiting_buyer(1.0)
+	customer.patience_tick_scale = shop.circulation_patience_scale()
+	_expect_equal(queue.enqueue(customer), true, "AH1: impatient covered customer enqueues")
+	var rep_before := int(_game_state.get("current_reputation"))
+	queue.tick_waiting(1.1)
+	_expect_equal(_ah1_count_outcome(&"timeout"), 1, "AH1: play-table patience stays a timeout")
+	_expect_equal(_ah1_count_outcome(&"walkout"), 0, "AH1: AB1 patience is not a walkout")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AH1: timeout still uses the existing frustration hook"
+	)
+	_expect_equal(
+		int(_game_state.get("register_walkout_count_today")),
+		0,
+		"AH1: timeout does not count as a register walkout"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_register_walkout_sale_pays_listed() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AH1: sale day hires a Cashier")
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AH1: sale day fires the Cashier"
+	)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AH1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AH1: floor lot keeps its listed price after fire")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AH1: sell_through_mult_for stays 1.0 after fire"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AH1: listed lot still enqueues after fire")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AH1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AH1: live sell still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AH1: completed sale pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AH1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "walkout")
+		and not _function_body_contains(queue_src, "func sell_listed()", "register")
+		and not _function_body_contains(queue_src, "func sell_listed()", "coverage"),
+		true,
+		"AH1: CustomerQueue.sell_listed does not apply a walkout sell weight"
+	)
+	_expect_equal(
+		queue_src.contains("stocker") == false
+		and queue_src.contains("fire_staff") == false
+		and queue_src.contains("roster_age") == false,
+		true,
+		"AH1: queue leave path does not rewire AF1/AG1 into sell math"
+	)
+	queue.free()
+
+	_game_state.call("start_new_game")
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_cashier(false) != null, true, "AH1: fire-then-walkout hires")
+	_expect_equal(_game_state.call("start_floor"), true, "AH1: fire-then-walkout opens")
+	shop.staff[0].on_duty_today = true
+	_game_state.set("attention_remaining", 0)
+	queue = _ah1_hooked_queue()
+	_expect_equal(queue.enqueue(_ah1_waiting_buyer()), true, "AH1: line waits before the fire")
+	_expect_equal(queue.size(), 1, "AH1: customer is waiting when the Cashier is fired")
+	_expect_equal(
+		_game_state.call("fire_staff", 0) != null,
+		true,
+		"AH1: Fire the on-duty Cashier"
+	)
+	_expect_equal(shop.has_cashier_on_duty(), false, "AH1: fired Cashier is gone")
+	var walked := queue.resolve_register_walkouts()
+	_expect_equal(walked >= 1, true, "AH1: firing coverage walks the waiting line")
+	_expect_equal(queue.size(), 0, "AH1: the waiting people leave")
+	_expect_equal(
+		_inventory_service.call("get_lot", &"ACC-SLV-60") != null
+		and int((_inventory_service.call("get_lot", &"ACC-SLV-60") as StockLot).listed_price_cents)
+		== listed_price,
+		true,
+		"AH1: Fire does not change listed prices"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_register_walkout_ac1_ad1_ae1_af1_ag1_unchanged() -> void:
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.sightline_display_bonus, 1.15)
+		and is_equal_approx(shop.sightline_display_bonus_mult(), 1.15)
+		and shop.sightline_tiles() == 3,
+		true,
+		"AH1/AC1: sightline display_bonus stays ×1.15 / 3 tiles"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.case_display_bonus, 1.20)
+		and is_equal_approx(NORMAL_CONFIG.binder_display_bonus, 1.00)
+		and is_equal_approx(NORMAL_CONFIG.backstock_display_bonus, 0.00)
+		and is_equal_approx(shop.case_display_bonus(), 1.20)
+		and is_equal_approx(shop.binder_display_bonus(), 1.00)
+		and is_equal_approx(shop.backstock_display_bonus(), 0.00),
+		true,
+		"AH1/AD1: case/binder/backstock ladder stays ×1.20 / ×1.00 / ×0.00"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.impulse_shelf_interest, 1.25)
+		and is_equal_approx(NORMAL_CONFIG.floor_shelf_interest, 1.00)
+		and NORMAL_CONFIG.impulse_shelf_tiles == 2
+		and is_equal_approx(shop.impulse_shelf_interest_mult(), 1.25)
+		and is_equal_approx(shop.floor_shelf_interest_mult(), 1.00)
+		and shop.impulse_shelf_tiles() == 2,
+		true,
+		"AH1/AE1: impulse / floor shelf stay ×1.25 / ×1.00 / 2 tiles"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.stocker_restock_lots_per_day == 4
+		and shop.stocker_restock_lots_per_day() == 4,
+		true,
+		"AH1/AF1: Stocker budget stays 4 lots/day"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5
+		and NORMAL_CONFIG.fire_popular_roster_age == 3
+		and shop.fire_rep_hit() == 5
+		and shop.fire_popular_roster_age() == 3,
+		true,
+		"AH1/AG1: Fire scalars stay Rep −5 at roster age 3"
+	)
+	var ac1_near := _legal_case_origin_at_distance(shop.layout, 3)
+	if ac1_near != Vector2i(-1, -1):
+		shop.layout.display_case().origin = ac1_near
+		var slab := _seed_listed_empress_slab()
+		if slab != null:
+			_expect_equal(
+				shop.has_sightline_display_bonus(),
+				true,
+				"AH1/AC1: door-adjacent case notice still applies"
+			)
+			_expect_equal(
+				is_equal_approx(float(_demand_signals.call("display_bonus")), 1.15),
+				true,
+				"AH1/AC1: DemandSignals.display_bonus stays the sightline number"
+			)
+			_expect_equal(
+				is_equal_approx(
+					float(_demand_signals.call(
+						"location_display_bonus",
+						InventoryLocation.new(InventoryLocation.Type.CASE)
+					)),
+					1.20
+				),
+				true,
+				"AH1/AD1: CASE location ladder stays ×1.20"
+			)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func display_bonus()")
+		and demand_src.contains("func location_display_bonus(")
+		and demand_src.contains("func impulse_shelf_interest("),
+		true,
+		"AH1: AC1 / AD1 / AE1 stay distinct APIs"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func display_bonus()", "walkout")
+		and not _function_body_contains(
+			demand_src,
+			"func location_display_bonus(",
+			"walkout"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func impulse_shelf_interest(",
+			"walkout"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"walkout"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"register_is_covered"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"fire"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"stocker"
+		),
+		true,
+		"AH1: walkouts are not folded into AC1/AD1/AE1/AF1/AG1 sell weights"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_register_walkout_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("stocker")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("sightline")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("display_bonus")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("impulse_shelf")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("fire_staff")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("roster_age")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("walkout")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("register_is_covered"),
+		false,
+		"AH1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/autoload/demand_signals.gd"
+		).contains("func _ensure_priceable_sku"),
+		true,
+		"AH1: Soft _ensure_priceable_sku stays parked"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AH1: cameras stay owned≡active (no off-switch)"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/shop/shop_state.gd",
+		"res://scripts/shop/staff_member.gd",
+		"res://scripts/shop/stocker_restock.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/autoload/inventory_service.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AH1: %s stays §4.5 clean" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AH1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		hud_src.contains("sandbox_best_net_worth_cents"),
+		true,
+		"AH1: AA1 sandbox bests stay"
+	)
+	_expect_equal(
+		hud_src.contains("func _hire_from_panel"),
+		true,
+		"AH1: hire modal stays the existing Staff panel"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ac-v1.md"
+		).contains("×1.15 is not on the live sell roll"),
+		true,
+		"AH1: AC1 Soft OK notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ad-v1.md"
+		).contains("rank-not-weight"),
+		true,
+		"AH1: AD1 Soft OK notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ae-v1.md"
+		).contains("browse rank / notice")
+		and FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ae-v1.md"
+		).contains("Soft OK MVP stays Soft"),
+		true,
+		"AH1: AE1 Soft OK notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-af-v1.md"
+		).contains("Placement only"),
+		true,
+		"AH1: AF1 placement-only notes stay"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://docs/design/next-eng-sot-pick-ag-v1.md"
+		).contains("Fire staff"),
+		true,
+		"AH1: AG1 Fire notes stay"
+	)
+
+	_game_state.call("start_new_game")
+	var shop := _game_state.get("shop") as ShopState
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AH1: gameplay HUD loads")
+	if hud != null:
+		var open_staff := hud.get_node_or_null("%OpenStaffButton") as Button
+		var hire_cashier := hud.get_node_or_null("%HireCashierButton") as Button
+		var hire_specialist := hud.get_node_or_null("%HireSpecialistButton") as Button
+		var hire_stocker := hud.get_node_or_null("%HireStockerButton") as Button
+		_expect_equal(open_staff != null, true, "AH1: Staff panel is still the hire/fire surface")
+		if open_staff != null:
+			open_staff.pressed.emit()
+		_expect_equal(
+			hire_cashier != null
+			and hire_specialist != null
+			and hire_stocker != null,
+			true,
+			"AH1: hire modal is not redone"
+		)
+		_game_state.set("attention_remaining", 0)
+		_event_bus.emit_signal("attention_changed", 0)
+		var customer := CustomerProfile.new()
+		customer.display_name = "Waiter"
+		customer.target_sku = &"ACC-SLV-60"
+		customer.listed_price_cents = 599
+		customer.budget_cents = 5_000
+		Callable(hud, "_on_customer_head_changed").call(customer)
+		Callable(hud, "_on_customer_desk_ready").call(customer, true)
+		var sell := hud.get_node_or_null("%SellButton") as Button
+		_expect_equal(
+			sell != null and sell.disabled,
+			true,
+			"AH1: Sell disables when the register is uncovered"
+		)
+		_event_bus.emit_signal("customer_resolved", customer, &"walkout")
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("Walkout") and toast.text.contains("register"),
+			true,
+			"AH1: HUD names the uncovered-register walkout"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "AH1 walkout toast")
+		if hire_cashier != null:
+			hire_cashier.pressed.emit()
+		_expect_equal(shop.cashier_count(), 1, "AH1: HUD hire still books a Cashier")
+		shop.staff[0].on_duty_today = true
+		Callable(hud, "_sync_register_sell_button").call()
+		_expect_equal(
+			sell != null and not sell.disabled,
+			true,
+			"AH1: Sell re-enables when a Cashier covers"
+		)
+		root.remove_child(hud)
+		hud.free()
+	_game_state.call("start_new_game")
+
+
+func _ah1_waiting_buyer(patience_seconds: float = 60.0) -> CustomerProfile:
+	var customer := CustomerProfile.new()
+	customer.budget_cents = 20_000
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	customer.patience_seconds = patience_seconds
+	return customer
+
+
+func _ah1_hooked_queue() -> CustomerQueue:
+	_ah1_outcomes.clear()
+	var queue := CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		Callable(_game_state, "adjust_reputation"),
+		Callable(_game_state, "spend_attention"),
+		Callable(_game_state, "register_is_covered"),
+		Callable(_game_state, "apply_register_walkout_rep")
+	)
+	queue.customer_finished.connect(_ah1_capture_finished)
+	return queue
+
+
+func _ah1_capture_finished(_customer: CustomerProfile, outcome: StringName) -> void:
+	_ah1_outcomes.append(outcome)
+
+
+func _ah1_count_outcome(outcome: StringName) -> int:
+	var count := 0
+	for listed: StringName in _ah1_outcomes:
+		if listed == outcome:
+			count += 1
+	return count
 
 
 func _ag1_run_floor_days(count: int) -> void:

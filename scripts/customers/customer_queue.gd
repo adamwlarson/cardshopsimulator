@@ -12,16 +12,22 @@ var _customers: Array[CustomerProfile] = []
 var _inventory_service: Node
 var _reputation_hook: Callable
 var _attention_hook: Callable
+var _coverage_hook: Callable
+var _walkout_rep_hook: Callable
 
 
 func configure(
 	inventory_service: Node,
 	reputation_hook: Callable = Callable(),
-	attention_hook: Callable = Callable()
+	attention_hook: Callable = Callable(),
+	coverage_hook: Callable = Callable(),
+	walkout_rep_hook: Callable = Callable()
 ) -> void:
 	_inventory_service = inventory_service
 	_reputation_hook = reputation_hook
 	_attention_hook = attention_hook
+	_coverage_hook = coverage_hook
+	_walkout_rep_hook = walkout_rep_hook
 
 
 func enqueue(customer: CustomerProfile) -> bool:
@@ -84,6 +90,7 @@ func enqueue_targeted(customer: CustomerProfile, sku_id: StringName) -> bool:
 
 
 func tick_waiting(delta: float) -> void:
+	resolve_register_walkouts()
 	for customer: CustomerProfile in _customers.duplicate():
 		if customer.tick_wait(delta):
 			_customers.erase(customer)
@@ -91,6 +98,28 @@ func tick_waiting(delta: float) -> void:
 				_reputation_hook.call(-1)
 			customer_finished.emit(customer, &"timeout")
 			queue_changed.emit(_customers.size())
+
+
+func is_register_covered() -> bool:
+	if not _coverage_hook.is_valid():
+		return true
+	return bool(_coverage_hook.call())
+
+
+func resolve_register_walkouts() -> int:
+	# AH1: a customer who needs service and finds no coverage leaves
+	# that step. Patience timeout stays a separate &"timeout" path.
+	if is_register_covered():
+		return 0
+	var walked := 0
+	for customer: CustomerProfile in _customers.duplicate():
+		if customer == null or customer.state != CustomerProfile.State.WAITING:
+			continue
+		if _walkout_rep_hook.is_valid():
+			_walkout_rep_hook.call()
+		_complete(customer, &"walkout")
+		walked += 1
+	return walked
 
 
 func queue_head() -> CustomerProfile:

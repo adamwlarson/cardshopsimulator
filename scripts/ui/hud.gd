@@ -149,6 +149,7 @@ func _ready() -> void:
 	EventBus.customer_queue_changed.connect(_update_queue)
 	EventBus.customer_head_changed.connect(_on_customer_head_changed)
 	EventBus.customer_desk_ready_changed.connect(_on_customer_desk_ready)
+	EventBus.customer_resolved.connect(_on_customer_resolved)
 	EventBus.price_focus_requested.connect(_on_price_focus_requested)
 	EventBus.rent_decision_requested.connect(_on_rent_decision_requested)
 	EventBus.rent_decision_resolved.connect(_on_rent_decision_resolved)
@@ -368,6 +369,7 @@ func _update_attention(remaining: int) -> void:
 	_sync_inspect_button()
 	_sync_prep_action_buttons()
 	_sync_serve_owner_verbs()
+	_sync_register_sell_button()
 
 
 func _update_queue(length: int) -> void:
@@ -1120,6 +1122,39 @@ func _on_buy_focus_requested(
 		return
 
 
+func _on_customer_resolved(
+	_customer: CustomerProfile,
+	outcome: StringName
+) -> void:
+	if outcome != &"walkout":
+		return
+	if GameState.last_register_walkout_rep_delta != 0:
+		beat_toast.text = "Walkout — register uncovered · Rep %d" % (
+			GameState.last_register_walkout_rep_delta
+		)
+	else:
+		beat_toast.text = "Walkout — register uncovered"
+	beat_toast.show()
+
+
+func _sync_register_sell_button() -> void:
+	var sell := get_node_or_null("%SellButton") as Button
+	if sell == null or not serve_panel.visible or _current_customer == null:
+		return
+	var covered := GameState.register_is_covered()
+	if (
+		_current_customer.trade_intent
+		== CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	):
+		sell.disabled = (
+			not covered
+			or _current_customer.buylist_signal == null
+			or not _current_customer.buylist_signal.can_confirm
+		)
+	else:
+		sell.disabled = not covered
+
+
 func _on_customer_head_changed(customer: CustomerProfile) -> void:
 	_current_customer = customer
 	if _current_customer == null:
@@ -1185,7 +1220,8 @@ func _sync_customer_serve() -> void:
 			pull_hide.hide()
 		%SellButton.text = "Buy at offer"
 		%SellButton.disabled = (
-			_current_customer.buylist_signal == null
+			not GameState.register_is_covered()
+			or _current_customer.buylist_signal == null
 			or not _current_customer.buylist_signal.can_confirm
 		)
 		return
@@ -1216,7 +1252,7 @@ func _sync_customer_serve() -> void:
 		or not GameState.can_negotiate()
 	)
 	%SellButton.text = "Sell at list"
-	%SellButton.disabled = false
+	%SellButton.disabled = not GameState.register_is_covered()
 	_sync_serve_owner_verbs()
 
 
@@ -1685,6 +1721,7 @@ func _close_rearrange() -> void:
 func _on_staff_changed() -> void:
 	_sync_inspect_button()
 	_sync_prep_action_buttons()
+	_sync_register_sell_button()
 
 
 func _on_cameras_changed() -> void:
