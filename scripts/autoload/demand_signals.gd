@@ -651,6 +651,106 @@ func auction_snipe_ask_cents(
 	return AuctionSnipePolicy.ask_cents(basis_cents, seed, day, configured_width)
 
 
+func shady_trunk_ask_rate(configured: float = 0.0) -> float:
+	return ShadyTrunkPolicy.ask_rate(configured)
+
+
+func shady_trunk_report_rep_gain(configured: int = 0) -> int:
+	return ShadyTrunkPolicy.report_rep_gain(configured)
+
+
+func shady_trunk_fake_slab_rate(configured: float = -1.0) -> float:
+	return ShadyTrunkPolicy.fake_slab_rate(configured)
+
+
+func shady_trunk_comp_width(configured: float = 0.0) -> float:
+	return ShadyTrunkPolicy.comp_width(configured)
+
+
+func shady_trunk_flag(seed: int, day: int) -> bool:
+	return ShadyTrunkPolicy.flag_on(seed, day)
+
+
+func shady_trunk_should_offer(seed: int, day: int) -> bool:
+	return ShadyTrunkPolicy.should_offer(seed, day)
+
+
+func shady_trunk_ask_cents(basis_cents: int, configured_rate: float = 0.0) -> int:
+	return ShadyTrunkPolicy.ask_cents(basis_cents, configured_rate)
+
+
+func open_shady_trunk() -> BuyConfirmSignal:
+	return buy_signal_for_id(ShadyTrunkPolicy.offer_id(GameState.current_day))
+
+
+func roll_shady_trunk(seed: int, day: int) -> BuyConfirmSignal:
+	if not ShadyTrunkPolicy.should_offer(seed, day):
+		return null
+	var opportunity := _make_shady_trunk(seed, day)
+	if opportunity == null or not opportunity.is_valid():
+		return null
+	return _signal_for_opportunity(opportunity)
+
+
+func shady_trunk_can_buy(dto: BuyConfirmSignal) -> bool:
+	if dto == null or not ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
+		return false
+	if _closed_opportunity_ids.has(dto.opportunity_id):
+		return false
+	var ask := maxi(dto.lot_total_cents, dto.unit_cost_cents * maxi(1, dto.quantity))
+	if not Economy.can_afford(ask):
+		return false
+	return dto.space_required <= dto.space_free
+
+
+func buy_shady_trunk(dto: BuyConfirmSignal) -> bool:
+	if dto == null or not ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
+		return false
+	if _closed_opportunity_ids.has(dto.opportunity_id):
+		return false
+	var opportunity := _existing_opportunity(dto.opportunity_id)
+	if opportunity == null or not opportunity.is_valid():
+		return false
+	var buy_qty := maxi(1, opportunity.quantity)
+	var ask := opportunity.unit_cost_cents * buy_qty
+	if not Economy.can_afford(ask):
+		return false
+	if is_inspect_mandatory(dto) and not dto.inspected:
+		return false
+	var shown_midpoint := (dto.shown_comp_low_cents + dto.shown_comp_high_cents) / 2
+	var purchased := false
+	if opportunity.is_graded():
+		purchased = _confirm_graded_purchase(dto, opportunity, shown_midpoint)
+	else:
+		purchased = InventoryService.confirm_stock_purchase(
+			opportunity.sku_id,
+			buy_qty,
+			opportunity.unit_cost_cents,
+			shown_midpoint - opportunity.unit_cost_cents,
+			InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+		)
+	if purchased:
+		_closed_opportunity_ids[opportunity.id] = true
+	return purchased
+
+
+func report_shady_trunk(dto: BuyConfirmSignal) -> bool:
+	if dto == null or not ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
+		return false
+	if _closed_opportunity_ids.has(dto.opportunity_id):
+		return false
+	if _existing_opportunity(dto.opportunity_id) == null:
+		return false
+	GameState.adjust_reputation(shady_trunk_report_rep_gain())
+	return dismiss_buy_opportunity(dto.opportunity_id)
+
+
+func walk_shady_trunk(dto: BuyConfirmSignal) -> bool:
+	if dto == null or not ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
+		return false
+	return dismiss_buy_opportunity(dto.opportunity_id)
+
+
 func open_auction_snipe() -> BuyConfirmSignal:
 	return buy_signal_for_id(AuctionSnipePolicy.offer_id(GameState.current_day))
 
@@ -735,6 +835,8 @@ func _on_customer_resolved_regulars(
 func confirm_buy(dto: BuyConfirmSignal, requested_count: int = -1) -> bool:
 	if dto != null and AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
 		return bid_auction_snipe(dto)
+	if dto != null and ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
+		return buy_shady_trunk(dto)
 	if dto == null or not dto.can_confirm:
 		return false
 	if is_inspect_mandatory(dto) and not dto.inspected:
@@ -991,6 +1093,11 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 	var snipe := _prep_auction_snipe()
 	if snipe != null:
 		opportunities.append(snipe)
+	# AT1: same night roll. Seeded night flag offers one trunk lot.
+	# No flag → no trunk that night. Not a sell weight.
+	var trunk := _prep_shady_trunk()
+	if trunk != null:
+		opportunities.append(trunk)
 	for opportunity: BuyOpportunity in opportunities:
 		if not _closed_opportunity_ids.has(opportunity.id):
 			result.append(opportunity)
@@ -1003,6 +1110,37 @@ func _prep_auction_snipe() -> BuyOpportunity:
 	if not AuctionSnipePolicy.should_offer(AuctionSnipePolicy.RUN_SEED, day, event_live):
 		return null
 	return _make_auction_snipe(AuctionSnipePolicy.RUN_SEED, day)
+
+
+func _prep_shady_trunk() -> BuyOpportunity:
+	var day := GameState.current_day
+	if not ShadyTrunkPolicy.should_offer(ShadyTrunkPolicy.RUN_SEED, day):
+		return null
+	return _make_shady_trunk(ShadyTrunkPolicy.RUN_SEED, day)
+
+
+func _make_shady_trunk(_seed: int, day: int) -> BuyOpportunity:
+	var sku_id := ShadyTrunkPolicy.DEFAULT_SKU_ID
+	if InventoryService.model == null:
+		return null
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null:
+		return null
+	var ask_cents := ShadyTrunkPolicy.ask_cents(_marketplace_basis_cents(sku_id))
+	if ask_cents <= 0:
+		return null
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = ShadyTrunkPolicy.offer_id(day)
+	opportunity.sku_id = sku_id
+	opportunity.display_name = sku.display_name
+	opportunity.offer_label = ShadyTrunkPolicy.OFFER_LABEL
+	opportunity.channel = DemandSignalService.Channel.SHADY
+	opportunity.unit_cost_cents = ask_cents
+	opportunity.quantity = 1
+	opportunity.space_required = ShadyTrunkPolicy.SPACE_REQUIRED
+	opportunity.grader = ShadyTrunkPolicy.DEFAULT_GRADER
+	opportunity.grade = ShadyTrunkPolicy.DEFAULT_GRADE
+	return opportunity
 
 
 func _make_auction_snipe(seed: int, day: int) -> BuyOpportunity:
@@ -1151,6 +1289,10 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 		dto.confidence = AuctionSnipePolicy.CONFIDENCE
 		if GameState.attention_remaining < auction_snipe_attention():
 			dto.can_confirm = false
+	if ShadyTrunkPolicy.is_trunk_id(opportunity.id):
+		if not dto.inspected:
+			dto.condition_cue = ShadyTrunkPolicy.CONDITION_CUE
+		dto.confidence = ShadyTrunkPolicy.CONFIDENCE
 	return dto
 
 
