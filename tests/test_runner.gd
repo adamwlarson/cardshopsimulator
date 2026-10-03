@@ -21168,6 +21168,8 @@ func _test_regulars_return_walkout_refuse_and_cap() -> void:
 		"AO1: a refuse queues nothing"
 	)
 	refuse_queue.free()
+	_game_state.set("current_reputation", 50)
+	_event_bus.emit_signal("reputation_changed", 50)
 	var first := _ao1_sell_listed()
 	_expect_equal(first != null, true, "AO1: first listed sale still completes")
 	if first != null:
@@ -21225,19 +21227,16 @@ func _test_regulars_return_tagged_sale_path_no_truth() -> void:
 		false,
 		"AO1: Regular display never shows true_market"
 	)
-	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
-	_expect_equal(lot != null, true, "AO1: sale path needs the seeded sleeve lot")
-	if lot == null:
-		return
-	var listed_price := lot.listed_price_cents
 	var cash_before := int(_economy.get("balance_cents"))
 	var queue := CustomerQueue.new()
 	queue.configure(_inventory_service)
 	_expect_equal(queue.enqueue(returning), true, "AO1: Regular uses the existing sale path")
+	var listed_price := returning.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AO1: Regular copies a listed price")
 	_expect_equal(
-		returning.listed_price_cents,
 		listed_price,
-		"AO1: Regular copies the listed price — no new price"
+		int(_inventory_service.call("listed_price_for", returning.target_sku)),
+		"AO1: Regular uses the SKU listed price — no new price"
 	)
 	_expect_equal(queue.sell_listed(), true, "AO1: Regular listed sale still resolves")
 	_expect_equal(
