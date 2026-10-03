@@ -423,11 +423,16 @@ func _open_buy_list() -> void:
 func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
 	_trade_offer = null
 	_buy_signal = dto
-	buy_title.text = "BUY · %s · %s\n%s ×%d" % [
+	var count_text := (
+		"min ×%d" % _buy_signal.quantity
+		if _buy_signal.channel == &"distributor"
+		else "×%d" % _buy_signal.quantity
+	)
+	buy_title.text = "BUY · %s · %s\n%s %s" % [
 		String(_buy_signal.channel).capitalize(),
 		_buy_signal.offer_label,
 		_buy_signal.display_name,
-		_buy_signal.quantity,
+		count_text,
 	]
 	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
 	_sync_trade_actions(false)

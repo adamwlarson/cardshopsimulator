@@ -559,6 +559,24 @@ func take_regular_return() -> CustomerProfile:
 	return _regulars.take_floor_return()
 
 
+func distributor_moq_mult(configured: float = 0.0) -> float:
+	return DistributorMoqPolicy.moq_mult(configured)
+
+
+func is_distributor_moq_worse(reputation: int = -1) -> bool:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return DistributorMoqPolicy.is_worse_moq(resolved)
+
+
+func distributor_minimum_units(
+	today_moq: int,
+	reputation: int = -1,
+	configured_mult: float = 0.0
+) -> int:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return DistributorMoqPolicy.minimum_units(today_moq, resolved, configured_mult)
+
+
 func _ensure_regulars_bus() -> void:
 	if EventBus.customer_resolved.is_connected(_on_customer_resolved_regulars):
 		return
@@ -572,7 +590,7 @@ func _on_customer_resolved_regulars(
 	_regulars.note_outcome(customer, outcome, GameState.current_reputation)
 
 
-func confirm_buy(dto: BuyConfirmSignal) -> bool:
+func confirm_buy(dto: BuyConfirmSignal, requested_count: int = -1) -> bool:
 	if dto == null or not dto.can_confirm:
 		return false
 	if is_inspect_mandatory(dto) and not dto.inspected:
@@ -587,10 +605,13 @@ func confirm_buy(dto: BuyConfirmSignal) -> bool:
 		if opportunity.is_graded():
 			purchased = _confirm_graded_purchase(dto, opportunity, shown_midpoint)
 		else:
+			var buy_qty := _purchase_quantity(dto, opportunity, requested_count)
+			if buy_qty <= 0:
+				return false
 			var unit_cost := _effective_unit_cost_cents(opportunity)
 			purchased = InventoryService.confirm_stock_purchase(
 				opportunity.sku_id,
-				opportunity.quantity,
+				buy_qty,
 				unit_cost,
 				shown_midpoint - unit_cost,
 				InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
@@ -825,11 +846,12 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 
 
 func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
+	var offer_qty := _offer_quantity(opportunity)
 	var dto := buy_signal(
 		opportunity.sku_id,
 		opportunity.channel,
 		opportunity.unit_cost_cents,
-		opportunity.quantity,
+		offer_qty,
 		opportunity.space_required
 	)
 	dto.opportunity_id = opportunity.id
@@ -838,7 +860,7 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 	dto.channel = StringName(
 		DemandSignalService.Channel.keys()[opportunity.channel].to_lower()
 	)
-	dto.quantity = opportunity.quantity
+	dto.quantity = offer_qty
 	dto.beat_id = opportunity.beat_id
 	if opportunity.is_graded():
 		_service.bind_graded_signal(
@@ -1078,6 +1100,38 @@ func _effective_unit_cost_cents(opportunity: BuyOpportunity) -> int:
 		opportunity.unit_cost_cents,
 		opportunity.channel
 	)
+
+
+func _offer_quantity(opportunity: BuyOpportunity) -> int:
+	# AP1: read Rep when the distributor offer is built. Quiet band
+	# (≤24) doubles today's MOQ. Rep ≥ 25 keeps today's minimum.
+	if opportunity == null:
+		return 0
+	if opportunity.channel != DemandSignalService.Channel.DISTRIBUTOR:
+		return opportunity.quantity
+	return distributor_minimum_units(
+		opportunity.quantity,
+		GameState.current_reputation
+	)
+
+
+func _purchase_quantity(
+	dto: BuyConfirmSignal,
+	opportunity: BuyOpportunity,
+	requested_count: int
+) -> int:
+	if opportunity == null:
+		return 0
+	if opportunity.channel != DemandSignalService.Channel.DISTRIBUTOR:
+		return opportunity.quantity
+	var min_qty := distributor_minimum_units(
+		opportunity.quantity,
+		GameState.current_reputation
+	)
+	var buy_qty := requested_count if requested_count >= 0 else dto.quantity
+	if buy_qty < min_qty:
+		return 0
+	return buy_qty
 
 
 func _supply_glut_restock_lots() -> Array[BuyOpportunity]:
