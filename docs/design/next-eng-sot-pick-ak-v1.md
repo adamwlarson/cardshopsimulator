@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AK v1 — post AJ1
 
-**Status:** **AK1 ADOPTED** 2026-10-03 — Daily shrink settle. Park AK2/AK4. Hard-park AK3 camera off-switch. Soft catalog CLOSED. Do not turn whale bias, the quiet floor, walkouts, or Fire into a sell weight. AC1/AD1/AE1 stay rank or notice. AJ1 stays as shipped.
+**Status:** **AK1 SHIPPED** 2026-10-03 — squash-merged #67 @ `8276509c`. Daily shrink settle. Park AK2/AK4. Hard-park AK3 camera off-switch. Soft catalog CLOSED. Do not turn whale bias, the quiet floor, walkouts, or Fire into a sell weight. AC1/AD1/AE1 stay rank or notice. AJ1 stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-aj (AJ1 High-rep whale bias SHIPPED #66 @ `ede4d7c8`); Soft catalog CLOSED
