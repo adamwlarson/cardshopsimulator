@@ -5,8 +5,10 @@ signal queue_changed(length: int)
 signal customer_ready(customer: CustomerProfile)
 signal customer_finished(customer: CustomerProfile, outcome: StringName)
 
-const NEGOTIATE_ATTENTION_COST := 8
+const NEGOTIATE_ATTENTION_COST := NegotiatePolicy.ATTENTION_COST
 const PULL_ATTENTION_COST := 5
+
+var last_negotiate_result: StringName = &""
 
 var _customers: Array[CustomerProfile] = []
 var _inventory_service: Node
@@ -197,22 +199,53 @@ func pull_from_backstock() -> bool:
 	return bool(_inventory_service.call("pull_from_backstock", customer.target_sku))
 
 
-func negotiate(percent_from_list: float = -0.10) -> bool:
+func negotiate(
+	percent_from_list: float = NegotiatePolicy.DIRECTION_MINUS,
+	acting_role: StringName = NegotiatePolicy.ACTOR_OWNER
+) -> bool:
+	last_negotiate_result = NegotiatePolicy.RESULT_REFUSED
 	var customer := begin_serving_head()
 	if customer == null or customer.has_negotiated:
 		return false
-	if _attention_hook.is_valid() and not bool(
-		_attention_hook.call(NEGOTIATE_ATTENTION_COST)
-	):
+	if not NegotiatePolicy.can_negotiate_customer(customer):
+		return false
+	if not NegotiatePolicy.can_actor_negotiate(acting_role):
+		return false
+	var cost := NegotiatePolicy.attention_cost()
+	if _attention_hook.is_valid() and not bool(_attention_hook.call(cost)):
 		return false
 	customer.has_negotiated = true
-	var negotiated := negotiated_price_cents(
-		customer.listed_price_cents,
-		percent_from_list
+	var direction := NegotiatePolicy.direction_percent(percent_from_list)
+	var listed := customer.listed_price_cents
+	var negotiated := negotiated_price_cents(listed, direction)
+	var reputation := _serve_reputation()
+	var seed := NegotiatePolicy.roll_seed(
+		NegotiatePolicy.customer_seed_key(customer),
+		_serve_day(),
+		direction
 	)
-	if not customer.can_afford(customer.target_sku, negotiated):
-		return false
-	customer.listed_price_cents = negotiated
+	if NegotiatePolicy.roll_accept(
+		seed,
+		direction,
+		reputation,
+		customer.archetype_id
+	):
+		if (
+			_inventory_service == null
+			or not bool(_inventory_service.call(
+				"confirm_customer_sale",
+				customer.target_sku,
+				negotiated
+			))
+		):
+			return false
+		last_negotiate_result = NegotiatePolicy.RESULT_SOLD
+		_complete(customer, &"sold")
+		return true
+	if _reputation_hook.is_valid():
+		_reputation_hook.call(NegotiatePolicy.miss_rep_delta())
+	last_negotiate_result = NegotiatePolicy.RESULT_WALKED
+	_complete(customer, &"walked")
 	return true
 
 
@@ -244,8 +277,26 @@ static func negotiated_price_cents(
 	listed_price_cents: int,
 	percent_from_list: float
 ) -> int:
-	var clamped_percent := clampf(percent_from_list, -0.10, 0.10)
-	return maxi(1, roundi(listed_price_cents * (1.0 + clamped_percent)))
+	var direction := NegotiatePolicy.direction_percent(percent_from_list)
+	return maxi(1, roundi(float(listed_price_cents) * (1.0 + direction)))
+
+
+func _serve_reputation() -> int:
+	return _read_game_state_int("current_reputation", 0)
+
+
+func _serve_day() -> int:
+	return _read_game_state_int("current_day", 1)
+
+
+func _read_game_state_int(property: String, fallback: int) -> int:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return fallback
+	var game_state := tree.root.get_node_or_null("GameState")
+	if game_state == null:
+		return fallback
+	return int(game_state.get(property))
 
 
 func _complete(customer: CustomerProfile, outcome: StringName) -> void:
