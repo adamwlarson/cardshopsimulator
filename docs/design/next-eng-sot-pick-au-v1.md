@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AU v1 — post AT1
 
-**Status:** **AU1 ADOPTED** 2026-10-03 — One-counter haggle. Park AU2/AU3/AU4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
+**Status:** **AU1 SHIPPED** 2026-10-03 — squash-merged #77 @ `44a1b299` (reviewed `30c77934`). One-counter haggle. Park AU2/AU3/AU4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-at (AT1 Shady trunk SHIPPED #76 @ `f1323259`); Soft catalog CLOSED
@@ -96,3 +96,4 @@
 | 2026-10-03 | PM adopted **AU1**. Park AU2/AU3/AU4. Hard-park camera off-switch. Soft catalog CLOSED. One counter on distributor, marketplace, and shady Buy. Draft sha256 `dc4b10d0`. |
 | 2026-10-03 | PM adopted **AU1**. Spec on main `02763134`. Spike [AU1 one-counter haggle](https://cursor.com/agents/bc-9ee6ae0d-dd54-59e8-a845-b11dc960f08d). Park AU2/AU3/AU4. No Art. Soft catalog CLOSED. Draft sha256 `dc4b10d0`. |
 | 2026-10-03 | PM tip-froze PR #77 @ `30c77934`. Ready. 5 files, no docs. Agent archived. |
+| 2026-10-03 | PM SHIPPED **AU1**. Squash-merged #77 @ `44a1b299` (reviewed `30c77934`). QA PASS, harness 73/0/0. No new Soft note. Branch `cursor/au1-one-counter-haggle-f08d` deleted. |
