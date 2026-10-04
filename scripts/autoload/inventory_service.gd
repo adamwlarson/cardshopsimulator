@@ -110,12 +110,17 @@ func confirm_stock_purchase(
 	quantity: int,
 	unit_cost_cents: int,
 	expected_margin_cents: int,
-	location: InventoryLocation
+	location: InventoryLocation,
+	paid_total_cents: int = -1
 ) -> bool:
+	var paid_unit := unit_cost_cents
 	var total_cost_cents := quantity * unit_cost_cents
-	if quantity <= 0 or unit_cost_cents <= 0 or not Economy.can_afford(total_cost_cents):
+	if paid_total_cents > 0:
+		total_cost_cents = paid_total_cents
+		paid_unit = maxi(1, paid_total_cents / maxi(1, quantity))
+	if quantity <= 0 or paid_unit <= 0 or not Economy.can_afford(total_cost_cents):
 		return false
-	if not receive_stock(sku_id, quantity, unit_cost_cents, location):
+	if not receive_stock(sku_id, quantity, paid_unit, location):
 		return false
 	if not Economy.record_expense(total_cost_cents, &"inventory", "Stock purchase"):
 		remove_stock(sku_id, quantity)
@@ -123,7 +128,7 @@ func confirm_stock_purchase(
 	QaInstrumentation.record_buy_confirm(
 		sku_id,
 		quantity,
-		unit_cost_cents,
+		paid_unit,
 		expected_margin_cents
 	)
 	return true
