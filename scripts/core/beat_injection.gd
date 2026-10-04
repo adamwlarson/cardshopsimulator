@@ -1097,8 +1097,13 @@ func _ensure_marketplace_steal() -> BuyOpportunity:
 
 func _ensure_shady_trunk_lot() -> BuyOpportunity:
 	for dto: BuyConfirmSignal in DemandSignals.open_buy_signals():
-		if dto.channel == &"shady" and dto.confidence == &"low":
-			return _opportunity_from_open_id(dto.opportunity_id)
+		if dto.channel != &"shady" or dto.confidence != &"low":
+			continue
+		# AT1 night-flag lots are a separate prep channel. Do not steal
+		# that offer for the §10 campaign modal.
+		if ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
+			continue
+		return _opportunity_from_open_id(dto.opportunity_id)
 	var sku := InventoryService.model.get_sku(SKIE_ETB_SKU)
 	if sku == null:
 		return null

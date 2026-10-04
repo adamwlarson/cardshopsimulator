@@ -733,9 +733,10 @@ func _inspect_cert_cue(dto: BuyConfirmSignal) -> String:
 
 
 func _fake_slab_rate(channel: Variant = Channel.SHADY) -> float:
-	var rate := 0.08
+	var configured := -1.0
 	if _config != null:
-		rate = _config.shady_fake_slab_rate
+		configured = _config.shady_fake_slab_rate
+	var rate := ShadyTrunkPolicy.fake_slab_rate(configured)
 	if _counterfeit_scare and channel_from(channel) == Channel.SHADY:
 		rate = minf(1.0, rate * _scare_shady_fake_mult)
 	return rate

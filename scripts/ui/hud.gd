@@ -123,6 +123,7 @@ extends Control
 var _buy_signal: BuyConfirmSignal
 var _trade_offer: PlayerTradeOffer
 var _trade_decline_button: Button
+var _trunk_report_button: Button
 var _price_signal: PriceConfirmSignal
 var _online_signal: OnlineListConfirmSignal
 var _online_target: Dictionary = {}
@@ -188,6 +189,7 @@ func _ready() -> void:
 		price_inspect_button.pressed.connect(_inspect_price_slab)
 	buy_button.pressed.connect(_open_buy_confirm)
 	_ensure_trade_decline_button()
+	_ensure_trunk_report_button()
 	%BuyBackButton.pressed.connect(_back_to_buy_detail)
 	%BuyConfirmButton.pressed.connect(_confirm_buy)
 	%OpenPriceButton.pressed.connect(_open_price_list)
@@ -488,6 +490,10 @@ func _confirm_buy() -> void:
 		if DemandSignals.bid_auction_snipe(_buy_signal):
 			_close_buy()
 		return
+	if _is_shady_trunk():
+		if DemandSignals.buy_shady_trunk(_buy_signal):
+			_close_buy()
+		return
 	if _buy_signal == null or not _buy_signal.can_confirm:
 		return
 	if not _spend_for_floor(8):
@@ -569,6 +575,9 @@ func _sync_buy_confirm_gate() -> void:
 	if _is_auction_snipe():
 		buy_button.disabled = not DemandSignals.auction_snipe_can_bid(_buy_signal)
 		return
+	if _is_shady_trunk():
+		buy_button.disabled = not DemandSignals.shady_trunk_can_buy(_buy_signal)
+		return
 	buy_button.disabled = _buy_signal == null or not _buy_signal.can_confirm
 
 
@@ -635,10 +644,32 @@ func _ensure_trade_decline_button() -> void:
 		actions.move_child(_trade_decline_button, buy_button.get_index())
 
 
+func _ensure_trunk_report_button() -> void:
+	if _trunk_report_button != null:
+		return
+	if inspect_button == null:
+		return
+	var actions := inspect_button.get_parent() as HBoxContainer
+	if actions == null:
+		return
+	_trunk_report_button = Button.new()
+	_trunk_report_button.name = "TrunkReportButton"
+	_trunk_report_button.visible = false
+	_trunk_report_button.custom_minimum_size = Vector2(0.0, 40.0)
+	_trunk_report_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_trunk_report_button.text = "Report"
+	_trunk_report_button.pressed.connect(_report_shady_trunk)
+	actions.add_child(_trunk_report_button)
+	if buy_button != null:
+		actions.move_child(_trunk_report_button, buy_button.get_index() + 1)
+
+
 func _sync_offer_actions() -> void:
 	_ensure_trade_decline_button()
+	_ensure_trunk_report_button()
 	var is_trade := _trade_offer != null
 	var is_snipe := _is_auction_snipe()
+	var is_trunk := _is_shady_trunk()
 	if buy_button != null:
 		if is_trade:
 			buy_button.text = "Accept"
@@ -647,7 +678,10 @@ func _sync_offer_actions() -> void:
 		else:
 			buy_button.text = "Buy"
 	if _trade_decline_button != null:
-		_trade_decline_button.visible = is_trade or is_snipe
+		_trade_decline_button.text = "Walk" if is_trunk else "Decline"
+		_trade_decline_button.visible = is_trade or is_snipe or is_trunk
+	if _trunk_report_button != null:
+		_trunk_report_button.visible = is_trunk
 
 
 func _is_auction_snipe() -> bool:
@@ -657,6 +691,20 @@ func _is_auction_snipe() -> bool:
 	)
 
 
+func _is_shady_trunk() -> bool:
+	return (
+		_buy_signal != null
+		and ShadyTrunkPolicy.is_trunk_id(_buy_signal.opportunity_id)
+	)
+
+
+func _report_shady_trunk() -> void:
+	if not _is_shady_trunk():
+		return
+	DemandSignals.report_shady_trunk(_buy_signal)
+	_close_buy()
+
+
 func _decline_selected_offer() -> void:
 	if _trade_offer != null:
 		DemandSignals.decline_player_trade(_trade_offer)
@@ -664,6 +712,8 @@ func _decline_selected_offer() -> void:
 		return
 	if _is_auction_snipe():
 		DemandSignals.decline_auction_snipe(_buy_signal)
+	elif _is_shady_trunk():
+		DemandSignals.walk_shady_trunk(_buy_signal)
 	_close_buy()
 
 

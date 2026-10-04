@@ -331,6 +331,8 @@ static func buy_summary(dto: BuyConfirmSignal) -> String:
 		lines.append("Minimum: ×%d" % dto.quantity)
 	if AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
 		lines.append("Bid · Att %d" % AuctionSnipePolicy.attention_cost())
+	if ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
+		lines.append("Trunk · Buy, Report, or Walk")
 	lines.append_array(PackedStringArray([
 		"Comp range: %s – %s" % [
 			format_cents(dto.shown_comp_low_cents),
@@ -427,6 +429,8 @@ static func buy_confirm_snapshot(dto: BuyConfirmSignal) -> String:
 		lines.append("Minimum: ×%d" % dto.quantity)
 	if AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
 		lines.append("Bid · Att %d" % AuctionSnipePolicy.attention_cost())
+	if ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
+		lines.append("Trunk · Buy, Report, or Walk")
 	lines.append_array(PackedStringArray([
 		"%s–%s · %s · %s" % [
 			format_cents(dto.shown_comp_low_cents),
