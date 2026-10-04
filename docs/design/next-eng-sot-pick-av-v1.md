@@ -99,3 +99,4 @@
 | 2026-10-03 | Local draft ready for PM. Path `docs/design/next-eng-sot-pick-av-v1.md`. |
 | 2026-10-03 | PM adopted **AV1**. Park AV2/AV3/AV4. Hard-park camera off-switch. Soft catalog CLOSED. One ±10% negotiate on a customer buying from the shop. Draft sha256 `2840d41c`. |
 | 2026-10-03 | PM adopted **AV1**. Spec on main `dafc70ef`. Spike [AV1 sell-side negotiate](https://cursor.com/agents/bc-89fcaeae-e81d-5295-bcb1-391172750d16). Park AV2/AV3/AV4. No Art. Soft catalog CLOSED. Draft sha256 `2840d41c`. |
+| 2026-10-03 | PM tip-froze PR #78 @ `3332d3cd`. Ready. 7 files, no docs. Agent archived. |
