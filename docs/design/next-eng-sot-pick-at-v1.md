@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AT v1 — post AS1
 
-**Status:** **AT1 ADOPTED** 2026-10-03 — Shady trunk. Park AT2/AT3/AT4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
+**Status:** **AT1 SHIPPED** 2026-10-03 — squash-merged #76 @ `f1323259` (reviewed `4b09180e`). Shady trunk. Park AT2/AT3/AT4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, or Fire into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-as (AS1 Auction snipes SHIPPED #75 @ `967ecd37`); Soft catalog CLOSED
@@ -95,3 +95,4 @@
 | 2026-10-03 | PM adopted **AT1**. Park AT2/AT3/AT4. Hard-park camera off-switch. Soft catalog CLOSED. Fees / HUD / STOP stay parked. One night trunk lot at 25% of today's basis. Draft sha256 `7d96b64d`. |
 | 2026-10-03 | PM adopted **AT1**. Spec on main `cc103dd3`. Spike [AT1 shady trunk](https://cursor.com/agents/bc-a8c6fdaa-6d2f-5d7c-bd24-aa8b228f5324). Park AT2/AT3/AT4. No Art. Soft catalog CLOSED. Draft sha256 `7d96b64d`. |
 | 2026-10-03 | PM tip-froze PR #76 @ `4b09180e`. Ready. 7 files, no docs. Agent archived. |
+| 2026-10-03 | PM SHIPPED **AT1**. Squash-merged #76 @ `f1323259` (reviewed `4b09180e`). QA PASS, harness 49/0/0. No new Soft note. Branch `cursor/at1-shady-trunk-5324` deleted. |
