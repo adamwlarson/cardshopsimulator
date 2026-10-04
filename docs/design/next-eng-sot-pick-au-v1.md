@@ -94,3 +94,4 @@
 |------|----------|
 | 2026-10-03 | Drafted post AT1 SHIPPED #76 @ `f1323259`. Lean **AU1 One-counter haggle**. Fee cut / sell negotiate / HUD / STOP parked. Camera off-switch hard-parked. |
 | 2026-10-03 | PM adopted **AU1**. Park AU2/AU3/AU4. Hard-park camera off-switch. Soft catalog CLOSED. One counter on distributor, marketplace, and shady Buy. Draft sha256 `dc4b10d0`. |
+| 2026-10-03 | PM adopted **AU1**. Spec on main `02763134`. Spike [AU1 one-counter haggle](https://cursor.com/agents/bc-9ee6ae0d-dd54-59e8-a845-b11dc960f08d). Park AU2/AU3/AU4. No Art. Soft catalog CLOSED. Draft sha256 `dc4b10d0`. |
