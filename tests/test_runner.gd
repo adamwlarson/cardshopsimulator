@@ -211,6 +211,7 @@ func _initialize() -> void:
 	_test_daily_market_drift()
 	_test_auction_snipes()
 	_test_shady_trunk()
+	_test_one_counter_haggle()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -24800,6 +24801,748 @@ func _at1_hud_has_trunk_row(hud: Node) -> bool:
 		if row != null and row.text.begins_with("Shady"):
 			return true
 	return false
+
+
+func _test_one_counter_haggle() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_haggle_named_gate()
+	_test_haggle_accept_and_one_counter()
+	_test_haggle_invalid_and_miss_leave_state()
+	_test_haggle_channel_weights_and_no_truth()
+	_test_haggle_door_whale_sale_fee_stay()
+	_test_haggle_shipped_levers_stay()
+	_test_haggle_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_haggle_named_gate() -> void:
+	_expect_equal(
+		is_equal_approx(HagglePolicy.CHANNEL_WEIGHT_DISTRIBUTOR, 1.10),
+		true,
+		"AU1: distributor weight is 1.10"
+	)
+	_expect_equal(
+		is_equal_approx(HagglePolicy.CHANNEL_WEIGHT_MARKETPLACE, 1.00),
+		true,
+		"AU1: marketplace weight is 1.00"
+	)
+	_expect_equal(
+		is_equal_approx(HagglePolicy.CHANNEL_WEIGHT_SHADY, 0.80),
+		true,
+		"AU1: shady weight is 0.80"
+	)
+	_expect_equal(
+		is_equal_approx(HagglePolicy.channel_weight(&"auction"), 1.00),
+		true,
+		"AU1: a missing channel weight falls back to 1.00"
+	)
+	_expect_equal(
+		is_equal_approx(HagglePolicy.channel_weight(&"", -1.0), 1.00),
+		true,
+		"AU1: an omitted channel weight falls back to 1.00"
+	)
+	_expect_equal(
+		is_equal_approx(HagglePolicy.rep_term(40), 0.40 + 40.0 * 0.006),
+		true,
+		"AU1: missing Rep term falls back to 0.40 + Rep × 0.006"
+	)
+	_expect_equal(
+		is_equal_approx(HagglePolicy.rep_term(40, -1.0), 0.64),
+		true,
+		"AU1: negative Rep term falls back to 0.40 + Rep × 0.006"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("haggle_channel_weight", &"auction", -1.0)), 1.00),
+		true,
+		"AU1: DemandSignals omitted channel weight is 1.00"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("haggle_rep_term", 40, -1.0)), 0.64),
+		true,
+		"AU1: DemandSignals omitted Rep term is 0.40 + Rep × 0.006"
+	)
+	_expect_equal(HagglePolicy.can_haggle(&"distributor"), true, "AU1: distributor can haggle")
+	_expect_equal(HagglePolicy.can_haggle(&"marketplace"), true, "AU1: marketplace can haggle")
+	_expect_equal(HagglePolicy.can_haggle(&"shady"), true, "AU1: shady Buy can haggle")
+	_expect_equal(HagglePolicy.can_haggle(&"auction"), false, "AU1: auction snipes are out")
+	_expect_equal(HagglePolicy.can_haggle(&"buylist"), false, "AU1: walk-in buylist is out")
+	_expect_equal(HagglePolicy.is_valid_counter(1, 100), true, "AU1: 1¢ below the ask is valid")
+	_expect_equal(HagglePolicy.is_valid_counter(100, 100), false, "AU1: a counter at the ask is refused")
+	_expect_equal(HagglePolicy.is_valid_counter(101, 100), false, "AU1: a counter above the ask is refused")
+	_expect_equal(HagglePolicy.is_valid_counter(0, 100), false, "AU1: a 0¢ counter is refused")
+
+
+func _test_haggle_accept_and_one_counter() -> void:
+	_au1_reset()
+	var dto := _au1_inject_cash_offer(&"au1-accept-ask", &"marketplace", 4_800, 1)
+	_expect_equal(dto != null, true, "AU1: Accept needs a cash offer")
+	if dto == null:
+		return
+	var ask := dto.lot_total_cents
+	var cash_before := int(_economy.get("balance_cents"))
+	var qty_before := _as1_stock_qty(dto.sku_id)
+	var back_before := _as1_backstock_qty(dto.sku_id)
+	_expect_equal(
+		bool(_demand_signals.call("confirm_buy", dto)),
+		true,
+		"AU1: Accept still buys at the ask"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - ask,
+		"AU1: Accept pays the ask"
+	)
+	_expect_equal(
+		_as1_stock_qty(dto.sku_id),
+		qty_before + 1,
+		"AU1: Accept receives the lot"
+	)
+	_expect_equal(
+		_as1_backstock_qty(dto.sku_id),
+		back_before + 1,
+		"AU1: Accept lands in backstock"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", dto.opportunity_id) == null,
+		true,
+		"AU1: Accept closes the offer"
+	)
+
+	_au1_reset()
+	dto = _au1_inject_cash_offer(&"au1-one-counter", &"marketplace", 4_800, 1)
+	_expect_equal(dto != null, true, "AU1: Counter needs the same seeded offer")
+	if dto == null:
+		return
+	var offer := dto.lot_total_cents - 100
+	_expect_equal(offer >= 1, true, "AU1: Counter is strictly below the ask")
+	cash_before = int(_economy.get("balance_cents"))
+	qty_before = _as1_stock_qty(dto.sku_id)
+	back_before = _as1_backstock_qty(dto.sku_id)
+	var result := StringName(_demand_signals.call("counter_buy", dto, offer))
+	_expect_equal(
+		result == HagglePolicy.RESULT_ACCEPTED or result == HagglePolicy.RESULT_MISSED,
+		true,
+		"AU1: one Counter below the ask either buys or clears"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", dto.opportunity_id) == null,
+		true,
+		"AU1: a spent Counter clears the offer"
+	)
+	if result == HagglePolicy.RESULT_ACCEPTED:
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before - offer,
+			"AU1: a hit buys at the counter price"
+		)
+		_expect_equal(
+			_as1_stock_qty(dto.sku_id),
+			qty_before + 1,
+			"AU1: a hit receives the lot"
+		)
+		_expect_equal(
+			_as1_backstock_qty(dto.sku_id),
+			back_before + 1,
+			"AU1: a hit lands in backstock"
+		)
+	else:
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before,
+			"AU1: a miss leaves cash unchanged"
+		)
+		_expect_equal(
+			_as1_stock_qty(dto.sku_id),
+			qty_before,
+			"AU1: a miss leaves lots unchanged"
+		)
+	var second := StringName(_demand_signals.call("counter_buy", dto, offer))
+	_expect_equal(second, HagglePolicy.RESULT_REFUSED, "AU1: a second Counter is refused")
+
+	_au1_reset()
+	var dist := _au1_inject_cash_offer(&"au1-dist-accept", &"distributor", 1_800, 1)
+	_expect_equal(dist != null, true, "AU1: distributor Accept needs an offer")
+	if dist != null:
+		var dist_ask := dist.lot_total_cents
+		var dist_cash := int(_economy.get("balance_cents"))
+		_expect_equal(
+			bool(_demand_signals.call("confirm_buy", dist)),
+			true,
+			"AU1: distributor Accept still buys at the ask"
+		)
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			dist_cash - dist_ask,
+			"AU1: distributor Accept pays the ask"
+		)
+
+	var on_day := int(_at1_flag_days(ShadyTrunkPolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "AU1: shady Buy needs a flag-on night")
+	if on_day >= 1:
+		_at1_reset_on(on_day)
+		var trunk: BuyConfirmSignal = _demand_signals.call("open_shady_trunk")
+		_expect_equal(trunk != null, true, "AU1: shady Buy still accepts at the ask")
+		if trunk != null:
+			_expect_equal(
+				bool(_demand_signals.call("can_haggle_offer", trunk)),
+				true,
+				"AU1: shady trunk Buy can take one counter"
+			)
+			var trunk_ask := trunk.lot_total_cents
+			var trunk_cash := int(_economy.get("balance_cents"))
+			_expect_equal(
+				bool(_demand_signals.call("confirm_buy", trunk)),
+				true,
+				"AU1: shady Accept still buys at the ask"
+			)
+			_expect_equal(
+				int(_economy.get("balance_cents")),
+				trunk_cash - trunk_ask,
+				"AU1: shady Accept pays the ask"
+			)
+
+
+func _test_haggle_invalid_and_miss_leave_state() -> void:
+	_au1_reset()
+	var dto := _au1_inject_cash_offer(&"au1-invalid-counter", &"marketplace", 4_800, 1)
+	_expect_equal(dto != null, true, "AU1: invalid Counter needs an offer")
+	if dto == null:
+		return
+	var ask := dto.lot_total_cents
+	var before := _au1_offer_snapshot(dto.sku_id)
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		StringName(_demand_signals.call("counter_buy", dto, ask)),
+		HagglePolicy.RESULT_REFUSED,
+		"AU1: a Counter at the ask is refused"
+	)
+	_expect_equal(
+		StringName(_demand_signals.call("counter_buy", dto, ask + 25)),
+		HagglePolicy.RESULT_REFUSED,
+		"AU1: a Counter above the ask is refused"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", dto.opportunity_id) != null,
+		true,
+		"AU1: an invalid Counter leaves the one-shot available"
+	)
+	_expect_equal(
+		bool(_demand_signals.call("can_haggle_offer", dto)),
+		true,
+		"AU1: the one-shot stays after an at-or-above Counter"
+	)
+	_au1_expect_nothing_moved(before, dto.sku_id, "AU1 invalid Counter")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AU1: an invalid Counter leaves Rep unchanged"
+	)
+
+	var miss_offer := 1
+	var seed := int(_demand_signals.call("haggle_roll_seed", dto.opportunity_id))
+	var will_hit := HagglePolicy.roll_accept(
+		seed,
+		miss_offer,
+		ask,
+		int(_game_state.get("current_reputation")),
+		dto.channel
+	)
+	if will_hit:
+		miss_offer = 1
+		# Same seed is deterministic; a 1¢ offer against a large ask is a miss.
+		_expect_equal(will_hit, false, "AU1: 1¢ vs a large ask should miss")
+	var miss_before := _au1_offer_snapshot(dto.sku_id)
+	var miss_rep := int(_game_state.get("current_reputation"))
+	var miss_result := StringName(_demand_signals.call("counter_buy", dto, miss_offer))
+	_expect_equal(miss_result, HagglePolicy.RESULT_MISSED, "AU1: a 1¢ Counter misses")
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", dto.opportunity_id) == null,
+		true,
+		"AU1: a missed Counter clears the offer"
+	)
+	_au1_expect_nothing_moved(miss_before, dto.sku_id, "AU1 missed Counter")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		miss_rep,
+		"AU1: a missed Counter leaves Rep unchanged"
+	)
+	_expect_equal(
+		StringName(_demand_signals.call("counter_buy", dto, miss_offer)),
+		HagglePolicy.RESULT_REFUSED,
+		"AU1: a second Counter after a miss is refused"
+	)
+
+	_au1_reset()
+	dto = _au1_inject_cash_offer(&"au1-decline", &"distributor", 1_800, 1)
+	_expect_equal(dto != null, true, "AU1: Decline needs an offer")
+	if dto != null:
+		var decline_before := _au1_offer_snapshot(dto.sku_id)
+		var decline_rep := int(_game_state.get("current_reputation"))
+		_expect_equal(
+			bool(_demand_signals.call("decline_haggle_offer", dto)),
+			true,
+			"AU1: Decline clears the offer"
+		)
+		_expect_equal(
+			_demand_signals.call("buy_signal_for_id", dto.opportunity_id) == null,
+			true,
+			"AU1: a declined offer is gone"
+		)
+		_au1_expect_nothing_moved(decline_before, dto.sku_id, "AU1 Decline")
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			decline_rep,
+			"AU1: Decline leaves Rep unchanged"
+		)
+
+	var snipe_on := int(_as1_flag_days(AuctionSnipePolicy.RUN_SEED).get("on", 0))
+	if snipe_on >= 1:
+		_as1_reset_on(snipe_on)
+		var snipe: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+		if snipe != null:
+			_expect_equal(
+				bool(_demand_signals.call("can_haggle_offer", snipe)),
+				false,
+				"AU1: auction snipes stay out"
+			)
+			_expect_equal(
+				StringName(_demand_signals.call("counter_buy", snipe, 1)),
+				HagglePolicy.RESULT_REFUSED,
+				"AU1: a snipe Counter is refused"
+			)
+			_expect_equal(
+				_demand_signals.call("open_auction_snipe") != null,
+				true,
+				"AU1: refusing a snipe Counter leaves the snipe"
+			)
+
+
+func _test_haggle_channel_weights_and_no_truth() -> void:
+	const ASK := 10_000
+	const OFFER := 8_000
+	const REP := 40
+	var dist_p := float(
+		_demand_signals.call("haggle_accept_chance", OFFER, ASK, REP, &"distributor")
+	)
+	var market_p := float(
+		_demand_signals.call("haggle_accept_chance", OFFER, ASK, REP, &"marketplace")
+	)
+	var shady_p := float(
+		_demand_signals.call("haggle_accept_chance", OFFER, ASK, REP, &"shady")
+	)
+	_expect_equal(dist_p > market_p, true, "AU1: distributor p is higher than marketplace")
+	_expect_equal(market_p > shady_p, true, "AU1: marketplace p is higher than shady")
+	_expect_equal(
+		is_equal_approx(dist_p, (8_000.0 / 10_000.0) * 0.64 * 1.10),
+		true,
+		"AU1: distributor p uses weight 1.10"
+	)
+	_expect_equal(
+		is_equal_approx(market_p, (8_000.0 / 10_000.0) * 0.64 * 1.00),
+		true,
+		"AU1: marketplace p uses weight 1.00"
+	)
+	_expect_equal(
+		is_equal_approx(shady_p, (8_000.0 / 10_000.0) * 0.64 * 0.80),
+		true,
+		"AU1: shady p uses weight 0.80"
+	)
+
+	_au1_reset()
+	var dto := _au1_inject_cash_offer(&"au1-no-truth", &"marketplace", 2_400, 1)
+	_expect_equal(dto != null, true, "AU1: truth path needs an offer")
+	if dto == null:
+		return
+	_expect_dto_has_no_truth_fields(dto, "AU1 cash offer")
+	_expect_equal(
+		dto.get("p") == null
+		and dto.get("accept_chance") == null
+		and dto.get("true_market_cents") == null,
+		true,
+		"AU1: offer DTO has no p or true_market"
+	)
+	var row := DemandSignalPresenter.opportunity_row(dto)
+	var summary := DemandSignalPresenter.buy_summary(dto)
+	var snapshot := DemandSignalPresenter.buy_confirm_snapshot(dto)
+	for text: String in [row, summary, snapshot]:
+		_assert_text_has_no_truth(text, "AU1 cash offer copy")
+		_expect_equal(
+			text.to_lower().contains("true_market"),
+			false,
+			"AU1: offer never shows true_market"
+		)
+		_expect_equal(
+			_au1_text_shows_p(text, dist_p)
+			or _au1_text_shows_p(text, market_p)
+			or _au1_text_shows_p(text, shady_p),
+			false,
+			"AU1: offer never shows p"
+		)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AU1: HUD loads for the counter")
+	if hud != null:
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		if open_buy != null:
+			open_buy.pressed.emit()
+		_select_buy_on_hud(hud, dto)
+		var buy_button := hud.get_node_or_null("%BuyButton") as Button
+		var counter_button := hud.find_child("CounterButton", true, false) as Button
+		var decline_button := hud.find_child("TradeDeclineButton", true, false) as Button
+		_expect_equal(
+			buy_button != null and buy_button.text == "Accept",
+			true,
+			"AU1: placeholder Accept is present"
+		)
+		_expect_equal(
+			counter_button != null and counter_button.visible,
+			true,
+			"AU1: placeholder Counter is present"
+		)
+		_expect_equal(
+			decline_button != null and decline_button.visible and decline_button.text == "Decline",
+			true,
+			"AU1: placeholder Decline is present"
+		)
+		var hud_summary := hud.get_node_or_null("%BuySummary") as Label
+		if hud_summary != null:
+			_assert_text_has_no_truth(hud_summary.text, "AU1 HUD buy summary")
+			_expect_equal(
+				hud_summary.text.to_lower().contains("true_market"),
+				false,
+				"AU1: HUD never shows true_market"
+			)
+			_expect_equal(
+				_au1_text_shows_p(hud_summary.text, market_p),
+				false,
+				"AU1: HUD never shows p"
+			)
+		hud.free()
+
+
+func _test_haggle_door_whale_sale_fee_stay() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_40 := catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, BASELINE)
+	var at_75 := catalog.roll_spawn(SEED, 75, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_40.size(), 5, "AU1: door spawn count stays as shipped")
+	_expect_equal(at_75.size(), at_40.size(), "AU1: high-rep door spawn count stays as shipped")
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"AU1: spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AU1/AJ1: high-rep whale pack stays ×1.5"
+	)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "AU1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"AU1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AU1: marketplace fee stays 8%"
+	)
+	_game_state.call("start_new_game")
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "AU1: sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "AU1: listed price stays set")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AU1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(listed_price, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	_expect_equal(queue.enqueue(customer), true, "AU1: listed lot still enqueues")
+	_expect_equal(
+		customer.listed_price_cents,
+		listed_price,
+		"AU1: queue copies the listed price"
+	)
+	_expect_equal(queue.sell_listed(), true, "AU1: live sell still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"AU1: a completed sale still pays the listed price"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"AU1: customer_sale ledger is the listed price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "haggle")
+		and not _function_body_contains(queue_src, "func sell_listed()", "counter")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"haggle"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"counter"
+		),
+		true,
+		"AU1: the counter is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_haggle_shipped_levers_stay() -> void:
+	_game_state.call("start_new_game")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.market_drift_sealed_low, 0.98)
+		and is_equal_approx(NORMAL_CONFIG.market_drift_sealed_high, 1.02),
+		true,
+		"AU1/AR1: daily hidden market drift stays as shipped"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.is_high_rep(75) and not MarketplaceLeadPolicy.is_high_rep(74),
+		true,
+		"AU1/AQ1: marketplace leads stay at Rep 75"
+	)
+	_expect_equal(
+		PlayerTradePolicy.is_unlocked(50) and not PlayerTradePolicy.is_unlocked(49),
+		true,
+		"AU1/AN1: player trades stay unlocked at Rep 50"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.is_unlocked(50) and not RegularsReturnPolicy.is_unlocked(49),
+		true,
+		"AU1/AO1: Regulars return stays unlocked at Rep 50"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.is_worse_moq(24) and not DistributorMoqPolicy.is_worse_moq(25),
+		true,
+		"AU1/AP1: distributor MOQ stays worse at Rep 24"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005)
+		and is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AU1/AK1/AL1: shrink stays 0.2%/0.7% and floor-sealed +0.3%"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(75)
+		and not CustomerSpawnPolicy.is_high_rep(74)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AU1/AJ1: high-rep whale pack stays ×1.5 at 75"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AU1: marketplace fee stays 8%"
+	)
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.REPORT_REP_GAIN == 2,
+		true,
+		"AU1/AT1: shady trunk Report stays +2 and Walk stays a dismiss"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_haggle_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("haggle")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("negotiate"),
+		false,
+		"AU1: Soft catalog stays closed"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AU1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AU1: marketplace fee stays 8% — this is not a fee cut"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AU1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("true_market")
+		and not hud_src.contains("accept_chance"),
+		true,
+		"AU1: HUD has no STOP, camera off-switch, true_market, or p"
+	)
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	_expect_equal(
+		not balance_src.contains("haggle")
+		and not balance_src.contains("fee_cut")
+		and not balance_src.contains("true_market"),
+		true,
+		"AU1: haggle knobs live on the policy, not BalanceConfig"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/haggle_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AU1: %s stays §4.5 clean" % path
+		)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		demand_src.contains("func counter_buy")
+		and demand_src.contains("func decline_haggle_offer")
+		and demand_src.contains("HagglePolicy"),
+		true,
+		"AU1: the one counter lives on cash buy offers"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "haggle")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "counter")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "auction")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "snipe")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "trunk")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shady")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "moq")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AU1: AC1 through AT1 stay off the sell roll"
+	)
+	_game_state.call("start_new_game")
+
+
+func _au1_reset() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 1)
+	_game_state.set("current_reputation", 40)
+	_event_bus.emit_signal("reputation_changed", 40)
+
+
+func _au1_inject_cash_offer(
+	opportunity_id: StringName,
+	channel_name: StringName,
+	unit_cost_cents: int,
+	quantity: int
+) -> BuyConfirmSignal:
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = opportunity_id
+	opportunity.sku_id = &"AA-DUST-ETB"
+	opportunity.display_name = "Dustway Chronicles Explorer Box"
+	opportunity.offer_label = "Haggle lot"
+	opportunity.channel = DemandSignalService.channel_from(channel_name)
+	opportunity.unit_cost_cents = unit_cost_cents
+	opportunity.quantity = quantity
+	opportunity.space_required = 1
+	_expect_equal(
+		bool(_demand_signals.call("inject_buy_opportunity", opportunity)),
+		true,
+		"AU1: injects %s" % String(opportunity_id)
+	)
+	return _demand_signals.call("buy_signal_for_id", opportunity_id) as BuyConfirmSignal
+
+
+func _au1_offer_snapshot(sku_id: StringName) -> Dictionary:
+	return {
+		"attention": int(_game_state.get("attention_remaining")),
+		"cash": int(_economy.get("balance_cents")),
+		"qty": _as1_stock_qty(sku_id),
+		"backstock": _as1_backstock_qty(sku_id),
+	}
+
+
+func _au1_expect_nothing_moved(before: Dictionary, sku_id: StringName, label: String) -> void:
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		int(before.get("attention", -1)),
+		"%s leaves Attention unchanged" % label
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		int(before.get("cash", -1)),
+		"%s leaves cash unchanged" % label
+	)
+	_expect_equal(
+		_as1_stock_qty(sku_id),
+		int(before.get("qty", -1)),
+		"%s leaves lots unchanged" % label
+	)
+	_expect_equal(
+		_as1_backstock_qty(sku_id),
+		int(before.get("backstock", -1)),
+		"%s leaves backstock unchanged" % label
+	)
+
+
+func _au1_text_shows_p(text: String, chance: float) -> bool:
+	if text.is_empty() or chance <= 0.0:
+		return false
+	var lower := text.to_lower()
+	if lower.contains("p=") or lower.contains("p =") or lower.contains("accept chance"):
+		return true
+	var raw := "%.4f" % chance
+	if text.contains(raw):
+		return true
+	var pct := "%d%%" % roundi(chance * 100.0)
+	return text.contains(pct) and lower.contains("p")
 
 
 func _aq1_reset_at(reputation: int) -> void:

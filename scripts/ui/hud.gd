@@ -124,6 +124,8 @@ var _buy_signal: BuyConfirmSignal
 var _trade_offer: PlayerTradeOffer
 var _trade_decline_button: Button
 var _trunk_report_button: Button
+var _counter_button: Button
+var _counter_input: LineEdit
 var _price_signal: PriceConfirmSignal
 var _online_signal: OnlineListConfirmSignal
 var _online_target: Dictionary = {}
@@ -190,6 +192,7 @@ func _ready() -> void:
 	buy_button.pressed.connect(_open_buy_confirm)
 	_ensure_trade_decline_button()
 	_ensure_trunk_report_button()
+	_ensure_counter_controls()
 	%BuyBackButton.pressed.connect(_back_to_buy_detail)
 	%BuyConfirmButton.pressed.connect(_confirm_buy)
 	%OpenPriceButton.pressed.connect(_open_price_list)
@@ -664,14 +667,48 @@ func _ensure_trunk_report_button() -> void:
 		actions.move_child(_trunk_report_button, buy_button.get_index() + 1)
 
 
+func _ensure_counter_controls() -> void:
+	if inspect_button == null:
+		return
+	var actions := inspect_button.get_parent() as HBoxContainer
+	if actions == null:
+		return
+	if _counter_input == null:
+		var content := buy_panel.get_node_or_null("Content") as VBoxContainer
+		_counter_input = LineEdit.new()
+		_counter_input.name = "CounterInput"
+		_counter_input.visible = false
+		_counter_input.placeholder_text = "Counter"
+		_counter_input.custom_minimum_size = Vector2(0.0, 36.0)
+		if content != null:
+			content.add_child(_counter_input)
+			content.move_child(_counter_input, actions.get_index())
+		else:
+			actions.add_child(_counter_input)
+	if _counter_button != null:
+		return
+	_counter_button = Button.new()
+	_counter_button.name = "CounterButton"
+	_counter_button.visible = false
+	_counter_button.custom_minimum_size = Vector2(0.0, 40.0)
+	_counter_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_counter_button.text = "Counter"
+	_counter_button.pressed.connect(_counter_selected_offer)
+	actions.add_child(_counter_button)
+	if buy_button != null:
+		actions.move_child(_counter_button, buy_button.get_index())
+
+
 func _sync_offer_actions() -> void:
 	_ensure_trade_decline_button()
 	_ensure_trunk_report_button()
+	_ensure_counter_controls()
 	var is_trade := _trade_offer != null
 	var is_snipe := _is_auction_snipe()
 	var is_trunk := _is_shady_trunk()
+	var is_haggle := _can_haggle_selected()
 	if buy_button != null:
-		if is_trade:
+		if is_trade or is_haggle:
 			buy_button.text = "Accept"
 		elif is_snipe:
 			buy_button.text = "Bid"
@@ -679,9 +716,19 @@ func _sync_offer_actions() -> void:
 			buy_button.text = "Buy"
 	if _trade_decline_button != null:
 		_trade_decline_button.text = "Walk" if is_trunk else "Decline"
-		_trade_decline_button.visible = is_trade or is_snipe or is_trunk
+		_trade_decline_button.visible = is_trade or is_snipe or is_trunk or is_haggle
 	if _trunk_report_button != null:
 		_trunk_report_button.visible = is_trunk
+	if _counter_button != null:
+		_counter_button.visible = is_haggle
+	if _counter_input != null:
+		_counter_input.visible = is_haggle
+		if is_haggle and _buy_signal != null:
+			_counter_input.placeholder_text = "Below %s" % DemandSignalPresenter.format_cents(
+				_buy_signal.lot_total_cents
+			)
+		else:
+			_counter_input.text = ""
 
 
 func _is_auction_snipe() -> bool:
@@ -705,6 +752,22 @@ func _report_shady_trunk() -> void:
 	_close_buy()
 
 
+func _can_haggle_selected() -> bool:
+	return _buy_signal != null and DemandSignals.can_haggle_offer(_buy_signal)
+
+
+func _counter_selected_offer() -> void:
+	if not _can_haggle_selected():
+		return
+	var offer_cents := 0
+	if _counter_input != null:
+		offer_cents = DemandSignalPresenter.parse_cents(_counter_input.text)
+	var result := DemandSignals.counter_buy(_buy_signal, offer_cents)
+	if result == HagglePolicy.RESULT_REFUSED:
+		return
+	_close_buy()
+
+
 func _decline_selected_offer() -> void:
 	if _trade_offer != null:
 		DemandSignals.decline_player_trade(_trade_offer)
@@ -714,6 +777,8 @@ func _decline_selected_offer() -> void:
 		DemandSignals.decline_auction_snipe(_buy_signal)
 	elif _is_shady_trunk():
 		DemandSignals.walk_shady_trunk(_buy_signal)
+	elif _can_haggle_selected():
+		DemandSignals.decline_haggle_offer(_buy_signal)
 	_close_buy()
 
 

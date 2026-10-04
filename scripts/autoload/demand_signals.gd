@@ -7,6 +7,7 @@ var _market_state := MarketState.new()
 var _service: DemandSignalService
 var _opportunity_catalog := BuyOpportunityCatalog.new()
 var _closed_opportunity_ids: Dictionary = {}
+var _haggle_spent_ids: Dictionary = {}
 var _scripted_opportunities: Array[BuyOpportunity] = []
 var _event_service := MarketEventService.new()
 var _active_event: MarketEvent
@@ -22,6 +23,7 @@ func _ready() -> void:
 func reset() -> void:
 	_market_state = MarketState.new()
 	_closed_opportunity_ids.clear()
+	_haggle_spent_ids.clear()
 	_scripted_opportunities.clear()
 	_player_trades.reset()
 	_regulars.reset()
@@ -819,6 +821,124 @@ func decline_auction_snipe(dto: BuyConfirmSignal) -> bool:
 	return dismiss_buy_opportunity(dto.opportunity_id)
 
 
+func can_haggle_offer(dto: BuyConfirmSignal) -> bool:
+	if dto == null or dto.opportunity_id.is_empty():
+		return false
+	if AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
+		return false
+	if _closed_opportunity_ids.has(dto.opportunity_id):
+		return false
+	if _haggle_spent_ids.has(dto.opportunity_id):
+		return false
+	return HagglePolicy.can_haggle(dto.channel)
+
+
+func haggle_channel_weight(channel: Variant, configured: float = -1.0) -> float:
+	return HagglePolicy.channel_weight(channel, configured)
+
+
+func haggle_rep_term(reputation: int = -1, configured: float = -1.0) -> float:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return HagglePolicy.rep_term(resolved, configured)
+
+
+func haggle_accept_chance(
+	offer_cents: int,
+	ask_cents: int,
+	reputation: int,
+	channel: Variant,
+	configured_weight: float = -1.0,
+	configured_rep_term: float = -1.0
+) -> float:
+	return HagglePolicy.accept_chance(
+		offer_cents,
+		ask_cents,
+		reputation,
+		channel,
+		configured_weight,
+		configured_rep_term
+	)
+
+
+func haggle_roll_seed(opportunity_id: StringName, day: int = -1) -> int:
+	var resolved_day := day if day >= 0 else GameState.current_day
+	return HagglePolicy.roll_seed(opportunity_id, resolved_day)
+
+
+func decline_haggle_offer(dto: BuyConfirmSignal) -> bool:
+	if not can_haggle_offer(dto):
+		return false
+	return dismiss_buy_opportunity(dto.opportunity_id)
+
+
+func counter_buy(dto: BuyConfirmSignal, offer_cents: int) -> StringName:
+	if not can_haggle_offer(dto):
+		return HagglePolicy.RESULT_REFUSED
+	var opportunity := _existing_opportunity(dto.opportunity_id)
+	if opportunity == null or not opportunity.is_valid():
+		return HagglePolicy.RESULT_REFUSED
+	var ask := _haggle_ask_cents(dto, opportunity)
+	if not HagglePolicy.is_valid_counter(offer_cents, ask):
+		return HagglePolicy.RESULT_REFUSED
+	if is_inspect_mandatory(dto) and not dto.inspected:
+		return HagglePolicy.RESULT_REFUSED
+	if not Economy.can_afford(offer_cents):
+		return HagglePolicy.RESULT_REFUSED
+	if dto.space_required > dto.space_free:
+		return HagglePolicy.RESULT_REFUSED
+	var reputation := GameState.current_reputation
+	var seed := haggle_roll_seed(dto.opportunity_id)
+	var hit := HagglePolicy.roll_accept(
+		seed,
+		offer_cents,
+		ask,
+		reputation,
+		dto.channel
+	)
+	_haggle_spent_ids[dto.opportunity_id] = true
+	if not hit:
+		dismiss_buy_opportunity(dto.opportunity_id)
+		return HagglePolicy.RESULT_MISSED
+	if not _complete_cash_buy_at(dto, opportunity, offer_cents):
+		_haggle_spent_ids.erase(dto.opportunity_id)
+		return HagglePolicy.RESULT_REFUSED
+	_closed_opportunity_ids[opportunity.id] = true
+	return HagglePolicy.RESULT_ACCEPTED
+
+
+func _haggle_ask_cents(dto: BuyConfirmSignal, opportunity: BuyOpportunity) -> int:
+	if opportunity != null and opportunity.unit_cost_cents > 0:
+		var qty := _offer_quantity(opportunity)
+		var unit := _effective_unit_cost_cents(opportunity)
+		if opportunity.is_graded():
+			unit = opportunity.unit_cost_cents
+			qty = maxi(1, opportunity.quantity)
+		return maxi(1, unit * maxi(1, qty))
+	return maxi(dto.lot_total_cents, dto.unit_cost_cents * maxi(1, dto.quantity))
+
+
+func _complete_cash_buy_at(
+	dto: BuyConfirmSignal,
+	opportunity: BuyOpportunity,
+	paid_total_cents: int
+) -> bool:
+	var shown_midpoint := (dto.shown_comp_low_cents + dto.shown_comp_high_cents) / 2
+	if opportunity.is_graded():
+		return _confirm_graded_purchase(dto, opportunity, shown_midpoint, paid_total_cents)
+	var buy_qty := _purchase_quantity(dto, opportunity, -1)
+	if buy_qty <= 0:
+		return false
+	var unit_cost := maxi(1, paid_total_cents / buy_qty)
+	return InventoryService.confirm_stock_purchase(
+		opportunity.sku_id,
+		buy_qty,
+		unit_cost,
+		shown_midpoint - unit_cost,
+		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK),
+		paid_total_cents
+	)
+
+
 func _ensure_regulars_bus() -> void:
 	if EventBus.customer_resolved.is_connected(_on_customer_resolved_regulars):
 		return
@@ -1035,9 +1155,15 @@ func refresh_price_signal(
 func _confirm_graded_purchase(
 	dto: BuyConfirmSignal,
 	opportunity: BuyOpportunity,
-	shown_midpoint: int
+	shown_midpoint: int,
+	paid_total_cents: int = -1
 ) -> bool:
 	var total_cost := opportunity.unit_cost_cents * opportunity.quantity
+	if paid_total_cents > 0:
+		total_cost = paid_total_cents
+	var unit_cost := opportunity.unit_cost_cents
+	if paid_total_cents > 0:
+		unit_cost = maxi(1, paid_total_cents / maxi(1, opportunity.quantity))
 	if total_cost <= 0 or not Economy.can_afford(total_cost):
 		return false
 	var location := InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
@@ -1046,7 +1172,7 @@ func _confirm_graded_purchase(
 		opportunity.sku_id,
 		opportunity.grader,
 		opportunity.grade,
-		opportunity.unit_cost_cents,
+		unit_cost,
 		location,
 		dto.channel,
 		cert_state
@@ -1060,8 +1186,8 @@ func _confirm_graded_purchase(
 	QaInstrumentation.record_buy_confirm(
 		opportunity.sku_id,
 		opportunity.quantity,
-		opportunity.unit_cost_cents,
-		shown_midpoint - opportunity.unit_cost_cents
+		unit_cost,
+		shown_midpoint - unit_cost
 	)
 	EventBus.publish_inventory_changed(
 		opportunity.sku_id,
