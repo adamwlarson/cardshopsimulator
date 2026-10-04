@@ -98,3 +98,4 @@
 | 2026-10-03 | Drafted post AU1 SHIPPED #77 @ `44a1b299`. Lean **AV1 Sell-side Negotiate ±10%**. Fee cut / HUD / STOP / buylist polish parked. Camera off-switch hard-parked. |
 | 2026-10-03 | Local draft ready for PM. Path `docs/design/next-eng-sot-pick-av-v1.md`. |
 | 2026-10-03 | PM adopted **AV1**. Park AV2/AV3/AV4. Hard-park camera off-switch. Soft catalog CLOSED. One ±10% negotiate on a customer buying from the shop. Draft sha256 `2840d41c`. |
+| 2026-10-03 | PM adopted **AV1**. Spec on main `dafc70ef`. Spike [AV1 sell-side negotiate](https://cursor.com/agents/bc-89fcaeae-e81d-5295-bcb1-391172750d16). Park AV2/AV3/AV4. No Art. Soft catalog CLOSED. Draft sha256 `2840d41c`. |
