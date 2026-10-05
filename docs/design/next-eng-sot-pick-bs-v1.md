@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BS v1 — post BR1
 
-**Status:** **TIP-FROZEN** 2026-10-05 ~5:56pm ET — BS1 [#101](https://github.com/adamwlarson/cardshopsimulator/pull/101) @ `04191651` (branch `cursor/bs1-rotation-staples-crash-06fb`). Eng review vs bar `ba3fbd4d`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
+**Status:** **SHIPPED** 2026-10-05 ~7:11pm ET — squash-merged [#101](https://github.com/adamwlarson/cardshopsimulator/pull/101) @ `d898492c` (reviewed `04191651`). QA PASS-with-notes harness 281/0/0. Soft CLOSED. Soft OK list-time Soft. No Art. Next pick is BT.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-br (BR1 Pro tour / influencer spike SHIPPED #100 @ `f4eb0ee6`); Soft catalog CLOSED
@@ -94,3 +94,4 @@
 | 2026-10-05 ~5:45pm ET | Drafted post BR1 SHIPPED #100 @ `f4eb0ee6` (reviewed `cc9b37b5`). Lean **BS1 Rotation staples crash event** (C1 leak shipped with no market effect — verified `soft_rotation_leak` apply/revert are no-ops on main). STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Archetype-customer spawn bias stays Out. BM1/BN1/BO1/BP1/BQ1/BR1 stay as shipped. |
 | 2026-10-05 ~5:46pm ET | **ADOPTED** BS1. Park BS2 STOP / BS3 Soft / BS4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. Live Dustway may lack staple tags — Eng fixtures for acceptance; Soft CLOSED so no catalog Soft reopen. |
 | 2026-10-05 ~5:56pm ET | **Tip-frozen** [#101](https://github.com/adamwlarson/cardshopsimulator/pull/101) @ `04191651` (branch `cursor/bs1-rotation-staples-crash-06fb`). 8 files, no docs. Cloud agent bc-cf45a9ac archived. Eng review that SHA against bar `ba3fbd4d`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
+| 2026-10-05 ~7:11pm ET | **SHIPPED** — squash-merged [#101](https://github.com/adamwlarson/cardshopsimulator/pull/101) @ `d898492c` (reviewed `04191651`). QA PASS-with-notes harness 281/0/0. Soft OK list-time stays Soft. Soft CLOSED. No Art. Next pick is BT. |
