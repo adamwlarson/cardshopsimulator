@@ -93,3 +93,4 @@
 |------|----------|
 | 2026-10-05 ~3:16pm ET | Drafted post BM1 SHIPPED #95 @ `dcc7f748` (reviewed `a47ec381`). Lean **BN1 Buylist low-% fewer lots**. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. High-% seller flood stays Out. |
 | 2026-10-05 ~4:05pm ET | **ADOPTED** BN1. Park BN2 STOP / BN3 Soft / BN4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~4:12pm ET | **Tip-frozen** [#96](https://github.com/adamwlarson/cardshopsimulator/pull/96) @ `4fd16f94` (branch `cursor/bn1-buylist-fewer-lots-17d3`). 10 files, no docs. Cloud agent bc-4bd4eeea archived. Eng review that SHA against bar `7979a02a`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
