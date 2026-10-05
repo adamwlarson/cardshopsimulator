@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BO v1 — post BN1
 
-**Status:** **ADOPTED** 2026-10-05 ~4:21pm ET — **BO1 Buylist high-% seller flood**. Park BO2 STOP / BO3 Soft / BO4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze.
+**Status:** **Tip-frozen** 2026-10-05 ~4:26pm ET — **BO1** [#97](https://github.com/adamwlarson/cardshopsimulator/pull/97) @ `01c5f1ac` (branch `cursor/bo1-buylist-seller-flood-309e`). 8 files, no docs. Cloud agent bc-9f959864 archived. Eng review that SHA against bar `423171ff`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. Soft OK list-time stays Soft. No Art.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bn (BN1 Buylist low-% fewer lots SHIPPED #96 @ `4eb7c9ea`); Soft catalog CLOSED
@@ -94,3 +94,4 @@
 |------|----------|
 | 2026-10-05 ~4:20pm ET | Drafted post BN1 SHIPPED #96 @ `4eb7c9ea` (reviewed `4fd16f94`). Lean **BO1 Buylist high-% seller flood**. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. |
 | 2026-10-05 ~4:21pm ET | **ADOPTED** BO1. Park BO2 STOP / BO3 Soft / BO4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~4:26pm ET | **Tip-frozen** [#97](https://github.com/adamwlarson/cardshopsimulator/pull/97) @ `01c5f1ac` (branch `cursor/bo1-buylist-seller-flood-309e`). 8 files, no docs. Cloud agent bc-9f959864 archived. Eng review that SHA against bar `423171ff`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
