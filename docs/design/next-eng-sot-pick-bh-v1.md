@@ -92,4 +92,4 @@
 |------|----------|
 | 2026-10-05 | Drafted post BG1 SHIPPED #89 @ `617f929c`. Lean **BH1 Persist online cancel day-count**. STOP / Soft reopeners parked. Camera off-switch hard-parked. |
 | 2026-10-05 ~1:30pm ET | **ADOPTED** BH1. Park BH2 STOP / BH3 listed-band Soft / BH4 display-bonus Soft. Camera off-switch hard-parked. Soft CLOSED. No Art. Eng bar locked; awaiting tip-freeze. |
-| 2026-10-05 ~1:36pm ET | **Tip-frozen** [#90](https://github.com/adamwlarson/cardshopsimulator/pull/90) @ `5800b0c0` (branch `cursor/bh1-persist-online-cancel-day-654c`). 5 files, no docs. Cloud agent bc-86214c57 archived. Eng review that SHA against bar `b63aaca5`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
+| 2026-10-05 ~1:41pm ET | **SHIPPED** squash-merged [#90](https://github.com/adamwlarson/cardshopsimulator/pull/90) @ `04deb9e2` (reviewed `5800b0c0`). QA PASS harness 202/0/0. Soft OK notes none. Soft catalog CLOSED. No Art. Next pick is BI. |
