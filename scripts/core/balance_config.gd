@@ -196,6 +196,14 @@ enum Difficulty {
 ## Easy/Hard inherit. Not a sell weight and not a listed-price change.
 @export var register_walkout_rep_hit: int = 1
 @export var register_walkout_rep_cap: int = 3
+## BK1 / systems §5.3: close-settle fair / overprice Rep ticks vs the
+## noisy suggested the player already sees. Missing / ≤0 mults fall
+## back in FairPriceSettlePolicy to 1.10 / 1.25. Missing Rep deltas
+## fall back to +1 / −1. Easy/Hard inherit. Not a sell weight.
+@export var fair_price_fair_mult: float = 1.10
+@export var fair_price_gouge_mult: float = 1.25
+@export var fair_price_fair_rep_gain: int = 1
+@export var fair_price_gouge_rep_hit: int = 1
 
 
 func is_rent_due_day(day: int) -> bool:

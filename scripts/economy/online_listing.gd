@@ -27,6 +27,7 @@ var previous_location: InventoryLocation
 var status: Status = Status.ACTIVE
 var card: CardInstance
 var slab: SlabInstance
+var suggested_at_list_cents: int = 0
 
 
 func is_active() -> bool:

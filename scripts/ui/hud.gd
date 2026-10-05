@@ -404,8 +404,20 @@ func _update_phase(phase: int) -> void:
 	):
 		beat_toast.text = "Cashier no-show — floor understaffed"
 		beat_toast.show()
+	elif phase == GameState.DayPhase.SETTLE:
+		_maybe_show_fair_price_settle_toast()
 	_sync_modal_veil()
 	_maybe_open_event_price_editor()
+
+
+func _maybe_show_fair_price_settle_toast() -> void:
+	var message := DemandSignalPresenter.fair_price_settle_toast(
+		GameState.last_fair_price_settle_rep_delta
+	)
+	if message.is_empty():
+		return
+	beat_toast.text = message
+	beat_toast.show()
 
 
 func _update_attention(remaining: int) -> void:
@@ -1054,7 +1066,14 @@ func _confirm_online_list() -> void:
 	var listed_price_cents := _online_signal.listed_price_cents
 	if online_price_input != null:
 		listed_price_cents = DemandSignalPresenter.parse_cents(online_price_input.text)
-	var result := Economy.online_listings.list_target(_online_target, listed_price_cents)
+	var list_opts := {
+		"suggested_price_cents": _online_signal.suggested_price_cents,
+	}
+	var result := Economy.online_listings.list_target(
+		_online_target,
+		listed_price_cents,
+		list_opts
+	)
 	if not bool(result.get("ok", false)):
 		if StringName(result.get("reason", &"")) == &"hold_cap":
 			beat_toast.text = "Hold slots full · %d / %d" % [

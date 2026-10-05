@@ -15,6 +15,8 @@ var _active_event: MarketEvent
 var _player_trades := PlayerTradeService.new()
 var _regulars := RegularsReturnService.new()
 var _drift_rng := RandomNumberGenerator.new()
+var _shown_shop_suggested_cents: Dictionary = {}
+var _shown_online_suggested_cents: Dictionary = {}
 
 
 func _ready() -> void:
@@ -28,6 +30,8 @@ func reset() -> void:
 	_scripted_opportunities.clear()
 	_player_trades.reset()
 	_regulars.reset()
+	_shown_shop_suggested_cents.clear()
+	_shown_online_suggested_cents.clear()
 	_ensure_regulars_bus()
 	_event_service.reset(MarketEventService.EVENT_RNG_SEED)
 	_drift_rng.seed = MARKET_DRIFT_SEED
@@ -1669,7 +1673,7 @@ func price_signal(
 	listed_price_cents: int,
 	location: InventoryLocation
 ) -> PriceConfirmSignal:
-	return _service.price_confirm(
+	var dto := _service.price_confirm(
 		GameState.current_day,
 		sku_id,
 		listed_price_cents,
@@ -1677,6 +1681,9 @@ func price_signal(
 		DemandSignalService.Channel.BUYLIST,
 		is_skill_informed(sku_id)
 	)
+	if dto != null:
+		_remember_shop_suggested(dto.sku_id, dto.suggested_price_cents)
+	return dto
 
 
 func listable_stock_signals() -> Array[OnlineListConfirmSignal]:
@@ -1700,13 +1707,66 @@ func list_confirm_signal(
 	listed_price_cents: int,
 	location: InventoryLocation
 ) -> OnlineListConfirmSignal:
-	return _service.list_confirm(
+	var dto := _service.list_confirm(
 		GameState.current_day,
 		sku_id,
 		listed_price_cents,
 		location,
 		is_skill_informed(sku_id)
 	)
+	if dto != null:
+		_remember_online_suggested(dto.sku_id, dto.suggested_price_cents)
+	return dto
+
+
+func shown_shop_suggested_cents(sku_id: StringName) -> int:
+	return int(_shown_shop_suggested_cents.get(sku_id, 0))
+
+
+func shown_online_suggested_cents(sku_id: StringName) -> int:
+	return int(_shown_online_suggested_cents.get(sku_id, 0))
+
+
+func suggested_for_listed_sale(
+	sku_id: StringName,
+	listed_price_cents: int,
+	location: InventoryLocation = null
+) -> int:
+	var cached := shown_shop_suggested_cents(sku_id)
+	if cached > 0:
+		return cached
+	var loc := location if location != null else InventoryService.location_for(sku_id)
+	var dto := price_signal(sku_id, listed_price_cents, loc)
+	if dto == null:
+		return 0
+	return dto.suggested_price_cents
+
+
+func suggested_for_online_list(
+	sku_id: StringName,
+	listed_price_cents: int,
+	location: InventoryLocation = null
+) -> int:
+	var cached := shown_online_suggested_cents(sku_id)
+	if cached > 0:
+		return cached
+	var loc := location if location != null else InventoryService.location_for(sku_id)
+	var dto := list_confirm_signal(sku_id, listed_price_cents, loc)
+	if dto == null:
+		return 0
+	return dto.suggested_price_cents
+
+
+func _remember_shop_suggested(sku_id: StringName, suggested_cents: int) -> void:
+	if sku_id.is_empty() or suggested_cents <= 0:
+		return
+	_shown_shop_suggested_cents[sku_id] = suggested_cents
+
+
+func _remember_online_suggested(sku_id: StringName, suggested_cents: int) -> void:
+	if sku_id.is_empty() or suggested_cents <= 0:
+		return
+	_shown_online_suggested_cents[sku_id] = suggested_cents
 
 
 func refresh_list_signal(

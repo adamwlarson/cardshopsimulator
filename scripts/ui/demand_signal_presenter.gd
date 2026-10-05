@@ -107,6 +107,14 @@ static func nm_mismatch_toast(refund_cents: int, rep_delta: int) -> String:
 	]
 
 
+static func fair_price_settle_toast(rep_delta: int) -> String:
+	if rep_delta > 0:
+		return "Fair prices — shop earned trust · Rep +%d" % rep_delta
+	if rep_delta < 0:
+		return "Overpriced listings — shop spent trust · Rep %d" % rep_delta
+	return ""
+
+
 static func research_action_label(cash_cents: int, attention_cost: int) -> String:
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 
