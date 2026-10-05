@@ -93,3 +93,4 @@
 |------|----------|
 | 2026-10-05 | Drafted post AY1 SHIPPED #81 @ `717047f9`. Lean **AZ1 Specialist inspect discount**. Fee cut / HUD / STOP / marketplace Inspect parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM adopted **AZ1**. Park AZ2/AZ3/AZ4. Hard-park camera off-switch. Soft catalog CLOSED. Buylist Inspect costs 2 Att with Specialist on duty (else 5). Draft sha256 `4079dfef`. |
+| 2026-10-05 | PM adopted **AZ1**. Spec on main `b77c064a`. Spike [AZ1 Specialist inspect discount](https://cursor.com/agents/bc-ce59b862-d9b8-592a-81c5-74a5fac5bb7f). Park AZ2/AZ3/AZ4. No Art. Soft catalog CLOSED. Draft sha256 `4079dfef`. |
