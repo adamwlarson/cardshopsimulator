@@ -2,7 +2,8 @@ class_name OnlineListingService
 extends RefCounted
 
 var _listings: Array[OnlineListing] = []
-var _cancel_days: Array[int] = []
+var _cancel_day: int = 0
+var _cancels_today: int = 0
 var _next_id: int = 1
 var _rng := RandomNumberGenerator.new()
 
@@ -13,7 +14,8 @@ func _init(rng_seed: int = 1) -> void:
 
 func reset(rng_seed: int = 1) -> void:
 	_listings.clear()
-	_cancel_days.clear()
+	_cancel_day = 0
+	_cancels_today = 0
 	_next_id = 1
 	_rng.seed = rng_seed
 
@@ -129,19 +131,19 @@ func cancel_listing(listing_id: StringName) -> Dictionary:
 	if not _restore_held(listing):
 		return _result(false, &"restore_failed", listing)
 	listing.status = OnlineListing.Status.CANCELLED
-	var day := GameState.current_day
-	_cancel_days.append(day)
-	var cancels := _cancels_in_window(day)
-	var frequent := cancels >= _config().online_cancel_frequent_threshold
+	var config := _config()
+	var cancels_today := _note_cancel(GameState.current_day)
+	var free_count := OnlineCancelPolicy.free_per_day_for(config)
+	var frequent := OnlineCancelPolicy.is_frequent(cancels_today, free_count)
 	var rep_delta := 0
 	if frequent:
-		rep_delta = -_config().online_cancel_rep_hit
+		rep_delta = OnlineCancelPolicy.rep_delta_for(config)
 		GameState.adjust_reputation(rep_delta)
 		QaInstrumentation.record_online_cancel_rep_hit({
 			"listing_id": String(listing.id),
 			"sku_id": String(listing.sku_id),
-			"cancels_in_window": cancels,
-			"window_days": _config().online_cancel_window_days,
+			"cancels_today": cancels_today,
+			"free_per_day": free_count,
 			"rep_delta": rep_delta,
 			"reputation": GameState.current_reputation,
 		})
@@ -150,7 +152,8 @@ func cancel_listing(listing_id: StringName) -> Dictionary:
 		"sku_id": String(listing.sku_id),
 		"frequent": frequent,
 		"rep_delta": rep_delta,
-		"cancels_in_window": cancels,
+		"cancels_today": cancels_today,
+		"free_per_day": free_count,
 	})
 	return {
 		"ok": true,
@@ -158,7 +161,8 @@ func cancel_listing(listing_id: StringName) -> Dictionary:
 		"listing": listing,
 		"frequent": frequent,
 		"rep_delta": rep_delta,
-		"cancels_in_window": cancels,
+		"cancels_today": cancels_today,
+		"free_per_day": free_count,
 	}
 
 
@@ -295,14 +299,12 @@ func _ship_days_from(opts: Dictionary, config: BalanceConfig) -> int:
 	return _rng.randi_range(config.online_ship_days_min, config.online_ship_days_max)
 
 
-func _cancels_in_window(day: int) -> int:
-	var window := _config().online_cancel_window_days
-	var earliest := day - window + 1
-	var count := 0
-	for cancel_day: int in _cancel_days:
-		if cancel_day >= earliest:
-			count += 1
-	return count
+func _note_cancel(day: int) -> int:
+	if day != _cancel_day:
+		_cancel_day = day
+		_cancels_today = 0
+	_cancels_today += 1
+	return _cancels_today
 
 
 func _fee_rate(config: BalanceConfig = null) -> float:

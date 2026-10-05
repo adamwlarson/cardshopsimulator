@@ -225,6 +225,7 @@ func _initialize() -> void:
 	_test_sell_side_nm_mismatch()
 	_test_online_fee_cut()
 	_test_net_worth_hud()
+	_test_online_frequent_cancel_rep()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -11196,6 +11197,8 @@ func _test_i1_list_hold_fee_and_cancel() -> void:
 
 
 func _test_i1_frequent_cancel_rep_hit() -> void:
+	# I1 cancel path still applies the BG1 calendar-day sting: first
+	# ONLINE_HOLD cancel each day is free; extras are Rep −1 each.
 	_qa_autoload.call("set_force_enabled", true)
 	_qa_autoload.call("clear")
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
@@ -11223,11 +11226,11 @@ func _test_i1_frequent_cancel_rep_hit() -> void:
 		)
 		if bool(last_result.get("frequent", false)):
 			hit_count += 1
-	_expect_equal(hit_count >= 1, true, "I1: frequent-cancel flag fires")
+	_expect_equal(hit_count, 2, "I1: second and third same-day cancels are frequent")
 	_expect_equal(
 		int(_game_state.get("current_reputation")),
-		40 - NORMAL_CONFIG.online_cancel_rep_hit,
-		"I1: frequent cancel applies Rep hit"
+		38,
+		"I1: two extra same-day cancels apply Rep −1 each"
 	)
 	var events: Array = _qa_autoload.call("get_events")
 	var saw_hit := false
@@ -11239,15 +11242,14 @@ func _test_i1_frequent_cancel_rep_hit() -> void:
 		var payload: Dictionary = event.get("payload", {})
 		_expect_payload_keys(
 			event,
-			[&"listing_id", &"sku_id", &"cancels_in_window", &"window_days", &"rep_delta", &"reputation"],
+			[&"listing_id", &"sku_id", &"cancels_today", &"free_per_day", &"rep_delta", &"reputation"],
 			"I1: frequent-cancel QA payload"
 		)
-		_expect_equal(int(payload.get("rep_delta", 0)) < 0, true, "I1: QA rep_delta is a hit")
+		_expect_equal(int(payload.get("rep_delta", 0)), -1, "I1: QA rep_delta is −1")
 		_expect_equal(
-			int(payload.get("cancels_in_window", 0))
-			>= NORMAL_CONFIG.online_cancel_frequent_threshold,
+			int(payload.get("cancels_today", 0)) > int(payload.get("free_per_day", 0)),
 			true,
-			"I1: QA window count meets threshold"
+			"I1: QA count is past the free cancel"
 		)
 	_expect_equal(saw_hit, true, "I1: online_cancel_rep_hit instrumentation fires")
 	_qa_autoload.call("set_force_enabled", false)
@@ -31684,16 +31686,6 @@ func _test_be1_in_shop_sale_no_cut() -> void:
 func _test_be1_hold_ship_cancel_stay() -> void:
 	_expect_equal(NORMAL_CONFIG.online_ship_days_min, 1, "BE1: ship min stays 1 day")
 	_expect_equal(NORMAL_CONFIG.online_ship_days_max, 3, "BE1: ship max stays 3 days")
-	_expect_equal(
-		NORMAL_CONFIG.online_cancel_frequent_threshold,
-		3,
-		"BE1: frequent-cancel threshold stays 3"
-	)
-	_expect_equal(
-		NORMAL_CONFIG.online_cancel_rep_hit,
-		3,
-		"BE1: frequent-cancel Rep hit stays 3"
-	)
 	_qa_autoload.call("set_force_enabled", true)
 	_qa_autoload.call("clear")
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
@@ -32565,6 +32557,475 @@ func _test_bf1_untouched() -> void:
 		"BF1: listed-band retag stays parked"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_online_frequent_cancel_rep() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bg1_named_gate_and_fallbacks()
+	_test_bg1_same_day_first_free_then_minus_one()
+	_test_bg1_next_day_first_free_again()
+	_test_bg1_completed_sale_never_fires()
+	_test_bg1_cancel_returns_stock()
+	_test_bg1_ui_and_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bg1_named_gate_and_fallbacks() -> void:
+	_expect_equal(OnlineCancelPolicy.FREE_PER_DAY, 1, "BG1: locked free-count is 1/day")
+	_expect_equal(OnlineCancelPolicy.REP_HIT, 1, "BG1: locked Rep hit is 1")
+	_expect_equal(
+		NORMAL_CONFIG.online_cancel_free_per_day,
+		1,
+		"BG1: Normal free-count is 1/day"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.online_cancel_rep_hit,
+		1,
+		"BG1: Normal extra-cancel Rep hit is 1"
+	)
+	_expect_equal(
+		EASY_CONFIG.online_cancel_free_per_day == 1
+		and HARD_CONFIG.online_cancel_free_per_day == 1
+		and EASY_CONFIG.online_cancel_rep_hit == 1
+		and HARD_CONFIG.online_cancel_rep_hit == 1,
+		true,
+		"BG1: Easy/Hard inherit 1 free/day and Rep −1"
+	)
+	_expect_equal(OnlineCancelPolicy.free_per_day(0), 1, "BG1: missing free-count falls back to 1")
+	_expect_equal(OnlineCancelPolicy.free_per_day(-2), 1, "BG1: negative free-count falls back to 1")
+	_expect_equal(OnlineCancelPolicy.rep_hit(0), 1, "BG1: missing Rep penalty falls back to 1")
+	_expect_equal(OnlineCancelPolicy.rep_hit(-4), 1, "BG1: negative Rep penalty falls back to 1")
+	_expect_equal(
+		OnlineCancelPolicy.rep_delta(0) == -1
+		and OnlineCancelPolicy.rep_delta_for(null) == -1,
+		true,
+		"BG1: missing Rep penalty applies −1"
+	)
+	_expect_equal(
+		OnlineCancelPolicy.free_per_day_for(null) == 1
+		and OnlineCancelPolicy.rep_hit_for(null) == 1,
+		true,
+		"BG1: null config still uses 1 free/day and hit 1"
+	)
+	var missing := BalanceConfig.new()
+	missing.online_cancel_free_per_day = 0
+	missing.online_cancel_rep_hit = 0
+	_expect_equal(
+		OnlineCancelPolicy.free_per_day_for(missing),
+		1,
+		"BG1: zero config free-count falls back to 1/day"
+	)
+	_expect_equal(
+		OnlineCancelPolicy.rep_delta_for(missing),
+		-1,
+		"BG1: zero config Rep penalty falls back to −1"
+	)
+	_expect_equal(OnlineCancelPolicy.is_frequent(1), false, "BG1: first cancel is not frequent")
+	_expect_equal(OnlineCancelPolicy.is_frequent(2), true, "BG1: second cancel is frequent")
+	_expect_equal(OnlineCancelPolicy.is_frequent(3), true, "BG1: third cancel is frequent")
+	_expect_equal(
+		OnlineCancelPolicy.is_frequent_for(1, null),
+		false,
+		"BG1: null-config first cancel stays free"
+	)
+
+
+func _test_bg1_same_day_first_free_then_minus_one() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BG1: unique card for same-day cancels")
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var first := _bg1_relist_and_cancel(card)
+	_expect_equal(bool(first.get("ok", false)), true, "BG1: first cancel succeeds")
+	_expect_equal(bool(first.get("frequent", false)), false, "BG1: first same-day cancel is free")
+	_expect_equal(int(first.get("rep_delta", -99)), 0, "BG1: first cancel Rep delta is 0")
+	_expect_equal(int(first.get("cancels_today", 0)), 1, "BG1: first cancel counts as 1 today")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		40,
+		"BG1: first ONLINE_HOLD cancel leaves Rep unchanged"
+	)
+	var second := _bg1_relist_and_cancel(card)
+	_expect_equal(bool(second.get("frequent", false)), true, "BG1: second same-day cancel is frequent")
+	_expect_equal(int(second.get("rep_delta", 0)), -1, "BG1: second cancel applies Rep −1 once")
+	_expect_equal(int(second.get("cancels_today", 0)), 2, "BG1: second cancel counts as 2 today")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		39,
+		"BG1: second cancel drops Rep by 1"
+	)
+	var third := _bg1_relist_and_cancel(card)
+	_expect_equal(bool(third.get("frequent", false)), true, "BG1: third same-day cancel is frequent")
+	_expect_equal(int(third.get("rep_delta", 0)), -1, "BG1: third cancel applies Rep −1 once")
+	_expect_equal(int(third.get("cancels_today", 0)), 3, "BG1: third cancel counts as 3 today")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		38,
+		"BG1: third cancel drops Rep by 1 more"
+	)
+	var hit_events := 0
+	for event_value: Variant in _qa_autoload.call("get_events"):
+		var event := event_value as Dictionary
+		if String(event.get("event", "")) != "online_cancel_rep_hit":
+			continue
+		hit_events += 1
+		var payload: Dictionary = event.get("payload", {})
+		_expect_equal(int(payload.get("rep_delta", 0)), -1, "BG1: each QA hit is −1")
+		_expect_equal(
+			int(payload.get("cancels_today", 0)) > int(payload.get("free_per_day", 1)),
+			true,
+			"BG1: QA hit is past the free cancel"
+		)
+		_assert_payload_has_no_truth(payload, "BG1: cancel-rep QA")
+	_expect_equal(hit_events, 2, "BG1: second and third cancels each fire one Rep hit")
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bg1_next_day_first_free_again() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BG1: unique card for next-day reset")
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	_bg1_relist_and_cancel(card)
+	_bg1_relist_and_cancel(card)
+	_bg1_relist_and_cancel(card)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		38,
+		"BG1: day-1 extras spend 2 Rep before the clock rolls"
+	)
+	_qa_autoload.call("clear")
+	_game_state.set("current_day", int(_game_state.get("current_day")) + 1)
+	var first := _bg1_relist_and_cancel(card)
+	_expect_equal(bool(first.get("frequent", false)), false, "BG1: next-day first cancel is free")
+	_expect_equal(int(first.get("rep_delta", -99)), 0, "BG1: next-day first cancel Rep delta is 0")
+	_expect_equal(int(first.get("cancels_today", 0)), 1, "BG1: next-day first cancel is count 1")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		38,
+		"BG1: next calendar day first cancel is free again"
+	)
+	var hit_events := 0
+	for event_value: Variant in _qa_autoload.call("get_events"):
+		var event := event_value as Dictionary
+		if String(event.get("event", "")) == "online_cancel_rep_hit":
+			hit_events += 1
+	_expect_equal(hit_events, 0, "BG1: next-day first cancel does not fire a Rep hit")
+	var second := _bg1_relist_and_cancel(card)
+	_expect_equal(bool(second.get("frequent", false)), true, "BG1: next-day second cancel is frequent")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		37,
+		"BG1: next-day extra cancel applies Rep −1 once"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bg1_completed_sale_never_fires() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BG1: unique card for completed sale")
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var listed: Dictionary = _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(card),
+		2500,
+		{"ship_days": 1}
+	)
+	_expect_equal(bool(listed.get("ok", false)), true, "BG1: list for fill succeeds")
+	var listing := listed.get("listing") as OnlineListing
+	var filled: Array = _economy.get("online_listings").call("tick_shipping")
+	_expect_equal(filled.size() >= 1, true, "BG1: 1-day ship fills without a cancel")
+	_expect_equal(
+		listing.status,
+		OnlineListing.Status.FILLED,
+		"BG1: completed online sale is FILLED"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		40,
+		"BG1: completed online sale does not change Rep"
+	)
+	var cancel_hits := 0
+	var fill_events := 0
+	for event_value: Variant in _qa_autoload.call("get_events"):
+		var event := event_value as Dictionary
+		var name := String(event.get("event", ""))
+		if name == "online_cancel_rep_hit" or name == "online_cancelled":
+			cancel_hits += 1
+		if name == "online_filled":
+			fill_events += 1
+	_expect_equal(fill_events >= 1, true, "BG1: fill instrumentation still fires")
+	_expect_equal(cancel_hits, 0, "BG1: completed online sale never fires the cancel path")
+	var after_fill: Dictionary = _economy.get("online_listings").call(
+		"cancel_listing",
+		listing.id
+	)
+	_expect_equal(
+		bool(after_fill.get("ok", false)),
+		false,
+		"BG1: filled listing cannot take the I1 cancel path"
+	)
+	var later := _i1_unique_card()
+	_expect_equal(later != null, true, "BG1: unique card after the filled sale")
+	if later != null:
+		var first := _bg1_relist_and_cancel(later)
+		_expect_equal(
+			bool(first.get("frequent", false)),
+			false,
+			"BG1: a filled sale does not consume the day's free cancel"
+		)
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			40,
+			"BG1: first cancel after a completed sale is still free"
+		)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bg1_cancel_returns_stock() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BG1: unique card for stock return")
+	if card == null:
+		return
+	var listed: Dictionary = _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(card),
+		1800,
+		{"ship_days": 3}
+	)
+	_expect_equal(bool(listed.get("ok", false)), true, "BG1: list holds the card")
+	_expect_equal(
+		card.location.type,
+		InventoryLocation.Type.ONLINE_HOLD,
+		"BG1: listed card is on ONLINE_HOLD"
+	)
+	var cancelled: Dictionary = _economy.get("online_listings").call(
+		"cancel_listing",
+		(listed.get("listing") as OnlineListing).id
+	)
+	_expect_equal(bool(cancelled.get("ok", false)), true, "BG1: cancel before fill works")
+	_expect_equal(
+		card.location.type,
+		InventoryLocation.Type.BINDER,
+		"BG1: cancel returns stock off ONLINE_HOLD"
+	)
+	_expect_equal(
+		int(cancelled.get("rep_delta", -99)),
+		0,
+		"BG1: returning stock on the first cancel does not cost Rep"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bg1_ui_and_untouched() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BG1: unique card for HUD toast")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BG1: HUD loads for cancel toast")
+	if hud != null and card != null:
+		var listed: Dictionary = _economy.get("online_listings").call(
+			"list_target",
+			_i1_card_target(card),
+			1800,
+			{"ship_days": 3}
+		)
+		_expect_equal(bool(listed.get("ok", false)), true, "BG1: HUD path can list")
+		var listing := listed.get("listing") as OnlineListing
+		Callable(hud, "_cancel_online_listing").call(listing.id)
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("stock returned"),
+			true,
+			"BG1: first cancel toast is the free stock-return beat"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BG1: free cancel toast")
+		var listed_again: Dictionary = _economy.get("online_listings").call(
+			"list_target",
+			_i1_card_target(card),
+			1800,
+			{"ship_days": 3}
+		)
+		_expect_equal(bool(listed_again.get("ok", false)), true, "BG1: HUD path can re-list")
+		var listing_again := listed_again.get("listing") as OnlineListing
+		Callable(hud, "_cancel_online_listing").call(listing_again.id)
+		_expect_equal(
+			toast != null
+			and toast.text.contains("frequent cancels cost Rep"),
+			true,
+			"BG1: extra cancel toast is the trust ding"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BG1: frequent cancel toast")
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			39,
+			"BG1: HUD extra cancel applies Rep −1"
+		)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BG1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BG1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BG1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BG1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BG1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BG1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(NORMAL_CONFIG.online_ship_days_min, 1, "BG1: ship min stays 1 day")
+	_expect_equal(NORMAL_CONFIG.online_ship_days_max, 3, "BG1: ship max stays 3 days")
+	_expect_equal(NmMismatchPolicy.REP_HIT, 2, "BG1: BB1/BD1 mismatch Rep stays −2")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BG1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("frequent_cancel")
+		or events.contains("stop_day"),
+		false,
+		"BG1: Soft catalog stays closed"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "cancel")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "online_cancel"),
+		true,
+		"BG1: frequent-cancel Rep stays off the sell weight"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+		"res://scripts/ui/main_menu.gd",
+		"res://scripts/economy/online_cancel_policy.gd",
+		"res://scripts/economy/online_listing_service.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BG1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BG1: %s never shows p_buy" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("frequent cancels cost Rep"),
+		true,
+		"BG1: HUD still has the frequent-cancel trust ding"
+	)
+	_expect_equal(
+		hud_src.contains("%NetWorth") and hud_src.contains("func _sync_net_worth"),
+		true,
+		"BG1: BF1 net-worth HUD stays"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"BG1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("retag"),
+		true,
+		"BG1: listed-band retag stays parked"
+	)
+	_expect_equal(
+		not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert"),
+		true,
+		"BG1: STOP / win assert stay parked"
+	)
+	if hud != null:
+		if hud.get_parent() == root:
+			root.remove_child(hud)
+		hud.free()
+	_game_state.call("start_new_game")
+
+
+func _bg1_relist_and_cancel(card: CardInstance) -> Dictionary:
+	var listed: Dictionary = _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(card),
+		1800,
+		{"ship_days": 3}
+	)
+	if not bool(listed.get("ok", false)):
+		return listed
+	var listing := listed.get("listing") as OnlineListing
+	return _economy.get("online_listings").call("cancel_listing", listing.id)
 
 
 func _expect_hud_net_worth(hud: Node, expected_cents: int, label: String) -> void:
