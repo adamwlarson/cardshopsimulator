@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BT v1 — post BS1
 
-**Status:** **ADOPTED** 2026-10-05 ~7:16pm ET — BT1 Distributor weekly restock menu. Eng bar = this file on main after sync. Soft CLOSED. Soft OK list-time Soft. No Art. Park BT2 STOP / BT3 Soft / BT4 Soft. Camera hard-parked.
+**Status:** **TIP-FROZEN** 2026-10-05 ~7:24pm ET — BT1 [#102](https://github.com/adamwlarson/cardshopsimulator/pull/102) @ `a1c2b34c` (branch `cursor/distributor-weekly-restock-menu-a364`). Eng review vs bar `9a626a91`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bs (BS1 Rotation staples crash SHIPPED #101 @ `d898492c`, reviewed `04191651`; docs status `62169448`); Soft catalog CLOSED
@@ -96,3 +96,4 @@
 |------|----------|
 | 2026-10-05 ~7:15pm ET | Drafted post BS1 SHIPPED #101 @ `d898492c` (reviewed `04191651`). Lean **BT1 Distributor weekly restock menu** — verified on main `62169448`: `data/buy_opportunities.json` distributor line ends day 2 and only Supply glut adds distributor lots afterwards; no recurring menu. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. BS1 Soft notes stay Soft. No Art. BM1–BS1 stay as shipped. |
 | 2026-10-05 ~7:16pm ET | **ADOPTED** BT1. Park BT2 STOP / BT3 Soft / BT4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~7:24pm ET | **Tip-frozen** [#102](https://github.com/adamwlarson/cardshopsimulator/pull/102) @ `a1c2b34c` (branch `cursor/distributor-weekly-restock-menu-a364`). 7 files, no docs. Cloud agent bc-a111788f archived. Eng review that SHA against bar `9a626a91`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
