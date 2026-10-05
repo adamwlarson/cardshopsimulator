@@ -37,6 +37,29 @@ func apply_cancel_day_save(data: Dictionary) -> void:
 	_cancels_today = OnlineCancelPolicy.cancels_today_from_save(data)
 
 
+func listings_to_save() -> Dictionary:
+	return OnlineListingSavePolicy.snapshot(_next_id, active_listings())
+
+
+func apply_listings_save(data: Dictionary) -> void:
+	_listings.clear()
+	if data.is_empty():
+		_next_id = 1
+		return
+	_next_id = OnlineListingSavePolicy.next_id_from_save(data)
+	for row: Dictionary in OnlineListingSavePolicy.listing_rows_from_save(data):
+		var listing := OnlineListingSavePolicy.listing_from_save(row)
+		if listing == null or not listing.is_active() or listing.remaining_days <= 0:
+			continue
+		if not _restore_held_membership(listing, row):
+			continue
+		if String(listing.id).is_empty():
+			listing.id = StringName("online-%d" % _next_id)
+			_next_id += 1
+		_listings.append(listing)
+		_advance_next_id_past(listing.id)
+
+
 func is_unlocked() -> bool:
 	var config := _config()
 	return (
@@ -299,6 +322,185 @@ func _remove_held(listing: OnlineListing) -> bool:
 		OnlineListing.Kind.SLAB:
 			return listing.slab != null and InventoryService.remove_slab(listing.slab)
 	return false
+
+
+func _restore_held_membership(listing: OnlineListing, row: Dictionary) -> bool:
+	var hold := InventoryLocation.new(InventoryLocation.Type.ONLINE_HOLD)
+	var cost := OnlineListingSavePolicy.acquired_cost_from_save(row)
+	var ask := listing.listed_price_cents
+	match listing.kind:
+		OnlineListing.Kind.LOT:
+			return _restore_lot_membership(listing, hold, cost, ask)
+		OnlineListing.Kind.CARD:
+			return _restore_card_membership(listing, hold, cost, ask)
+		OnlineListing.Kind.SLAB:
+			return _restore_slab_membership(listing, row, hold, cost, ask)
+	return false
+
+
+func _restore_lot_membership(
+	listing: OnlineListing,
+	hold: InventoryLocation,
+	cost: int,
+	ask: int
+) -> bool:
+	if InventoryService.model == null:
+		return false
+	var claimed := _claimed_hold_quantity(listing.sku_id, OnlineListing.Kind.LOT)
+	var on_hold := _hold_lot_quantity(listing.sku_id)
+	var missing := listing.quantity - maxi(0, on_hold - claimed)
+	if missing > 0:
+		if not InventoryService.receive_stock(
+			listing.sku_id,
+			missing,
+			cost,
+			hold.duplicate_location()
+		):
+			return false
+	if ask > 0:
+		for lot: StockLot in InventoryService.model.stock_lots:
+			if (
+				lot.sku != null
+				and lot.sku.id == listing.sku_id
+				and lot.location != null
+				and lot.location.type == InventoryLocation.Type.ONLINE_HOLD
+			):
+				lot.listed_price_cents = ask
+				break
+	return _hold_lot_quantity(listing.sku_id) >= claimed + listing.quantity
+
+
+func _restore_card_membership(
+	listing: OnlineListing,
+	hold: InventoryLocation,
+	cost: int,
+	ask: int
+) -> bool:
+	var existing := _unbound_hold_card(listing.sku_id)
+	if existing != null:
+		listing.card = existing
+		if ask > 0:
+			existing.listed_price_cents = ask
+		return true
+	var card := InventoryService.receive_card(
+		listing.sku_id,
+		cost,
+		hold.duplicate_location(),
+		ask
+	)
+	listing.card = card
+	return card != null
+
+
+func _restore_slab_membership(
+	listing: OnlineListing,
+	row: Dictionary,
+	hold: InventoryLocation,
+	cost: int,
+	ask: int
+) -> bool:
+	var existing := _unbound_hold_slab(listing.sku_id)
+	if existing != null:
+		listing.slab = existing
+		if ask > 0:
+			existing.listed_price_cents = ask
+		return true
+	var grader := StringName(row.get(OnlineListingSavePolicy.GRADER_KEY, &""))
+	var grade := float(row.get(OnlineListingSavePolicy.GRADE_KEY, 0.0))
+	var slab := InventoryService.receive_slab(
+		listing.sku_id,
+		grader,
+		grade,
+		cost,
+		hold.duplicate_location()
+	)
+	if slab == null:
+		return false
+	var cert_id := String(row.get(OnlineListingSavePolicy.CERT_ID_KEY, ""))
+	if not cert_id.is_empty():
+		slab.cert_id = cert_id
+	if ask > 0:
+		slab.listed_price_cents = ask
+	listing.slab = slab
+	return true
+
+
+func _unbound_hold_card(sku_id: StringName) -> CardInstance:
+	if InventoryService.model == null:
+		return null
+	for card: CardInstance in InventoryService.model.cards:
+		if (
+			card != null
+			and card.sku_id == sku_id
+			and card.location != null
+			and card.location.type == InventoryLocation.Type.ONLINE_HOLD
+			and not _card_is_bound(card)
+		):
+			return card
+	return null
+
+
+func _unbound_hold_slab(sku_id: StringName) -> SlabInstance:
+	if InventoryService.model == null:
+		return null
+	for slab: SlabInstance in InventoryService.model.slabs:
+		if (
+			slab != null
+			and slab.card_ref != null
+			and slab.card_ref.sku_id == sku_id
+			and slab.location != null
+			and slab.location.type == InventoryLocation.Type.ONLINE_HOLD
+			and not _slab_is_bound(slab)
+		):
+			return slab
+	return null
+
+
+func _card_is_bound(card: CardInstance) -> bool:
+	for listing: OnlineListing in _listings:
+		if listing.card == card:
+			return true
+	return false
+
+
+func _slab_is_bound(slab: SlabInstance) -> bool:
+	for listing: OnlineListing in _listings:
+		if listing.slab == slab:
+			return true
+	return false
+
+
+func _claimed_hold_quantity(sku_id: StringName, kind: OnlineListing.Kind) -> int:
+	var claimed := 0
+	for listing: OnlineListing in _listings:
+		if listing.kind == kind and listing.sku_id == sku_id and listing.is_active():
+			claimed += listing.quantity
+	return claimed
+
+
+func _hold_lot_quantity(sku_id: StringName) -> int:
+	if InventoryService.model == null:
+		return 0
+	var total := 0
+	for lot: StockLot in InventoryService.model.stock_lots:
+		if (
+			lot != null
+			and lot.sku != null
+			and lot.sku.id == sku_id
+			and lot.location != null
+			and lot.location.type == InventoryLocation.Type.ONLINE_HOLD
+		):
+			total += lot.qty
+	return total
+
+
+func _advance_next_id_past(listing_id: StringName) -> void:
+	var text := String(listing_id)
+	const PREFIX := "online-"
+	if not text.begins_with(PREFIX):
+		return
+	var seq := int(text.substr(PREFIX.length()))
+	_next_id = maxi(_next_id, seq + 1)
 
 
 func _fallback_location(listing: OnlineListing) -> InventoryLocation:
