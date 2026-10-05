@@ -163,6 +163,11 @@ func confirm_channel_singles_purchase(
 			card,
 			GameState.current_day
 		)
+		AuctionInspectPolicy.apply_true_condition(
+			dto,
+			card,
+			GameState.current_day
+		)
 		NmMismatchPolicy.stamp_acquired_card(dto, card)
 		received.append(card)
 	if not Economy.record_expense(total_cost_cents, &"inventory", "Stock purchase"):

@@ -394,6 +394,18 @@ func inspect_condition(dto: BuyConfirmSignal, day: int = -1) -> bool:
 		apply_inspect_state(dto)
 		if MarketplaceInspectPolicy.applies_to(dto):
 			MarketplaceInspectPolicy.ensure_lot_condition(dto, resolved_day)
+		if AuctionInspectPolicy.applies_to(dto):
+			AuctionInspectPolicy.ensure_lot_condition(dto, resolved_day)
+		return true
+	if AuctionInspectPolicy.applies_to(dto):
+		if not AuctionInspectPolicy.apply_inspect(
+			dto,
+			resolved_day,
+			_inspect_accuracy()
+		):
+			return false
+		_inspect_cue_by_key[key] = dto.condition_cue
+		refresh_confirm_gate(dto)
 		return true
 	if MarketplaceInspectPolicy.applies_to(dto):
 		if not MarketplaceInspectPolicy.apply_inspect(

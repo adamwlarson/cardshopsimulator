@@ -214,6 +214,7 @@ func _initialize() -> void:
 	_test_better_marketplace_lead()
 	_test_daily_market_drift()
 	_test_auction_snipes()
+	_test_auction_inspect_fog()
 	_test_shady_trunk()
 	_test_one_counter_haggle()
 	_test_sell_side_negotiate()
@@ -24043,6 +24044,773 @@ func _as1_hud_has_snipe_row(hud: Node) -> bool:
 		if row != null and row.text.begins_with("Auction"):
 			return true
 	return false
+
+
+func _test_auction_inspect_fog() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bc1_named_gate()
+	_test_bc1_one_inspect_and_att_refuse()
+	_test_bc1_seeded_reveal_and_bid()
+	_test_bc1_specialist_ladder_and_other_inspects()
+	_test_bc1_door_whale_fee_bb1_stay()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bc1_named_gate() -> void:
+	_expect_equal(
+		AuctionInspectPolicy.FOG_CUE,
+		"Photo only — inspect recommended",
+		"BC1: auction fog is photo/inspect-recommended"
+	)
+	_expect_equal(
+		AuctionInspectPolicy.FOG_CUE,
+		AuctionSnipePolicy.CONDITION_CUE,
+		"BC1: Inspect reuses the AS1 photo cue"
+	)
+	_expect_equal(
+		AuctionInspectPolicy.attention_cost(),
+		5,
+		"BC1: missing duty flag keeps Inspect at 5"
+	)
+	_expect_equal(
+		AuctionInspectPolicy.attention_cost(false),
+		5,
+		"BC1: off-duty Inspect stays 5"
+	)
+	_expect_equal(
+		AuctionInspectPolicy.attention_cost(true),
+		2,
+		"BC1: Specialist on duty cuts Inspect to 2"
+	)
+	_expect_equal(
+		AuctionInspectPolicy.attention_cost(),
+		MarketplaceInspectPolicy.attention_cost(),
+		"BC1: auction Inspect reuses the AZ1/BA1 Att ladder"
+	)
+	_expect_equal(
+		AuctionInspectPolicy.attention_cost(true),
+		BuylistPolicy.attention_cost(true),
+		"BC1: Specialist 2 Att is the AZ1/BA1 discount"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST,
+		10,
+		"BC1: Bid Attention stays 10"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.is_channel(&"auction"),
+		false,
+		"BC1: BA1 marketplace Inspect stays off auction"
+	)
+	_expect_equal(
+		AuctionInspectPolicy.can_actor_inspect(AuctionInspectPolicy.ACTOR_OWNER),
+		true,
+		"BC1: owner can Inspect"
+	)
+	_expect_equal(
+		AuctionInspectPolicy.can_actor_inspect(AuctionInspectPolicy.ACTOR_CASHIER),
+		false,
+		"BC1: cashier cannot Inspect"
+	)
+	var on_day := int(_as1_flag_days(AuctionSnipePolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "BC1: named gate needs a flag-on day")
+	if on_day < 1:
+		return
+	_as1_reset_on(on_day)
+	var snipe: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BC1: named gate needs the snipe")
+	if snipe == null:
+		return
+	_expect_equal(
+		AuctionInspectPolicy.applies_to(snipe),
+		true,
+		"BC1: Inspect applies to the AS1 snipe"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.applies_to(snipe),
+		false,
+		"BC1: BA1 policy does not claim the snipe"
+	)
+	_expect_equal(
+		int(_demand_signals.call("inspect_attention_cost_for", snipe)),
+		5,
+		"BC1: DemandSignals Inspect cost is 5 without Specialist"
+	)
+
+
+func _test_bc1_one_inspect_and_att_refuse() -> void:
+	var on_day := int(_as1_flag_days(AuctionSnipePolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "BC1: Inspect path needs a flag-on day")
+	if on_day < 1:
+		return
+	_as1_reset_on(on_day)
+	var snipe: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BC1: Inspect needs the snipe")
+	if snipe == null:
+		return
+	_expect_equal(
+		snipe.condition_cue,
+		AuctionSnipePolicy.CONDITION_CUE,
+		"BC1: cue before Inspect is photo/inspect-recommended"
+	)
+	_expect_equal(snipe.confidence, &"medium", "BC1: confidence stays Medium")
+	_expect_equal(snipe.inspected, false, "BC1: snipe starts uninspected")
+	_expect_equal(
+		snipe.lot_condition_ready,
+		true,
+		"BC1: true condition is seeded before Inspect"
+	)
+	var true_band := snipe.lot_condition
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BC1: HUD loads for auction Inspect")
+	if hud != null:
+		_select_buy_on_hud(hud, snipe)
+		var summary := hud.get_node_or_null("%BuySummary") as Label
+		var inspect := hud.get_node_or_null("%InspectButton") as Button
+		var buy := hud.get_node_or_null("%BuyButton") as Button
+		var decline := hud.find_child("TradeDeclineButton", true, false) as Button
+		if decline == null:
+			decline = hud.get("_trade_decline_button") as Button
+		_expect_equal(
+			summary != null and summary.text.contains("Photo only"),
+			true,
+			"BC1: BuyOpportunityDetail shows photo/inspect-recommended copy"
+		)
+		if summary != null:
+			_assert_text_has_no_truth(summary.text, "BC1 fog auction summary")
+			_expect_equal(
+				_ay1_summary_shows_band(summary.text),
+				false,
+				"BC1: true condition stays hidden until Inspect"
+			)
+			_expect_equal(summary.text.contains("Medium"), true, "BC1: detail shows Medium")
+			_expect_equal(summary.text.contains("Att 10"), true, "BC1: Bid Att 10 stays on detail")
+			_expect_equal(
+				summary.text.to_lower().contains("true_market"),
+				false,
+				"BC1: fog HUD never shows true_market"
+			)
+			_expect_equal(
+				summary.text.to_lower().contains("cert_valid"),
+				false,
+				"BC1: fog HUD never shows cert_valid"
+			)
+		_expect_equal(
+			inspect != null and inspect.visible and not inspect.disabled,
+			true,
+			"BC1: Inspect is present on auction detail"
+		)
+		if inspect != null:
+			_expect_equal(
+				inspect.text.contains("Inspect") and inspect.text.contains("Att 5"),
+				true,
+				"BC1: Inspect shows the 5 Att cost"
+			)
+		_expect_equal(
+			buy != null and buy.visible and buy.text == "Bid",
+			true,
+			"BC1: Bid stays on auction detail"
+		)
+		_expect_equal(
+			decline != null and decline.visible,
+			true,
+			"BC1: Decline stays on auction detail"
+		)
+		hud.free()
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var owned_before := int(_inventory_service.call("total_owned", snipe.sku_id))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", snipe)),
+		true,
+		"BC1: one auction Inspect spends 5 Att"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"BC1: one auction Inspect spends 5 Attention"
+	)
+	_expect_equal(snipe.inspected, true, "BC1: Inspect marks the snipe inspected")
+	_expect_equal(
+		_ay1_is_band_cue(snipe.condition_cue),
+		true,
+		"BC1: auction Inspect shows a condition band"
+	)
+	_expect_equal(
+		snipe.lot_condition,
+		true_band,
+		"BC1: Inspect does not rewrite auction true condition"
+	)
+	_expect_equal(snipe.confidence, &"medium", "BC1: Inspect leaves Medium confidence")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"BC1: Inspect does not Bid the snipe"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", snipe.sku_id)),
+		owned_before,
+		"BC1: Inspect leaves auction lots unchanged"
+	)
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") != null,
+		true,
+		"BC1: Inspect does not clear the offer"
+	)
+	_assert_text_has_no_truth(snipe.condition_cue, "BC1 auction inspect cue")
+	_expect_dto_has_no_truth_fields(snipe, "BC1 inspected auction snipe")
+	_free_lingering_gameplay_huds()
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		_select_buy_on_hud(hud, snipe)
+		var summary_after := hud.get_node_or_null("%BuySummary") as Label
+		var inspect_after := hud.get_node_or_null("%InspectButton") as Button
+		var buy_after := hud.get_node_or_null("%BuyButton") as Button
+		if summary_after != null:
+			_expect_equal(
+				summary_after.text.contains(snipe.condition_cue),
+				true,
+				"BC1: detail shows the revealed band"
+			)
+			_assert_text_has_no_truth(summary_after.text, "BC1 revealed auction summary")
+			_expect_equal(
+				summary_after.text.to_lower().contains("true_market"),
+				false,
+				"BC1: revealed HUD never shows true_market"
+			)
+			_expect_equal(
+				summary_after.text.to_lower().contains("cert_valid"),
+				false,
+				"BC1: revealed HUD never shows cert_valid"
+			)
+		_expect_equal(
+			inspect_after != null and inspect_after.visible and inspect_after.disabled,
+			true,
+			"BC1: a spent Inspect is refused in the HUD"
+		)
+		_expect_equal(
+			buy_after != null and buy_after.visible and not buy_after.disabled,
+			true,
+			"BC1: Bid stays allowed after Inspect"
+		)
+		hud.free()
+	var att_after := int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", snipe)),
+		false,
+		"BC1: a second auction Inspect is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_after,
+		"BC1: a second Inspect leaves Attention unchanged"
+	)
+
+	_as1_reset_on(on_day)
+	snipe = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BC1: Att-short Inspect needs the snipe")
+	if snipe == null:
+		return
+	_game_state.set("attention_remaining", 4)
+	att_before = int(_game_state.get("attention_remaining"))
+	var fog := snipe.condition_cue
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", snipe)),
+		false,
+		"BC1: Inspect at Att < 5 is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BC1: a refused Inspect leaves Attention unchanged"
+	)
+	_expect_equal(
+		snipe != null and not snipe.inspected,
+		true,
+		"BC1: a refused Inspect leaves the offer"
+	)
+	_expect_equal(
+		snipe != null and snipe.condition_cue == fog,
+		true,
+		"BC1: a refused Inspect leaves photo fog"
+	)
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") != null,
+		true,
+		"BC1: Att-short Inspect leaves the snipe"
+	)
+	_free_lingering_gameplay_huds()
+	hud = _instantiate_gameplay_hud()
+	if hud != null and snipe != null:
+		_select_buy_on_hud(hud, snipe)
+		var short_inspect := hud.get_node_or_null("%InspectButton") as Button
+		_expect_equal(
+			short_inspect != null and short_inspect.visible and short_inspect.disabled,
+			true,
+			"BC1: Inspect is refused in the HUD at Att < 5"
+		)
+		hud.free()
+
+	_as1_reset_on(on_day)
+	snipe = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BC1: cashier Inspect needs the snipe")
+	if snipe == null:
+		return
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(
+			_demand_signals.call(
+				"inspect_buy",
+				snipe,
+				AuctionInspectPolicy.ACTOR_CASHIER
+			)
+		),
+		false,
+		"BC1: a cashier cannot Inspect"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BC1: a cashier Inspect spends no Attention"
+	)
+	_expect_equal(
+		snipe != null and not snipe.inspected,
+		true,
+		"BC1: a cashier Inspect leaves the offer"
+	)
+
+
+func _test_bc1_seeded_reveal_and_bid() -> void:
+	_expect_equal(
+		BuylistPolicy.revealed_band(CardInstance.Condition.MP, 7, 1.0),
+		CardInstance.Condition.MP,
+		"BC1: accuracy 1.0 shows the true band"
+	)
+	var miss := BuylistPolicy.revealed_band(CardInstance.Condition.MP, 7, 0.0)
+	_expect_equal(
+		BuylistPolicy.is_adjacent_band(CardInstance.Condition.MP, miss)
+		and miss != CardInstance.Condition.MP,
+		true,
+		"BC1: accuracy 0.0 shows an adjacent wrong band"
+	)
+	_expect_equal(
+		BuylistPolicy.is_adjacent_band(
+			CardInstance.Condition.NM,
+			CardInstance.Condition.DMG
+		),
+		false,
+		"BC1: NM never leaps to DMG"
+	)
+	var hits := 0
+	var leaps := 0
+	var samples := 2000
+	for seed in range(samples):
+		var shown := BuylistPolicy.revealed_band(CardInstance.Condition.HP, seed)
+		if shown == CardInstance.Condition.HP:
+			hits += 1
+		elif not BuylistPolicy.is_adjacent_band(CardInstance.Condition.HP, shown):
+			leaps += 1
+	_expect_equal(
+		hits >= int(float(samples) * 0.82) and hits <= int(float(samples) * 0.88),
+		true,
+		"BC1: reveal stays 85/15"
+	)
+	_expect_equal(leaps == 0, true, "BC1: reveal never leaps past an adjacent band")
+
+	var on_day := int(_as1_flag_days(AuctionSnipePolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "BC1: bid without Inspect needs a flag-on day")
+	if on_day < 1:
+		return
+	_as1_reset_on(on_day)
+	var snipe: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BC1: bid without Inspect needs the snipe")
+	if snipe == null:
+		return
+	var true_band := snipe.lot_condition
+	_expect_equal(snipe.inspected, false, "BC1: bid-without-Inspect starts uninspected")
+	_expect_equal(
+		snipe.condition_cue,
+		AuctionSnipePolicy.CONDITION_CUE,
+		"BC1: bid without Inspect keeps the photo cue"
+	)
+	var sku := snipe.sku_id
+	var ask := snipe.lot_total_cents
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var qty_before := _as1_stock_qty(sku)
+	var back_before := _as1_backstock_qty(sku)
+	_expect_equal(
+		bool(_demand_signals.call("bid_auction_snipe", snipe)),
+		true,
+		"BC1: Bid without Inspect still works"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 10,
+		"BC1: Bid without Inspect still costs Attention 10"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - ask,
+		"BC1: Bid without Inspect still pays the ask"
+	)
+	_expect_equal(
+		_as1_stock_qty(sku),
+		qty_before + 1,
+		"BC1: Bid without Inspect lands the lot"
+	)
+	_expect_equal(
+		_as1_backstock_qty(sku),
+		back_before + 1,
+		"BC1: Bid without Inspect lands in backstock"
+	)
+	var acquired := _bc1_acquired_stock(sku)
+	_expect_equal(acquired != null, true, "BC1: Bid without Inspect stores a stock lot")
+	if acquired != null:
+		_expect_equal(
+			acquired.condition,
+			true_band,
+			"BC1: Bid without Inspect stores true condition"
+		)
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") == null,
+		true,
+		"BC1: Bid without Inspect still closes the offer"
+	)
+
+	_as1_reset_on(on_day)
+	snipe = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BC1: wrong-reveal Bid needs the snipe")
+	if snipe == null:
+		return
+	snipe.lot_condition = CardInstance.Condition.MP
+	snipe.lot_condition_ready = true
+	_expect_equal(
+		AuctionInspectPolicy.apply_inspect(snipe, on_day, 0.0),
+		true,
+		"BC1: a forced miss still Inspects"
+	)
+	var shown_band := BuylistPolicy.band_from_cue(snipe.condition_cue)
+	_expect_equal(
+		shown_band != CardInstance.Condition.MP
+		and BuylistPolicy.is_adjacent_band(CardInstance.Condition.MP, shown_band),
+		true,
+		"BC1: the forced miss is an adjacent wrong band"
+	)
+	sku = snipe.sku_id
+	ask = snipe.lot_total_cents
+	att_before = int(_game_state.get("attention_remaining"))
+	cash_before = int(_economy.get("balance_cents"))
+	qty_before = _as1_stock_qty(sku)
+	_expect_equal(
+		bool(_demand_signals.call("bid_auction_snipe", snipe)),
+		true,
+		"BC1: Bid after a wrong reveal still takes the lot"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 10,
+		"BC1: Bid after Inspect still costs Attention 10"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - ask,
+		"BC1: Bid after a wrong reveal still pays the ask"
+	)
+	_expect_equal(
+		_as1_stock_qty(sku),
+		qty_before + 1,
+		"BC1: Bid after a wrong reveal lands the lot"
+	)
+	acquired = _bc1_acquired_stock(sku)
+	_expect_equal(acquired != null, true, "BC1: Bid after a wrong reveal stores a lot")
+	if acquired != null:
+		_expect_equal(
+			acquired.condition,
+			CardInstance.Condition.MP,
+			"BC1: a wrong reveal does not rewrite lot true condition"
+		)
+		_expect_equal(
+			acquired.condition != shown_band,
+			true,
+			"BC1: domain condition stays the true band after a miss"
+		)
+	_expect_equal(
+		snipe.lot_condition,
+		CardInstance.Condition.MP,
+		"BC1: DTO true condition stays MP after a miss Bid"
+	)
+
+
+func _test_bc1_specialist_ladder_and_other_inspects() -> void:
+	var on_day := int(_as1_flag_days(AuctionSnipePolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "BC1: Specialist ladder needs a flag-on day")
+	if on_day < 1:
+		return
+	_as1_reset_on(on_day)
+	var shop := _game_state.get("shop") as ShopState
+	var config := _game_state.get("balance_config") as BalanceConfig
+	_expect_equal(
+		AuctionInspectPolicy.attention_cost_for(shop, config),
+		5,
+		"BC1: no Specialist on duty → Inspect costs 5"
+	)
+	_expect_equal(shop.hire_specialist() != null, true, "BC1: hire Specialist for on-duty discount")
+	_expect_equal(
+		AuctionInspectPolicy.attention_cost_for(shop, config),
+		2,
+		"BC1: Specialist on duty → Inspect costs 2"
+	)
+	var snipe: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BC1: on-duty Inspect needs the snipe")
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	if hud != null and snipe != null:
+		_select_buy_on_hud(hud, snipe)
+		var inspect := hud.get_node_or_null("%InspectButton") as Button
+		_expect_equal(
+			inspect != null and inspect.visible and not inspect.disabled,
+			true,
+			"BC1: on-duty Inspect is present"
+		)
+		if inspect != null:
+			_expect_equal(
+				inspect.text.contains("Att 2"),
+				true,
+				"BC1: HUD mirrors Specialist Inspect cost 2"
+			)
+		hud.free()
+	var att_before := int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", snipe)),
+		true,
+		"BC1: on-duty Inspect spends 2 Att"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 2,
+		"BC1: on-duty Inspect spends 2 Attention"
+	)
+	_expect_equal(
+		_ay1_is_band_cue(snipe.condition_cue) if snipe != null else false,
+		true,
+		"BC1: on-duty Inspect still shows a condition band"
+	)
+
+	_as1_reset_on(on_day)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "BC1: hire Specialist for Att-below-cost")
+	snipe = _demand_signals.call("open_auction_snipe")
+	_game_state.set("attention_remaining", 1)
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", snipe)),
+		false,
+		"BC1: on-duty Inspect at Att < 2 is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BC1: refused on-duty Inspect leaves Att unchanged"
+	)
+
+	_as1_reset_on(on_day)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "BC1: hire Specialist to clear today's duty")
+	for member: StaffMember in shop.staff:
+		if member != null and member.is_specialist():
+			member.on_duty_today = false
+	_expect_equal(
+		AuctionInspectPolicy.attention_cost_for(shop, config),
+		5,
+		"BC1: missing today-duty flag keeps Inspect at 5"
+	)
+	snipe = _demand_signals.call("open_auction_snipe")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", snipe)),
+		true,
+		"BC1: off-floor Specialist still Inspects at 5"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"BC1: off-floor Specialist does not take the 2 Att discount"
+	)
+
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-BASE-088")
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "BC1 buylist stays")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(queue.inspect_buylist(), true, "BC1: AY1 buylist Inspect path still spends")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"BC1: buylist Inspect without Specialist stays 5"
+	)
+	_expect_equal(seller.has_inspected, true, "BC1: buylist Inspect path unchanged")
+	queue.free()
+
+	_ba1_reset()
+	var market := _ba1_inject_offer(
+		&"bc1-market-unchanged",
+		&"AA-BASE-088",
+		&"marketplace",
+		500
+	)
+	_expect_equal(market != null, true, "BC1: marketplace Inspect still injects")
+	if market != null:
+		_expect_equal(
+			market.condition_cue,
+			MarketplaceInspectPolicy.FOG_CUE,
+			"BC1: marketplace fog stays photo/inspect-recommended"
+		)
+		att_before = int(_game_state.get("attention_remaining"))
+		_expect_equal(
+			bool(_demand_signals.call("inspect_buy", market)),
+			true,
+			"BC1: marketplace Inspect path still spends"
+		)
+		_expect_equal(
+			int(_game_state.get("attention_remaining")),
+			att_before - 5,
+			"BC1: marketplace Inspect still costs 5"
+		)
+		_expect_equal(
+			_ay1_is_band_cue(market.condition_cue),
+			true,
+			"BC1: marketplace Inspect still shows a band"
+		)
+
+	_ba1_reset()
+	var shady := _ba1_inject_offer(
+		&"bc1-shady-unchanged",
+		&"AA-BASE-088",
+		&"shady",
+		400
+	)
+	_expect_equal(shady != null, true, "BC1: shady Inspect still injects")
+	if shady != null:
+		att_before = int(_game_state.get("attention_remaining"))
+		_expect_equal(
+			bool(_demand_signals.call("inspect_buy", shady)),
+			true,
+			"BC1: shady Inspect path still spends"
+		)
+		_expect_equal(
+			int(_game_state.get("attention_remaining")),
+			att_before - 5,
+			"BC1: shady Inspect still costs 5"
+		)
+		_expect_equal(
+			_ay1_is_band_cue(shady.condition_cue),
+			true,
+			"BC1: shady Inspect still shows a band"
+		)
+
+
+func _test_bc1_door_whale_fee_bb1_stay() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BC1: door spawn_count stays today's count"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BC1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"BC1: marketplace fee stays 8%"
+	)
+	_expect_equal(
+		NmMismatchPolicy.is_fog_channel(&"marketplace")
+		and NmMismatchPolicy.is_fog_channel(&"shady"),
+		true,
+		"BC1: BB1 mismatch stays marketplace/shady"
+	)
+	_expect_equal(
+		NmMismatchPolicy.is_fog_channel(&"auction"),
+		false,
+		"BC1: BB1 mismatch stays off auction"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BC1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "auction")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"auction"
+		),
+		true,
+		"BC1: auction Inspect is not folded into sell_listed or sell_through_mult_for"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("auction_inspect"),
+		false,
+		"BC1: Soft catalog stays closed"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/auction_inspect_policy.gd",
+		"res://scripts/economy/auction_snipe_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BC1: %s stays §4.5 clean" % path
+		)
+	_game_state.call("start_new_game")
+
+
+func _bc1_acquired_stock(sku_id: StringName) -> StockLot:
+	var model := _inventory_service.get("model") as InventoryModel
+	if model == null:
+		return null
+	var found: StockLot = null
+	for lot: StockLot in model.stock_lots:
+		if lot == null or lot.sku == null:
+			continue
+		if lot.sku.id != sku_id:
+			continue
+		if lot.location == null or lot.location.type != InventoryLocation.Type.BACKSTOCK:
+			continue
+		found = lot
+	return found
 
 
 func _test_shady_trunk() -> void:
