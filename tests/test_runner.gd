@@ -221,6 +221,7 @@ func _initialize() -> void:
 	_test_edit_you_offer_mid_serve()
 	_test_buylist_inspect()
 	_test_marketplace_shady_inspect()
+	_test_sell_side_nm_mismatch()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1297,6 +1298,36 @@ func _test_difficulty_balance_ordering() -> void:
 	_expect_equal(NORMAL_CONFIG.fake_slab_sale_rep_hit, 15, "normal fake-slab sale Rep hit")
 	_expect_equal(EASY_CONFIG.fake_slab_sale_rep_hit, 15, "easy fake-slab sale Rep inherits")
 	_expect_equal(HARD_CONFIG.fake_slab_sale_rep_hit, 15, "hard fake-slab sale Rep inherits")
+	_expect_equal(
+		NORMAL_CONFIG.uninspected_nm_mismatch_rep_hit,
+		2,
+		"BB1: normal uninspected NM mismatch Rep hit"
+	)
+	_expect_equal(
+		EASY_CONFIG.uninspected_nm_mismatch_rep_hit,
+		2,
+		"BB1: easy uninspected NM mismatch Rep inherits"
+	)
+	_expect_equal(
+		HARD_CONFIG.uninspected_nm_mismatch_rep_hit,
+		2,
+		"BB1: hard uninspected NM mismatch Rep inherits"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.uninspected_nm_mismatch_refund_fraction, 0.50),
+		true,
+		"BB1: normal mismatch refund fraction is 0.50"
+	)
+	_expect_equal(
+		is_equal_approx(EASY_CONFIG.uninspected_nm_mismatch_refund_fraction, 0.50),
+		true,
+		"BB1: easy mismatch refund fraction inherits 0.50"
+	)
+	_expect_equal(
+		is_equal_approx(HARD_CONFIG.uninspected_nm_mismatch_refund_fraction, 0.50),
+		true,
+		"BB1: hard mismatch refund fraction inherits 0.50"
+	)
 	_expect_equal(
 		DemandSignalService.recommends_inspect(&"auction"),
 		true,
@@ -29521,6 +29552,725 @@ func _ay1_acquired_card(sku_id: StringName) -> CardInstance:
 		if card != null and card.sku_id == sku_id:
 			found = card
 	return found
+
+
+func _test_sell_side_nm_mismatch() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bb1_named_gate_and_fallbacks()
+	_test_bb1_uninspected_nm_refunds_inspected_same_seed_does_not()
+	_test_bb1_listed_true_or_worse_and_safe_channels()
+	_test_bb1_negotiate_ui_and_no_truth()
+	_test_bb1_door_whale_fee_stay()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bb1_named_gate_and_fallbacks() -> void:
+	_expect_equal(
+		NmMismatchPolicy.rep_hit(NmMismatchPolicy.UNSET_INT),
+		2,
+		"BB1: missing Rep penalty falls back to 2"
+	)
+	_expect_equal(NmMismatchPolicy.rep_hit_for(null), 2, "BB1: null config Rep falls back to 2")
+	_expect_equal(NmMismatchPolicy.rep_hit(0), 2, "BB1: zero Rep config falls back to 2")
+	_expect_equal(
+		is_equal_approx(NmMismatchPolicy.refund_fraction(-1.0), 0.50),
+		true,
+		"BB1: missing refund fraction falls back to 0.50"
+	)
+	_expect_equal(
+		NmMismatchPolicy.refund_cents_for(10_000, null),
+		5_000,
+		"BB1: null config refund is half the sale cents"
+	)
+	_expect_equal(
+		NmMismatchPolicy.refund_cents(12_346, 0.50),
+		6_173,
+		"BB1: refund is round(sale × 0.50) cents"
+	)
+	_expect_equal(
+		NmMismatchPolicy.is_fog_channel(&"marketplace")
+		and NmMismatchPolicy.is_fog_channel(&"shady"),
+		true,
+		"BB1: marketplace and shady are fog channels"
+	)
+	_expect_equal(
+		NmMismatchPolicy.is_fog_channel(&"distributor")
+		or NmMismatchPolicy.is_fog_channel(&"buylist")
+		or NmMismatchPolicy.is_fog_channel(&"auction"),
+		false,
+		"BB1: distributor, buylist, and auction stay out"
+	)
+	var fog := CardInstance.new(&"AA-BASE-088", 100)
+	fog.source_channel = &"marketplace"
+	fog.condition = CardInstance.Condition.LP
+	fog.listed_condition = CardInstance.Condition.NM
+	_expect_equal(NmMismatchPolicy.should_fire(fog), true, "BB1: uninspected NM vs LP fires")
+	fog.mismatch_fired = true
+	_expect_equal(NmMismatchPolicy.should_fire(fog), false, "BB1: mismatch fires once")
+	fog.mismatch_fired = false
+	fog.inspected = true
+	_expect_equal(NmMismatchPolicy.should_fire(fog), false, "BB1: inspected lots are safe")
+	fog.inspected = false
+	fog.listed_condition = CardInstance.Condition.LP
+	_expect_equal(
+		NmMismatchPolicy.listed_true_or_worse(fog),
+		true,
+		"BB1: listed LP at true LP is true-or-worse"
+	)
+	_expect_equal(NmMismatchPolicy.should_fire(fog), false, "BB1: listed true band does not fire")
+	fog.listed_condition = CardInstance.Condition.MP
+	_expect_equal(
+		NmMismatchPolicy.listed_true_or_worse(fog),
+		true,
+		"BB1: listed MP at true LP is worse"
+	)
+	_expect_equal(NmMismatchPolicy.should_fire(fog), false, "BB1: listed worse than true does not fire")
+	fog.listed_condition = CardInstance.Condition.NM
+	fog.condition = CardInstance.Condition.NM
+	_expect_equal(NmMismatchPolicy.should_fire(fog), false, "BB1: true NM does not fire")
+	fog.condition = CardInstance.Condition.LP
+	fog.source_channel = &"distributor"
+	_expect_equal(NmMismatchPolicy.should_fire(fog), false, "BB1: distributor NM-assumed stays out")
+	fog.source_channel = &"buylist"
+	_expect_equal(NmMismatchPolicy.should_fire(fog), false, "BB1: buylist stays out")
+
+
+func _test_bb1_uninspected_nm_refunds_inspected_same_seed_does_not() -> void:
+	var sku := &"AA-BASE-088"
+	var listed := 10_000
+	var refund := NmMismatchPolicy.refund_cents_for(listed, NORMAL_CONFIG)
+	_expect_equal(refund, 5_000, "BB1: half of $100.00 is $50.00")
+
+	_bb1_reset()
+	_qa_autoload.call("clear")
+	_qa_autoload.call("set_force_enabled", true)
+	var skipped := _bb1_acquire_fog_single(
+		&"bb1-same-seed",
+		sku,
+		&"marketplace",
+		400,
+		CardInstance.Condition.LP,
+		false
+	)
+	_expect_equal(skipped != null, true, "BB1: uninspected marketplace buy stores a card")
+	if skipped == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	_expect_equal(skipped.inspected, false, "BB1: skipped Inspect stays uninspected")
+	_expect_equal(
+		skipped.source_channel,
+		&"marketplace",
+		"BB1: buy stamps marketplace as the channel"
+	)
+	_expect_equal(skipped.condition, CardInstance.Condition.LP, "BB1: domain true condition is LP")
+	_expect_equal(
+		skipped.listed_condition,
+		CardInstance.Condition.NM,
+		"BB1: uninspected listing presents as NM"
+	)
+	_bb1_stage_listed(skipped, listed)
+	var owned_before := int(_inventory_service.call("total_owned", sku))
+	var cash_before := int(_economy.get("balance_cents"))
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", sku, listed)),
+		true,
+		"BB1: uninspected NM shop sale still completes"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", sku)),
+		owned_before - 1,
+		"BB1: stock stays sold — no return-to-shelf"
+	)
+	_expect_equal(
+		_inventory_service.call("listed_card_for", sku) == null,
+		true,
+		"BB1: the sold single is gone"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed - refund,
+		"BB1: sale credits then claws back half the sale cents"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 2,
+		"BB1: uninspected NM mismatch applies Rep −2 once"
+	)
+	_expect_equal(
+		bool(_game_state.get("last_nm_mismatch_sale")),
+		true,
+		"BB1: GameState notes the mismatch beat"
+	)
+	var mismatch_event := _qa_event(&"nm_mismatch_sale")
+	_expect_equal(mismatch_event.is_empty(), false, "BB1: QA records nm_mismatch_sale")
+	if not mismatch_event.is_empty():
+		var payload: Dictionary = mismatch_event.get("payload", {})
+		_expect_equal(int(payload.get("refund_cents", 0)), refund, "BB1: QA refund is half")
+		_expect_equal(int(payload.get("rep_delta", 0)), -2, "BB1: QA Rep delta is −2")
+		_expect_equal(
+			String(payload.get("listed_band", "")),
+			"NM",
+			"BB1: QA listed band is NM"
+		)
+		_expect_equal(bool(payload.get("inspected", true)), false, "BB1: QA records uninspected")
+		_assert_payload_has_no_truth(payload, "BB1 mismatch QA")
+	_qa_autoload.call("set_force_enabled", false)
+
+	_bb1_reset()
+	var inspected := _bb1_acquire_fog_single(
+		&"bb1-same-seed",
+		sku,
+		&"marketplace",
+		400,
+		CardInstance.Condition.LP,
+		true
+	)
+	_expect_equal(inspected != null, true, "BB1: inspected same-seed buy stores a card")
+	if inspected == null:
+		return
+	_expect_equal(inspected.inspected, true, "BB1: Inspect before buy stamps reveal spent")
+	_expect_equal(
+		inspected.condition,
+		CardInstance.Condition.LP,
+		"BB1: inspected same seed keeps true LP"
+	)
+	_bb1_stage_listed(inspected, listed)
+	owned_before = int(_inventory_service.call("total_owned", sku))
+	cash_before = int(_economy.get("balance_cents"))
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", sku, listed)),
+		true,
+		"BB1: inspected same-seed sale still completes"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", sku)),
+		owned_before - 1,
+		"BB1: inspected sale still removes the single"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed,
+		"BB1: inspected lot does not refund"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"BB1: inspected lot does not ding Rep"
+	)
+	_expect_equal(
+		bool(_game_state.get("last_nm_mismatch_sale")),
+		false,
+		"BB1: inspected same seed does not note mismatch"
+	)
+
+	_bb1_reset()
+	var shady := _bb1_acquire_fog_single(
+		&"bb1-shady-nm",
+		sku,
+		&"shady",
+		350,
+		CardInstance.Condition.MP,
+		false
+	)
+	_expect_equal(shady != null, true, "BB1: uninspected shady buy stores a card")
+	if shady == null:
+		return
+	_bb1_stage_listed(shady, listed)
+	cash_before = int(_economy.get("balance_cents"))
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", sku, listed)),
+		true,
+		"BB1: uninspected shady NM sale completes"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed - refund,
+		"BB1: shady uninspected NM also refunds half"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 2,
+		"BB1: shady uninspected NM also dings Rep −2"
+	)
+
+
+func _test_bb1_listed_true_or_worse_and_safe_channels() -> void:
+	var sku := &"AA-BASE-088"
+	var listed := 10_000
+
+	_bb1_reset()
+	var honest := _bb1_acquire_fog_single(
+		&"bb1-listed-true",
+		sku,
+		&"marketplace",
+		400,
+		CardInstance.Condition.LP,
+		false
+	)
+	_expect_equal(honest != null, true, "BB1: listed-true path needs a fog card")
+	if honest != null:
+		_bb1_stage_listed(honest, listed, CardInstance.Condition.LP)
+		var cash_before := int(_economy.get("balance_cents"))
+		var rep_before := int(_game_state.get("current_reputation"))
+		_expect_equal(
+			bool(_inventory_service.call("confirm_customer_sale", sku, listed)),
+			true,
+			"BB1: listed at true LP still sells"
+		)
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before + listed,
+			"BB1: listed at true condition does not refund"
+		)
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			rep_before,
+			"BB1: listed at true condition does not ding Rep"
+		)
+
+	_bb1_reset()
+	var worse := _bb1_acquire_fog_single(
+		&"bb1-listed-worse",
+		sku,
+		&"marketplace",
+		400,
+		CardInstance.Condition.LP,
+		false
+	)
+	if worse != null:
+		_bb1_stage_listed(worse, listed, CardInstance.Condition.HP)
+		var cash_worse := int(_economy.get("balance_cents"))
+		var rep_worse := int(_game_state.get("current_reputation"))
+		_expect_equal(
+			bool(_inventory_service.call("confirm_customer_sale", sku, listed)),
+			true,
+			"BB1: listed worse than true still sells"
+		)
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_worse + listed,
+			"BB1: listed worse than true does not refund"
+		)
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			rep_worse,
+			"BB1: listed worse than true does not ding Rep"
+		)
+
+	_bb1_reset()
+	var location := InventoryLocation.new(InventoryLocation.Type.CASE)
+	var distributor: CardInstance = _inventory_service.call(
+		"receive_card",
+		sku,
+		200,
+		location,
+		listed
+	)
+	_expect_equal(distributor != null, true, "BB1: distributor NM-assumed card exists")
+	if distributor != null:
+		distributor.condition = CardInstance.Condition.LP
+		_bb1_stage_listed(distributor, listed)
+		_expect_equal(
+			String(distributor.source_channel),
+			"",
+			"BB1: distributor receive does not stamp a fog channel"
+		)
+		var cash_dist := int(_economy.get("balance_cents"))
+		var rep_dist := int(_game_state.get("current_reputation"))
+		_expect_equal(
+			bool(_inventory_service.call("confirm_customer_sale", sku, listed)),
+			true,
+			"BB1: distributor NM-assumed still sells"
+		)
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_dist + listed,
+			"BB1: distributor NM-assumed never refunds this path"
+		)
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			rep_dist,
+			"BB1: distributor NM-assumed never dings this path"
+		)
+
+	_bb1_reset()
+	_game_state.call("start_floor")
+	var dto := _aw1_signal(sku)
+	_expect_equal(dto != null, true, "BB1: buylist safe path needs a walk-in single")
+	if dto != null:
+		dto.lot_condition = CardInstance.Condition.LP
+		dto.lot_condition_ready = true
+		var queue := _aw1_queue()
+		var seller := _aw1_enqueue_seller(queue, dto, "BB1 buylist")
+		_expect_equal(seller != null, true, "BB1: buylist seller enqueues")
+		if seller != null:
+			_expect_equal(queue.accept_buylist_offer(), true, "BB1: buylist buy lands the lot")
+		queue.free()
+		var buylist_card := _ay1_acquired_card(sku)
+		_expect_equal(buylist_card != null, true, "BB1: buylist buy stores a card")
+		if buylist_card != null:
+			_expect_equal(
+				buylist_card.source_channel,
+				&"buylist",
+				"BB1: buylist stamps its channel"
+			)
+			_bb1_stage_listed(buylist_card, listed)
+			var cash_buy := int(_economy.get("balance_cents"))
+			var rep_buy := int(_game_state.get("current_reputation"))
+			_expect_equal(
+				bool(_inventory_service.call("confirm_customer_sale", sku, listed)),
+				true,
+				"BB1: buylist single still sells"
+			)
+			_expect_equal(
+				int(_economy.get("balance_cents")),
+				cash_buy + listed,
+				"BB1: buylist never takes this mismatch refund"
+			)
+			_expect_equal(
+				int(_game_state.get("current_reputation")),
+				rep_buy,
+				"BB1: buylist never takes this mismatch Rep hit"
+			)
+
+	_bb1_reset()
+	_qa_autoload.call("clear")
+	_qa_autoload.call("set_force_enabled", true)
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var empress := inventory.get_sku(&"AA-SKIE-052")
+	var fake: SlabInstance = _inventory_service.call(
+		"seed_fake_slab",
+		&"AA-SKIE-052",
+		&"Prism",
+		10.0,
+		empress.base_market_cents if empress != null else 12_000,
+		InventoryLocation.new(InventoryLocation.Type.CASE),
+		&"shady"
+	)
+	_expect_equal(fake != null, true, "BB1: AT1 fake-slab path still seeds")
+	if fake != null:
+		fake.listed_price_cents = 12_000
+		var rep_slab := int(_game_state.get("current_reputation"))
+		_expect_equal(
+			bool(_inventory_service.call("confirm_customer_sale", &"AA-SKIE-052", 12_000)),
+			true,
+			"BB1: graded fake-on-sale still resolves"
+		)
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			rep_slab - NORMAL_CONFIG.fake_slab_sale_rep_hit,
+			"BB1: graded fake-on-sale stays AT1 Rep 15"
+		)
+		_expect_equal(
+			bool(_game_state.get("last_nm_mismatch_sale")),
+			false,
+			"BB1: AT1 fake-slab does not take the NM mismatch path"
+		)
+		_expect_equal(
+			_qa_event(&"nm_mismatch_sale").is_empty(),
+			true,
+			"BB1: AT1 fake-slab does not emit nm_mismatch_sale"
+		)
+		_expect_equal(
+			_qa_event(&"slab_sale_failed").is_empty(),
+			false,
+			"BB1: AT1 fake-slab still emits slab_sale_failed"
+		)
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_bb1_negotiate_ui_and_no_truth() -> void:
+	var sku := &"AA-BASE-088"
+	var listed := 10_000
+	_bb1_reset()
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"BB1: FLOOR opens for Negotiate"
+	)
+	_game_state.set("current_reputation", 100)
+	_event_bus.emit_signal("reputation_changed", 100)
+	var fog := _bb1_acquire_fog_single(
+		&"bb1-negotiate",
+		sku,
+		&"marketplace",
+		400,
+		CardInstance.Condition.LP,
+		false
+	)
+	_expect_equal(fog != null, true, "BB1: Negotiate mismatch needs a fog single")
+	if fog == null:
+		return
+	_bb1_stage_listed(fog, listed)
+	var queue := _av1_queue()
+	var buyer := CustomerProfile.new()
+	buyer.archetype_id = &"kid_parent"
+	buyer.display_name = "BB1 nudge"
+	buyer.trade_intent = CustomerProfile.TradeIntent.BUYING_FROM_SHOP
+	buyer.desired_skus = [sku]
+	buyer.budget_cents = listed * 2
+	_expect_equal(queue.enqueue(buyer), true, "BB1: Negotiate buyer enqueues the fog single")
+	var negotiated := CustomerQueue.negotiated_price_cents(
+		listed,
+		NegotiatePolicy.DIRECTION_MINUS
+	)
+	var refund := NmMismatchPolicy.refund_cents_for(negotiated, NORMAL_CONFIG)
+	var cash_before := int(_economy.get("balance_cents"))
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		queue.negotiate(NegotiatePolicy.DIRECTION_MINUS),
+		true,
+		"BB1: AV1 Negotiate still takes the shot"
+	)
+	_expect_equal(
+		queue.last_negotiate_result,
+		NegotiatePolicy.RESULT_SOLD,
+		"BB1: Kid at Rep 100 hits minus 10%"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + negotiated - refund,
+		"BB1: a Negotiate hit refunds half the resolved sale cents"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 2,
+		"BB1: a Negotiate hit still applies Rep −2 once"
+	)
+	queue.free()
+
+	_bb1_reset()
+	fog = _bb1_acquire_fog_single(
+		&"bb1-ui-toast",
+		sku,
+		&"marketplace",
+		400,
+		CardInstance.Condition.LP,
+		false
+	)
+	if fog == null:
+		return
+	_bb1_stage_listed(fog, listed)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BB1: HUD loads for the mismatch beat")
+	if hud == null:
+		return
+	var customer := CustomerProfile.new()
+	customer.display_name = "Mismatch buyer"
+	customer.target_sku = sku
+	customer.listed_price_cents = listed
+	customer.budget_cents = listed * 2
+	customer.desired_skus = [sku]
+	Callable(hud, "_on_customer_head_changed").call(customer)
+	Callable(hud, "_on_customer_desk_ready").call(customer, true)
+	var summary := hud.get_node_or_null("%CustomerSummary") as Label
+	_expect_equal(summary != null, true, "BB1: CustomerServe summary exists")
+	if summary != null:
+		_expect_equal(
+			summary.text.contains("NM"),
+			true,
+			"BB1: CustomerServe presents the listed NM band"
+		)
+		_expect_equal(
+			summary.text.contains("LP"),
+			false,
+			"BB1: CustomerServe does not show true LP"
+		)
+		_assert_text_has_no_truth(summary.text, "BB1 CustomerServe summary")
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", sku, listed)),
+		true,
+		"BB1: HUD mismatch sale completes"
+	)
+	_event_bus.emit_signal("customer_resolved", customer, &"sold")
+	var toast := hud.get_node_or_null("%BeatToast") as Label
+	_expect_equal(
+		toast != null and toast.visible and toast.text.contains("refund"),
+		true,
+		"BB1: HUD shows a soft failure beat with the refund"
+	)
+	if toast != null:
+		_expect_equal(
+			toast.text.contains("Rep") and toast.text.contains("-2"),
+			true,
+			"BB1: HUD names the trust ding"
+		)
+		_assert_text_has_no_truth(toast.text, "BB1 mismatch toast")
+		_expect_equal(
+			_av1_text_shows_p(toast.text, NORMAL_CONFIG.inspect_accuracy),
+			false,
+			"BB1: toast never shows Inspect p"
+		)
+	hud.free()
+	var toast_copy := DemandSignalPresenter.nm_mismatch_toast(5_000, -2)
+	_assert_text_has_no_truth(toast_copy, "BB1 presenter mismatch toast")
+	_expect_equal(
+		toast_copy.to_lower().contains("cert_valid")
+		or toast_copy.to_lower().contains("true_market"),
+		false,
+		"BB1: presenter toast has no truth fields"
+	)
+
+
+func _test_bb1_door_whale_fee_stay() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BB1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BB1: whale weight stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"BB1: marketplace fee stays 8%"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BB1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("net_worth")
+		or events.contains("stop_day"),
+		false,
+		"BB1: Soft catalog stays closed"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "NmMismatchPolicy")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "mismatch"),
+		true,
+		"BB1: mismatch stays off the sell weight"
+	)
+	var inventory_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/inventory_service.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(
+			inventory_src,
+			"func _resolve_slab_sale(",
+			"NmMismatchPolicy"
+		)
+		and not _function_body_contains(
+			inventory_src,
+			"func _fail_fake_slab_sale(",
+			"NmMismatchPolicy"
+		),
+		true,
+		"BB1: graded fake-on-sale stays AT1 only"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		not hud_src.contains("true_market") and not hud_src.contains("cert_valid"),
+		true,
+		"BB1: HUD has no true_market or cert_valid"
+	)
+	var presenter_src := FileAccess.get_file_as_string(
+		"res://scripts/ui/demand_signal_presenter.gd"
+	)
+	_expect_equal(
+		not presenter_src.contains("true_market")
+		and not presenter_src.contains("cert_valid"),
+		true,
+		"BB1: presenter has no true_market or cert_valid"
+	)
+
+
+func _bb1_reset() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _bb1_acquire_fog_single(
+	opportunity_id: StringName,
+	sku_id: StringName,
+	channel_name: StringName,
+	unit_cost_cents: int,
+	true_band: CardInstance.Condition,
+	inspect_first: bool
+) -> CardInstance:
+	var dto := _ba1_inject_offer(opportunity_id, sku_id, channel_name, unit_cost_cents)
+	if dto == null:
+		return null
+	dto.lot_condition = true_band
+	dto.lot_condition_ready = true
+	if inspect_first:
+		_expect_equal(
+			bool(_demand_signals.call("inspect_buy", dto)),
+			true,
+			"BB1: Inspect before buy spends the reveal"
+		)
+	_expect_equal(
+		bool(_demand_signals.call("confirm_buy", dto)),
+		true,
+		"BB1: fog channel buy lands the single"
+	)
+	var model := _inventory_service.get("model") as InventoryModel
+	if model == null:
+		return null
+	var found: CardInstance = null
+	for card: CardInstance in model.cards:
+		if (
+			card != null
+			and card.sku_id == sku_id
+			and String(card.source_channel) == String(channel_name)
+		):
+			found = card
+	return found
+
+
+func _bb1_stage_listed(
+	card: CardInstance,
+	listed_price_cents: int,
+	listed_band: CardInstance.Condition = CardInstance.Condition.NM
+) -> void:
+	if card == null:
+		return
+	var model := _inventory_service.get("model") as InventoryModel
+	if model != null:
+		for other: CardInstance in model.cards:
+			if other != null and other != card and other.sku_id == card.sku_id:
+				other.listed_price_cents = 0
+	card.listed_condition = listed_band
+	card.listed_price_cents = listed_price_cents
+	var moved := bool(
+		_inventory_service.call(
+			"move_card_to",
+			card,
+			InventoryLocation.new(InventoryLocation.Type.CASE)
+		)
+	)
+	if not moved:
+		_inventory_service.call(
+			"move_card_to",
+			card,
+			InventoryLocation.new(InventoryLocation.Type.BINDER)
+		)
 
 
 func _au1_reset() -> void:

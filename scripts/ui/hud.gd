@@ -1372,15 +1372,21 @@ func _on_customer_resolved(
 	_customer: CustomerProfile,
 	outcome: StringName
 ) -> void:
-	if outcome != &"walkout":
+	if outcome == &"walkout":
+		if GameState.last_register_walkout_rep_delta != 0:
+			beat_toast.text = "Walkout — register uncovered · Rep %d" % (
+				GameState.last_register_walkout_rep_delta
+			)
+		else:
+			beat_toast.text = "Walkout — register uncovered"
+		beat_toast.show()
 		return
-	if GameState.last_register_walkout_rep_delta != 0:
-		beat_toast.text = "Walkout — register uncovered · Rep %d" % (
-			GameState.last_register_walkout_rep_delta
+	if outcome == &"sold" and GameState.last_nm_mismatch_sale:
+		beat_toast.text = DemandSignalPresenter.nm_mismatch_toast(
+			GameState.last_nm_mismatch_refund_cents,
+			GameState.last_nm_mismatch_rep_delta
 		)
-	else:
-		beat_toast.text = "Walkout — register uncovered"
-	beat_toast.show()
+		beat_toast.show()
 
 
 func _sync_register_sell_button() -> void:
@@ -1792,15 +1798,15 @@ func _customer_wants_label(customer: CustomerProfile) -> String:
 			String(slab.grader),
 			slab.grade
 		)
-	var card := InventoryService.get_card(sku_id)
+	var card := InventoryService.listed_card_for(sku_id)
 	var condition := ""
 	if card != null:
-		condition = CardInstance.Condition.keys()[card.condition]
+		condition = BuylistPolicy.band_label(card.listed_condition)
 	elif (
 		sku != null
 		and sku.product_class == ProductSKU.ProductClass.SINGLE
 	):
-		condition = CardInstance.Condition.keys()[CardInstance.Condition.NM]
+		condition = BuylistPolicy.band_label(CardInstance.Condition.NM)
 	return DemandSignalPresenter.wants_label(display_name, sku_id, condition)
 
 
