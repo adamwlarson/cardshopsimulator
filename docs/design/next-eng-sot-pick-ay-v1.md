@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AY v1 — post AX1
 
-**Status:** **AY1 ADOPTED** 2026-10-05 — Buylist Inspect. Park AY2/AY3/AY4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, AU1 haggle, AV1 Negotiate, AW1 buylist, or AX1 Change offer into a sell weight. Door spawn math stays as shipped.
+**Status:** **AY1 SHIPPED** 2026-10-05 — squash-merged #81 @ `717047f9` (reviewed `e8707aa3`). Buylist Inspect. Park AY2/AY3/AY4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, AU1 haggle, AV1 Negotiate, AW1 buylist, or AX1 Change offer into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-ax (AX1 Edit You offer SHIPPED #80 @ `84cdf7c9`); Soft catalog CLOSED
@@ -95,3 +95,5 @@
 | 2026-10-05 | PM adopted **AY1**. Park AY2/AY3/AY4. Hard-park camera off-switch. Soft catalog CLOSED. One Inspect on the AW1/AX1 buylist serve. Draft sha256 `b9c2513b`. |
 | 2026-10-05 | PM adopted **AY1**. Spec on main `98b7e177`. Spike [AY1 buylist Inspect](https://cursor.com/agents/bc-7fa02845-7904-52da-b1d8-a1fe89e9a0a4). Park AY2/AY3/AY4. No Art. Soft catalog CLOSED. Draft sha256 `b9c2513b`. |
 | 2026-10-05 | PM tip-froze PR #81 @ `e8707aa3`. Ready. 11 files, no docs. Agent archived. |
+| 2026-10-05 | Eng **APPROVE**-with-notes AY1 [PR #81](https://github.com/adamwlarson/cardshopsimulator/pull/81) @ `e8707aa3`. Soft: HUD gate mirror; true lot_condition seeded at offer-build, UI fog until spend. Soft OK MVP. QA cleared by PM. |
+| 2026-10-05 | PM SHIPPED **AY1**. Squash-merged #81 @ `717047f9` (reviewed `e8707aa3`). QA PASS, harness 147/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. Branch `cursor/ay1-buylist-inspect-a0a4` deleted. |
