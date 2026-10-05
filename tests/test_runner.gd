@@ -230,6 +230,7 @@ func _initialize() -> void:
 	_test_online_hold_soft_cap()
 	_test_online_hold_listing_persist()
 	_test_fair_price_settle()
+	_test_noisy_suggested_day_clear()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -35403,6 +35404,368 @@ func _bk1_sell_sleeves_at(ask_cents: int) -> bool:
 	var sold := queue.enqueue(customer) and queue.sell_listed()
 	queue.free()
 	return sold
+
+
+func _test_noisy_suggested_day_clear() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bl1_cache_drops_on_advance_and_drift()
+	_test_bl1_bk1_uses_post_clear_suggested()
+	_test_bl1_hud_priceconfirm_and_refresh_rederive()
+	_test_bl1_ui_soft_and_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bl1_cache_drops_on_advance_and_drift() -> void:
+	_bl1_reset()
+	var sku := &"ACC-SLV-60"
+	var cached := _bk1_shop_suggested(sku)
+	_expect_equal(cached > 0, true, "BL1: first HUD/PriceConfirm caches a noisy suggested")
+	_expect_equal(
+		int(_demand_signals.call("shown_shop_suggested_cents", sku)),
+		cached,
+		"BL1: shown shop sticker matches the cached cents"
+	)
+	_bl1_double_hidden_market(sku)
+	_expect_equal(_game_state.call("start_floor"), true, "BL1: floor opens before settle")
+	_expect_equal(_game_state.call("start_settle"), true, "BL1: settle runs AR1 overnight drift")
+	_expect_equal(
+		int(_demand_signals.call("shown_shop_suggested_cents", sku)),
+		0,
+		"BL1: AR1 drift path drops the cached noisy suggested"
+	)
+	_expect_equal(_game_state.call("advance_day"), true, "BL1: calendar day advances")
+	_expect_equal(
+		int(_game_state.get("current_day")),
+		2,
+		"BL1: day id flips on advance"
+	)
+	_expect_equal(
+		int(_demand_signals.call("shown_shop_suggested_cents", sku)),
+		0,
+		"BL1: day-id flip keeps the noisy suggested cache empty"
+	)
+	var next_cents := int(_demand_signals.call("suggested_for_listed_sale", sku, cached))
+	_expect_equal(next_cents > 0, true, "BL1: next suggested read re-derives")
+	_expect_equal(
+		next_cents != cached,
+		true,
+		"BL1: next suggested read is not yesterday's cached cents"
+	)
+	_expect_equal(
+		int(_demand_signals.call("shown_shop_suggested_cents", sku)),
+		next_cents,
+		"BL1: re-derived cents become today's shown sticker"
+	)
+
+	_bl1_reset()
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BL1: unique card for online sticker cache")
+	if card == null:
+		return
+	var online_cached := _bk1_online_suggested(card)
+	_expect_equal(online_cached > 0, true, "BL1: first list confirm caches online suggested")
+	_expect_equal(
+		int(_demand_signals.call("shown_online_suggested_cents", card.sku_id)),
+		online_cached,
+		"BL1: shown online sticker matches the cached cents"
+	)
+	_demand_signals.call("apply_daily_market_drift")
+	_expect_equal(
+		int(_demand_signals.call("shown_online_suggested_cents", card.sku_id)),
+		0,
+		"BL1: AR1 drift also drops the online noisy suggested cache"
+	)
+	_expect_equal(
+		int(_demand_signals.call("shown_shop_suggested_cents", sku)),
+		0,
+		"BL1: drift clear drops shop and online sibling caches together"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bl1_bk1_uses_post_clear_suggested() -> void:
+	_bl1_reset()
+	var sku := &"ACC-SLV-60"
+	var stale := _bk1_shop_suggested(sku)
+	_expect_equal(stale > 0, true, "BL1: day-1 noisy suggested is positive")
+	_bl1_double_hidden_market(sku)
+	_expect_equal(_game_state.call("start_floor"), true, "BL1: BK1 path can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BL1: BK1 path can settle+drift")
+	_expect_equal(_game_state.call("advance_day"), true, "BL1: BK1 path can advance the day")
+	var shown := _bk1_shop_suggested(sku)
+	_expect_equal(shown > 0, true, "BL1: post-clear HUD suggested is positive")
+	_expect_equal(
+		shown != stale,
+		true,
+		"BL1: post-clear HUD suggested is not yesterday's cache"
+	)
+	_expect_equal(
+		FairPriceSettlePolicy.is_gouge(shown, stale),
+		true,
+		"BL1: stale cache would treat today's shown ask as gouge"
+	)
+	_expect_equal(
+		FairPriceSettlePolicy.is_fair(shown, shown),
+		true,
+		"BL1: today's shown ask is fair vs the post-clear suggested"
+	)
+	_expect_equal(_bk1_sell_sleeves_at(shown), true, "BL1: new-day listed sale completes")
+	var log: ListedSaleDayLog = _game_state.get("listed_sale_log")
+	_expect_equal(log.had_fair, true, "BL1: BK1 records fair vs the shown post-clear suggested")
+	_expect_equal(log.had_gouge, false, "BL1: BK1 does not judge the new day against stale cache")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(_game_state.call("start_floor"), true, "BL1: new-day floor opens")
+	_expect_equal(_game_state.call("start_settle"), true, "BL1: new-day settle runs")
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		1,
+		"BL1: fair vs post-clear suggested settles Rep +1"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before + 1,
+		"BL1: reputation follows the shown suggested, not yesterday's cache"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bl1_hud_priceconfirm_and_refresh_rederive() -> void:
+	_bl1_reset()
+	var sku := &"ACC-SLV-60"
+	var listed: int = int(_inventory_service.call("listed_price_for", sku))
+	var location: InventoryLocation = _inventory_service.call("location_for", sku)
+	var day1: PriceConfirmSignal = _demand_signals.call("price_signal", sku, listed, location)
+	_expect_equal(day1 != null, true, "BL1: day-1 PriceConfirm exists")
+	var stale := day1.suggested_price_cents if day1 != null else 0
+	var stale_position := day1.position if day1 != null else &""
+	var stale_feel := day1.move_feel if day1 != null else &""
+	_bl1_double_hidden_market(sku)
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_game_state.call("advance_day")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BL1: HUD loads after rollover")
+	if hud != null:
+		hud.call("_open_price_list")
+	var signals: Array = _demand_signals.call("priceable_stock_signals")
+	var hud_dto: PriceConfirmSignal = null
+	for item: Variant in signals:
+		var dto := item as PriceConfirmSignal
+		if dto != null and dto.sku_id == sku:
+			hud_dto = dto
+			break
+	_expect_equal(hud_dto != null, true, "BL1: first HUD PriceConfirm after rollover exists")
+	if hud_dto != null:
+		_expect_equal(
+			hud_dto.suggested_price_cents != stale,
+			true,
+			"BL1: first HUD PriceConfirm uses today's suggested, not yesterday's cache"
+		)
+		_expect_dto_has_no_truth_fields(hud_dto, "BL1 HUD PriceConfirm")
+		var summary := DemandSignalPresenter.price_summary(hud_dto)
+		_assert_text_has_no_truth(summary, "BL1 price summary")
+		_expect_equal(
+			summary.contains("true_market") or summary.contains("p_buy"),
+			false,
+			"BL1: PriceConfirm copy never shows true_market or p_buy"
+		)
+		_expect_equal(
+			hud_dto.position.is_empty() == false and hud_dto.move_feel.is_empty() == false,
+			true,
+			"BL1: position and move-feel re-derive with today's suggested"
+		)
+	if hud != null:
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		if toast != null:
+			_assert_text_has_no_truth(toast.text, "BL1 HUD toast")
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+	var refreshed: PriceConfirmSignal = _demand_signals.call(
+		"refresh_price_signal",
+		day1,
+		listed
+	)
+	_expect_equal(refreshed != null, true, "BL1: refresh after rollover rebuilds PriceConfirm")
+	if refreshed != null:
+		_expect_equal(
+			refreshed.suggested_price_cents != stale,
+			true,
+			"BL1: refresh does not keep yesterday's cached cents"
+		)
+		_expect_equal(
+			refreshed.suggested_price_cents
+			== int(_demand_signals.call("shown_shop_suggested_cents", sku)),
+			true,
+			"BL1: refresh stamps the post-clear shown suggested"
+		)
+		_expect_equal(
+			refreshed.position != stale_position or refreshed.move_feel != stale_feel
+			or refreshed.suggested_price_cents != stale,
+			true,
+			"BL1: sibling position/move-feel do not stick to the stale sticker"
+		)
+	_game_state.call("start_new_game")
+
+
+func _test_bl1_ui_soft_and_untouched() -> void:
+	_bl1_reset()
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BL1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BL1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BL1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BL1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BL1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BL1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "noisy_suggested")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shown_shop"),
+		true,
+		"BL1: noisy-suggested clear stays off the sell roll"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not spawn_src.contains("NoisySuggestedCache")
+		and not policy_src.contains("NoisySuggestedCache")
+		and not spawn_src.contains("clear_cached_noisy_suggested")
+		and not policy_src.contains("clear_cached_noisy_suggested"),
+		true,
+		"BL1: door spawn does not read the noisy suggested cache"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.FAIR_MULT, 1.10)
+		and is_equal_approx(FairPriceSettlePolicy.GOUGE_MULT, 1.25),
+		true,
+		"BL1: BK1 fair/gouge mults stay 1.10 / 1.25"
+	)
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BL1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(OnlineHoldCapPolicy.CAP_LOW, 4, "BL1: BI1 low cap stays 4")
+	_expect_equal(
+		OnlineCancelPolicy.FREE_PER_DAY == 1 and OnlineCancelPolicy.REP_HIT == 1,
+		true,
+		"BL1: BG1 cancel rules stay 1 free / −1"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("listed_band")
+		or events.contains("stop_day"),
+		false,
+		"BL1: Soft catalog stays closed"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/noisy_suggested_cache.gd",
+		"res://scripts/economy/fair_price_settle_policy.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/autoload/economy.gd",
+		"res://scripts/economy/online_listing.gd",
+		"res://scripts/economy/online_listing_service.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BL1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BL1: %s never shows p_buy" % path
+		)
+	var save_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/online_listing_save_policy.gd"
+	)
+	_expect_equal(
+		not save_src.contains("suggested_at_list"),
+		true,
+		"BL1: Soft OK list-time suggested persistence stays Soft"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert")
+		and not hud_src.contains("camera_off"),
+		true,
+		"BL1: listed-band retag, STOP, and camera off-switch stay parked"
+	)
+	var cache := NoisySuggestedCache.new()
+	cache.remember_shop(&"ACC-SLV-60", 1234)
+	cache.remember_online(&"AA-BASE-088", 5678)
+	_expect_equal(cache.shop_cents(&"ACC-SLV-60"), 1234, "BL1: shop cache stores cents")
+	cache.clear()
+	_expect_equal(cache.is_empty(), true, "BL1: cache clear drops shop and online stickers")
+	_expect_equal(cache.shop_cents(&"ACC-SLV-60"), 0, "BL1: cleared shop cents read as 0")
+	_game_state.call("start_new_game")
+
+
+func _bl1_reset() -> void:
+	var config := NORMAL_CONFIG.duplicate() as BalanceConfig
+	config.event_chance_settle = 0.0
+	_game_state.call("set_balance_config", config)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	_demand_signals.call("seed_market_drift_rng", 20261003)
+
+
+func _bl1_double_hidden_market(sku_id: StringName) -> void:
+	var market: MarketState = _demand_signals.get("_market_state")
+	if market == null:
+		return
+	market.apply_multiplier(sku_id, 2.0)
 
 
 func _bj1_active_rows() -> Array[Dictionary]:

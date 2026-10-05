@@ -15,8 +15,7 @@ var _active_event: MarketEvent
 var _player_trades := PlayerTradeService.new()
 var _regulars := RegularsReturnService.new()
 var _drift_rng := RandomNumberGenerator.new()
-var _shown_shop_suggested_cents: Dictionary = {}
-var _shown_online_suggested_cents: Dictionary = {}
+var _noisy_suggested := NoisySuggestedCache.new()
 
 
 func _ready() -> void:
@@ -30,8 +29,7 @@ func reset() -> void:
 	_scripted_opportunities.clear()
 	_player_trades.reset()
 	_regulars.reset()
-	_shown_shop_suggested_cents.clear()
-	_shown_online_suggested_cents.clear()
+	clear_cached_noisy_suggested()
 	_ensure_regulars_bus()
 	_event_service.reset(MarketEventService.EVENT_RNG_SEED)
 	_drift_rng.seed = MARKET_DRIFT_SEED
@@ -99,6 +97,9 @@ func apply_daily_market_drift() -> Dictionary:
 		var multiplier := _drift_rng.randf_range(band.x, band.y)
 		if _market_state.apply_multiplier(sku_id, multiplier) > 0:
 			drifted += 1
+	# BL1: AR1 overnight drift invalidates yesterday's noisy stickers so
+	# the next HUD / PriceConfirm / BK1 read re-derives today's §4.5.
+	clear_cached_noisy_suggested()
 	return {"drifted": drifted}
 
 
@@ -1254,11 +1255,13 @@ func refresh_price_signal(
 ) -> PriceConfirmSignal:
 	if dto == null:
 		return null
-	return _service.refresh_price_confirm(
-		dto,
-		listed_price_cents,
-		InventoryService.location_for(dto.sku_id)
-	)
+	var location := InventoryService.location_for(dto.sku_id)
+	var cached := shown_shop_suggested_cents(dto.sku_id)
+	if cached <= 0:
+		return _rebuild_price_signal(dto, listed_price_cents, location)
+	if dto.suggested_price_cents != cached:
+		dto.suggested_price_cents = cached
+	return _service.refresh_price_confirm(dto, listed_price_cents, location)
 
 
 func _confirm_ungraded_purchase(
@@ -1720,11 +1723,18 @@ func list_confirm_signal(
 
 
 func shown_shop_suggested_cents(sku_id: StringName) -> int:
-	return int(_shown_shop_suggested_cents.get(sku_id, 0))
+	return _noisy_suggested.shop_cents(sku_id)
 
 
 func shown_online_suggested_cents(sku_id: StringName) -> int:
-	return int(_shown_online_suggested_cents.get(sku_id, 0))
+	return _noisy_suggested.online_cents(sku_id)
+
+
+func clear_cached_noisy_suggested() -> void:
+	# BL1: drop live-SKU noisy suggested plus sibling shop/online stickers.
+	# Position / move-feel re-derive on the next §4.5 read. List-time
+	# `suggested_at_list_cents` on an ONLINE_HOLD stays on the listing.
+	_noisy_suggested.clear()
 
 
 func suggested_for_listed_sale(
@@ -1758,15 +1768,11 @@ func suggested_for_online_list(
 
 
 func _remember_shop_suggested(sku_id: StringName, suggested_cents: int) -> void:
-	if sku_id.is_empty() or suggested_cents <= 0:
-		return
-	_shown_shop_suggested_cents[sku_id] = suggested_cents
+	_noisy_suggested.remember_shop(sku_id, suggested_cents)
 
 
 func _remember_online_suggested(sku_id: StringName, suggested_cents: int) -> void:
-	if sku_id.is_empty() or suggested_cents <= 0:
-		return
-	_shown_online_suggested_cents[sku_id] = suggested_cents
+	_noisy_suggested.remember_online(sku_id, suggested_cents)
 
 
 func refresh_list_signal(
@@ -1776,7 +1782,46 @@ func refresh_list_signal(
 ) -> OnlineListConfirmSignal:
 	if dto == null or _service == null:
 		return null
+	var cached := shown_online_suggested_cents(dto.sku_id)
+	if cached <= 0:
+		return _rebuild_list_signal(dto, listed_price_cents, location)
+	if dto.suggested_price_cents != cached:
+		dto.suggested_price_cents = cached
 	return _service.refresh_list_confirm(dto, listed_price_cents, location)
+
+
+func _rebuild_price_signal(
+	dto: PriceConfirmSignal,
+	listed_price_cents: int,
+	location: InventoryLocation
+) -> PriceConfirmSignal:
+	var rebuilt := price_signal(dto.sku_id, listed_price_cents, location)
+	if rebuilt == null:
+		return null
+	rebuilt.display_name = dto.display_name
+	rebuilt.quantity = dto.quantity
+	rebuilt.condition_cue = dto.condition_cue
+	rebuilt.inspected = dto.inspected
+	rebuilt.grader = dto.grader
+	rebuilt.grade = dto.grade
+	return rebuilt
+
+
+func _rebuild_list_signal(
+	dto: OnlineListConfirmSignal,
+	listed_price_cents: int,
+	location: InventoryLocation
+) -> OnlineListConfirmSignal:
+	var rebuilt := list_confirm_signal(dto.sku_id, listed_price_cents, location)
+	if rebuilt == null:
+		return null
+	rebuilt.display_name = dto.display_name
+	rebuilt.quantity = dto.quantity
+	rebuilt.condition_cue = dto.condition_cue
+	rebuilt.inspected = dto.inspected
+	rebuilt.grader = dto.grader
+	rebuilt.grade = dto.grade
+	return rebuilt
 
 
 func researchable_sets() -> Array[Dictionary]:
