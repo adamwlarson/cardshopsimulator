@@ -94,3 +94,4 @@
 |------|----------|
 | 2026-10-05 | Drafted post BJ1 SHIPPED #92 @ `47776097`. Lean **BK1 Fair / overprice settle Rep tick**. STOP / Soft reopeners parked. Camera off-switch hard-parked. |
 | 2026-10-05 ~2:20pm ET | **ADOPTED** BK1. Park BK2 STOP / BK3 listed-band Soft / BK4 display-bonus Soft. Camera off-switch hard-parked. Soft CLOSED. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~2:33pm ET | **Tip-frozen** [#93](https://github.com/adamwlarson/cardshopsimulator/pull/93) @ `08c1b53f` (branch `cursor/bk1-fair-overprice-settle-rep-53b3`). 13 files, no docs. Cloud agent bc-ed8df823 archived. Eng review that SHA against bar `6c144830`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
