@@ -96,3 +96,4 @@
 | 2026-10-05 | Drafted post AV1 SHIPPED #78 @ `6f881d6b`. Lean **AW1 Buylist buy-from-them**. Fee cut / HUD / STOP / mid-serve offer edit parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM adopted **AW1**. Park AW2/AW3/AW4. Hard-park camera off-switch. Soft catalog CLOSED. Buylist seller serve with You offer, Buy, Walk. Draft sha256 `ddf0e9c9`. |
 | 2026-10-05 | PM adopted **AW1**. Spec on main `a675de76`. Spike [AW1 buylist buy-from-them](https://cursor.com/agents/bc-93a95cb7-d057-5673-a238-5bb9ef062be8). Park AW2/AW3/AW4. No Art. Soft catalog CLOSED. Draft sha256 `ddf0e9c9`. |
+| 2026-10-05 | PM tip-froze PR #79 @ `b52af462`. Ready. 7 files, no docs. Agent archived. |
