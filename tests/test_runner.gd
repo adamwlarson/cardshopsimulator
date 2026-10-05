@@ -34729,7 +34729,6 @@ func _test_fair_price_settle() -> void:
 	_test_bk1_ui_and_untouched()
 	_qa_autoload.call("set_force_enabled", false)
 	_qa.set_force_enabled(false)
-	NORMAL_CONFIG.event_chance_settle = 0.18
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
 
@@ -34853,7 +34852,6 @@ func _test_bk1_named_gate_and_fallbacks() -> void:
 
 
 func _test_bk1_same_seed_fair_plus_one() -> void:
-	var events_chance := _bk1_silence_events()
 	_bk1_reset_for_settle()
 	var suggested := _bk1_shop_suggested()
 	_expect_equal(suggested > 0, true, "BK1: noisy suggested is positive")
@@ -34885,12 +34883,10 @@ func _test_bk1_same_seed_fair_plus_one() -> void:
 		rep_before + 1,
 		"BK1: reputation stays +1 after a repeated settle pass"
 	)
-	_bk1_restore_events(events_chance)
 	_game_state.call("start_new_game")
 
 
 func _test_bk1_same_seed_gouge_minus_one_skips_fair() -> void:
-	var events_chance := _bk1_silence_events()
 	_bk1_reset_for_settle()
 	var suggested := _bk1_shop_suggested()
 	var gouge_ask := _bk1_gouge_ask(suggested)
@@ -34940,12 +34936,10 @@ func _test_bk1_same_seed_gouge_minus_one_skips_fair() -> void:
 		rep_before - 1,
 		"BK1: mixed day reputation is −1, not net zero"
 	)
-	_bk1_restore_events(events_chance)
 	_game_state.call("start_new_game")
 
 
 func _test_bk1_no_sales_and_second_fair_once() -> void:
-	var events_chance := _bk1_silence_events()
 	_bk1_reset_for_settle()
 	var log: ListedSaleDayLog = _game_state.get("listed_sale_log")
 	_expect_equal(log.had_fair or log.had_gouge, false, "BK1: a fresh day has no listed-sale flags")
@@ -34982,12 +34976,10 @@ func _test_bk1_no_sales_and_second_fair_once() -> void:
 		rep_before + 1,
 		"BK1: two fair sales still raise reputation by 1"
 	)
-	_bk1_restore_events(events_chance)
 	_game_state.call("start_new_game")
 
 
 func _test_bk1_online_fill_counts_cancel_does_not() -> void:
-	var events_chance := _bk1_silence_events()
 	_bk1_reset_for_settle()
 	_game_state.set("current_reputation", 40)
 	var card := _i1_unique_card()
@@ -35074,12 +35066,10 @@ func _test_bk1_online_fill_counts_cancel_does_not() -> void:
 			rep_before,
 			"BK1: cancel-only settle leaves reputation unchanged"
 		)
-	_bk1_restore_events(events_chance)
 	_game_state.call("start_new_game")
 
 
 func _test_bk1_walkout_refuse_haggle_do_not() -> void:
-	var events_chance := _bk1_silence_events()
 	_bk1_reset_for_settle()
 	var suggested := _bk1_shop_suggested()
 	_inventory_service.call("set_listed_price", &"ACC-SLV-60", suggested)
@@ -35150,12 +35140,10 @@ func _test_bk1_walkout_refuse_haggle_do_not() -> void:
 		true,
 		"BK1: negotiate / refuse / walkout do not record listed-sale flags"
 	)
-	_bk1_restore_events(events_chance)
 	_game_state.call("start_new_game")
 
 
 func _test_bk1_ui_and_untouched() -> void:
-	var events_chance := _bk1_silence_events()
 	_bk1_reset_for_settle()
 	var suggested := _bk1_shop_suggested()
 	_expect_equal(_bk1_sell_sleeves_at(suggested), true, "BK1: HUD path can complete a fair sale")
@@ -35322,10 +35310,18 @@ func _test_bk1_ui_and_untouched() -> void:
 			"BK1: %s never shows p_buy" % path
 		)
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	var presenter_src := FileAccess.get_file_as_string(
+		"res://scripts/ui/demand_signal_presenter.gd"
+	)
 	_expect_equal(
-		hud_src.contains("earned trust") and hud_src.contains("spent trust"),
+		presenter_src.contains("earned trust") and presenter_src.contains("spent trust"),
 		true,
-		"BK1: HUD keeps the fair/overprice settle beats"
+		"BK1: settle beats stay a soft ding / soft boost"
+	)
+	_expect_equal(
+		hud_src.contains("_maybe_show_fair_price_settle_toast"),
+		true,
+		"BK1: HUD shows the fair/overprice settle beat"
 	)
 	_expect_equal(
 		not hud_src.contains("listed_band")
@@ -35345,24 +35341,15 @@ func _test_bk1_ui_and_untouched() -> void:
 		true,
 		"BK1: BJ1 listing save stays on hold identity, not settle ticks"
 	)
-	_bk1_restore_events(events_chance)
 	_game_state.call("start_new_game")
 
 
 func _bk1_reset_for_settle() -> void:
-	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	var config := NORMAL_CONFIG.duplicate() as BalanceConfig
+	config.event_chance_settle = 0.0
+	_game_state.call("set_balance_config", config)
 	_game_state.call("start_new_game")
 	_game_state.set("current_reputation", 40)
-
-
-func _bk1_silence_events() -> float:
-	var previous := float(NORMAL_CONFIG.event_chance_settle)
-	NORMAL_CONFIG.event_chance_settle = 0.0
-	return previous
-
-
-func _bk1_restore_events(previous: float) -> void:
-	NORMAL_CONFIG.event_chance_settle = previous
 
 
 func _bk1_shop_suggested(sku_id: StringName = &"ACC-SLV-60") -> int:
