@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BD v1 — post BC1
 
-**Status:** **ADOPTED** 2026-10-05 — **BD1 Extend BB1 NM mismatch onto auction**. Park BD2/BD3/BD4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn prior packs into a sell weight. Door spawn math stays as shipped.
+**Status:** **BD1 ADOPTED** 2026-10-05 — Extend BB1 NM mismatch onto auction. Spec on main `f54e9335`. Park BD2/BD3/BD4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn prior packs into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bc (BC1 Auction Inspect fog SHIPPED #85 @ `89ae3b0a`); Soft catalog CLOSED
@@ -93,3 +93,6 @@
 |------|----------|
 | 2026-10-05 | Drafted post BC1 SHIPPED #85 @ `89ae3b0a`. Lean **BD1 Extend BB1 NM mismatch onto auction**. Fee cut / HUD / STOP / listed-band retag parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM ADOPTED **BD1**. Sync to main; Eng bar = this commit. Soft CLOSED. No Art. |
+| 2026-10-05 | PM adopted **BD1**. Spec on main `f54e9335`. Spike [BD1 Extend BB1 NM mismatch onto auction](https://cursor.com/agents/bc-7959cef1-9fd5-5dd8-8f5a-7a878ac2dc50). Park BD2/BD3/BD4. No Art. Soft catalog CLOSED. Draft sha256 `4e30f141`. |
+| 2026-10-05 | Eng bar locked BD1 against `f54e9335`. Auction joins BB1 fog set. Awaiting tip-freeze. |
+| 2026-10-05 | PM tip-froze PR #86 @ `a0094b84`. Ready. 3 files, no docs. Agent archived. |
