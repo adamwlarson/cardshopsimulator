@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AZ v1 — post AY1
 
-**Status:** **AZ1 ADOPTED** 2026-10-05 — Specialist inspect discount. Park AZ2/AZ3/AZ4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, AU1 haggle, AV1 Negotiate, AW1 buylist, AX1 Change, or AY1 Inspect into a sell weight. Door spawn math stays as shipped.
+**Status:** **AZ1 SHIPPED** 2026-10-05 — squash-merged #82 @ `81657192` (reviewed `ad1d96d3`). Specialist inspect discount. Park AZ2/AZ3/AZ4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, AU1 haggle, AV1 Negotiate, AW1 buylist, AX1 Change, or AY1 Inspect into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-ay (AY1 Buylist Inspect SHIPPED #81 @ `717047f9`); Soft catalog CLOSED
@@ -96,3 +96,5 @@
 | 2026-10-05 | PM adopted **AZ1**. Spec on main `b77c064a`. Spike [AZ1 Specialist inspect discount](https://cursor.com/agents/bc-ce59b862-d9b8-592a-81c5-74a5fac5bb7f). Park AZ2/AZ3/AZ4. No Art. Soft catalog CLOSED. Draft sha256 `4079dfef`. |
 | 2026-10-05 | Eng bar locked AZ1 against `b77c064a`. Specialist on-duty Inspect 2 Att; else 5. Awaiting tip-freeze. |
 | 2026-10-05 | PM tip-froze PR #82 @ `ad1d96d3`. Ready. 4 files, no docs. Agent archived. |
+| 2026-10-05 | Eng **APPROVE**-with-notes AZ1 [PR #82](https://github.com/adamwlarson/cardshopsimulator/pull/82) @ `ad1d96d3`. Soft: HUD gate mirror; empty roster → shop duty-flag fallback. Soft OK MVP. QA cleared by PM. |
+| 2026-10-05 | PM SHIPPED **AZ1**. Squash-merged #82 @ `81657192` (reviewed `ad1d96d3`). QA PASS, harness 159/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. Branch `cursor/az1-specialist-inspect-discount-bb7f` deleted. |
