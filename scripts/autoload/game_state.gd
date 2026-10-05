@@ -818,6 +818,7 @@ func capture_save() -> Dictionary:
 		"register_walkout_rep_spent_today": register_walkout_rep_spent_today,
 		"payday_loan_days_remaining": Economy.payday_loan_days_remaining(),
 		"online_cancel": Economy.online_cancel_to_save(),
+		"online_listings": Economy.online_listings_to_save(),
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
@@ -882,6 +883,11 @@ func restore_save(data: Dictionary) -> bool:
 		int(inventory.get("case_slot_bonus", 0)),
 		int(inventory.get("backstock_bin_bonus", 0))
 	)
+	var online_holds: Variant = data.get("online_listings", {})
+	if online_holds is Dictionary:
+		Economy.restore_online_listings(online_holds as Dictionary)
+	else:
+		Economy.restore_online_listings({})
 	var market_event: Variant = data.get("market_event", {})
 	if market_event is Dictionary:
 		DemandSignals.apply_event_save(market_event as Dictionary)

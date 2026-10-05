@@ -228,6 +228,7 @@ func _initialize() -> void:
 	_test_online_frequent_cancel_rep()
 	_test_online_cancel_day_persist()
 	_test_online_hold_soft_cap()
+	_test_online_hold_listing_persist()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -34111,6 +34112,628 @@ func _test_bi1_ui_and_untouched() -> void:
 		"BI1: STOP / win assert stay parked"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_online_hold_listing_persist() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bj1_snapshot_schema()
+	_test_bj1_list_save_reload_keeps_holds()
+	_test_bj1_soft_cap_after_load()
+	_test_bj1_cancel_after_load_respects_day_rules()
+	_test_bj1_completed_sales_never_reappear()
+	_test_bj1_missing_save_key()
+	_test_bj1_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bj1_snapshot_schema() -> void:
+	var listing := OnlineListing.new()
+	listing.id = &"online-4"
+	listing.kind = OnlineListing.Kind.CARD
+	listing.sku_id = &"AA-SKIE-058"
+	listing.display_name = "Skie"
+	listing.quantity = 1
+	listing.listed_price_cents = 2200
+	listing.fee_cents = 176
+	listing.ship_days = 3
+	listing.remaining_days = 2
+	listing.listed_on_day = 5
+	listing.previous_location = InventoryLocation.new(InventoryLocation.Type.BINDER, 3)
+	listing.status = OnlineListing.Status.ACTIVE
+	var filled := OnlineListing.new()
+	filled.id = &"online-1"
+	filled.kind = OnlineListing.Kind.CARD
+	filled.sku_id = &"AA-SKIE-058"
+	filled.listed_price_cents = 1800
+	filled.ship_days = 1
+	filled.remaining_days = 0
+	filled.status = OnlineListing.Status.FILLED
+	var snap := OnlineListingSavePolicy.snapshot(5, [listing, filled])
+	_expect_equal(int(snap.get("next_id", -1)), 5, "BJ1: snapshot stores next listing id")
+	var rows: Variant = snap.get("listings", [])
+	_expect_equal(rows is Array and (rows as Array).size() == 1, true, "BJ1: snapshot keeps only ACTIVE holds")
+	if rows is Array and not (rows as Array).is_empty():
+		var row: Dictionary = (rows as Array)[0]
+		_expect_equal(String(row.get("id", "")), "online-4", "BJ1: snapshot stores listing id")
+		_expect_equal(String(row.get("kind", "")), "card", "BJ1: snapshot stores kind as a name")
+		_expect_equal(String(row.get("sku_id", "")), "AA-SKIE-058", "BJ1: snapshot stores stock identity")
+		_expect_equal(int(row.get("listed_price_cents", -1)), 2200, "BJ1: snapshot stores the listed ask")
+		_expect_equal(int(row.get("remaining_days", -1)), 2, "BJ1: snapshot stores remaining ship days")
+		_expect_equal(int(row.get("ship_days", -1)), 3, "BJ1: snapshot stores original ship days")
+		_expect_equal(row.has("cert_valid"), false, "BJ1: snapshot does not serialize cert_valid")
+		_expect_equal(row.has("true_market"), false, "BJ1: snapshot does not serialize true_market")
+		_expect_equal(row.has("p_buy"), false, "BJ1: snapshot does not serialize p_buy")
+		var prev: Dictionary = row.get("previous_location", {})
+		_expect_equal(
+			int(prev.get("type", -1)),
+			int(InventoryLocation.Type.BINDER),
+			"BJ1: snapshot stores prior location type"
+		)
+		_expect_equal(int(prev.get("slot_id", 0)), 3, "BJ1: snapshot stores prior slot id")
+	var restored := OnlineListingSavePolicy.listing_from_save(
+		OnlineListingSavePolicy.listing_to_save(listing)
+	)
+	_expect_equal(restored != null, true, "BJ1: listing_from_save rebuilds an ACTIVE hold")
+	if restored != null:
+		_expect_equal(String(restored.id), "online-4", "BJ1: restored listing keeps id")
+		_expect_equal(restored.listed_price_cents, 2200, "BJ1: restored listing keeps ask")
+		_expect_equal(restored.remaining_days, 2, "BJ1: restored listing keeps remaining days")
+		_expect_equal(
+			restored.remaining_days != 1 and restored.remaining_days != 3,
+			true,
+			"BJ1: remaining days are not reset to a fresh 1–3"
+		)
+	_expect_equal(
+		OnlineListingSavePolicy.listing_from_save({"sku_id": "AA-SKIE-058", "remaining_days": 0}) == null,
+		true,
+		"BJ1: remaining_days 0 does not restore as a hold"
+	)
+	_expect_equal(
+		OnlineListingSavePolicy.listing_rows_from_save({}).is_empty(),
+		true,
+		"BJ1: missing listings key loads as no holds"
+	)
+	var json_round: Variant = JSON.parse_string(JSON.stringify(snap))
+	_expect_equal(json_round is Dictionary, true, "BJ1: snapshot JSON-roundtrips")
+	if json_round is Dictionary:
+		var parsed := json_round as Dictionary
+		_expect_equal(
+			OnlineListingSavePolicy.next_id_from_save(parsed),
+			5,
+			"BJ1: JSON next_id still reads as 5"
+		)
+		var parsed_rows := OnlineListingSavePolicy.listing_rows_from_save(parsed)
+		_expect_equal(parsed_rows.size(), 1, "BJ1: JSON still has one ACTIVE hold")
+		if not parsed_rows.is_empty():
+			var parsed_listing := OnlineListingSavePolicy.listing_from_save(parsed_rows[0])
+			_expect_equal(
+				parsed_listing != null and parsed_listing.remaining_days == 2,
+				true,
+				"BJ1: JSON remaining days still read as 2"
+			)
+			_expect_equal(
+				parsed_listing != null and parsed_listing.listed_price_cents == 2200,
+				true,
+				"BJ1: JSON ask still reads as 2200"
+			)
+
+
+func _test_bj1_list_save_reload_keeps_holds() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var first := _bj1_list(1800, 3)
+	var second := _bj1_list(2200, 3)
+	var third := _bj1_list(2500, 2)
+	_expect_equal(
+		_bi1_all_ok([first, second, third]),
+		true,
+		"BJ1: three concurrent holds list under the soft cap"
+	)
+	if not _bi1_all_ok([first, second, third]):
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var service: Object = _economy.get("online_listings")
+	service.call("tick_shipping")
+	var before := _bj1_active_rows()
+	_expect_equal(before.size(), 3, "BJ1: one ship tick leaves all three ACTIVE")
+	_expect_equal(int(before[0].get("remaining_days", -1)), 2, "BJ1: first hold remaining is 2")
+	_expect_equal(int(before[1].get("remaining_days", -1)), 2, "BJ1: second hold remaining is 2")
+	_expect_equal(int(before[2].get("remaining_days", -1)), 1, "BJ1: third hold remaining is 1")
+	var held_sku := StringName(before[0].get("sku_id", ""))
+	_expect_equal(
+		_inventory_service.call("find_listed_sku_offer", held_sku, 2500),
+		{},
+		"BJ1: held stock cannot be offered in-store before save"
+	)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "BJ1 hold save")
+	var snap: Variant = saved.get("online_listings", {})
+	_expect_equal(snap is Dictionary, true, "BJ1: save carries online_listings")
+	if snap is Dictionary:
+		_expect_equal(
+			OnlineListingSavePolicy.listing_rows_from_save(snap as Dictionary).size(),
+			3,
+			"BJ1: save stores three ACTIVE holds"
+		)
+	var parsed_save: Variant = JSON.parse_string(JSON.stringify(saved))
+	_expect_equal(parsed_save is Dictionary, true, "BJ1: JSON save roundtrips")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		int((_economy.get("online_listings") as Object).call("concurrent_hold_count")),
+		0,
+		"BJ1: a fresh session has no ONLINE_HOLD listings"
+	)
+	_expect_equal(
+		parsed_save is Dictionary and _game_state.call("restore_save", parsed_save),
+		true,
+		"BJ1: restore_save accepts the JSON-roundtripped hold snapshot"
+	)
+	var after := _bj1_active_rows()
+	_expect_equal(after.size(), 3, "BJ1: reload restores the same N holds")
+	_expect_equal(after, before, "BJ1: ids, asks, and remaining ship days survive reload")
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		3,
+		"BJ1: concurrent hold count after load is 3"
+	)
+	var restored_first: OnlineListing = _economy.get("online_listings").call(
+		"listing_by_id",
+		StringName(before[0].get("id", ""))
+	)
+	_expect_equal(restored_first != null, true, "BJ1: restored listing is addressable by id")
+	if restored_first != null:
+		_expect_equal(
+			restored_first.card != null
+			and restored_first.card.location.type == InventoryLocation.Type.ONLINE_HOLD,
+			true,
+			"BJ1: restored stock is still ONLINE_HOLD"
+		)
+		_expect_equal(
+			_inventory_service.call(
+				"find_listed_sku_offer",
+				restored_first.sku_id,
+				restored_first.listed_price_cents
+			),
+			{},
+			"BJ1: holds still cannot be offered in-store after load"
+		)
+		_expect_equal(
+			bool(
+				_inventory_service.call(
+					"confirm_customer_sale",
+					restored_first.sku_id,
+					restored_first.listed_price_cents
+				)
+			),
+			false,
+			"BJ1: holds still cannot sell in-store after load"
+		)
+	service = _economy.get("online_listings")
+	service.call("tick_shipping")
+	var after_tick := _bj1_active_rows()
+	_expect_equal(after_tick.size(), 2, "BJ1: remaining 1 hold fills on the next tick")
+	_expect_equal(
+		int(after_tick[0].get("remaining_days", -1)),
+		1,
+		"BJ1: a remaining-2 hold continues to 1, not a fresh 1–3"
+	)
+	_expect_equal(
+		int(after_tick[1].get("remaining_days", -1)),
+		1,
+		"BJ1: the other remaining-2 hold continues to 1"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bj1_soft_cap_after_load() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var listed := _bi1_list_n(4, 1800, 3)
+	_expect_equal(_bi1_all_ok(listed), true, "BJ1: four holds fill the Rep 40 cap")
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		4,
+		"BJ1: pre-save concurrent hold count is 4"
+	)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BJ1: restore at-cap holds"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		4,
+		"BJ1: soft-cap count after load matches pre-save"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("hold_cap")),
+		4,
+		"BJ1: live cap stays 4 at Rep 40 after load"
+	)
+	var fifth := _i1_list_unique_card(1800)
+	_expect_equal(bool(fifth.get("ok", false)), false, "BJ1: at-cap refuse still works after load")
+	_expect_equal(
+		StringName(fifth.get("reason", &"")),
+		&"hold_cap",
+		"BJ1: post-load over-cap reason is hold_cap"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		4,
+		"BJ1: refused list does not free a ghost slot from vanished holds"
+	)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BJ1: HUD loads after restoring holds")
+	if hud != null:
+		Callable(hud, "_sync_online_button").call()
+		var button := hud.get_node_or_null("%OpenOnlineButton") as Button
+		_expect_equal(
+			button != null and button.text.contains("4/4"),
+			true,
+			"BJ1: HUD Online button still shows 4/4 after load"
+		)
+		if hud.get_parent() == root:
+			root.remove_child(hud)
+		hud.free()
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bj1_cancel_after_load_respects_day_rules() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var first_card := _i1_unique_card()
+	var second_card := _i1_unique_card()
+	_expect_equal(
+		first_card != null and second_card != null,
+		true,
+		"BJ1: unique cards for cancel-after-load"
+	)
+	if first_card == null or second_card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var first := _bi1_list_card(first_card, 1800, 3)
+	var second := _bi1_list_card(second_card, 2200, 3)
+	_expect_equal(_bi1_all_ok([first, second]), true, "BJ1: two holds list before the free cancel")
+	var first_listing := first.get("listing") as OnlineListing
+	var cancelled: Dictionary = _economy.get("online_listings").call(
+		"cancel_listing",
+		first_listing.id
+	)
+	_expect_equal(bool(cancelled.get("frequent", true)), false, "BJ1: first cancel is free")
+	_expect_equal(int(cancelled.get("rep_delta", -99)), 0, "BJ1: free cancel Rep delta is 0")
+	var remaining_id := (second.get("listing") as OnlineListing).id
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(
+		OnlineListingSavePolicy.listing_rows_from_save(saved.get("online_listings", {})).size(),
+		1,
+		"BJ1: save keeps the still-ACTIVE hold and drops the cancelled one"
+	)
+	_expect_equal(
+		OnlineCancelPolicy.cancels_today_from_save(saved.get("online_cancel", {})),
+		1,
+		"BJ1: BH1 cancel count still saves beside the holds"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BJ1: restore holds plus the spent free cancel"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		1,
+		"BJ1: cancelled listing does not reappear as a hold"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("cancels_today")),
+		1,
+		"BJ1: restored cancel-day count is still 1"
+	)
+	var restored: OnlineListing = _economy.get("online_listings").call(
+		"listing_by_id",
+		remaining_id
+	)
+	_expect_equal(restored != null and restored.is_active(), true, "BJ1: remaining hold is still ACTIVE")
+	if restored == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var restored_card := restored.card
+	var extra: Dictionary = _economy.get("online_listings").call("cancel_listing", restored.id)
+	_expect_equal(bool(extra.get("ok", false)), true, "BJ1: cancel after load still returns")
+	_expect_equal(
+		bool(extra.get("frequent", false)),
+		true,
+		"BJ1: same-day cancel after load is not a second free"
+	)
+	_expect_equal(int(extra.get("rep_delta", 0)), -1, "BJ1: extra cancel after load is Rep −1")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		39,
+		"BJ1: BG1/BH1 extra-day rule still applies after load"
+	)
+	_expect_equal(
+		restored_card != null
+		and restored_card.location.type == InventoryLocation.Type.BINDER,
+		true,
+		"BJ1: cancel after load returns stock off ONLINE_HOLD"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		0,
+		"BJ1: cancel after load frees the soft-cap slot"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bj1_completed_sales_never_reappear() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var fill_a := _bj1_list(1800, 1)
+	var fill_b := _bj1_list(1900, 1)
+	var lingering := _bj1_list(2500, 3)
+	_expect_equal(
+		_bi1_all_ok([fill_a, fill_b, lingering]),
+		true,
+		"BJ1: two 1-day holds and one 3-day hold list"
+	)
+	if not _bi1_all_ok([fill_a, fill_b, lingering]):
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var fill_ids: Array[String] = [
+		String((fill_a.get("listing") as OnlineListing).id),
+		String((fill_b.get("listing") as OnlineListing).id),
+	]
+	var linger_id := String((lingering.get("listing") as OnlineListing).id)
+	_economy.get("online_listings").call("tick_shipping")
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		1,
+		"BJ1: completed 1-day sales free two slots before save"
+	)
+	var saved: Dictionary = _game_state.call("capture_save")
+	var saved_rows := OnlineListingSavePolicy.listing_rows_from_save(
+		saved.get("online_listings", {})
+	)
+	_expect_equal(saved_rows.size(), 1, "BJ1: save stores only the still-shipping hold")
+	if not saved_rows.is_empty():
+		_expect_equal(
+			String(saved_rows[0].get("id", "")),
+			linger_id,
+			"BJ1: save names the lingering hold, not a filled sale"
+		)
+		_expect_equal(
+			int(saved_rows[0].get("remaining_days", -1)),
+			2,
+			"BJ1: lingering hold remaining continues from 3 − 1"
+		)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BJ1: restore after completed sales"
+	)
+	var after := _bj1_active_rows()
+	_expect_equal(after.size(), 1, "BJ1: completed sales never reappear as holds")
+	_expect_equal(String(after[0].get("id", "")), linger_id, "BJ1: only the lingering hold reloads")
+	_expect_equal(int(after[0].get("remaining_days", -1)), 2, "BJ1: lingering remaining days continue")
+	for filled_id: String in fill_ids:
+		_expect_equal(
+			_economy.get("online_listings").call("listing_by_id", StringName(filled_id)) == null
+			or not (
+				_economy.get("online_listings").call("listing_by_id", StringName(filled_id)) as OnlineListing
+			).is_active(),
+			true,
+			"BJ1: filled listing %s is not an ACTIVE hold after load" % filled_id
+		)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bj1_missing_save_key() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	_expect_equal(_bi1_all_ok(_bi1_list_n(2, 1800, 3)), true, "BJ1: two holds before a legacy save")
+	var saved: Dictionary = _game_state.call("capture_save")
+	saved.erase("online_listings")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BJ1: pre-BJ1 saves without online_listings still load"
+	)
+	_expect_equal(
+		int((_economy.get("online_listings") as Object).call("concurrent_hold_count")),
+		0,
+		"BJ1: missing listings key does not invent holds"
+	)
+	var later := _bi1_list_n(4, 1800, 3)
+	_expect_equal(_bi1_all_ok(later), true, "BJ1: a legacy load does not occupy ghost cap slots")
+	var fifth := _i1_list_unique_card(1800)
+	_expect_equal(bool(fifth.get("ok", false)), false, "BJ1: cap still refuses the fifth after a legacy load")
+	_game_state.call("start_new_game")
+
+
+func _test_bj1_untouched() -> void:
+	_expect_equal(OnlineHoldCapPolicy.CAP_LOW, 4, "BJ1: BI1 low cap stays 4")
+	_expect_equal(OnlineHoldCapPolicy.CAP_MID, 8, "BJ1: BI1 mid cap stays 8")
+	_expect_equal(OnlineHoldCapPolicy.CAP_HIGH, 12, "BJ1: BI1 high cap stays 12")
+	_expect_equal(
+		OnlineCancelPolicy.FREE_PER_DAY == 1 and OnlineCancelPolicy.REP_HIT == 1,
+		true,
+		"BJ1: BG1 fallbacks stay 1 free / −1"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.online_cancel_free_per_day == 1
+		and NORMAL_CONFIG.online_cancel_rep_hit == 1,
+		true,
+		"BJ1: Normal cancel fallbacks stay 1 free / −1"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BJ1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BJ1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BJ1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BJ1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BJ1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BJ1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(NORMAL_CONFIG.online_ship_days_min, 1, "BJ1: ship min stays 1 day")
+	_expect_equal(NORMAL_CONFIG.online_ship_days_max, 3, "BJ1: ship max stays 3 days")
+	_expect_equal(NmMismatchPolicy.REP_HIT, 2, "BJ1: BB1/BD1 mismatch Rep stays −2")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BJ1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("frequent_cancel")
+		or events.contains("hold_cap")
+		or events.contains("stop_day"),
+		false,
+		"BJ1: Soft catalog stays closed"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "OnlineListingSavePolicy")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "online_listings"),
+		true,
+		"BJ1: listing persist stays off the sell weight"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not spawn_src.contains("OnlineListingSavePolicy")
+		and not policy_src.contains("OnlineListingSavePolicy")
+		and not spawn_src.contains("online_listings_to_save")
+		and not policy_src.contains("online_listings_to_save"),
+		true,
+		"BJ1: door spawn does not read hold persistence"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+		"res://scripts/ui/main_menu.gd",
+		"res://scripts/economy/online_listing_save_policy.gd",
+		"res://scripts/economy/online_listing_service.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BJ1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BJ1: %s never shows p_buy" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("Hold slots full"),
+		true,
+		"BJ1: HUD still has the hold-cap refuse beat"
+	)
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("retag"),
+		true,
+		"BJ1: listed-band retag stays parked"
+	)
+	_expect_equal(
+		not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert"),
+		true,
+		"BJ1: STOP / win assert stay parked"
+	)
+	_game_state.call("start_new_game")
+
+
+func _bj1_active_rows() -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	var listings: Array = _economy.get("online_listings").call("active_listings")
+	for listing_value: Variant in listings:
+		var listing := listing_value as OnlineListing
+		if listing == null:
+			continue
+		rows.append({
+			"id": String(listing.id),
+			"sku_id": String(listing.sku_id),
+			"listed_price_cents": listing.listed_price_cents,
+			"remaining_days": listing.remaining_days,
+			"ship_days": listing.ship_days,
+		})
+	return rows
+
+
+func _bj1_list(listed_price_cents: int, ship_days: int) -> Dictionary:
+	var card := _i1_unique_card()
+	if card == null:
+		return {"ok": false, "reason": &"no_card"}
+	return _bi1_list_card(card, listed_price_cents, ship_days)
 
 
 func _bi1_list_card(
