@@ -103,6 +103,10 @@ enum Difficulty {
 @export var shady_fake_slab_rate: float = 0.08
 ## Sale of a fail-slab: reputation bomb (systems §2.2).
 @export var fake_slab_sale_rep_hit: int = 15
+## BB1: uninspected marketplace/shady single listed NM, true LP+.
+## Missing values fall back to −2 / 0.50 in NmMismatchPolicy.
+@export var uninspected_nm_mismatch_rep_hit: int = 2
+@export var uninspected_nm_mismatch_refund_fraction: float = 0.50
 
 @export var fair_comp_mae_max: float = 0.12
 @export var fair_band_within1_min: float = 0.80

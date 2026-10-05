@@ -100,6 +100,13 @@ static func buylist_inspect_label(attention_cost: int) -> String:
 	return "Inspect · Att %d" % attention_cost
 
 
+static func nm_mismatch_toast(refund_cents: int, rep_delta: int) -> String:
+	return "Condition mismatch — refund %s · Rep %d" % [
+		format_cents(refund_cents),
+		rep_delta,
+	]
+
+
 static func research_action_label(cash_cents: int, attention_cost: int) -> String:
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 

@@ -163,6 +163,7 @@ func confirm_channel_singles_purchase(
 			card,
 			GameState.current_day
 		)
+		NmMismatchPolicy.stamp_acquired_card(dto, card)
 		received.append(card)
 	if not Economy.record_expense(total_cost_cents, &"inventory", "Stock purchase"):
 		for card: CardInstance in received:
@@ -232,6 +233,7 @@ func _apply_buylist_lot_condition(dto: BuyConfirmSignal, card: CardInstance) -> 
 	if card == null:
 		return
 	card.condition = BuylistPolicy.lot_condition_of(dto)
+	NmMismatchPolicy.stamp_acquired_card(dto, card)
 
 
 func remove_stock(sku_id: StringName, quantity: int) -> bool:
@@ -593,21 +595,18 @@ func find_listed_offer(
 func confirm_customer_sale(sku_id: StringName, sale_price_cents: int) -> bool:
 	if sale_price_cents <= 0:
 		return false
+	GameState.clear_last_nm_mismatch()
 	var slab := _listed_slab_for(sku_id)
 	if slab != null:
 		return _resolve_slab_sale(slab, sale_price_cents)
-	for card: CardInstance in model.cards:
-		if (
-			card.sku_id == sku_id
-			and card.listed_price_cents > 0
-			and is_in_store_sellable(card.location)
-			and _is_walk_in_visible(card.location)
-		):
-			if not model.remove_card(card):
-				return false
-			Economy.record_income(sale_price_cents, &"customer_sale", "Customer sale")
-			EventBus.publish_inventory_changed(sku_id, _total_quantity(sku_id))
-			return true
+	var card := listed_card_for(sku_id)
+	if card != null:
+		if not model.remove_card(card):
+			return false
+		Economy.record_income(sale_price_cents, &"customer_sale", "Customer sale")
+		_apply_nm_mismatch_if_needed(card, sale_price_cents)
+		EventBus.publish_inventory_changed(sku_id, _total_quantity(sku_id))
+		return true
 	for lot: StockLot in model.stock_lots:
 		if (
 			lot.sku.id == sku_id
@@ -830,6 +829,49 @@ func _total_quantity(sku_id: StringName) -> int:
 		if slab.card_ref != null and slab.card_ref.sku_id == sku_id:
 			total += 1
 	return total
+
+
+func listed_card_for(sku_id: StringName) -> CardInstance:
+	for card: CardInstance in model.cards:
+		if (
+			card.sku_id == sku_id
+			and card.listed_price_cents > 0
+			and is_in_store_sellable(card.location)
+			and _is_walk_in_visible(card.location)
+		):
+			return card
+	return null
+
+
+func _apply_nm_mismatch_if_needed(card: CardInstance, sale_price_cents: int) -> void:
+	if not NmMismatchPolicy.should_fire(card):
+		return
+	card.mismatch_fired = true
+	var config := GameState.balance_config
+	var refund := NmMismatchPolicy.refund_cents_for(sale_price_cents, config)
+	var hit := NmMismatchPolicy.rep_hit_for(config)
+	var cash_before := Economy.balance_cents
+	var applied := 0
+	if refund > 0:
+		applied = Economy.record_forced_expense(
+			refund,
+			NmMismatchPolicy.LEDGER_CATEGORY,
+			NmMismatchPolicy.LEDGER_MEMO
+		)
+	GameState.adjust_reputation(-hit)
+	GameState.note_nm_mismatch(applied, -hit)
+	QaInstrumentation.record_nm_mismatch_sale({
+		"sku_id": String(card.sku_id),
+		"channel": String(card.source_channel),
+		"sale_price_cents": sale_price_cents,
+		"refund_cents": applied,
+		"cash_before_cents": cash_before,
+		"cash_after_cents": Economy.balance_cents,
+		"rep_delta": -hit,
+		"listed_band": BuylistPolicy.band_label(card.listed_condition),
+		"inspected": card.inspected,
+		"outcome": "mismatch_refund",
+	})
 
 
 func _listed_slab_for(sku_id: StringName) -> SlabInstance:

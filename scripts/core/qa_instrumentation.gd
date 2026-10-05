@@ -164,6 +164,12 @@ func record_slab_sale_failed(payload: Dictionary) -> void:
 	_emit(&"slab_sale_failed", payload.duplicate(true))
 
 
+func record_nm_mismatch_sale(payload: Dictionary) -> void:
+	if not is_enabled():
+		return
+	_emit(&"nm_mismatch_sale", payload.duplicate(true))
+
+
 func record_online_listed(payload: Dictionary) -> void:
 	_emit(&"online_listed", payload)
 

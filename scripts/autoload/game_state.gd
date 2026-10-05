@@ -43,6 +43,9 @@ var last_fire_rep_delta: int = 0
 var last_register_walkout_rep_delta: int = 0
 var register_walkout_count_today: int = 0
 var register_walkout_rep_spent_today: int = 0
+var last_nm_mismatch_sale: bool = false
+var last_nm_mismatch_refund_cents: int = 0
+var last_nm_mismatch_rep_delta: int = 0
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
 var _suppress_sandbox_bests: bool = false
@@ -89,6 +92,7 @@ func start_new_game() -> void:
 	last_register_walkout_rep_delta = 0
 	register_walkout_count_today = 0
 	register_walkout_rep_spent_today = 0
+	clear_last_nm_mismatch()
 	_unpaid_wages_this_settle = false
 	_suppress_lose_eval = false
 	_suppress_sandbox_bests = true
@@ -449,6 +453,18 @@ func apply_register_walkout_rep() -> int:
 	last_register_walkout_rep_delta = -applied
 	adjust_reputation(-applied)
 	return -applied
+
+
+func clear_last_nm_mismatch() -> void:
+	last_nm_mismatch_sale = false
+	last_nm_mismatch_refund_cents = 0
+	last_nm_mismatch_rep_delta = 0
+
+
+func note_nm_mismatch(refund_cents: int, rep_delta: int) -> void:
+	last_nm_mismatch_sale = true
+	last_nm_mismatch_refund_cents = maxi(0, refund_cents)
+	last_nm_mismatch_rep_delta = rep_delta
 
 
 func fire_staff(index: int) -> StaffMember:
@@ -833,6 +849,7 @@ func restore_save(data: Dictionary) -> bool:
 	missed_rent_weeks = int(data.get("missed_rent_weeks", 0))
 	last_fire_rep_delta = 0
 	last_register_walkout_rep_delta = 0
+	clear_last_nm_mismatch()
 	register_walkout_count_today = maxi(
 		0,
 		int(data.get("register_walkout_count_today", 0))
