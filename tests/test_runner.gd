@@ -220,6 +220,7 @@ func _initialize() -> void:
 	_test_buylist_buy_from_them()
 	_test_edit_you_offer_mid_serve()
 	_test_buylist_inspect()
+	_test_marketplace_shady_inspect()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -28725,6 +28726,779 @@ func _test_az1_specialist_inspect_discount() -> void:
 		"AZ1: Soft catalog stays closed"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_marketplace_shady_inspect() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_ba1_named_gate()
+	_test_ba1_one_inspect_and_att_refuse()
+	_test_ba1_seeded_reveal_and_buy()
+	_test_ba1_specialist_ladder()
+	_test_ba1_door_whale_fee_stay()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_ba1_named_gate() -> void:
+	_expect_equal(
+		MarketplaceInspectPolicy.FOG_CUE,
+		"Photo only — inspect recommended",
+		"BA1: marketplace fog is photo/inspect-recommended"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.attention_cost(),
+		5,
+		"BA1: missing duty flag keeps Inspect at 5"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.attention_cost(false),
+		5,
+		"BA1: off-duty Inspect stays 5"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.attention_cost(true),
+		2,
+		"BA1: Specialist on duty cuts Inspect to 2"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.is_channel(DemandSignalService.Channel.MARKETPLACE),
+		true,
+		"BA1: marketplace is in channel"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.is_channel(&"shady"),
+		true,
+		"BA1: shady is in channel"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.is_channel(DemandSignalService.Channel.DISTRIBUTOR),
+		false,
+		"BA1: distributor stays out"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.is_channel(&"auction"),
+		false,
+		"BA1: auction stays out"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.is_channel(&"buylist"),
+		false,
+		"BA1: buylist Inspect stays on CustomerServe"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.can_actor_inspect(MarketplaceInspectPolicy.ACTOR_OWNER),
+		true,
+		"BA1: owner can Inspect"
+	)
+	_expect_equal(
+		MarketplaceInspectPolicy.can_actor_inspect(MarketplaceInspectPolicy.ACTOR_CASHIER),
+		false,
+		"BA1: cashier cannot Inspect"
+	)
+	_expect_equal(
+		HagglePolicy.can_haggle(&"marketplace")
+		and HagglePolicy.can_haggle(&"shady"),
+		true,
+		"BA1: AU1 Counter stays on marketplace and shady"
+	)
+
+
+func _test_ba1_one_inspect_and_att_refuse() -> void:
+	_ba1_reset()
+	var market := _ba1_inject_offer(
+		&"ba1-market-inspect",
+		&"AA-BASE-088",
+		&"marketplace",
+		500
+	)
+	_expect_equal(market != null, true, "BA1: marketplace Inspect needs a singles lot")
+	if market == null:
+		return
+	_expect_equal(
+		market.condition_cue,
+		MarketplaceInspectPolicy.FOG_CUE,
+		"BA1: marketplace cue before Inspect is photo/inspect-recommended"
+	)
+	_expect_equal(market.inspected, false, "BA1: marketplace lot starts uninspected")
+	_expect_equal(
+		market.lot_condition_ready,
+		true,
+		"BA1: marketplace true condition is seeded before Inspect"
+	)
+	var true_band := market.lot_condition
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BA1: HUD loads for marketplace Inspect")
+	if hud != null:
+		_select_buy_on_hud(hud, market)
+		var summary := hud.get_node_or_null("%BuySummary") as Label
+		var inspect := hud.get_node_or_null("%InspectButton") as Button
+		var buy := hud.get_node_or_null("%BuyButton") as Button
+		var counter := hud.get_node_or_null("Content/Actions/CounterButton") as Button
+		if counter == null:
+			counter = hud.get("_counter_button") as Button
+		_expect_equal(
+			summary != null and summary.text.contains("Photo only"),
+			true,
+			"BA1: BuyOpportunityDetail shows photo/inspect-recommended copy"
+		)
+		if summary != null:
+			_assert_text_has_no_truth(summary.text, "BA1 fog marketplace summary")
+			_expect_equal(
+				_ay1_summary_shows_band(summary.text),
+				false,
+				"BA1: true condition stays hidden until Inspect"
+			)
+		_expect_equal(
+			inspect != null and inspect.visible and not inspect.disabled,
+			true,
+			"BA1: Inspect is present on marketplace detail"
+		)
+		if inspect != null:
+			_expect_equal(
+				inspect.text.contains("Inspect") and inspect.text.contains("Att 5"),
+				true,
+				"BA1: Inspect shows the 5 Att cost"
+			)
+		_expect_equal(
+			buy != null and buy.visible,
+			true,
+			"BA1: Accept/Buy stays on marketplace detail"
+		)
+		_expect_equal(
+			counter != null and counter.visible,
+			true,
+			"BA1: Counter stays on marketplace detail"
+		)
+		hud.free()
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var owned_before := int(_inventory_service.call("total_owned", &"AA-BASE-088"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", market)),
+		true,
+		"BA1: one marketplace Inspect spends 5 Att"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"BA1: one marketplace Inspect spends 5 Attention"
+	)
+	_expect_equal(market.inspected, true, "BA1: Inspect marks the marketplace lot inspected")
+	_expect_equal(
+		_ay1_is_band_cue(market.condition_cue),
+		true,
+		"BA1: marketplace Inspect shows a condition band"
+	)
+	_expect_equal(
+		market.lot_condition,
+		true_band,
+		"BA1: Inspect does not rewrite marketplace true condition"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"BA1: Inspect does not buy the marketplace lot"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-BASE-088")),
+		owned_before,
+		"BA1: Inspect leaves marketplace lots unchanged"
+	)
+	_assert_text_has_no_truth(market.condition_cue, "BA1 marketplace inspect cue")
+	_free_lingering_gameplay_huds()
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		_select_buy_on_hud(hud, market)
+		var summary_after := hud.get_node_or_null("%BuySummary") as Label
+		var inspect_after := hud.get_node_or_null("%InspectButton") as Button
+		if summary_after != null:
+			_expect_equal(
+				summary_after.text.contains(market.condition_cue),
+				true,
+				"BA1: detail shows the revealed band"
+			)
+			_assert_text_has_no_truth(summary_after.text, "BA1 revealed marketplace summary")
+		_expect_equal(
+			inspect_after != null and inspect_after.visible and inspect_after.disabled,
+			true,
+			"BA1: a spent Inspect is refused in the HUD"
+		)
+		hud.free()
+	var att_after := int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", market)),
+		false,
+		"BA1: a second marketplace Inspect is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_after,
+		"BA1: a second Inspect leaves Attention unchanged"
+	)
+
+	_ba1_reset()
+	var shady := _ba1_inject_offer(
+		&"ba1-shady-inspect",
+		&"AA-BASE-088",
+		&"shady",
+		400
+	)
+	_expect_equal(shady != null, true, "BA1: shady Inspect needs a singles lot")
+	if shady == null:
+		return
+	_expect_equal(
+		shady.condition_cue.to_lower().contains("photo")
+		and shady.condition_cue.to_lower().contains("inspect"),
+		true,
+		"BA1: shady cue before Inspect is photo/inspect-recommended"
+	)
+	_expect_equal(shady.inspected, false, "BA1: shady lot starts uninspected")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", shady)),
+		true,
+		"BA1: one shady Inspect spends 5 Att"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"BA1: one shady Inspect spends 5 Attention"
+	)
+	_expect_equal(
+		_ay1_is_band_cue(shady.condition_cue),
+		true,
+		"BA1: shady Inspect shows a condition band"
+	)
+	_assert_text_has_no_truth(shady.condition_cue, "BA1 shady inspect cue")
+	att_after = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", shady)),
+		false,
+		"BA1: a second shady Inspect is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_after,
+		"BA1: a refused second shady Inspect leaves Att unchanged"
+	)
+
+	_ba1_reset()
+	market = _ba1_inject_offer(
+		&"ba1-market-short",
+		&"AA-BASE-088",
+		&"marketplace",
+		500
+	)
+	_game_state.set("attention_remaining", 4)
+	att_before = int(_game_state.get("attention_remaining"))
+	var fog := market.condition_cue if market != null else ""
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", market)),
+		false,
+		"BA1: Inspect at Att < 5 is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BA1: a refused Inspect leaves Attention unchanged"
+	)
+	_expect_equal(
+		market != null and not market.inspected,
+		true,
+		"BA1: a refused Inspect leaves the shot"
+	)
+	_expect_equal(
+		market != null and market.condition_cue == fog,
+		true,
+		"BA1: a refused Inspect leaves photo fog"
+	)
+	_free_lingering_gameplay_huds()
+	hud = _instantiate_gameplay_hud()
+	if hud != null and market != null:
+		_select_buy_on_hud(hud, market)
+		var short_inspect := hud.get_node_or_null("%InspectButton") as Button
+		_expect_equal(
+			short_inspect != null and short_inspect.visible and short_inspect.disabled,
+			true,
+			"BA1: Inspect is refused in the HUD at Att < 5"
+		)
+		hud.free()
+
+	_ba1_reset()
+	market = _ba1_inject_offer(
+		&"ba1-market-cashier",
+		&"AA-BASE-088",
+		&"marketplace",
+		500
+	)
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(
+			_demand_signals.call(
+				"inspect_buy",
+				market,
+				MarketplaceInspectPolicy.ACTOR_CASHIER
+			)
+		),
+		false,
+		"BA1: a cashier cannot Inspect"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BA1: a cashier Inspect spends no Attention"
+	)
+	_expect_equal(
+		market != null and not market.inspected,
+		true,
+		"BA1: a cashier Inspect leaves the shot"
+	)
+
+
+func _test_ba1_seeded_reveal_and_buy() -> void:
+	_expect_equal(
+		BuylistPolicy.revealed_band(CardInstance.Condition.MP, 7, 1.0),
+		CardInstance.Condition.MP,
+		"BA1: accuracy 1.0 shows the true band"
+	)
+	var miss := BuylistPolicy.revealed_band(CardInstance.Condition.MP, 7, 0.0)
+	_expect_equal(
+		BuylistPolicy.is_adjacent_band(CardInstance.Condition.MP, miss)
+		and miss != CardInstance.Condition.MP,
+		true,
+		"BA1: accuracy 0.0 shows an adjacent wrong band"
+	)
+	_expect_equal(
+		BuylistPolicy.is_adjacent_band(
+			CardInstance.Condition.NM,
+			CardInstance.Condition.DMG
+		),
+		false,
+		"BA1: NM never leaps to DMG"
+	)
+	var hits := 0
+	var leaps := 0
+	var samples := 2000
+	for seed in range(samples):
+		var shown := BuylistPolicy.revealed_band(CardInstance.Condition.HP, seed)
+		if shown == CardInstance.Condition.HP:
+			hits += 1
+		elif not BuylistPolicy.is_adjacent_band(CardInstance.Condition.HP, shown):
+			leaps += 1
+	_expect_equal(
+		hits >= int(float(samples) * 0.82) and hits <= int(float(samples) * 0.88),
+		true,
+		"BA1: reveal stays 85/15"
+	)
+	_expect_equal(leaps == 0, true, "BA1: reveal never leaps past an adjacent band")
+
+	_ba1_reset()
+	var market := _ba1_inject_offer(
+		&"ba1-market-buy-plain",
+		&"AA-BASE-088",
+		&"marketplace",
+		500
+	)
+	_expect_equal(market != null, true, "BA1: buy without Inspect needs a marketplace lot")
+	if market == null:
+		return
+	var true_band := market.lot_condition
+	_expect_equal(market.inspected, false, "BA1: buy-without-Inspect starts uninspected")
+	var cash_before := int(_economy.get("balance_cents"))
+	var owned_before := int(_inventory_service.call("total_owned", &"AA-BASE-088"))
+	_expect_equal(
+		bool(_demand_signals.call("confirm_buy", market)),
+		true,
+		"BA1: buy without Inspect still works"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - market.lot_total_cents,
+		"BA1: buy without Inspect pays the ask"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-BASE-088")),
+		owned_before + 1,
+		"BA1: buy without Inspect lands the lot"
+	)
+	var acquired := _ay1_acquired_card(&"AA-BASE-088")
+	_expect_equal(acquired != null, true, "BA1: buy without Inspect stores a card")
+	if acquired != null:
+		_expect_equal(
+			acquired.condition,
+			true_band,
+			"BA1: buy without Inspect stores true condition"
+		)
+
+	_ba1_reset()
+	market = _ba1_inject_offer(
+		&"ba1-market-wrong-reveal",
+		&"AA-BASE-088",
+		&"marketplace",
+		500
+	)
+	_expect_equal(market != null, true, "BA1: wrong-reveal buy needs a marketplace lot")
+	if market == null:
+		return
+	market.lot_condition = CardInstance.Condition.MP
+	market.lot_condition_ready = true
+	_expect_equal(
+		MarketplaceInspectPolicy.apply_inspect(market, 1, 0.0),
+		true,
+		"BA1: a forced miss still Inspects"
+	)
+	var shown_band := BuylistPolicy.band_from_cue(market.condition_cue)
+	_expect_equal(
+		shown_band != CardInstance.Condition.MP
+		and BuylistPolicy.is_adjacent_band(CardInstance.Condition.MP, shown_band),
+		true,
+		"BA1: the forced miss is an adjacent wrong band"
+	)
+	cash_before = int(_economy.get("balance_cents"))
+	owned_before = int(_inventory_service.call("total_owned", &"AA-BASE-088"))
+	var att_before := int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("confirm_buy", market)),
+		true,
+		"BA1: buy after a wrong reveal still takes the lot"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BA1: buy after Inspect spends no extra Attention"
+	)
+	acquired = _ay1_acquired_card(&"AA-BASE-088")
+	_expect_equal(acquired != null, true, "BA1: buy after a wrong reveal stores a card")
+	if acquired != null:
+		_expect_equal(
+			acquired.condition,
+			CardInstance.Condition.MP,
+			"BA1: a wrong reveal does not rewrite lot true condition"
+		)
+		_expect_equal(
+			acquired.condition != shown_band,
+			true,
+			"BA1: domain condition stays the true band after a miss"
+		)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-BASE-088")),
+		owned_before + 1,
+		"BA1: buy after a wrong reveal lands the lot"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - market.lot_total_cents,
+		"BA1: buy after a wrong reveal pays the ask"
+	)
+
+	var on_day := int(_at1_flag_days(ShadyTrunkPolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "BA1: trunk wrong-reveal needs a flag-on night")
+	if on_day < 1:
+		return
+	_at1_reset_on(on_day)
+	var trunk: BuyConfirmSignal = _demand_signals.call("open_shady_trunk")
+	_expect_equal(trunk != null, true, "BA1: trunk Inspect needs the shady Buy offer")
+	if trunk == null:
+		return
+	_expect_equal(
+		trunk.condition_cue.to_lower().contains("photo")
+		and trunk.condition_cue.to_lower().contains("inspect"),
+		true,
+		"BA1: trunk cue before Inspect is photo/inspect-recommended"
+	)
+	trunk.lot_condition = CardInstance.Condition.HP
+	trunk.lot_condition_ready = true
+	_expect_equal(
+		MarketplaceInspectPolicy.apply_inspect(trunk, on_day, 0.0),
+		true,
+		"BA1: trunk forced miss still Inspects"
+	)
+	shown_band = BuylistPolicy.band_from_cue(trunk.condition_cue)
+	_expect_equal(
+		_ay1_is_band_cue(trunk.condition_cue),
+		true,
+		"BA1: trunk Inspect shows a condition band"
+	)
+	_expect_equal(
+		shown_band != CardInstance.Condition.HP
+		and BuylistPolicy.is_adjacent_band(CardInstance.Condition.HP, shown_band),
+		true,
+		"BA1: trunk forced miss is adjacent"
+	)
+	var sku := trunk.sku_id
+	var slabs_before := _at1_backstock_slabs(sku)
+	_expect_equal(
+		bool(_demand_signals.call("buy_shady_trunk", trunk)),
+		true,
+		"BA1: trunk Buy after a wrong reveal still takes the lot"
+	)
+	_expect_equal(
+		_at1_backstock_slabs(sku),
+		slabs_before + 1,
+		"BA1: trunk Buy after Inspect lands the lot"
+	)
+	var slab := _ba1_acquired_slab(sku)
+	_expect_equal(slab != null and slab.card_ref != null, true, "BA1: trunk Buy stores a slab")
+	if slab != null and slab.card_ref != null:
+		_expect_equal(
+			slab.card_ref.condition,
+			CardInstance.Condition.HP,
+			"BA1: trunk Buy stores true condition after a wrong reveal"
+		)
+	_assert_text_has_no_truth(trunk.condition_cue, "BA1 trunk inspect cue")
+	_expect_equal(
+		DemandSignalPresenter.buy_summary(trunk).to_lower().contains("true_market"),
+		false,
+		"BA1: no screen shows true_market"
+	)
+	_expect_equal(
+		DemandSignalPresenter.buy_summary(trunk).to_lower().contains("cert_valid"),
+		false,
+		"BA1: no screen shows cert_valid"
+	)
+
+
+func _test_ba1_specialist_ladder() -> void:
+	_ba1_reset()
+	var shop := _game_state.get("shop") as ShopState
+	var config := _game_state.get("balance_config") as BalanceConfig
+	_expect_equal(
+		MarketplaceInspectPolicy.attention_cost_for(shop, config),
+		5,
+		"BA1: no Specialist on duty → Inspect costs 5"
+	)
+	_expect_equal(shop.hire_specialist() != null, true, "BA1: hire Specialist for on-duty discount")
+	_expect_equal(
+		MarketplaceInspectPolicy.attention_cost_for(shop, config),
+		2,
+		"BA1: Specialist on duty → Inspect costs 2"
+	)
+	var market := _ba1_inject_offer(
+		&"ba1-market-specialist",
+		&"AA-BASE-088",
+		&"marketplace",
+		500
+	)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	if hud != null and market != null:
+		_select_buy_on_hud(hud, market)
+		var inspect := hud.get_node_or_null("%InspectButton") as Button
+		_expect_equal(
+			inspect != null and inspect.visible and not inspect.disabled,
+			true,
+			"BA1: on-duty Inspect is present"
+		)
+		if inspect != null:
+			_expect_equal(
+				inspect.text.contains("Att 2"),
+				true,
+				"BA1: HUD mirrors Specialist Inspect cost 2"
+			)
+		hud.free()
+	var att_before := int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", market)),
+		true,
+		"BA1: on-duty Inspect spends 2 Att"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 2,
+		"BA1: on-duty Inspect spends 2 Attention"
+	)
+	_expect_equal(
+		_ay1_is_band_cue(market.condition_cue) if market != null else false,
+		true,
+		"BA1: on-duty Inspect still shows a condition band"
+	)
+
+	_ba1_reset()
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "BA1: hire Specialist for Att-below-cost")
+	market = _ba1_inject_offer(
+		&"ba1-market-specialist-short",
+		&"AA-BASE-088",
+		&"marketplace",
+		500
+	)
+	_game_state.set("attention_remaining", 1)
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", market)),
+		false,
+		"BA1: on-duty Inspect at Att < 2 is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BA1: refused on-duty Inspect leaves Att unchanged"
+	)
+
+	_ba1_reset()
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "BA1: hire Specialist to clear today's duty")
+	for member: StaffMember in shop.staff:
+		if member != null and member.is_specialist():
+			member.on_duty_today = false
+	_expect_equal(
+		MarketplaceInspectPolicy.attention_cost_for(shop, config),
+		5,
+		"BA1: missing today-duty flag keeps Inspect at 5"
+	)
+	market = _ba1_inject_offer(
+		&"ba1-market-off-floor",
+		&"AA-BASE-088",
+		&"marketplace",
+		500
+	)
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		bool(_demand_signals.call("inspect_buy", market)),
+		true,
+		"BA1: off-floor Specialist still Inspects at 5"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"BA1: off-floor Specialist does not take the 2 Att discount"
+	)
+
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-BASE-088")
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "BA1 buylist stays")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(queue.inspect_buylist(), true, "BA1: AY1 buylist Inspect path still spends")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"BA1: buylist Inspect without Specialist stays 5"
+	)
+	_expect_equal(seller.has_inspected, true, "BA1: buylist Inspect path unchanged")
+	queue.free()
+
+
+func _test_ba1_door_whale_fee_stay() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BA1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BA1: whale weight stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"BA1: marketplace fee stays 8%"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BA1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	_expect_equal(
+		HagglePolicy.CHANNEL_WEIGHT_MARKETPLACE,
+		1.00,
+		"BA1: AU1 Counter math stays as shipped"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("net_worth")
+		or events.contains("stop_day"),
+		false,
+		"BA1: Soft catalog stays closed"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func report_shady_trunk(", "inspect_buy")
+		and not _function_body_contains(demand_src, "func walk_shady_trunk(", "inspect_buy")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "inspect"),
+		true,
+		"BA1: Inspect stays off trunk Report/Walk and sell weight"
+	)
+	_expect_equal(
+		demand_src.contains("func inspect_buy(")
+		and demand_src.contains("MarketplaceInspectPolicy"),
+		true,
+		"BA1: marketplace / shady Inspect lives on BuyOpportunityDetail"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	_expect_equal(
+		queue_src.contains("func inspect_buylist(")
+		and not _function_body_contains(
+			queue_src,
+			"func inspect_buylist(",
+			"MarketplaceInspectPolicy"
+		),
+		true,
+		"BA1: AY1/AZ1 buylist Inspect stays as shipped"
+	)
+
+
+func _ba1_reset() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _ba1_inject_offer(
+	opportunity_id: StringName,
+	sku_id: StringName,
+	channel_name: StringName,
+	unit_cost_cents: int
+) -> BuyConfirmSignal:
+	var sku := (_inventory_service.get("model") as InventoryModel).get_sku(sku_id)
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = opportunity_id
+	opportunity.sku_id = sku_id
+	opportunity.display_name = sku.display_name if sku != null else String(sku_id)
+	opportunity.offer_label = "BA1 lot"
+	opportunity.channel = DemandSignalService.channel_from(channel_name)
+	opportunity.unit_cost_cents = unit_cost_cents
+	opportunity.quantity = 1
+	opportunity.space_required = 1
+	_expect_equal(
+		bool(_demand_signals.call("inject_buy_opportunity", opportunity)),
+		true,
+		"BA1: injects %s" % String(opportunity_id)
+	)
+	return _demand_signals.call("buy_signal_for_id", opportunity_id) as BuyConfirmSignal
+
+
+func _ba1_acquired_slab(sku_id: StringName) -> SlabInstance:
+	var model := _inventory_service.get("model") as InventoryModel
+	if model == null:
+		return null
+	var found: SlabInstance = null
+	for slab: SlabInstance in model.slabs:
+		if (
+			slab != null
+			and slab.card_ref != null
+			and slab.card_ref.sku_id == sku_id
+		):
+			found = slab
+	return found
 
 
 func _ay1_is_band_cue(cue: String) -> bool:

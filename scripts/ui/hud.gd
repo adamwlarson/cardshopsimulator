@@ -530,20 +530,9 @@ func _inspect_buy() -> void:
 	if _buy_signal == null or _buy_signal.inspected:
 		_sync_inspect_button()
 		return
-	if not DemandSignals.can_inspect(_buy_signal):
+	if not DemandSignals.inspect_buy(_buy_signal):
 		_sync_inspect_button()
 		return
-	if not GameState.can_inspect():
-		_sync_inspect_button()
-		return
-	var cost := GameState.shop.inspect_attention_cost()
-	if GameState.attention_remaining < cost:
-		_sync_inspect_button()
-		return
-	if not GameState.consume_attention(cost):
-		_sync_inspect_button()
-		return
-	DemandSignals.inspect_buy(_buy_signal)
 	buy_summary.text = DemandSignalPresenter.buy_summary(_buy_signal)
 	_sync_buy_confirm_gate()
 	_sync_inspect_button()
@@ -615,7 +604,7 @@ func _owned_slab_needs_inspect() -> bool:
 func _sync_inspect_button() -> void:
 	if inspect_button == null:
 		return
-	var cost := GameState.shop.inspect_attention_cost()
+	var cost := _buy_inspect_attention_cost()
 	inspect_button.text = DemandSignalPresenter.inspect_action_label(cost)
 	var recommended := (
 		_buy_signal != null
@@ -626,9 +615,15 @@ func _sync_inspect_button() -> void:
 		return
 	inspect_button.disabled = (
 		_buy_signal.inspected
-		or not GameState.can_inspect()
+		or not DemandSignals.can_inspect(_buy_signal)
 		or GameState.attention_remaining < cost
 	)
+
+
+func _buy_inspect_attention_cost() -> int:
+	if _buy_signal != null:
+		return DemandSignals.inspect_attention_cost_for(_buy_signal)
+	return GameState.shop.inspect_attention_cost()
 
 
 func _back_to_buy_detail() -> void:
