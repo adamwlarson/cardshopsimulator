@@ -226,6 +226,7 @@ func settle_day(day: int) -> void:
 	online_listings.tick_shipping()
 	_settle_shrink()
 	GameState.apply_fair_price_settle_rep()
+	GameState.apply_buylist_drip_settle_rep()
 	DemandSignals.apply_daily_market_drift()
 	DemandSignals.roll_settle_events()
 

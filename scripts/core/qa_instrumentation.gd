@@ -190,6 +190,10 @@ func record_fair_price_settle(payload: Dictionary) -> void:
 	_emit(&"fair_price_settle", payload)
 
 
+func record_buylist_drip_settle(payload: Dictionary) -> void:
+	_emit(&"buylist_drip_settle", payload)
+
+
 func record_campaign_won(payload: Dictionary) -> void:
 	_emit(&"campaign_won", payload.duplicate(true))
 

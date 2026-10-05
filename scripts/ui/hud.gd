@@ -415,8 +415,23 @@ func _maybe_show_fair_price_settle_toast() -> void:
 		GameState.last_fair_price_settle_rep_delta
 	)
 	if message.is_empty():
+		_maybe_show_buylist_drip_toast()
 		return
 	beat_toast.text = message
+	beat_toast.show()
+	_maybe_show_buylist_drip_toast(true)
+
+
+func _maybe_show_buylist_drip_toast(append: bool = false) -> void:
+	var message := DemandSignalPresenter.buylist_drip_toast(
+		GameState.last_buylist_drip_rep_delta
+	)
+	if message.is_empty():
+		return
+	if append and not beat_toast.text.is_empty():
+		beat_toast.text = "%s\n%s" % [beat_toast.text, message]
+	else:
+		beat_toast.text = message
 	beat_toast.show()
 
 

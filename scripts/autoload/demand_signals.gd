@@ -1141,7 +1141,9 @@ func buy_signal(
 
 
 func buylist_pct(category: Variant, configured: float = -1.0) -> float:
-	return BuylistPolicy.buylist_pct(category, configured)
+	if configured >= 0.0:
+		return BuylistPolicy.buylist_pct(category, configured)
+	return GameState.player_buylist_pct(category)
 
 
 func buylist_offer_cents(
@@ -1214,7 +1216,7 @@ func _apply_buylist_offer(dto: BuyConfirmSignal, sku: ProductSKU) -> void:
 		return
 	var listed := BuylistPolicy.listed_comp_cents(dto)
 	var category := BuylistPolicy.category_for(sku, dto)
-	var offer := BuylistPolicy.offer_cents(listed, category)
+	var offer := BuylistPolicy.offer_cents(listed, category, buylist_pct(category))
 	dto.unit_cost_cents = offer
 	dto.lot_total_cents = offer * maxi(1, dto.quantity)
 	dto.remaining_cash_cents = Economy.balance_cents - dto.lot_total_cents
