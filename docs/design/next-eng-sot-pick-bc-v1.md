@@ -94,3 +94,4 @@
 | 2026-10-05 | Drafted post BB1 SHIPPED #84 @ `17deced0`. Lean **BC1 Auction Inspect fog**. Fee cut / HUD / STOP / BB1-to-auction extend parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM adopted **BC1**. Park BC2/BC3/BC4. Hard-park camera off-switch. Soft catalog CLOSED. Auction snipe Inspect with AZ1 Att ladder. Draft sha256 `f9bf3c2d`. |
 | 2026-10-05 | PM adopted **BC1**. Spec on main `102fa3da`. Park BC2/BC3/BC4. No Art. Soft catalog CLOSED. Draft sha256 `f9bf3c2d`. |
+| 2026-10-05 | PM adopted **BC1**. Spec on main `183a889c`. Spike [BC1 Auction Inspect fog](https://cursor.com/agents/bc-33bbc3ae-372f-5311-a456-bb02d282fede). Park BC2/BC3/BC4. No Art. Soft catalog CLOSED. Draft sha256 `f9bf3c2d`. |
