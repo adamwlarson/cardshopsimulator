@@ -98,3 +98,4 @@
 | 2026-10-05 | Eng **APPROVE**-with-notes BB1 [PR #84](https://github.com/adamwlarson/cardshopsimulator/pull/84) @ `12ff5011`. Soft: no player listed-band retag UI this pick. Soft OK MVP. Soft catalog CLOSED. |
 | 2026-10-05 | Design Soft OK MVP on Eng Soft (no listed-band retag UI). QA formal released; Soft OK notes not fail criteria. |
 | 2026-10-05 | PM SHIPPED **BB1**. Squash-merged #84 @ `17deced0` (reviewed `12ff5011`). QA PASS, harness 135/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. Branch `cursor/bb1-nm-mismatch-2eea` deleted. |
+| 2026-10-05 | Docs status `03fa366f` noted on BB1 SHIP. |
