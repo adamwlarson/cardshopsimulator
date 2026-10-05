@@ -91,3 +91,4 @@
 |------|----------|
 | 2026-10-05 | Drafted post BK1 SHIPPED #93 @ `6a125022`. Lean **BL1 Day-rollover clear of cached noisy suggested**. STOP / Soft reopeners parked. Camera off-switch hard-parked. |
 | 2026-10-05 ~2:46pm ET | **ADOPTED** BL1. Park BL2 STOP / BL3 Soft / BL4 Soft. Camera off-switch hard-parked. Soft CLOSED. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~2:54pm ET | **Tip-frozen** [#94](https://github.com/adamwlarson/cardshopsimulator/pull/94) @ `2affb937` (branch `cursor/bl1-day-rollover-clear-suggested-76ae`). 4 files, no docs. Cloud agent bc-12d70111 archived. Eng review that SHA against bar `f35aae5f`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
