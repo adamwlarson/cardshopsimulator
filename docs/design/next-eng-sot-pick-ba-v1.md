@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BA v1 — post AZ1
 
-**Status:** **BA1 ADOPTED** 2026-10-05 — Marketplace / shady Inspect. Park BA2/BA3/BA4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn prior packs into a sell weight. Door spawn math stays as shipped.
+**Status:** **BA1 SHIPPED** 2026-10-05 — squash-merged #83 @ `c9a303c6` (reviewed `369d9836`). Marketplace / shady Inspect. Park BA2/BA3/BA4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn prior packs into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-az (AZ1 Specialist inspect discount SHIPPED #82 @ `81657192`); Soft catalog CLOSED
@@ -12,10 +12,10 @@
 
 | Pack | Result |
 |------|--------|
-| A–AZ1 | Full loop + buylist Inspect @ 5 / Specialist 2 |
-| Soft | Catalog CLOSED; AC1 through AZ1 Soft OK MVP notes stay Soft |
+| A–BA1 | Full loop + buylist + marketplace/shady Inspect @ AZ1 ladder |
+| Soft | Catalog CLOSED; AC1 through BA1 Soft OK MVP notes stay Soft |
 
-**Gap:** Marketplace / shady condition fog Inspect (systems §2.2, §4.5) still dark. Fee cut stays parked. Camera off-switch Soft hard-parked. Fees / HUD / STOP parked by PM.
+**Gap:** Fee cut stays parked. Camera off-switch Soft hard-parked. Fees / HUD / STOP parked by PM. Sell-side NM mismatch still dark.
 
 ---
 
@@ -96,3 +96,5 @@
 | 2026-10-05 | PM adopted **BA1**. Spec on main `ecbc538c`. Spike [BA1 Marketplace / shady Inspect](https://cursor.com/agents/bc-c4b171ba-02a7-581b-8c43-0a4cbbcd069b). Park BA2/BA3/BA4. No Art. Soft catalog CLOSED. Draft sha256 `2856e9a1`. |
 | 2026-10-05 | Eng bar locked BA1 against `ecbc538c`. Marketplace + shady Buy Inspect; AZ1 Att ladder. Awaiting tip-freeze. |
 | 2026-10-05 | PM tip-froze PR #83 @ `369d9836`. Ready. 7 files, no docs. Agent archived. |
+| 2026-10-05 | Eng **APPROVE**-with-notes BA1 [PR #83](https://github.com/adamwlarson/cardshopsimulator/pull/83) @ `369d9836`. Soft: HUD gate mirror; shady cue AT1 strongly recommended; unused apply_fog_cue. Soft OK MVP. QA cleared by PM. |
+| 2026-10-05 | PM SHIPPED **BA1**. Squash-merged #83 @ `c9a303c6` (reviewed `369d9836`). QA PASS, harness 140/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. Branch `cursor/ba1-marketplace-shady-inspect-069b` deleted. |
