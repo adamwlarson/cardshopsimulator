@@ -47,6 +47,9 @@ var _hype_new_set_id: StringName = &""
 var _hype_old_set_id: StringName = &""
 var _hype_new_mult: float = 1.0
 var _hype_old_mult: float = 1.0
+var _pro_tour_spike: bool = false
+var _pro_tour_tag: StringName = &""
+var _pro_tour_mult: float = 1.0
 var _instrumentation: QaInstrumentationService
 
 
@@ -148,6 +151,33 @@ func set_release_demand_mult_for(sku_id: StringName) -> float:
 	)
 
 
+func set_pro_tour_spike(
+	active: bool,
+	archetype_tag: StringName = &"",
+	mult: float = 0.0
+) -> void:
+	_pro_tour_spike = active
+	_pro_tour_tag = archetype_tag if active else &""
+	_pro_tour_mult = mult if active and mult > 0.0 else 1.0
+	_demand_cache.clear()
+
+
+func has_pro_tour_spike() -> bool:
+	return _pro_tour_spike
+
+
+func pro_tour_market_mult_for(sku_id: StringName) -> float:
+	if not _pro_tour_spike:
+		return 1.0
+	if sku_id.is_empty() or InventoryService.model == null:
+		return 1.0
+	return ProTourSpikePolicy.market_mult_for_sku(
+		InventoryService.model.get_sku(sku_id),
+		_pro_tour_tag,
+		_pro_tour_mult
+	)
+
+
 func sealed_race_mult() -> float:
 	return _glut_race_mult if _supply_glut else 1.0
 
@@ -245,7 +275,7 @@ func buy_confirm(
 	informed: bool = false
 ) -> BuyConfirmSignal:
 	var dto := BuyConfirmSignal.new()
-	var true_market_cents := _market_state.market_cents_for(sku_id)
+	var true_market_cents := _event_market_cents(sku_id)
 	var true_demand := _effective_demand(_market_state.demand_score_for(sku_id), sku_id)
 	var comp := _comp_range(true_market_cents, channel, informed)
 	dto.sku_id = sku_id
@@ -723,12 +753,22 @@ func _should_forbid_hot_cold_invert() -> bool:
 
 
 func _retail_market_cents(sku_id: StringName) -> int:
-	var true_market_cents := _market_state.market_cents_for(sku_id)
+	var true_market_cents := _event_market_cents(sku_id)
 	if true_market_cents <= 0 or not _supply_glut:
 		return true_market_cents
 	if not _is_sealed_sku(sku_id):
 		return true_market_cents
 	return maxi(1, roundi(float(true_market_cents) * sealed_race_mult()))
+
+
+func _event_market_cents(sku_id: StringName) -> int:
+	var true_market_cents := _market_state.market_cents_for(sku_id)
+	if true_market_cents <= 0:
+		return true_market_cents
+	var mult := pro_tour_market_mult_for(sku_id)
+	if is_equal_approx(mult, 1.0):
+		return true_market_cents
+	return maxi(1, roundi(float(true_market_cents) * mult))
 
 
 func _is_sealed_sku(sku_id: StringName) -> bool:

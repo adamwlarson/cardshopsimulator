@@ -148,6 +148,7 @@ func _initialize() -> void:
 	_test_recession_week_event()
 	_test_supply_glut_event()
 	_test_set_release_hype_event()
+	_test_pro_tour_spike_event()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -2657,9 +2658,10 @@ func _test_market_events_seven_day_seeded_run() -> void:
 		and FileAccess.get_file_as_string("res://data/events.json").contains("theft_ring")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("recession_week")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("supply_glut")
-		and FileAccess.get_file_as_string("res://data/events.json").contains("set_release_hype"),
+		and FileAccess.get_file_as_string("res://data/events.json").contains("set_release_hype")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("pro_tour_spike"),
 		true,
-		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, theft ring, recession, supply glut, and set release hype"
+		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, theft ring, recession, supply glut, set release hype, and pro tour spike"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 
@@ -7242,11 +7244,9 @@ func _test_set_release_hype_untouched_and_parked() -> void:
 		events.contains("fee_cut")
 		or events.contains("camera_off")
 		or events.contains("listed_band")
-		or events.contains("stop_day")
-		or events.contains("pro_tour")
-		or events.contains("influencer"),
+		or events.contains("stop_day"),
 		false,
-		"BQ1: Soft catalog stays closed; Pro tour stays Out"
+		"BQ1: Soft catalog stays closed"
 	)
 	var policy_src := FileAccess.get_file_as_string(
 		"res://scripts/economy/set_release_hype_policy.gd"
@@ -7297,6 +7297,945 @@ func _test_set_release_hype_untouched_and_parked() -> void:
 		demand_src.contains("func _ensure_priceable_sku"),
 		true,
 		"BQ1: Soft _ensure_priceable_sku stays parked"
+	)
+
+
+func _test_pro_tour_spike_event() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_pro_tour_spike_named_gate_and_fallbacks()
+	_test_pro_tour_spike_can_fire()
+	_test_pro_tour_spike_market_and_prices()
+	_test_pro_tour_spike_levers_and_no_soft_lock()
+	_test_pro_tour_spike_section_45_and_banner()
+	_test_pro_tour_spike_pack_coherence()
+	_test_pro_tour_spike_save_load()
+	_test_pro_tour_spike_untouched_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_pro_tour_spike_named_gate_and_fallbacks() -> void:
+	_expect_equal(
+		ProTourSpikePolicy.TELEGRAPH_DAYS,
+		1,
+		"BR1: locked telegraph is 1 day ahead"
+	)
+	_expect_equal(
+		ProTourSpikePolicy.DURATION_DAYS,
+		2,
+		"BR1: locked duration is 2 days inclusive of spike day"
+	)
+	_expect_equal(
+		is_equal_approx(ProTourSpikePolicy.MULT_MIN, 1.30)
+		and is_equal_approx(ProTourSpikePolicy.MULT_MAX, 1.80),
+		true,
+		"BR1: locked hidden-market band is ×1.30–1.80"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.pro_tour_telegraph_days == 1
+		and NORMAL_CONFIG.pro_tour_duration_days == 2
+		and is_equal_approx(NORMAL_CONFIG.pro_tour_mult_min, 1.30)
+		and is_equal_approx(NORMAL_CONFIG.pro_tour_mult_max, 1.80),
+		true,
+		"BR1: Normal config matches locked Pro tour levers"
+	)
+	_expect_equal(
+		EASY_CONFIG.pro_tour_telegraph_days == 1
+		and HARD_CONFIG.pro_tour_telegraph_days == 1
+		and EASY_CONFIG.pro_tour_duration_days == 2
+		and HARD_CONFIG.pro_tour_duration_days == 2
+		and is_equal_approx(EASY_CONFIG.pro_tour_mult_min, 1.30)
+		and is_equal_approx(HARD_CONFIG.pro_tour_mult_min, 1.30)
+		and is_equal_approx(EASY_CONFIG.pro_tour_mult_max, 1.80)
+		and is_equal_approx(HARD_CONFIG.pro_tour_mult_max, 1.80),
+		true,
+		"BR1: Easy/Hard inherit telegraph 1 / duration 2 / ×1.30–1.80"
+	)
+	var missing := BalanceConfig.new()
+	missing.pro_tour_telegraph_days = 0
+	missing.pro_tour_duration_days = 0
+	missing.pro_tour_mult_min = 0.0
+	missing.pro_tour_mult_max = 0.0
+	_expect_equal(
+		ProTourSpikePolicy.telegraph_days(0) == 1
+		and ProTourSpikePolicy.duration_days(-1) == 2,
+		true,
+		"BR1: missing / ≤0 telegraph and duration fall back"
+	)
+	_expect_equal(
+		ProTourSpikePolicy.telegraph_days_for(missing) == 1
+		and ProTourSpikePolicy.duration_days_for(missing) == 2
+		and ProTourSpikePolicy.telegraph_days_for(null) == 1
+		and ProTourSpikePolicy.duration_days_for(null) == 2,
+		true,
+		"BR1: null / zero config falls back to 1 / 2"
+	)
+	var inverted := BalanceConfig.new()
+	inverted.pro_tour_mult_min = 1.80
+	inverted.pro_tour_mult_max = 1.10
+	var inverted_band := ProTourSpikePolicy.mult_band_for(inverted)
+	var missing_band := ProTourSpikePolicy.mult_band_for(missing)
+	var null_band := ProTourSpikePolicy.mult_band_for(null)
+	_expect_equal(
+		is_equal_approx(missing_band.x, 1.30)
+		and is_equal_approx(missing_band.y, 1.80)
+		and is_equal_approx(null_band.x, 1.30)
+		and is_equal_approx(null_band.y, 1.80)
+		and is_equal_approx(inverted_band.x, 1.30)
+		and is_equal_approx(inverted_band.y, 1.80),
+		true,
+		"BR1: missing min/max or max < min fall back to 1.30 / 1.80"
+	)
+	_expect_equal(
+		ProTourSpikePolicy.is_telegraphing(3, 2)
+		and not ProTourSpikePolicy.is_spike_window(3, 2)
+		and ProTourSpikePolicy.is_spike_window(2, 2)
+		and ProTourSpikePolicy.is_spike_window(1, 2)
+		and not ProTourSpikePolicy.is_spike_window(0, 2),
+		true,
+		"BR1: telegraph is the day before the 2-day spike window"
+	)
+	_expect_equal(
+		ProTourSpikePolicy.remaining_days_at_roll() == 3,
+		true,
+		"BR1: settle roll remaining covers telegraph plus duration"
+	)
+	var aggro := ProductSKU.new(
+		&"t-aggro",
+		ProductSKU.ProductClass.SINGLE,
+		"Aggro Test",
+		100,
+		&"AA-BASE"
+	)
+	aggro.tags.append(&"archetype:aggro")
+	var aggro_b := ProductSKU.new(
+		&"t-aggro-b",
+		ProductSKU.ProductClass.SINGLE,
+		"Aggro Twin",
+		200,
+		&"AA-BASE"
+	)
+	aggro_b.tags.append(&"archetype:aggro")
+	var mid := ProductSKU.new(
+		&"t-mid",
+		ProductSKU.ProductClass.SINGLE,
+		"Mid Test",
+		100,
+		&"AA-BASE"
+	)
+	mid.tags.append(&"archetype:mid")
+	var sealed := ProductSKU.new(
+		&"t-sealed",
+		ProductSKU.ProductClass.SEALED,
+		"Sealed Test",
+		100,
+		&"AA-SKIE"
+	)
+	sealed.tags.append(&"archetype:aggro")
+	_expect_equal(
+		is_equal_approx(
+			ProTourSpikePolicy.market_mult_for_sku(aggro, &"archetype:aggro", 1.45),
+			1.45
+		)
+		and is_equal_approx(
+			ProTourSpikePolicy.market_mult_for_sku(aggro_b, &"archetype:aggro", 1.45),
+			1.45
+		),
+		true,
+		"BR1: same event mult applies to every tagged single"
+	)
+	_expect_equal(
+		is_equal_approx(
+			ProTourSpikePolicy.market_mult_for_sku(mid, &"archetype:aggro", 1.45),
+			1.0
+		)
+		and is_equal_approx(
+			ProTourSpikePolicy.market_mult_for_sku(sealed, &"archetype:aggro", 1.45),
+			1.0
+		),
+		true,
+		"BR1: untagged singles and sealed stay out of the event mult"
+	)
+	_expect_equal(
+		ProTourSpikePolicy.banner_text(&"archetype:aggro") == "Pro tour buzz: aggro decks",
+		true,
+		"BR1: banner copy names the archetype without the rolled mult"
+	)
+
+
+func _test_pro_tour_spike_can_fire() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call("seed_event_rng", MarketEventService.EVENT_RNG_SEED)
+	var telegraph: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_PRO_TOUR,
+		{
+			"duration_days": 2,
+			"remaining_days": 3,
+			"archetype_tag": &"archetype:aggro",
+			"pro_tour_mult": 1.50,
+		}
+	)
+	_expect_equal(telegraph != null, true, "BR1: formal start_pack_event fires Pro tour")
+	_expect_equal(telegraph.kind, MarketEvent.KIND_PRO_TOUR, "BR1: kind is pro_tour_spike")
+	_expect_equal(telegraph.duration_days, 2, "BR1: duration is 2 spike days")
+	_expect_equal(telegraph.remaining_days, 3, "BR1: remaining includes the telegraph day")
+	_expect_equal(
+		telegraph.archetype_tag,
+		&"archetype:aggro",
+		"BR1: seeded pick binds an archetype tag"
+	)
+	_expect_equal(
+		is_equal_approx(telegraph.pro_tour_mult, 1.50),
+		true,
+		"BR1: seeded pick stores the rolled mult once"
+	)
+	_expect_equal(
+		_demand_signals.call("has_pro_tour"),
+		true,
+		"BR1: telegraph day occupies the pack bus"
+	)
+	_expect_equal(
+		_demand_signals.call("has_pro_tour_spike"),
+		false,
+		"BR1: telegraph day does not invent an active spike"
+	)
+	var banner := String(_demand_signals.call("calendar_telegraph_text"))
+	_expect_equal(banner.contains("Pro tour buzz"), true, "BR1: EventBanner telegraphs ≥1 day before active")
+	_expect_equal(banner.contains("aggro"), true, "BR1: telegraph names the archetype")
+	_assert_text_has_no_truth(banner, "BR1 telegraph banner")
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"BR1: Pro tour does not open Option D PriceEditor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var fired := false
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 64):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		_qa_autoload.call("clear")
+		for _day_index: int in range(20):
+			_game_state.call("start_floor")
+			_game_state.call("start_settle")
+			var rolled: MarketEvent = _demand_signals.call("active_event")
+			if rolled != null and rolled.kind == MarketEvent.KIND_PRO_TOUR:
+				fired = true
+				break
+			if int(_game_state.get("current_day")) < 20:
+				_game_state.call("advance_day")
+		if fired:
+			break
+	_expect_equal(fired, true, "BR1: seeded settle run can roll pro_tour_spike")
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_pro_tour_spike_market_and_prices() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call("seed_event_rng", MarketEventService.EVENT_RNG_SEED)
+	var aggro := &"AA-BASE-078"
+	var mid := &"AA-BASE-088"
+	var chase := &"AA-SKIE-047"
+	var sealed := &"AA-SKIE-BLST"
+	var sleeves := &"ACC-SLV-60"
+	var baseline_aggro := int(_demand_signals.call("market_cents_for", aggro))
+	var baseline_mid := int(_demand_signals.call("market_cents_for", mid))
+	var baseline_chase := int(_demand_signals.call("market_cents_for", chase))
+	var baseline_sealed := int(_demand_signals.call("market_cents_for", sealed))
+	var baseline_sleeves := int(_demand_signals.call("market_cents_for", sleeves))
+	var listed_aggro := int(_inventory_service.call("listed_price_for", aggro))
+	var cash_before := int(_economy.get("balance_cents"))
+	_expect_equal(baseline_aggro > 0, true, "BR1: tagged single has baseline hidden market")
+	var telegraph: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_PRO_TOUR,
+		{
+			"duration_days": 2,
+			"remaining_days": 3,
+			"archetype_tag": &"archetype:aggro",
+			"pro_tour_mult": 1.50,
+		}
+	)
+	_expect_equal(telegraph != null, true, "BR1: Pro tour starts on telegraph day")
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", aggro)),
+		baseline_aggro,
+		"BR1: telegraph day does not invent the hidden-market mult"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("pro_tour_market_mult_for", aggro)), 1.0),
+		true,
+		"BR1: telegraph pro_tour_market_mult_for stays 1.0"
+	)
+	_demand_signals.call("roll_settle_events")
+	var active: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		active != null and active.kind == MarketEvent.KIND_PRO_TOUR,
+		true,
+		"BR1: settle after telegraph keeps Pro tour on the bus"
+	)
+	_expect_equal(active.remaining_days, 2, "BR1: remaining_days ticks 3→2 into the spike")
+	_expect_equal(
+		_demand_signals.call("has_pro_tour_spike"),
+		true,
+		"BR1: spike window is active after the telegraph day"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("pro_tour_market_mult_for", aggro)), 1.50),
+		true,
+		"BR1: tagged single hidden-market mult is the seeded event roll"
+	)
+	var spiked := int(_demand_signals.call("market_cents_for", aggro))
+	_expect_equal(
+		spiked,
+		maxi(1, roundi(float(baseline_aggro) * 1.50)),
+		"BR1: tagged single hidden market is ×[1.30, 1.80] vs pre-event baseline"
+	)
+	_expect_equal(
+		spiked > baseline_aggro,
+		true,
+		"BR1: tagged single hidden market is above baseline while active"
+	)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", mid)) == baseline_mid
+		and int(_demand_signals.call("market_cents_for", chase)) == baseline_chase
+		and int(_demand_signals.call("market_cents_for", sealed)) == baseline_sealed
+		and int(_demand_signals.call("market_cents_for", sleeves)) == baseline_sleeves,
+		true,
+		"BR1: untagged singles and all sealed/accessories are unchanged by this event"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("pro_tour_market_mult_for", mid)), 1.0)
+		and is_equal_approx(float(_demand_signals.call("pro_tour_market_mult_for", sealed)), 1.0)
+		and is_equal_approx(float(_demand_signals.call("pro_tour_market_mult_for", sleeves)), 1.0),
+		true,
+		"BR1: event mult is the same no-op for every SKU the tag does not hit"
+	)
+	var market_state := _demand_signals.get("_market_state") as MarketState
+	_expect_equal(
+		market_state.market_cents_for(aggro),
+		baseline_aggro,
+		"BR1: event mult is a modifier — AR1 base true_market is not rewritten"
+	)
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", aggro)),
+		listed_aggro,
+		"BR1: listed prices are unchanged by the event alone"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"BR1: cash is unchanged by the event alone"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_traffic_mult")), 1.0)
+		and is_equal_approx(float(_demand_signals.call("active_event_whale_weight_mult")), 1.0),
+		true,
+		"BR1: buyer door spawn and whale weight stay 1.0"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", aggro)), 1.0),
+		true,
+		"BR1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	_demand_signals.call("roll_settle_events")
+	var after_one: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		after_one != null and after_one.kind == MarketEvent.KIND_PRO_TOUR,
+		true,
+		"BR1: day 1 wait-out keeps Pro tour active"
+	)
+	_expect_equal(after_one.remaining_days, 1, "BR1: remaining_days ticks 2→1")
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", aggro)),
+		maxi(1, roundi(float(baseline_aggro) * 1.50)),
+		"BR1: tagged hidden market stays up while remaining_days > 0"
+	)
+	_demand_signals.call("roll_settle_events")
+	_expect_equal(
+		_demand_signals.call("has_pro_tour"),
+		false,
+		"BR1: clearing after duration drops the event"
+	)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", aggro)),
+		baseline_aggro,
+		"BR1: after duration the mult no longer applies and base true_market resumes"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("pro_tour_market_mult_for", aggro)), 1.0),
+		true,
+		"BR1: a day with no Pro tour active does not invent the mult"
+	)
+	_demand_signals.call("seed_market_drift_rng", 20261003)
+	var spike: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_PRO_TOUR,
+		{
+			"duration_days": 2,
+			"remaining_days": 2,
+			"archetype_tag": &"archetype:aggro",
+			"pro_tour_mult": 1.50,
+		}
+	)
+	_expect_equal(spike != null, true, "BR1: spike restart for AR1 non-compounding check")
+	var base_before := market_state.market_cents_for(aggro)
+	_demand_signals.call("apply_daily_market_drift")
+	var base_after := market_state.market_cents_for(aggro)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", aggro)),
+		maxi(1, roundi(float(base_after) * 1.50)),
+		"BR1: AR1 drift writes the unmultiplied base; the event remultiplies at read"
+	)
+	_expect_equal(
+		base_after != maxi(1, roundi(float(base_before) * 1.50)),
+		true,
+		"BR1: drift does not bake the Pro tour mult into MarketState"
+	)
+
+
+func _test_pro_tour_spike_levers_and_no_soft_lock() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_PRO_TOUR,
+		{
+			"duration_days": 2,
+			"remaining_days": 2,
+			"archetype_tag": &"archetype:aggro",
+			"pro_tour_mult": 1.50,
+		}
+	)
+	var shop: ShopState = _game_state.get("shop")
+	_expect_equal(shop.can_hire(), true, "BR1: Pro tour PREP can still hire")
+	var aggro := &"AA-BASE-078"
+	var listed_before := int(_inventory_service.call("listed_price_for", aggro))
+	var raise_into := maxi(listed_before + 1, roundi(float(listed_before) * 1.20))
+	_expect_equal(
+		_inventory_service.call("set_listed_price", aggro, raise_into),
+		true,
+		"BR1: raise-listed-into-spike lever works during Pro tour"
+	)
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", aggro)),
+		raise_into,
+		"BR1: raised listed price persists"
+	)
+	var fire_sale := maxi(1, floori(float(listed_before) * 0.90))
+	_expect_equal(
+		_inventory_service.call("set_listed_price", aggro, fire_sale),
+		true,
+		"BR1: fire-sale lever works during Pro tour"
+	)
+	var price_dto := _demand_signals.call(
+		"price_signal",
+		aggro,
+		fire_sale,
+		_inventory_service.call("location_for", aggro)
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(price_dto, "BR1 Pro tour fire-sale price signal")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_dto),
+		"BR1 Pro tour fire-sale PriceEditor summary"
+	)
+	var opportunity: bool = _demand_signals.call(
+		"inject_buy_opportunity",
+		_br1_scripted_buy_opportunity()
+	)
+	_expect_equal(opportunity, true, "BR1: deepen-tagged-singles opportunity still injects")
+	var pre_buy := _demand_signals.call(
+		"buy_signal_for_id",
+		&"br1_pro_tour_prebuy"
+	) as BuyConfirmSignal
+	_expect_equal(pre_buy != null, true, "BR1: pre-buy signal builds")
+	_expect_dto_has_no_truth_fields(pre_buy, "BR1 Pro tour pre-buy confirm")
+	_expect_equal(
+		_demand_signals.call("dismiss_buy_opportunity", &"br1_pro_tour_prebuy"),
+		true,
+		"BR1: ignore-buy dismiss still works"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"br1_pro_tour_prebuy") == null,
+		true,
+		"BR1: dismissed buy stays closed — no soft-lock"
+	)
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"BR1: Pro tour can open FLOOR"
+	)
+	_expect_equal(
+		_game_state.call("start_settle"),
+		true,
+		"BR1: Pro tour FLOOR can settle — no soft-lock"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BR1: HUD loads during Pro tour levers")
+	if hud != null:
+		var open_price := hud.get_node_or_null("%OpenPriceButton") as Button
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		_expect_equal(
+			open_price != null and not open_price.disabled,
+			true,
+			"BR1: player can still open PriceEditor to raise into the spike or fire-sale"
+		)
+		_expect_equal(
+			open_buy != null and not open_buy.disabled,
+			true,
+			"BR1: player can still open buys to deepen tagged singles or skip"
+		)
+		hud.queue_free()
+
+
+func _br1_scripted_buy_opportunity() -> BuyOpportunity:
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = &"br1_pro_tour_prebuy"
+	opportunity.sku_id = &"AA-BASE-078"
+	opportunity.display_name = "Arcbolt Adept"
+	opportunity.offer_label = "Binder lot"
+	opportunity.channel = DemandSignalService.Channel.MARKETPLACE
+	opportunity.unit_cost_cents = 400
+	opportunity.quantity = 2
+	opportunity.space_required = 1
+	return opportunity
+
+
+func _test_pro_tour_spike_section_45_and_banner() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_PRO_TOUR,
+		{
+			"duration_days": 2,
+			"remaining_days": 2,
+			"archetype_tag": &"archetype:mid",
+			"pro_tour_mult": 1.62,
+		}
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Pro tour buzz"), true, "BR1: banner names Pro tour buzz")
+	_expect_equal(banner.contains("mid"), true, "BR1: banner names the archetype")
+	_expect_equal(banner.contains("decks"), true, "BR1: banner is Soft EventBanner copy")
+	_expect_equal(banner.contains("true_market"), false, "BR1: banner has no true_market")
+	_expect_equal(banner.contains("1.62"), false, "BR1: banner never shows the rolled mult")
+	_expect_equal(banner.contains("pro_tour_mult"), false, "BR1: banner never names the rolled mult")
+	_assert_text_has_no_truth(banner, "BR1 Pro tour banner")
+	var price_dto := _demand_signals.call(
+		"price_signal",
+		&"AA-BASE-078",
+		int(_inventory_service.call("listed_price_for", &"AA-BASE-078")),
+		_inventory_service.call("location_for", &"AA-BASE-078")
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(price_dto, "BR1 Pro tour price confirm")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_dto),
+		"BR1 Pro tour price summary"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var payload: Dictionary = _demand_signals.call("roll_settle_events")
+	_assert_payload_has_no_truth(payload, "BR1 Pro tour market_event_rolled")
+	_expect_equal(
+		payload.has("pro_tour")
+		and payload.has("pro_tour_spike")
+		and payload.has("archetype_tag")
+		and payload.has("pro_tour_mult"),
+		true,
+		"BR1: instrumentation records Pro tour tag and multiplier"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"BR1: EventBanner does not open Option D PriceEditor"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BR1: HUD loads for Pro tour telegraph")
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		_expect_equal(banner_label != null, true, "BR1: thin event banner exists")
+		_expect_equal(
+			banner_label != null
+			and banner_label.visible
+			and banner_label.text.contains("Pro tour buzz")
+			and banner_label.text.contains("mid")
+			and not banner_label.text.contains("1.62"),
+			true,
+			"BR1: HUD banner shows Pro tour without a new screen or the rolled mult"
+		)
+		_assert_text_has_no_truth(
+			banner_label.text if banner_label != null else "",
+			"BR1 HUD Pro tour banner"
+		)
+		var price_panel := hud.get_node_or_null("%PriceEditor") as PanelContainer
+		_expect_equal(
+			price_panel == null or not price_panel.visible,
+			true,
+			"BR1: HUD does not force PriceEditor for Pro tour"
+		)
+		hud.queue_free()
+
+
+func _test_pro_tour_spike_pack_coherence() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_PRO_TOUR,
+		{
+			"duration_days": 2,
+			"remaining_days": 2,
+			"archetype_tag": &"archetype:aggro",
+			"pro_tour_mult": 1.50,
+		}
+	)
+	_expect_equal(
+		_demand_signals.call("has_pro_tour_spike"),
+		true,
+		"BR1: max one Pro tour active at a time — first start occupies the bus"
+	)
+	var second: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_PRO_TOUR,
+		{
+			"duration_days": 2,
+			"remaining_days": 2,
+			"archetype_tag": &"archetype:mid",
+			"pro_tour_mult": 1.40,
+		}
+	)
+	_expect_equal(second != null, true, "BR1: a later Pro tour start replaces the first")
+	_expect_equal(second.archetype_tag, &"archetype:mid", "BR1: replacement binds the new tag")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("pro_tour_market_mult_for", &"AA-BASE-078")), 1.0)
+		and is_equal_approx(
+			float(_demand_signals.call("pro_tour_market_mult_for", &"AA-BASE-088")),
+			1.40
+		),
+		true,
+		"BR1: only the live Pro tour tag applies — no stacked spikes"
+	)
+	var glut: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(glut != null, true, "BR1: Supply glut still starts")
+	_expect_equal(
+		_demand_signals.call("has_pro_tour"),
+		false,
+		"BR1: glut replaces Pro tour on the shared pack bus"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("pro_tour_market_mult_for", &"AA-BASE-088")), 1.0),
+		true,
+		"BR1: glut does not keep the Pro tour market mult"
+	)
+	var set_release: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SET_RELEASE,
+		{
+			"duration_days": 5,
+			"remaining_days": 5,
+			"set_id": &"AA-SKIE",
+			"old_set_id": &"AA-DUST",
+		}
+	)
+	_expect_equal(set_release != null, true, "BR1: BQ1 Set release still starts")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("set_release_demand_mult_for", &"AA-SKIE-BLST")),
+			SetReleaseHypePolicy.HYPE_NEW_MULT
+		),
+		true,
+		"BR1: BQ1 sealed demand mults stay as shipped"
+	)
+	var recession: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_RECESSION,
+		{"duration_days": 7, "remaining_days": 7}
+	)
+	_expect_equal(recession != null, true, "BR1: Recession week still starts")
+	var convention: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(convention != null, true, "BR1: Convention weekend still starts")
+	var theft: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(theft != null, true, "BR1: Theft ring still starts")
+	var scare: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(scare != null, true, "BR1: Counterfeit scare still starts")
+	var hype: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": &"AA-SKIE-047", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(hype != null, true, "BR1: Option D hype still starts")
+	_expect_equal(hype.sku_id, &"AA-SKIE-047", "BR1: hype still targets Titan")
+	var fog: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_FOG,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(fog != null, true, "BR1: fog day still starts")
+	_expect_equal(_demand_signals.call("has_fog_flag"), true, "BR1: fog flag still applies")
+	_expect_equal(
+		_demand_signals.call("has_pro_tour"),
+		false,
+		"BR1: fog does not leak Pro tour"
+	)
+
+
+func _test_pro_tour_spike_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_PRO_TOUR,
+		{
+			"duration_days": 2,
+			"remaining_days": 2,
+			"archetype_tag": &"archetype:aggro",
+			"pro_tour_mult": 1.55,
+		}
+	)
+	_expect_equal(started != null, true, "BR1 save: Pro tour starts")
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "BR1 Pro tour save")
+	var stored: Dictionary = saved.get("market_event", {})
+	_expect_equal(String(stored.get("id", "")), "pro_tour_spike", "BR1 save writes event id")
+	_expect_equal(int(stored.get("remaining_days", 0)), 2, "BR1 save writes remaining days")
+	_expect_equal(String(stored.get("kind", "")), "pro_tour_spike", "BR1 save writes kind")
+	_expect_equal(
+		String(stored.get("archetype_tag", "")),
+		"archetype:aggro",
+		"BR1 save writes target tag"
+	)
+	_expect_equal(
+		is_equal_approx(float(stored.get("pro_tour_mult", 0.0)), 1.55),
+		true,
+		"BR1 save writes rolled mult"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_demand_signals.call("has_pro_tour"),
+		false,
+		"BR1: new game clears Pro tour"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BR1: restore_save accepts Pro tour snapshot"
+	)
+	var restored: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(restored != null, true, "BR1: save/load restores Pro tour")
+	_expect_equal(restored.kind, MarketEvent.KIND_PRO_TOUR, "BR1: restored kind")
+	_expect_equal(restored.archetype_tag, &"archetype:aggro", "BR1: restored target tag")
+	_expect_equal(
+		is_equal_approx(restored.pro_tour_mult, 1.55),
+		true,
+		"BR1: restored rolled mult"
+	)
+	_expect_equal(restored.remaining_days, 2, "BR1: restored remaining days")
+	_expect_equal(
+		_demand_signals.call("has_pro_tour_spike"),
+		true,
+		"BR1: restored Pro tour re-applies the spike window"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("pro_tour_market_mult_for", &"AA-BASE-078")),
+			1.55
+		),
+		true,
+		"BR1: restored Pro tour still multiplies tagged singles"
+	)
+	var restored_banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(
+		restored_banner.contains("Pro tour buzz") and restored_banner.contains("aggro"),
+		true,
+		"BR1: restored banner still names Pro tour"
+	)
+	_expect_equal(
+		restored_banner.contains("1.55"),
+		false,
+		"BR1: restored banner still hides the rolled mult"
+	)
+	_assert_text_has_no_truth(restored_banner, "BR1 restored Pro tour banner")
+
+
+func _test_pro_tour_spike_untouched_and_parked() -> void:
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and BuylistDripPolicy.REP_HIT == 1,
+		true,
+		"BR1: BM1 drip stays 0.40 / −1"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50),
+		true,
+		"BR1: BN1 fewer-lots stays ×0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFloodPolicy.FLOOD_CEILING, 0.70)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BR1: BO1 flood stays 0.70 / ×1.50"
+	)
+	_expect_equal(
+		UtilitiesPolicy.SMALL_DAILY_CENTS == 4_000
+		and UtilitiesPolicy.MEDIUM_DAILY_CENTS == 7_000
+		and UtilitiesPolicy.LARGE_DAILY_CENTS == 11_000,
+		true,
+		"BR1: BP1 utilities stay $40 / $70 / $110"
+	)
+	_expect_equal(
+		SetReleaseHypePolicy.TELEGRAPH_DAYS == 3
+		and SetReleaseHypePolicy.DURATION_DAYS == 5
+		and is_equal_approx(SetReleaseHypePolicy.HYPE_NEW_MULT, 1.40)
+		and is_equal_approx(SetReleaseHypePolicy.HYPE_OLD_MULT, 0.70),
+		true,
+		"BR1: BQ1 set release stays telegraph 3 / duration 5 / ×1.40 / ×0.70"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.FAIR_MULT, 1.10)
+		and is_equal_approx(FairPriceSettlePolicy.GOUGE_MULT, 1.25),
+		true,
+		"BR1: BK1 fair/gouge stays 1.10 / 1.25"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1,
+		true,
+		"BR1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BR1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BR1: whale weight stays as shipped"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "pro_tour")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"ProTourSpikePolicy"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func active_event_traffic_mult(",
+			"PRO_TOUR"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func active_event_whale_weight_mult(",
+			"PRO_TOUR"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func apply_daily_market_drift(",
+			"pro_tour"
+		),
+		true,
+		"BR1: Pro tour stays off sell-through, door spawn, whale weight, and AR1 drift writes"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("pro_tour_spike"),
+		true,
+		"BR1: Pro tour is a named settle event"
+	)
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("listed_band")
+		or events.contains("stop_day"),
+		false,
+		"BR1: Soft catalog stays closed"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/pro_tour_spike_policy.gd"
+	)
+	_expect_equal(
+		not policy_src.contains(".tscn")
+		and not policy_src.contains(".png")
+		and not policy_src.contains(".webp")
+		and not FileAccess.file_exists("res://scripts/economy/pro_tour_spike_policy.tscn"),
+		true,
+		"BR1: No Art"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/economy/buylist_drip_policy.gd"
+		).contains("pro_tour")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/buylist_fewer_lots_policy.gd"
+		).contains("pro_tour")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/buylist_flood_policy.gd"
+		).contains("pro_tour")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/utilities_policy.gd"
+		).contains("pro_tour")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/set_release_hype_policy.gd"
+		).contains("pro_tour"),
+		false,
+		"BR1: BM1/BN1/BO1/BP1/BQ1 rule bodies stay untouched"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/pro_tour_spike_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BR1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BR1: %s never shows p_buy" % path
+		)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"BR1: Soft _ensure_priceable_sku stays parked"
 	)
 
 
