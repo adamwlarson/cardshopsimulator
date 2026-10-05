@@ -93,3 +93,4 @@
 | 2026-10-05 | Drafted post BA1 SHIPPED #83 @ `c9a303c6`. Lean **BB1 Sell-side uninspected NM mismatch**. Fee cut / HUD / STOP / auction Inspect parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM adopted **BB1**. Park BB2/BB3/BB4. Hard-park camera off-switch. Soft catalog CLOSED. Sell-side NM mismatch on uninspected marketplace/shady singles. Draft sha256 `692fbfc4`. |
 | 2026-10-05 | PM adopted **BB1**. Spec on main `908e80fe`. Park BB2/BB3/BB4. No Art. Soft catalog CLOSED. Draft sha256 `692fbfc4`. |
+| 2026-10-05 | PM adopted **BB1**. Spec on main `0ba5560c`. Spike [BB1 Sell-side uninspected NM mismatch](https://cursor.com/agents/bc-4d048863-d53c-5c84-b669-14b804622eea). Park BB2/BB3/BB4. No Art. Soft catalog CLOSED. Draft sha256 `692fbfc4`. |
