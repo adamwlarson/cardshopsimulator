@@ -1,8 +1,8 @@
 class_name NmMismatchPolicy
 extends RefCounted
 
-## BB1 sell-side uninspected NM mismatch. Shop sale of a marketplace /
-## shady single that skipped Inspect and listed NM while true is LP+.
+## BB1/BD1 sell-side uninspected NM mismatch. Shop sale of a marketplace /
+## shady / auction single that skipped Inspect and listed NM while true is LP+.
 ## Soft Rep −2 once and claw back half the sale. Stock stays sold.
 ## Out: distributor NM-assumed, buylist, graded/`cert_valid` (AT1),
 ## inspected lots, listed true-or-worse. Not a sell weight.
@@ -14,7 +14,11 @@ const LEDGER_MEMO := "Uninspected NM mismatch refund"
 
 
 static func is_fog_channel(channel: Variant) -> bool:
-	return MarketplaceInspectPolicy.is_channel(channel)
+	if MarketplaceInspectPolicy.is_channel(channel):
+		return true
+	if typeof(channel) == TYPE_INT:
+		return channel == DemandSignalService.Channel.AUCTION
+	return String(channel).to_lower() == "auction"
 
 
 static func listed_presents_as_nm(card: CardInstance) -> bool:
