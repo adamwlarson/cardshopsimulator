@@ -115,6 +115,12 @@ static func fair_price_settle_toast(rep_delta: int) -> String:
 	return ""
 
 
+static func buylist_drip_toast(rep_delta: int) -> String:
+	if rep_delta >= 0:
+		return ""
+	return "Stingy buylist — regulars soured · Rep %d" % rep_delta
+
+
 static func research_action_label(cash_cents: int, attention_cost: int) -> String:
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 

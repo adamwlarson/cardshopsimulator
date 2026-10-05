@@ -231,6 +231,7 @@ func _initialize() -> void:
 	_test_online_hold_listing_persist()
 	_test_fair_price_settle()
 	_test_noisy_suggested_day_clear()
+	_test_buylist_drip_settle()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1751,6 +1752,8 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 		"res://scripts/economy/online_listing_service.gd",
 		"res://scripts/economy/fair_price_settle_policy.gd",
 		"res://scripts/economy/listed_sale_day_log.gd",
+		"res://scripts/economy/buylist_drip_policy.gd",
+		"res://scripts/economy/buylist_pct_settings.gd",
 		"res://scripts/ui/player_trade_presenter.gd",
 		"res://scripts/economy/player_trade_offer.gd",
 		"res://scripts/economy/player_trade_policy.gd",
@@ -35766,6 +35769,481 @@ func _bl1_double_hidden_market(sku_id: StringName) -> void:
 	if market == null:
 		return
 	market.apply_multiplier(sku_id, 2.0)
+
+
+func _test_buylist_drip_settle() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bm1_named_gate_and_fallbacks()
+	_test_bm1_same_seed_sealed_drip_and_floor()
+	_test_bm1_two_low_once_and_next_day()
+	_test_bm1_ui_bk1_ah1_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bm1_named_gate_and_fallbacks() -> void:
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40),
+		true,
+		"BM1: locked drip_floor is 0.40"
+	)
+	_expect_equal(BuylistDripPolicy.REP_HIT, 1, "BM1: locked drip Rep hit is 1")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.buylist_drip_floor, 0.40)
+		and is_equal_approx(EASY_CONFIG.buylist_drip_floor, 0.40)
+		and is_equal_approx(HARD_CONFIG.buylist_drip_floor, 0.40),
+		true,
+		"BM1: Easy/Normal/Hard inherit drip_floor 0.40"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.drip_floor(0.0), 0.40)
+		and is_equal_approx(BuylistDripPolicy.drip_floor(-1.0), 0.40),
+		true,
+		"BM1: missing drip_floor falls back to 0.40"
+	)
+	var missing := BalanceConfig.new()
+	missing.buylist_drip_floor = 0.0
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.drip_floor_for(missing), 0.40),
+		true,
+		"BM1: floor ≤ 0 falls back to 0.40"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.drip_floor_for(null), 0.40),
+		true,
+		"BM1: null config still uses drip_floor 0.40"
+	)
+	_expect_equal(
+		BuylistDripPolicy.is_below_floor(0.39),
+		true,
+		"BM1: 0.39 is strictly below 0.40"
+	)
+	_expect_equal(
+		BuylistDripPolicy.is_below_floor(0.40),
+		false,
+		"BM1: a category at exactly the floor does not drip"
+	)
+	_expect_equal(
+		BuylistDripPolicy.rep_delta_for(null),
+		-1,
+		"BM1: drip Rep delta is −1"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.PCT_SEALED, 0.55)
+		and is_equal_approx(BuylistPolicy.PCT_SINGLES_NM, 0.50)
+		and is_equal_approx(BuylistPolicy.PCT_GRADED, 0.45),
+		true,
+		"BM1: AW1 buylist defaults stay 0.55 / 0.50 / 0.45"
+	)
+	_bm1_reset_for_settle()
+	_expect_equal(
+		is_equal_approx(float(_game_state.call("player_buylist_pct", &"sealed")), 0.55)
+		and is_equal_approx(float(_game_state.call("player_buylist_pct", &"singles_nm")), 0.50)
+		and is_equal_approx(float(_game_state.call("player_buylist_pct", &"graded")), 0.45),
+		true,
+		"BM1: GameState stores AW1 category percents by default"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("buylist_pct", &"sealed")), 0.55),
+		true,
+		"BM1: DemandSignals.buylist_pct reads the AW1 player store"
+	)
+	var economy_src := FileAccess.get_file_as_string("res://scripts/autoload/economy.gd")
+	_expect_equal(
+		_function_body_contains(economy_src, "func settle_day(", "apply_buylist_drip_settle_rep")
+		and _function_body_contains(economy_src, "func settle_day(", "apply_fair_price_settle_rep")
+		and _function_body_contains(economy_src, "func settle_day(", "_settle_shrink"),
+		true,
+		"BM1: settle_day applies the buylist drip after shrink with BK1"
+	)
+	_expect_equal(
+		economy_src.find("apply_buylist_drip_settle_rep")
+		> economy_src.find("_settle_shrink()"),
+		true,
+		"BM1: drip is after wages/rent/shrink"
+	)
+	_expect_equal(
+		economy_src.find("apply_buylist_drip_settle_rep")
+		> economy_src.find("apply_fair_price_settle_rep"),
+		true,
+		"BM1: drip shares the BK1 settle reputation pass"
+	)
+
+
+func _test_bm1_same_seed_sealed_drip_and_floor() -> void:
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.39, 0.40, 0.40)
+	_expect_equal(
+		is_equal_approx(float(_game_state.call("player_buylist_pct", &"sealed")), 0.39),
+		true,
+		"BM1: sealed buylist is stored at 0.39"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("buylist_pct", &"sealed")), 0.39)
+		and is_equal_approx(float(_demand_signals.call("buylist_pct", &"singles_nm")), 0.40)
+		and is_equal_approx(float(_demand_signals.call("buylist_pct", &"graded")), 0.40),
+		true,
+		"BM1: DemandSignals reads the player store for drip categories"
+	)
+	var settings: BuylistPctSettings = _game_state.get("buylist_pcts")
+	_expect_equal(
+		BuylistDripPolicy.any_below_floor_for(settings, _game_state.get("balance_config")),
+		true,
+		"BM1: sealed at 0.39 trips the drip floor"
+	)
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(_game_state.call("start_floor"), true, "BM1: low-sealed path can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BM1: low-sealed path can settle")
+	_expect_equal(
+		int(_game_state.get("last_buylist_drip_rep_delta")),
+		-1,
+		"BM1: sealed at 0.39 (others ≥ 0.40) settles Rep −1 once"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"BM1: reputation drops by 1 on a stingy sealed day"
+	)
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		0,
+		"BM1: drip does not apply a BK1 fair/gouge tick"
+	)
+	_expect_equal(
+		int(_game_state.call("apply_buylist_drip_settle_rep")),
+		0,
+		"BM1: a second settle pass the same day does not add another −1"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"BM1: reputation stays −1 after a repeated settle pass"
+	)
+
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.40, 0.40, 0.40)
+	settings = _game_state.get("buylist_pcts")
+	_expect_equal(
+		BuylistDripPolicy.any_below_floor_for(settings, _game_state.get("balance_config")),
+		false,
+		"BM1: all categories at 0.40 stay at the floor"
+	)
+	rep_before = int(_game_state.get("current_reputation"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_game_state.get("last_buylist_drip_rep_delta")),
+		0,
+		"BM1: all categories at 0.40 → no drip from this rule"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"BM1: floor-exact settle leaves reputation unchanged"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bm1_two_low_once_and_next_day() -> void:
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.39, 0.30, 0.40)
+	var settings: BuylistPctSettings = _game_state.get("buylist_pcts")
+	_expect_equal(
+		BuylistDripPolicy.any_below_floor_for(settings, _game_state.get("balance_config")),
+		true,
+		"BM1: two categories below the floor still trip once"
+	)
+	_expect_equal(
+		BuylistDripPolicy.settle_rep_delta(settings, _game_state.get("balance_config")),
+		-1,
+		"BM1: two low categories still yield a single −1"
+	)
+	var rep_before := int(_game_state.get("current_reputation"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_game_state.get("last_buylist_drip_rep_delta")),
+		-1,
+		"BM1: two categories below floor still apply only one −1"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"BM1: two low categories do not stack"
+	)
+
+	_expect_equal(_game_state.call("advance_day"), true, "BM1: calendar day advances")
+	_expect_equal(
+		bool(_game_state.get("buylist_drip_applied")),
+		false,
+		"BM1: next day clears the once-per-settle drip flag"
+	)
+	_expect_equal(
+		is_equal_approx(float(_game_state.call("player_buylist_pct", &"sealed")), 0.39)
+		and is_equal_approx(float(_game_state.call("player_buylist_pct", &"singles_nm")), 0.30),
+		true,
+		"BM1: stingy percents persist into the next day"
+	)
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(_game_state.call("start_floor"), true, "BM1: next day can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BM1: next day can settle")
+	_expect_equal(
+		int(_game_state.get("last_buylist_drip_rep_delta")),
+		-1,
+		"BM1: next settle day can drip again if still low"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"BM1: a still-low next day drops reputation by 1 again"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bm1_ui_bk1_ah1_untouched() -> void:
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.39, 0.50, 0.45)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BM1: HUD loads for drip toast")
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	if hud != null:
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("regulars soured"),
+			true,
+			"BM1: stingy settle toast is a soft ding"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BM1: drip settle toast")
+		_expect_equal(
+			toast != null
+			and not toast.text.contains("true_market")
+			and not toast.text.contains("p_buy")
+			and not toast.text.contains("drip_floor")
+			and not toast.text.contains("0.40"),
+			true,
+			"BM1: toast never shows true_market, p_buy, or the floor math"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+
+	_bm1_reset_for_settle()
+	var suggested := _bk1_shop_suggested()
+	_expect_equal(_bk1_sell_sleeves_at(suggested), true, "BM1: BK1 fair listed sale still completes")
+	var log: ListedSaleDayLog = _game_state.get("listed_sale_log")
+	_expect_equal(log.had_fair, true, "BM1: BK1 still records a fair listed sale")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		1,
+		"BM1: BK1 fair/gouge settle tick stays as shipped"
+	)
+	_expect_equal(
+		int(_game_state.get("last_buylist_drip_rep_delta")),
+		0,
+		"BM1: AW1 defaults sit at or above the drip floor"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before + 1,
+		"BM1: BK1 fair +1 still applies when buylist is not stingy"
+	)
+
+	_bm1_reset_for_settle()
+	suggested = _bk1_shop_suggested()
+	_inventory_service.call("set_listed_price", &"ACC-SLV-60", suggested)
+	var queue := CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		Callable(_game_state, "adjust_reputation"),
+		Callable(_game_state, "spend_attention"),
+		Callable(_game_state, "register_is_covered"),
+		Callable(_game_state, "apply_register_walkout_rep")
+	)
+	_game_state.set("attention_remaining", 0)
+	var walked := _bk1_listed_buyer(suggested)
+	_expect_equal(queue.enqueue(walked), true, "BM1: AH1 walkout customer enqueues")
+	_expect_equal(queue.resolve_register_walkouts() >= 1, true, "BM1: uncovered register walks out")
+	queue.free()
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and NORMAL_CONFIG.register_walkout_rep_cap == 3,
+		true,
+		"BM1: AH1 walkout hit/cap stay 1 / 3"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.FAIR_MULT, 1.10)
+		and is_equal_approx(FairPriceSettlePolicy.GOUGE_MULT, 1.25),
+		true,
+		"BM1: BK1 fair/gouge mults stay 1.10 / 1.25"
+	)
+	_expect_equal(CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1, true, "BM1: buyer door spawn stays one customer per live roll")
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BM1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BM1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BM1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BM1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BM1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "buylist_drip")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "drip_floor")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "BuylistDrip"),
+		true,
+		"BM1: buylist drip stays off the sell roll"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not spawn_src.contains("BuylistDripPolicy")
+		and not policy_src.contains("BuylistDripPolicy")
+		and not spawn_src.contains("buylist_drip")
+		and not policy_src.contains("buylist_drip")
+		and not spawn_src.contains("drip_floor")
+		and not policy_src.contains("fewer-lots")
+		and not spawn_src.contains("fewer lots"),
+		true,
+		"BM1: door spawn does not invent fewer-lots math"
+	)
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BM1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.PCT_SEALED, 0.55)
+		and is_equal_approx(BuylistPolicy.PCT_SINGLES_NM, 0.50)
+		and is_equal_approx(BuylistPolicy.PCT_GRADED, 0.45),
+		true,
+		"BM1: AW1 defaults stay as shipped"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	_expect_equal(
+		queue_src.contains("func change_buylist_offer(")
+		and queue_src.contains("func accept_buylist_offer(")
+		and queue_src.contains("func walk_buylist("),
+		true,
+		"BM1: AX1 Change offer stays on the AW1 buylist serve"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("listed_band")
+		or events.contains("stop_day")
+		or events.contains("buylist_pct"),
+		false,
+		"BM1: Soft catalog stays closed"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/buylist_drip_policy.gd",
+		"res://scripts/economy/buylist_pct_settings.gd",
+		"res://scripts/economy/fair_price_settle_policy.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/autoload/economy.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BM1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BM1: %s never shows p_buy" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	var presenter_src := FileAccess.get_file_as_string(
+		"res://scripts/ui/demand_signal_presenter.gd"
+	)
+	_expect_equal(
+		presenter_src.contains("regulars soured"),
+		true,
+		"BM1: drip settle beat stays a soft ding"
+	)
+	_expect_equal(
+		hud_src.contains("_maybe_show_buylist_drip_toast")
+		and hud_src.contains("_maybe_show_fair_price_settle_toast"),
+		true,
+		"BM1: HUD can show the drip ding on the settle beat"
+	)
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert")
+		and not hud_src.contains("camera_off"),
+		true,
+		"BM1: listed-band retag, STOP, and camera off-switch stay parked"
+	)
+	var save_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/online_listing_save_policy.gd"
+	)
+	_expect_equal(
+		not save_src.contains("suggested_at_list"),
+		true,
+		"BM1: Soft OK list-time suggested persistence stays Soft"
+	)
+	_game_state.call("start_new_game")
+
+
+func _bm1_reset_for_settle() -> void:
+	var config := NORMAL_CONFIG.duplicate() as BalanceConfig
+	config.event_chance_settle = 0.0
+	_game_state.call("set_balance_config", config)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+
+
+func _bm1_set_pcts(sealed: float, singles_nm: float, graded: float) -> void:
+	_game_state.call("set_player_buylist_pct", &"sealed", sealed)
+	_game_state.call("set_player_buylist_pct", &"singles_nm", singles_nm)
+	_game_state.call("set_player_buylist_pct", &"graded", graded)
 
 
 func _bj1_active_rows() -> Array[Dictionary]:

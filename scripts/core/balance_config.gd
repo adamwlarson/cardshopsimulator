@@ -204,6 +204,10 @@ enum Difficulty {
 @export var fair_price_gouge_mult: float = 1.25
 @export var fair_price_fair_rep_gain: int = 1
 @export var fair_price_gouge_rep_hit: int = 1
+## BM1 / systems §4.3: close-settle Rep drip when any player buylist
+## % of market is strictly below this floor. Missing / ≤0 falls back
+## in BuylistDripPolicy to 0.40. Easy/Hard inherit. Not a sell weight.
+@export var buylist_drip_floor: float = 0.40
 
 
 func is_rent_due_day(day: int) -> bool:

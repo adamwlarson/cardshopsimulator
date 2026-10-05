@@ -48,6 +48,9 @@ var last_nm_mismatch_refund_cents: int = 0
 var last_nm_mismatch_rep_delta: int = 0
 var last_fair_price_settle_rep_delta: int = 0
 var listed_sale_log := ListedSaleDayLog.new()
+var last_buylist_drip_rep_delta: int = 0
+var buylist_drip_applied: bool = false
+var buylist_pcts := BuylistPctSettings.new()
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
 var _suppress_sandbox_bests: bool = false
@@ -97,6 +100,9 @@ func start_new_game() -> void:
 	clear_last_nm_mismatch()
 	last_fair_price_settle_rep_delta = 0
 	listed_sale_log.reset()
+	last_buylist_drip_rep_delta = 0
+	buylist_drip_applied = false
+	buylist_pcts.reset()
 	_unpaid_wages_this_settle = false
 	_suppress_lose_eval = false
 	_suppress_sandbox_bests = true
@@ -180,6 +186,8 @@ func advance_day() -> bool:
 	register_walkout_rep_spent_today = 0
 	last_fair_price_settle_rep_delta = 0
 	listed_sale_log.reset()
+	last_buylist_drip_rep_delta = 0
+	buylist_drip_applied = false
 	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
 	EventBus.attention_changed.emit(attention_remaining)
@@ -500,6 +508,33 @@ func apply_fair_price_settle_rep() -> int:
 		"rep_delta": delta,
 		"had_fair": listed_sale_log.had_fair,
 		"had_gouge": listed_sale_log.had_gouge,
+		"reputation": current_reputation,
+	})
+	return delta
+
+
+func player_buylist_pct(category: Variant) -> float:
+	return buylist_pcts.pct_for(category)
+
+
+func set_player_buylist_pct(category: Variant, pct: float) -> void:
+	buylist_pcts.set_pct(category, pct)
+
+
+func apply_buylist_drip_settle_rep() -> int:
+	# BM1: once per close-settle, after shrink (shares the BK1 beat).
+	# Any category strictly below drip_floor → Rep −1 once. Caps at one −1.
+	last_buylist_drip_rep_delta = 0
+	if buylist_drip_applied:
+		return 0
+	buylist_drip_applied = true
+	var delta := BuylistDripPolicy.settle_rep_delta(buylist_pcts, balance_config)
+	last_buylist_drip_rep_delta = delta
+	if delta == 0:
+		return 0
+	adjust_reputation(delta)
+	QaInstrumentation.record_buylist_drip_settle({
+		"rep_delta": delta,
 		"reputation": current_reputation,
 	})
 	return delta
@@ -858,6 +893,8 @@ func capture_save() -> Dictionary:
 		"online_cancel": Economy.online_cancel_to_save(),
 		"online_listings": Economy.online_listings_to_save(),
 		"listed_sale_day": listed_sale_log.snapshot(),
+		"buylist_pcts": buylist_pcts.snapshot(),
+		"buylist_drip_applied": buylist_drip_applied,
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
@@ -891,12 +928,19 @@ func restore_save(data: Dictionary) -> bool:
 	last_fire_rep_delta = 0
 	last_register_walkout_rep_delta = 0
 	last_fair_price_settle_rep_delta = 0
+	last_buylist_drip_rep_delta = 0
 	clear_last_nm_mismatch()
 	var listed_sale_day: Variant = data.get("listed_sale_day", {})
 	if listed_sale_day is Dictionary:
 		listed_sale_log.apply_save(listed_sale_day as Dictionary)
 	else:
 		listed_sale_log.reset()
+	var saved_buylist_pcts: Variant = data.get("buylist_pcts", {})
+	if saved_buylist_pcts is Dictionary:
+		buylist_pcts.apply_save(saved_buylist_pcts as Dictionary)
+	else:
+		buylist_pcts.reset()
+	buylist_drip_applied = bool(data.get("buylist_drip_applied", false))
 	register_walkout_count_today = maxi(
 		0,
 		int(data.get("register_walkout_count_today", 0))
