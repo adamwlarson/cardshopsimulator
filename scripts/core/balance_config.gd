@@ -235,6 +235,15 @@ enum Difficulty {
 @export var set_release_duration_days: int = 5
 @export var hype_new_mult: float = 1.40
 @export var hype_old_mult: float = 0.70
+## BR1 / systems §8: Pro tour / influencer spike. Missing / ≤0 telegraph
+## falls back in ProTourSpikePolicy to 1. Missing / ≤0 duration falls
+## back to 2 (inclusive of spike day). Missing min → 1.30. Missing max
+## → 1.80. Min ≤ 0 or max < min falls back to those defaults. Easy/Hard
+## inherit. Not a sell weight.
+@export var pro_tour_telegraph_days: int = 1
+@export var pro_tour_duration_days: int = 2
+@export var pro_tour_mult_min: float = 1.30
+@export var pro_tour_mult_max: float = 1.80
 
 
 func is_rent_due_day(day: int) -> bool:

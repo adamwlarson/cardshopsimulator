@@ -93,6 +93,16 @@
       "calendar": true,
       "duration_days_min": 5,
       "duration_days_max": 5
+    },
+    {
+      "id": "pro_tour_spike",
+      "type": "pro_tour_spike",
+      "title": "Pro tour spike",
+      "description": "Word drops that a pro-tour deck is about to break out — tagged singles spike. Stock depth now, or chase-buy into the window.",
+      "weight": 1.0,
+      "negative": false,
+      "duration_days_min": 2,
+      "duration_days_max": 2
     }
   ]
 }

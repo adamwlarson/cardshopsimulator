@@ -82,8 +82,11 @@ func roll_definition(config: BalanceConfig, day: int = 0) -> Dictionary:
 
 
 func roll_duration(def: Dictionary, config: BalanceConfig = null) -> int:
-	if StringName(def.get("type", "")) == MarketEvent.KIND_SET_RELEASE:
+	var kind := StringName(def.get("type", ""))
+	if kind == MarketEvent.KIND_SET_RELEASE:
 		return SetReleaseHypePolicy.duration_days_for(config)
+	if kind == MarketEvent.KIND_PRO_TOUR:
+		return ProTourSpikePolicy.duration_days_for(config)
 	var min_days := maxi(1, int(def.get("duration_days_min", 1)))
 	var max_days := maxi(min_days, int(def.get("duration_days_max", min_days)))
 	if max_days == min_days:
@@ -150,6 +153,46 @@ func pick_set_release_targets(
 	return {"set_id": new_id, "old_set_id": old_id}
 
 
+func pick_pro_tour_target(archetype_tag: StringName = &"") -> Dictionary:
+	var tags := live_archetype_tags()
+	if tags.is_empty():
+		return {}
+	var tag := archetype_tag
+	if tag.is_empty() or not (tag in tags):
+		tag = tags[rng.randi() % tags.size()]
+	if tag.is_empty():
+		return {}
+	return {"archetype_tag": tag}
+
+
+func roll_pro_tour_mult(config: BalanceConfig = null) -> float:
+	return ProTourSpikePolicy.roll_mult(rng, config)
+
+
+func live_archetype_tags() -> Array[StringName]:
+	var seen := {}
+	var names: PackedStringArray = []
+	if InventoryService.model == null:
+		return []
+	for value: Variant in InventoryService.model.catalog.values():
+		var sku := value as ProductSKU
+		if sku == null or sku.product_class != ProductSKU.ProductClass.SINGLE:
+			continue
+		for tag: StringName in sku.tags:
+			if not ProTourSpikePolicy.is_archetype_tag(tag):
+				continue
+			var key := String(tag)
+			if seen.has(key):
+				continue
+			seen[key] = true
+			names.append(key)
+	names.sort()
+	var ids: Array[StringName] = []
+	for name: String in names:
+		ids.append(StringName(name))
+	return ids
+
+
 func live_sealed_set_ids() -> Array[StringName]:
 	var seen := {}
 	var names: PackedStringArray = []
@@ -194,7 +237,7 @@ func _load_catalog() -> void:
 		for entry_value: Variant in (parsed as Dictionary).get("events", []):
 			if entry_value is Dictionary:
 				defs.append(entry_value as Dictionary)
-	if defs.size() >= 9:
+	if defs.size() >= 10:
 		return
 	defs = [
 		_fallback_def(&"hype_spike", "Hype spike", false, 1, 3),
@@ -206,6 +249,7 @@ func _load_catalog() -> void:
 		_fallback_def(&"recession_week", "Recession week", true, 7, 7),
 		_fallback_def(&"supply_glut", "Supply glut", false, 3, 3),
 		_fallback_def(&"set_release_hype", "Set release hype", false, 5, 5),
+		_fallback_def(&"pro_tour_spike", "Pro tour spike", false, 2, 2),
 	]
 
 

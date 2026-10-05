@@ -108,6 +108,8 @@ func roll_settle_events() -> Dictionary:
 		_active_event.remaining_days -= 1
 		if not _active_event.is_active():
 			_clear_active_event()
+		elif _active_event.kind == MarketEvent.KIND_PRO_TOUR:
+			_sync_pro_tour_service(_active_event)
 	if _active_event != null and _active_event.is_active():
 		return _record_roll(_active_event, false)
 	var config := GameState.balance_config
@@ -128,6 +130,10 @@ func roll_settle_events() -> Dictionary:
 		if remaining <= 0:
 			return _record_roll(null, true)
 		opts["remaining_days"] = remaining
+	elif kind == MarketEvent.KIND_PRO_TOUR:
+		opts["remaining_days"] = (
+			ProTourSpikePolicy.telegraph_days_for(config) + int(opts["duration_days"])
+		)
 	var started := start_pack_event(kind, opts)
 	if started == null or not started.is_active():
 		return _record_roll(null, true)
@@ -150,6 +156,8 @@ func start_pack_event(kind: StringName, opts: Dictionary = {}) -> MarketEvent:
 	event.sku_id = StringName(opts.get("sku_id", &""))
 	event.set_id = StringName(opts.get("set_id", &""))
 	event.old_set_id = StringName(opts.get("old_set_id", &""))
+	event.archetype_tag = StringName(opts.get("archetype_tag", &""))
+	event.pro_tour_mult = float(opts.get("pro_tour_mult", 0.0))
 	event.fog_flag = bool(def.get("fog_flag", kind == MarketEvent.KIND_FOG))
 	if not _bind_event_targets(event):
 		return null
@@ -168,15 +176,22 @@ func active_event() -> MarketEvent:
 
 func market_cents_for(sku_id: StringName) -> int:
 	# Hidden market used by Economy net-worth math (systems §9.2). Not a UI value.
+	# BR1 Pro tour reads through a non-compounding event mult; AR1 drift still
+	# writes the unmultiplied MarketState base.
 	var cents := _market_state.market_cents_for(sku_id)
-	if cents > 0:
+	if cents <= 0:
+		if InventoryService.model == null:
+			return 0
+		var sku := InventoryService.model.get_sku(sku_id)
+		if sku == null:
+			return 0
+		cents = sku.base_market_cents
+	if cents <= 0:
+		return 0
+	var mult := pro_tour_market_mult_for(sku_id)
+	if is_equal_approx(mult, 1.0):
 		return cents
-	if InventoryService.model == null:
-		return 0
-	var sku := InventoryService.model.get_sku(sku_id)
-	if sku == null:
-		return 0
-	return sku.base_market_cents
+	return maxi(1, roundi(float(cents) * mult))
 
 
 func has_fog_flag() -> bool:
@@ -212,10 +227,28 @@ func has_set_release_hype() -> bool:
 	return event != null and event.kind == MarketEvent.KIND_SET_RELEASE
 
 
+func has_pro_tour() -> bool:
+	var event := active_event()
+	return event != null and event.kind == MarketEvent.KIND_PRO_TOUR
+
+
+func has_pro_tour_spike() -> bool:
+	var event := active_event()
+	if event == null or event.kind != MarketEvent.KIND_PRO_TOUR:
+		return false
+	return ProTourSpikePolicy.is_spike_window(event.remaining_days, event.duration_days)
+
+
 func set_release_demand_mult_for(sku_id: StringName) -> float:
 	if _service == null or not has_set_release_hype():
 		return 1.0
 	return _service.set_release_demand_mult_for(sku_id)
+
+
+func pro_tour_market_mult_for(sku_id: StringName) -> float:
+	if _service == null or not has_pro_tour_spike():
+		return 1.0
+	return _service.pro_tour_market_mult_for(sku_id)
 
 
 func active_event_demand_mult() -> float:
@@ -504,6 +537,8 @@ func event_banner_text() -> String:
 			return "Distributor: Supply glut — sealed cheap · retail race"
 		MarketEvent.KIND_SET_RELEASE:
 			return "Calendar: Set release — new sealed hot · old sealed cool"
+		MarketEvent.KIND_PRO_TOUR:
+			return ProTourSpikePolicy.banner_text(event.archetype_tag)
 		MarketEvent.KIND_ROTATION:
 			if not _can_see_rotation_leak(event):
 				return ""
@@ -2137,6 +2172,19 @@ func _bind_event_targets(event: MarketEvent) -> bool:
 			event.set_id = StringName(picked.get("set_id", &""))
 			event.old_set_id = StringName(picked.get("old_set_id", &""))
 			return not event.set_id.is_empty() and not event.old_set_id.is_empty()
+		MarketEvent.KIND_PRO_TOUR:
+			var picked := _event_service.pick_pro_tour_target(event.archetype_tag)
+			if picked.is_empty():
+				return false
+			event.archetype_tag = StringName(picked.get("archetype_tag", &""))
+			if event.pro_tour_mult <= 0.0:
+				event.pro_tour_mult = _event_service.roll_pro_tour_mult(
+					GameState.balance_config
+				)
+			return (
+				ProTourSpikePolicy.is_archetype_tag(event.archetype_tag)
+				and event.pro_tour_mult > 0.0
+			)
 	return false
 
 
@@ -2185,6 +2233,9 @@ func _apply_event_effects(event: MarketEvent) -> bool:
 				SetReleaseHypePolicy.hype_old_mult_for(GameState.balance_config)
 			)
 			return true
+		MarketEvent.KIND_PRO_TOUR:
+			_sync_pro_tour_service(event)
+			return true
 	return false
 
 
@@ -2223,8 +2274,23 @@ func _revert_event_effects(event: MarketEvent) -> void:
 			_service.set_supply_glut(false)
 		MarketEvent.KIND_SET_RELEASE:
 			_service.set_set_release_hype(false)
+		MarketEvent.KIND_PRO_TOUR:
+			_service.set_pro_tour_spike(false)
 		MarketEvent.KIND_ROTATION:
 			pass
+
+
+func _sync_pro_tour_service(event: MarketEvent) -> void:
+	if _service == null:
+		return
+	if event == null or event.kind != MarketEvent.KIND_PRO_TOUR:
+		_service.set_pro_tour_spike(false)
+		return
+	var spike := ProTourSpikePolicy.is_spike_window(
+		event.remaining_days,
+		event.duration_days
+	)
+	_service.set_pro_tour_spike(spike, event.archetype_tag, event.pro_tour_mult)
 
 
 func _can_see_rotation_leak(event: MarketEvent) -> bool:
@@ -2298,6 +2364,14 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		"hype_old_mult": (
 			SetReleaseHypePolicy.hype_old_mult_for(GameState.balance_config)
 			if has_set_release_hype()
+			else 1.0
+		),
+		"pro_tour": has_pro_tour(),
+		"pro_tour_spike": has_pro_tour_spike(),
+		"archetype_tag": String(event.archetype_tag) if event != null else "",
+		"pro_tour_mult": (
+			event.pro_tour_mult
+			if event != null and event.kind == MarketEvent.KIND_PRO_TOUR
 			else 1.0
 		),
 	}
