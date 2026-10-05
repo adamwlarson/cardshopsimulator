@@ -92,3 +92,4 @@
 | 2026-10-05 | Drafted post BH1 SHIPPED #90 @ `04deb9e2`. Lean **BI1 ONLINE_HOLD soft cap (Rep-gated)**. STOP / Soft reopeners parked. Camera off-switch hard-parked. |
 | 2026-10-05 ~1:44pm ET | **ADOPTED** BI1. Park BI2 STOP / BI3 listed-band Soft / BI4 display-bonus Soft. Camera off-switch hard-parked. Soft CLOSED. No Art. Eng bar locked; awaiting tip-freeze. |
 | 2026-10-05 ~1:51pm ET | **Tip-frozen** [#91](https://github.com/adamwlarson/cardshopsimulator/pull/91) @ `2e2bc472` (branch `cursor/online-hold-soft-cap-a842`). 9 files, no docs. Cloud agent bc-a10c424f archived. Eng review that SHA against bar `942a6863`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
+| 2026-10-05 ~1:59pm ET | **SHIPPED** squash-merged [#91](https://github.com/adamwlarson/cardshopsimulator/pull/91) @ `d018f567` (reviewed `2e2bc472`). QA PASS harness 162/0/0. Soft OK notes none. Soft catalog CLOSED. No Art. Next pick is BJ. |
