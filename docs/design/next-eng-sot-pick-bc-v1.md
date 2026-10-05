@@ -96,3 +96,7 @@
 | 2026-10-05 | PM adopted **BC1**. Spec on main `102fa3da`. Park BC2/BC3/BC4. No Art. Soft catalog CLOSED. Draft sha256 `f9bf3c2d`. |
 | 2026-10-05 | PM adopted **BC1**. Spec on main `183a889c`. Spike [BC1 Auction Inspect fog](https://cursor.com/agents/bc-33bbc3ae-372f-5311-a456-bb02d282fede). Park BC2/BC3/BC4. No Art. Soft catalog CLOSED. Draft sha256 `f9bf3c2d`. |
 | 2026-10-05 | PM tip-froze PR #85 @ `3e9755bd`. Ready. 6 files, no docs. Agent archived. |
+| 2026-10-05 | PM tip-froze PR #85 @ `3e9755bd`. Ready. 6 files, no docs. Agent archived. |
+| 2026-10-05 | Eng **APPROVE**-with-notes BC1 [PR #85](https://github.com/adamwlarson/cardshopsimulator/pull/85) @ `3e9755bd`. Soft: HUD mirrors Att<cost; unused apply_fog_cue. Soft OK MVP. Soft catalog CLOSED. |
+| 2026-10-05 | Design Soft OK MVP on Eng Softs (HUD Att mirror; unused apply_fog_cue). QA formal released; Soft OK notes not fail criteria. |
+| 2026-10-05 | BC1 SHIPPED — squash-merged #85 @ `89ae3b0a` (reviewed `3e9755bd`). QA PASS harness 170/0/0. Soft OK Eng notes not failed. |
