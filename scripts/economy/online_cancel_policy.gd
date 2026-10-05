@@ -7,6 +7,10 @@ extends RefCounted
 ## pulls, list create, cash cancel fees. Not a sell weight.
 const FREE_PER_DAY := 1
 const REP_HIT := 1
+## BH1: save payload for today's ONLINE_HOLD cancel counter. Listings stay
+## off this snapshot. Missing / non-dict data loads as day 0 / count 0.
+const SAVE_DAY_KEY := "cancel_day"
+const SAVE_COUNT_KEY := "cancels_today"
 
 
 static func free_per_day(configured: int = 0) -> int:
@@ -50,3 +54,18 @@ static func is_frequent_for(
 	config: BalanceConfig = null
 ) -> bool:
 	return is_frequent(cancels_today, free_per_day_for(config))
+
+
+static func snapshot(cancel_day: int, cancels_today: int) -> Dictionary:
+	return {
+		SAVE_DAY_KEY: cancel_day,
+		SAVE_COUNT_KEY: maxi(0, cancels_today),
+	}
+
+
+static func cancel_day_from_save(data: Dictionary) -> int:
+	return int(data.get(SAVE_DAY_KEY, 0))
+
+
+static func cancels_today_from_save(data: Dictionary) -> int:
+	return maxi(0, int(data.get(SAVE_COUNT_KEY, 0)))

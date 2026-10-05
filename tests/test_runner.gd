@@ -226,6 +226,7 @@ func _initialize() -> void:
 	_test_online_fee_cut()
 	_test_net_worth_hud()
 	_test_online_frequent_cancel_rep()
+	_test_online_cancel_day_persist()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -33026,6 +33027,507 @@ func _bg1_relist_and_cancel(card: CardInstance) -> Dictionary:
 		return listed
 	var listing := listed.get("listing") as OnlineListing
 	return _economy.get("online_listings").call("cancel_listing", listing.id)
+
+
+func _test_online_cancel_day_persist() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bh1_snapshot_schema()
+	_test_bh1_same_day_save_reload_spends_free()
+	_test_bh1_next_day_after_load_is_free()
+	_test_bh1_load_save_already_on_next_day()
+	_test_bh1_completed_sales_never_touch_counter()
+	_test_bh1_missing_save_key_is_free()
+	_test_bh1_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bh1_snapshot_schema() -> void:
+	var snap := OnlineCancelPolicy.snapshot(4, 2)
+	_expect_equal(int(snap.get("cancel_day", -1)), 4, "BH1: snapshot stores the day id")
+	_expect_equal(int(snap.get("cancels_today", -1)), 2, "BH1: snapshot stores today's count")
+	_expect_equal(snap.size(), 2, "BH1: snapshot is only day id + count — no listings")
+	_expect_equal(
+		snap.has("listings") or snap.has("active") or snap.has("held"),
+		false,
+		"BH1: snapshot does not invent listing persistence"
+	)
+	_expect_equal(
+		OnlineCancelPolicy.cancel_day_from_save({}),
+		0,
+		"BH1: missing day id loads as 0"
+	)
+	_expect_equal(
+		OnlineCancelPolicy.cancels_today_from_save({}),
+		0,
+		"BH1: missing count loads as 0"
+	)
+	_expect_equal(
+		OnlineCancelPolicy.cancels_today_from_save({"cancels_today": -3}),
+		0,
+		"BH1: negative saved count clamps to 0"
+	)
+	var json_round: Variant = JSON.parse_string(JSON.stringify(snap))
+	_expect_equal(json_round is Dictionary, true, "BH1: snapshot JSON-roundtrips")
+	if json_round is Dictionary:
+		var parsed := json_round as Dictionary
+		_expect_equal(
+			OnlineCancelPolicy.cancel_day_from_save(parsed),
+			4,
+			"BH1: JSON day id still reads as 4"
+		)
+		_expect_equal(
+			OnlineCancelPolicy.cancels_today_from_save(parsed),
+			2,
+			"BH1: JSON count still reads as 2"
+		)
+
+
+func _test_bh1_same_day_save_reload_spends_free() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BH1: unique card for same-day persist")
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var first := _bg1_relist_and_cancel(card)
+	_expect_equal(bool(first.get("ok", false)), true, "BH1: first cancel succeeds")
+	_expect_equal(bool(first.get("frequent", false)), false, "BH1: first cancel is free")
+	_expect_equal(int(first.get("rep_delta", -99)), 0, "BH1: first cancel Rep delta is 0")
+	var day := int(_game_state.get("current_day"))
+	var listings: Object = _economy.get("online_listings")
+	_expect_equal(int(listings.call("cancel_day")), day, "BH1: in-memory day id matches calendar")
+	_expect_equal(int(listings.call("cancels_today")), 1, "BH1: in-memory count is 1 after free cancel")
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "BH1 same-day save")
+	var snap: Variant = saved.get("online_cancel", {})
+	_expect_equal(snap is Dictionary, true, "BH1: save carries online_cancel")
+	if snap is Dictionary:
+		var cancel_save := snap as Dictionary
+		_expect_equal(
+			OnlineCancelPolicy.cancel_day_from_save(cancel_save),
+			day,
+			"BH1: save stores the calendar day those cancels belong to"
+		)
+		_expect_equal(
+			OnlineCancelPolicy.cancels_today_from_save(cancel_save),
+			1,
+			"BH1: save stores the spent free cancel"
+		)
+		_expect_equal(
+			cancel_save.has("listings"),
+			false,
+			"BH1: save does not invent ONLINE_HOLD listing persistence"
+		)
+	var parsed_save: Variant = JSON.parse_string(JSON.stringify(saved))
+	_expect_equal(parsed_save is Dictionary, true, "BH1: JSON save roundtrips")
+	if parsed_save is Dictionary:
+		var parsed_cancel: Variant = (parsed_save as Dictionary).get("online_cancel", {})
+		_expect_equal(
+			parsed_cancel is Dictionary
+			and OnlineCancelPolicy.cancels_today_from_save(parsed_cancel as Dictionary) == 1,
+			true,
+			"BH1: JSON save still has count 1"
+		)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		int((_economy.get("online_listings") as Object).call("cancels_today")),
+		0,
+		"BH1: a fresh session clears the in-memory counter (the QA loophole)"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BH1: restore_save accepts the cancel-day snapshot"
+	)
+	_expect_equal(
+		int(_game_state.get("current_day")),
+		day,
+		"BH1: restore stays on the same calendar day"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		40,
+		"BH1: restore keeps Rep after the free cancel"
+	)
+	listings = _economy.get("online_listings")
+	_expect_equal(int(listings.call("cancel_day")), day, "BH1: restore keeps the cancel day id")
+	_expect_equal(int(listings.call("cancels_today")), 1, "BH1: restore keeps today's spent count")
+	var later := _i1_unique_card()
+	_expect_equal(later != null, true, "BH1: unique card after reload")
+	if later == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var second := _bg1_relist_and_cancel(later)
+	_expect_equal(bool(second.get("ok", false)), true, "BH1: post-reload cancel succeeds")
+	_expect_equal(
+		bool(second.get("frequent", false)),
+		true,
+		"BH1: same-day cancel after reload is not a second free"
+	)
+	_expect_equal(int(second.get("rep_delta", 0)), -1, "BH1: post-reload extra cancel is Rep −1")
+	_expect_equal(int(second.get("cancels_today", 0)), 2, "BH1: post-reload cancel counts as 2 today")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		39,
+		"BH1: same day after reload applies Rep −1"
+	)
+	var hit_events := 0
+	for event_value: Variant in _qa_autoload.call("get_events"):
+		var event := event_value as Dictionary
+		if String(event.get("event", "")) == "online_cancel_rep_hit":
+			hit_events += 1
+	_expect_equal(hit_events, 1, "BH1: post-reload extra cancel fires one Rep hit")
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bh1_next_day_after_load_is_free() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BH1: unique card for next-day-after-load")
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	_bg1_relist_and_cancel(card)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BH1: restore before advancing the calendar"
+	)
+	_game_state.set("current_day", int(_game_state.get("current_day")) + 1)
+	var later := _i1_unique_card()
+	_expect_equal(later != null, true, "BH1: unique card on the next calendar day")
+	if later == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var first := _bg1_relist_and_cancel(later)
+	_expect_equal(bool(first.get("frequent", false)), false, "BH1: next day after load is free")
+	_expect_equal(int(first.get("rep_delta", -99)), 0, "BH1: next day after load Rep delta is 0")
+	_expect_equal(int(first.get("cancels_today", 0)), 1, "BH1: next day after load is count 1")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		40,
+		"BH1: new calendar day after load resets the free cancel"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bh1_load_save_already_on_next_day() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BH1: unique card for next-day save")
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	_bg1_relist_and_cancel(card)
+	_bg1_relist_and_cancel(card)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		39,
+		"BH1: extras spend Rep before the clock rolls"
+	)
+	var spent_day := int(_game_state.get("current_day"))
+	_game_state.set("current_day", spent_day + 1)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(int(saved.get("day", 0)), spent_day + 1, "BH1: save is already on the next day")
+	var snap: Dictionary = saved.get("online_cancel", {})
+	_expect_equal(
+		OnlineCancelPolicy.cancel_day_from_save(snap),
+		spent_day,
+		"BH1: next-day save still names the day those cancels belong to"
+	)
+	_expect_equal(
+		OnlineCancelPolicy.cancels_today_from_save(snap),
+		2,
+		"BH1: next-day save still carries yesterday's count"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BH1: restore a save already on the next day"
+	)
+	_expect_equal(
+		int(_game_state.get("current_day")),
+		spent_day + 1,
+		"BH1: restored calendar is the next day"
+	)
+	var later := _i1_unique_card()
+	_expect_equal(later != null, true, "BH1: unique card after next-day load")
+	if later == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var first := _bg1_relist_and_cancel(later)
+	_expect_equal(
+		bool(first.get("frequent", false)),
+		false,
+		"BH1: load already on the next day is free again"
+	)
+	_expect_equal(int(first.get("cancels_today", 0)), 1, "BH1: next-day load first cancel is count 1")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		39,
+		"BH1: next-day load does not re-apply yesterday's extra"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bh1_completed_sales_never_touch_counter() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var fill_card := _i1_unique_card()
+	_expect_equal(fill_card != null, true, "BH1: unique card for completed sale")
+	if fill_card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var listed: Dictionary = _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(fill_card),
+		2500,
+		{"ship_days": 1}
+	)
+	_expect_equal(bool(listed.get("ok", false)), true, "BH1: list for fill succeeds")
+	var filled: Array = _economy.get("online_listings").call("tick_shipping")
+	_expect_equal(filled.size() >= 1, true, "BH1: 1-day ship fills without a cancel")
+	var listings: Object = _economy.get("online_listings")
+	_expect_equal(
+		int(listings.call("cancels_today")),
+		0,
+		"BH1: a completed sale does not increment today's cancel count"
+	)
+	var cancel_card := _i1_unique_card()
+	_expect_equal(cancel_card != null, true, "BH1: unique card to spend the free cancel")
+	if cancel_card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var first := _bg1_relist_and_cancel(cancel_card)
+	_expect_equal(
+		bool(first.get("frequent", false)),
+		false,
+		"BH1: fill does not consume the day's free cancel"
+	)
+	_expect_equal(int(listings.call("cancels_today")), 1, "BH1: only the cancel counts, not the fill")
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(
+		OnlineCancelPolicy.cancels_today_from_save(saved.get("online_cancel", {})),
+		1,
+		"BH1: save count is the cancel, not the completed sale"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BH1: restore after a filled sale still has the cancel count"
+	)
+	var later := _i1_unique_card()
+	_expect_equal(later != null, true, "BH1: unique card after fill persist")
+	if later == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var second := _bg1_relist_and_cancel(later)
+	_expect_equal(
+		bool(second.get("frequent", false)),
+		true,
+		"BH1: completed sales never grant a second free after reload"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		39,
+		"BH1: post-fill extra cancel after reload is still Rep −1"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bh1_missing_save_key_is_free() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BH1: unique card before a legacy save")
+	if card == null:
+		return
+	_bg1_relist_and_cancel(card)
+	var saved: Dictionary = _game_state.call("capture_save")
+	saved.erase("online_cancel")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BH1: pre-BH1 saves without online_cancel still load"
+	)
+	_expect_equal(
+		int((_economy.get("online_listings") as Object).call("cancels_today")),
+		0,
+		"BH1: missing save key does not leave a stale count"
+	)
+	var later := _i1_unique_card()
+	_expect_equal(later != null, true, "BH1: unique card after a legacy load")
+	if later == null:
+		return
+	var first := _bg1_relist_and_cancel(later)
+	_expect_equal(
+		bool(first.get("frequent", false)),
+		false,
+		"BH1: a save without the counter treats the first cancel as free"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bh1_untouched() -> void:
+	_expect_equal(
+		OnlineCancelPolicy.FREE_PER_DAY == 1 and OnlineCancelPolicy.REP_HIT == 1,
+		true,
+		"BH1: BG1 fallbacks stay 1 free / −1"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.online_cancel_free_per_day == 1
+		and NORMAL_CONFIG.online_cancel_rep_hit == 1,
+		true,
+		"BH1: Normal config fallbacks stay 1 free / −1"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BH1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BH1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BH1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BH1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BH1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BH1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(NORMAL_CONFIG.online_ship_days_min, 1, "BH1: ship min stays 1 day")
+	_expect_equal(NORMAL_CONFIG.online_ship_days_max, 3, "BH1: ship max stays 3 days")
+	_expect_equal(NmMismatchPolicy.REP_HIT, 2, "BH1: BB1/BD1 mismatch Rep stays −2")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BH1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("frequent_cancel")
+		or events.contains("stop_day"),
+		false,
+		"BH1: Soft catalog stays closed"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "cancel")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "online_cancel"),
+		true,
+		"BH1: cancel-day persist stays off the sell weight"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+		"res://scripts/ui/main_menu.gd",
+		"res://scripts/economy/online_cancel_policy.gd",
+		"res://scripts/economy/online_listing_service.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/autoload/economy.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BH1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BH1: %s never shows p_buy" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("frequent cancels cost Rep"),
+		true,
+		"BH1: HUD still has the frequent-cancel trust ding"
+	)
+	_expect_equal(
+		hud_src.contains("%NetWorth") and hud_src.contains("func _sync_net_worth"),
+		true,
+		"BH1: BF1 net-worth HUD stays"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"BH1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("retag"),
+		true,
+		"BH1: listed-band retag stays parked"
+	)
+	_expect_equal(
+		not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert"),
+		true,
+		"BH1: STOP / win assert stay parked"
+	)
+	_game_state.call("start_new_game")
 
 
 func _expect_hud_net_worth(hud: Node, expected_cents: int, label: String) -> void:
