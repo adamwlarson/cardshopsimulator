@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BF v1 — post BE1
 
-**Status:** **BF1 ADOPTED** 2026-10-05 — Net-worth HUD (AA1 formula live on HUD, all modes; never shows raw `true_market`). Park BF2/BF3/BF4. Hard-park camera off-switch. Soft catalog CLOSED. STOP stays parked. Do not turn prior packs into a sell weight. Door spawn math stays as shipped.
+**Status:** **BF1 SHIPPED** 2026-10-05 — squash-merged #88 @ `08947d2c` (reviewed `6f59c603`). QA PASS harness 176/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. No Art. Net-worth HUD (AA1 formula, all modes).
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-be (BE1 Online fee cut SHIPPED #87 @ `a6a0bb3f`); Soft catalog CLOSED
@@ -92,3 +92,4 @@
 | 2026-10-05 | Drafted post BE1 SHIPPED #87 @ `a6a0bb3f`. Lean **BF1 Net-worth HUD** (AA1 formula, all modes). STOP / online-cancel polish / listed-band Soft parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM adopted **BF1 GO** Net-worth HUD (AA1 formula, all modes). Park BF2 STOP / BF3 online-cancel polish / BF4 listed-band Soft. Hard-park camera off-switch. Soft catalog CLOSED. No Art. |
 | 2026-10-05 ~1:06pm ET | **Tip-frozen** [#88](https://github.com/adamwlarson/cardshopsimulator/pull/88) @ `6f59c603` (branch `cursor/bf1-net-worth-hud-b517`). 6 files, no docs. Cloud agent bc-30e6c712 archived. Eng review that SHA against bar `a0e1efb8`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
+| 2026-10-05 ~1:12pm ET | **SHIPPED** — squash-merged [#88](https://github.com/adamwlarson/cardshopsimulator/pull/88) @ `08947d2c` (reviewed `6f59c603`). QA PASS harness 176/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. No Art. Branch `cursor/bf1-net-worth-hud-b517` deleted. |
