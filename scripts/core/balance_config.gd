@@ -35,9 +35,11 @@ enum Difficulty {
 @export var online_unlock_rep: int = 35
 @export var online_ship_days_min: int = 1
 @export var online_ship_days_max: int = 3
-@export var online_cancel_window_days: int = 7
-@export var online_cancel_frequent_threshold: int = 3
-@export var online_cancel_rep_hit: int = 3
+## BG1: first N ONLINE_HOLD cancels each calendar day are free. Each extra
+## same-day cancel applies Rep −online_cancel_rep_hit once. Missing / ≤0
+## falls back in OnlineCancelPolicy to 1 free/day and hit 1.
+@export var online_cancel_free_per_day: int = 1
+@export var online_cancel_rep_hit: int = 1
 ## BE1: high-rep online listing settle cut. Missing / ≤0 falls back in
 ## OnlineFeePolicy to 5% at Rep ≥ 75. Base `online_fee` stays below the gate.
 @export var online_high_rep_fee_percent: int = 5
