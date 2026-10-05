@@ -12,6 +12,7 @@ var _haggle_spent_ids: Dictionary = {}
 var _scripted_opportunities: Array[BuyOpportunity] = []
 var _event_service := MarketEventService.new()
 var _active_event: MarketEvent
+var _pending_rotation_crash_set_id: StringName = &""
 var _player_trades := PlayerTradeService.new()
 var _regulars := RegularsReturnService.new()
 var _drift_rng := RandomNumberGenerator.new()
@@ -34,6 +35,7 @@ func reset() -> void:
 	_event_service.reset(MarketEventService.EVENT_RNG_SEED)
 	_drift_rng.seed = MARKET_DRIFT_SEED
 	_active_event = null
+	_pending_rotation_crash_set_id = &""
 	for value: Variant in InventoryService.model.catalog.values():
 		var sku := value as ProductSKU
 		if sku == null:
@@ -104,14 +106,34 @@ func apply_daily_market_drift() -> Dictionary:
 
 
 func roll_settle_events() -> Dictionary:
+	var scheduled_crash_set := &""
 	if _active_event != null and _active_event.is_active():
 		_active_event.remaining_days -= 1
 		if not _active_event.is_active():
+			if _active_event.kind == MarketEvent.KIND_ROTATION:
+				scheduled_crash_set = _active_event.set_id
+				if scheduled_crash_set.is_empty():
+					scheduled_crash_set = _pending_rotation_crash_set_id
 			_clear_active_event()
 		elif _active_event.kind == MarketEvent.KIND_PRO_TOUR:
 			_sync_pro_tour_service(_active_event)
 	if _active_event != null and _active_event.is_active():
 		return _record_roll(_active_event, false)
+	if scheduled_crash_set.is_empty():
+		scheduled_crash_set = _pending_rotation_crash_set_id
+	if not scheduled_crash_set.is_empty():
+		_pending_rotation_crash_set_id = &""
+		var follow_on := start_pack_event(
+			MarketEvent.KIND_ROTATION_CRASH,
+			{
+				"set_id": scheduled_crash_set,
+				"duration_days": RotationCrashPolicy.duration_days_for(
+					GameState.balance_config
+				),
+			}
+		)
+		if follow_on != null and follow_on.is_active():
+			return _record_roll(follow_on, true)
 	var config := GameState.balance_config
 	if not _event_service.should_roll(config):
 		return _record_roll(null, true)
@@ -145,6 +167,7 @@ func start_pack_event(kind: StringName, opts: Dictionary = {}) -> MarketEvent:
 	if def.is_empty():
 		return null
 	_clear_active_event()
+	_pending_rotation_crash_set_id = &""
 	var event := MarketEvent.new()
 	event.id = StringName(def.get("id", kind))
 	event.kind = kind
@@ -158,11 +181,16 @@ func start_pack_event(kind: StringName, opts: Dictionary = {}) -> MarketEvent:
 	event.old_set_id = StringName(opts.get("old_set_id", &""))
 	event.archetype_tag = StringName(opts.get("archetype_tag", &""))
 	event.pro_tour_mult = float(opts.get("pro_tour_mult", 0.0))
+	event.rotation_crash_mult = float(opts.get("rotation_crash_mult", 0.0))
 	event.fog_flag = bool(def.get("fog_flag", kind == MarketEvent.KIND_FOG))
 	if not _bind_event_targets(event):
 		return null
 	if not _apply_event_effects(event):
 		return null
+	if event.kind == MarketEvent.KIND_ROTATION:
+		_pending_rotation_crash_set_id = event.set_id
+	else:
+		_pending_rotation_crash_set_id = &""
 	_active_event = event
 	_publish_event_changed()
 	return event
@@ -176,8 +204,8 @@ func active_event() -> MarketEvent:
 
 func market_cents_for(sku_id: StringName) -> int:
 	# Hidden market used by Economy net-worth math (systems §9.2). Not a UI value.
-	# BR1 Pro tour reads through a non-compounding event mult; AR1 drift still
-	# writes the unmultiplied MarketState base.
+	# BR1 Pro tour and BS1 Rotation crash read through non-compounding event
+	# mults; AR1 drift still writes the unmultiplied MarketState base.
 	var cents := _market_state.market_cents_for(sku_id)
 	if cents <= 0:
 		if InventoryService.model == null:
@@ -188,7 +216,9 @@ func market_cents_for(sku_id: StringName) -> int:
 		cents = sku.base_market_cents
 	if cents <= 0:
 		return 0
-	var mult := pro_tour_market_mult_for(sku_id)
+	var mult := (
+		pro_tour_market_mult_for(sku_id) * rotation_crash_market_mult_for(sku_id)
+	)
 	if is_equal_approx(mult, 1.0):
 		return cents
 	return maxi(1, roundi(float(cents) * mult))
@@ -239,6 +269,11 @@ func has_pro_tour_spike() -> bool:
 	return ProTourSpikePolicy.is_spike_window(event.remaining_days, event.duration_days)
 
 
+func has_rotation_crash() -> bool:
+	var event := active_event()
+	return event != null and event.kind == MarketEvent.KIND_ROTATION_CRASH
+
+
 func set_release_demand_mult_for(sku_id: StringName) -> float:
 	if _service == null or not has_set_release_hype():
 		return 1.0
@@ -249,6 +284,16 @@ func pro_tour_market_mult_for(sku_id: StringName) -> float:
 	if _service == null or not has_pro_tour_spike():
 		return 1.0
 	return _service.pro_tour_market_mult_for(sku_id)
+
+
+func rotation_crash_market_mult_for(sku_id: StringName) -> float:
+	if _service == null or not has_rotation_crash():
+		return 1.0
+	return _service.rotation_crash_market_mult_for(sku_id)
+
+
+func pending_rotation_crash_set_id() -> StringName:
+	return _pending_rotation_crash_set_id
 
 
 func active_event_demand_mult() -> float:
@@ -539,6 +584,11 @@ func event_banner_text() -> String:
 			return "Calendar: Set release — new sealed hot · old sealed cool"
 		MarketEvent.KIND_PRO_TOUR:
 			return ProTourSpikePolicy.banner_text(event.archetype_tag)
+		MarketEvent.KIND_ROTATION_CRASH:
+			var set_name := String(event.set_id)
+			if _service != null:
+				set_name = _service.display_name_for_set(event.set_id)
+			return RotationCrashPolicy.banner_text(set_name)
 		MarketEvent.KIND_ROTATION:
 			if not _can_see_rotation_leak(event):
 				return ""
@@ -564,9 +614,10 @@ func calendar_telegraph_text() -> String:
 
 func event_to_save() -> Dictionary:
 	var event := active_event()
-	if event == null:
-		return {}
-	return event.to_save()
+	var data := event.to_save() if event != null else {}
+	if not _pending_rotation_crash_set_id.is_empty():
+		data["pending_rotation_crash_set_id"] = String(_pending_rotation_crash_set_id)
+	return data
 
 
 func seed_event_rng(rng_seed: int) -> void:
@@ -576,8 +627,12 @@ func seed_event_rng(rng_seed: int) -> void:
 func apply_event_save(data: Dictionary) -> bool:
 	_clear_active_event()
 	if data.is_empty():
+		_pending_rotation_crash_set_id = &""
 		_publish_event_changed()
 		return true
+	_pending_rotation_crash_set_id = StringName(
+		data.get("pending_rotation_crash_set_id", "")
+	)
 	var event := MarketEvent.from_save(data)
 	if not event.is_active():
 		_publish_event_changed()
@@ -587,6 +642,13 @@ func apply_event_save(data: Dictionary) -> bool:
 	if not _apply_event_effects(event):
 		return false
 	_active_event = event
+	if (
+		event.kind == MarketEvent.KIND_ROTATION
+		and _pending_rotation_crash_set_id.is_empty()
+	):
+		_pending_rotation_crash_set_id = event.set_id
+	if event.kind == MarketEvent.KIND_ROTATION_CRASH:
+		_pending_rotation_crash_set_id = &""
 	_publish_event_changed()
 	return true
 
@@ -2185,6 +2247,20 @@ func _bind_event_targets(event: MarketEvent) -> bool:
 				ProTourSpikePolicy.is_archetype_tag(event.archetype_tag)
 				and event.pro_tour_mult > 0.0
 			)
+		MarketEvent.KIND_ROTATION_CRASH:
+			if RotationCrashPolicy.is_base_set(event.set_id):
+				return false
+			var crash_target := _event_service.pick_rotation_crash_target(event.set_id)
+			if crash_target.is_empty():
+				return false
+			event.set_id = StringName(crash_target.get("set_id", &""))
+			if event.set_id.is_empty() or RotationCrashPolicy.is_base_set(event.set_id):
+				return false
+			if event.rotation_crash_mult <= 0.0:
+				event.rotation_crash_mult = _event_service.roll_rotation_crash_mult(
+					GameState.balance_config
+				)
+			return event.rotation_crash_mult > 0.0
 	return false
 
 
@@ -2236,6 +2312,9 @@ func _apply_event_effects(event: MarketEvent) -> bool:
 		MarketEvent.KIND_PRO_TOUR:
 			_sync_pro_tour_service(event)
 			return true
+		MarketEvent.KIND_ROTATION_CRASH:
+			_sync_rotation_crash_service(event)
+			return true
 	return false
 
 
@@ -2276,6 +2355,8 @@ func _revert_event_effects(event: MarketEvent) -> void:
 			_service.set_set_release_hype(false)
 		MarketEvent.KIND_PRO_TOUR:
 			_service.set_pro_tour_spike(false)
+		MarketEvent.KIND_ROTATION_CRASH:
+			_service.set_rotation_crash(false)
 		MarketEvent.KIND_ROTATION:
 			pass
 
@@ -2291,6 +2372,20 @@ func _sync_pro_tour_service(event: MarketEvent) -> void:
 		event.duration_days
 	)
 	_service.set_pro_tour_spike(spike, event.archetype_tag, event.pro_tour_mult)
+
+
+func _sync_rotation_crash_service(event: MarketEvent) -> void:
+	if _service == null:
+		return
+	if event == null or event.kind != MarketEvent.KIND_ROTATION_CRASH:
+		_service.set_rotation_crash(false)
+		return
+	_service.set_rotation_crash(
+		true,
+		event.set_id,
+		event.rotation_crash_mult,
+		RotationCrashPolicy.mild_mult_for(GameState.balance_config)
+	)
 
 
 func _can_see_rotation_leak(event: MarketEvent) -> bool:
@@ -2374,6 +2469,13 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 			if event != null and event.kind == MarketEvent.KIND_PRO_TOUR
 			else 1.0
 		),
+		"rotation_crash": has_rotation_crash(),
+		"rotation_crash_mult": (
+			event.rotation_crash_mult
+			if event != null and event.kind == MarketEvent.KIND_ROTATION_CRASH
+			else 1.0
+		),
+		"pending_rotation_crash_set_id": String(_pending_rotation_crash_set_id),
 	}
 	QaInstrumentation.record_market_event_rolled(payload)
 	return payload

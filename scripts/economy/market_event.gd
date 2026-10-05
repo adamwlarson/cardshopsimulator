@@ -11,6 +11,7 @@ const KIND_RECESSION := &"recession_week"
 const KIND_SUPPLY_GLUT := &"supply_glut"
 const KIND_SET_RELEASE := &"set_release_hype"
 const KIND_PRO_TOUR := &"pro_tour_spike"
+const KIND_ROTATION_CRASH := &"rotation_crash"
 
 var id: StringName = &""
 var kind: StringName = &""
@@ -22,6 +23,7 @@ var set_id: StringName = &""
 var old_set_id: StringName = &""
 var archetype_tag: StringName = &""
 var pro_tour_mult: float = 0.0
+var rotation_crash_mult: float = 0.0
 var fog_flag: bool = false
 var price_editor_prompted: bool = false
 
@@ -42,6 +44,7 @@ func to_save() -> Dictionary:
 		"old_set_id": String(old_set_id),
 		"archetype_tag": String(archetype_tag),
 		"pro_tour_mult": pro_tour_mult,
+		"rotation_crash_mult": rotation_crash_mult,
 		"fog_flag": fog_flag,
 		"price_editor_prompted": price_editor_prompted,
 	}
@@ -61,6 +64,7 @@ static func from_save(data: Dictionary) -> MarketEvent:
 	event.old_set_id = StringName(data.get("old_set_id", ""))
 	event.archetype_tag = StringName(data.get("archetype_tag", ""))
 	event.pro_tour_mult = float(data.get("pro_tour_mult", 0.0))
+	event.rotation_crash_mult = float(data.get("rotation_crash_mult", 0.0))
 	event.fog_flag = bool(data.get("fog_flag", event.kind == KIND_FOG))
 	event.price_editor_prompted = bool(data.get("price_editor_prompted", false))
 	return event

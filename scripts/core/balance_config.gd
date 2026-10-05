@@ -244,6 +244,16 @@ enum Difficulty {
 @export var pro_tour_duration_days: int = 2
 @export var pro_tour_mult_min: float = 1.30
 @export var pro_tour_mult_max: float = 1.80
+## BS1 / systems §8: Rotation staples crash. Missing surprise weight → 0.5
+## (vs default 1.0). Missing / ≤0 duration → 5. Missing min → 0.45.
+## Missing max → 0.70. Missing mild → 0.90. Min ≤ 0, max < min, max > 1,
+## or mild ∉ (0, 1] fall back in RotationCrashPolicy. Easy/Hard inherit.
+## Not a sell weight.
+@export var rotation_crash_surprise_weight: float = 0.5
+@export var rotation_crash_duration_days: int = 5
+@export var rotation_crash_mult_min: float = 0.45
+@export var rotation_crash_mult_max: float = 0.70
+@export var rotation_mild_mult: float = 0.90
 
 
 func is_rent_due_day(day: int) -> bool:

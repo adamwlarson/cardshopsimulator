@@ -50,6 +50,10 @@ var _hype_old_mult: float = 1.0
 var _pro_tour_spike: bool = false
 var _pro_tour_tag: StringName = &""
 var _pro_tour_mult: float = 1.0
+var _rotation_crash: bool = false
+var _rotation_crash_set_id: StringName = &""
+var _rotation_crash_mult: float = 1.0
+var _rotation_mild_mult: float = 1.0
 var _instrumentation: QaInstrumentationService
 
 
@@ -175,6 +179,38 @@ func pro_tour_market_mult_for(sku_id: StringName) -> float:
 		InventoryService.model.get_sku(sku_id),
 		_pro_tour_tag,
 		_pro_tour_mult
+	)
+
+
+func set_rotation_crash(
+	active: bool,
+	set_id: StringName = &"",
+	crash_mult: float = 0.0,
+	mild_mult: float = 0.0
+) -> void:
+	_rotation_crash = active
+	_rotation_crash_set_id = set_id if active else &""
+	_rotation_crash_mult = crash_mult if active and crash_mult > 0.0 else 1.0
+	_rotation_mild_mult = (
+		RotationCrashPolicy.mild_mult(mild_mult) if active else 1.0
+	)
+	_demand_cache.clear()
+
+
+func has_rotation_crash() -> bool:
+	return _rotation_crash
+
+
+func rotation_crash_market_mult_for(sku_id: StringName) -> float:
+	if not _rotation_crash:
+		return 1.0
+	if sku_id.is_empty() or InventoryService.model == null:
+		return 1.0
+	return RotationCrashPolicy.market_mult_for_sku(
+		InventoryService.model.get_sku(sku_id),
+		_rotation_crash_set_id,
+		_rotation_crash_mult,
+		_rotation_mild_mult
 	)
 
 
@@ -765,7 +801,9 @@ func _event_market_cents(sku_id: StringName) -> int:
 	var true_market_cents := _market_state.market_cents_for(sku_id)
 	if true_market_cents <= 0:
 		return true_market_cents
-	var mult := pro_tour_market_mult_for(sku_id)
+	var mult := (
+		pro_tour_market_mult_for(sku_id) * rotation_crash_market_mult_for(sku_id)
+	)
 	if is_equal_approx(mult, 1.0):
 		return true_market_cents
 	return maxi(1, roundi(float(true_market_cents) * mult))

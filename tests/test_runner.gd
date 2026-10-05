@@ -149,6 +149,7 @@ func _initialize() -> void:
 	_test_supply_glut_event()
 	_test_set_release_hype_event()
 	_test_pro_tour_spike_event()
+	_test_rotation_crash_event()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -2659,9 +2660,10 @@ func _test_market_events_seven_day_seeded_run() -> void:
 		and FileAccess.get_file_as_string("res://data/events.json").contains("recession_week")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("supply_glut")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("set_release_hype")
-		and FileAccess.get_file_as_string("res://data/events.json").contains("pro_tour_spike"),
+		and FileAccess.get_file_as_string("res://data/events.json").contains("pro_tour_spike")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("rotation_crash"),
 		true,
-		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, theft ring, recession, supply glut, set release hype, and pro tour spike"
+		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, theft ring, recession, supply glut, set release hype, pro tour spike, and rotation crash"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 
@@ -8236,6 +8238,1068 @@ func _test_pro_tour_spike_untouched_and_parked() -> void:
 		demand_src.contains("func _ensure_priceable_sku"),
 		true,
 		"BR1: Soft _ensure_priceable_sku stays parked"
+	)
+
+
+func _test_rotation_crash_event() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_rotation_crash_named_gate_and_fallbacks()
+	_test_rotation_crash_leak_follow_on_and_surprise()
+	_test_rotation_crash_market_and_prices()
+	_test_rotation_crash_duration_resume_and_save_load()
+	_test_rotation_crash_levers_banner_and_visibility()
+	_test_rotation_crash_untouched_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _bs1_tags(tag: StringName) -> Array[StringName]:
+	var tags: Array[StringName] = []
+	tags.append(tag)
+	return tags
+
+
+func _bs1_make_single(
+	sku_id: StringName,
+	display_name: String,
+	market_cents: int,
+	set_id: StringName,
+	tag: StringName
+) -> ProductSKU:
+	return ProductSKU.new(
+		sku_id,
+		ProductSKU.ProductClass.SINGLE,
+		display_name,
+		market_cents,
+		set_id,
+		_bs1_tags(tag)
+	)
+
+
+func _bs1_install_dustway_singles() -> Dictionary:
+	var model: InventoryModel = _inventory_service.get("model")
+	_expect_equal(model != null, true, "BS1: inventory model exists for Dustway fixtures")
+	if model == null:
+		return {}
+	var staple := _bs1_make_single(
+		&"AA-DUST-STPL",
+		"Dustway Staple",
+		1200,
+		&"AA-DUST",
+		&"staple"
+	)
+	var staple_b := _bs1_make_single(
+		&"AA-DUST-STP2",
+		"Dustway Staple Two",
+		800,
+		&"AA-DUST",
+		&"staple"
+	)
+	var faded := _bs1_make_single(
+		&"AA-DUST-FADE",
+		"Dustway Faded Chase",
+		900,
+		&"AA-DUST",
+		&"chase-faded"
+	)
+	var bulk := _bs1_make_single(
+		&"AA-DUST-BULK",
+		"Dustway Bulk",
+		40,
+		&"AA-DUST",
+		&"bulk"
+	)
+	model.catalog[staple.id] = staple
+	model.catalog[staple_b.id] = staple_b
+	model.catalog[faded.id] = faded
+	model.catalog[bulk.id] = bulk
+	var market := _demand_signals.get("_market_state") as MarketState
+	if market != null:
+		market.update_sku(staple.id, staple.base_market_cents, 0.68)
+		market.update_sku(staple_b.id, staple_b.base_market_cents, 0.68)
+		market.update_sku(faded.id, faded.base_market_cents, 0.45)
+		market.update_sku(bulk.id, bulk.base_market_cents, 0.45)
+	return {
+		"staple": staple.id,
+		"staple_b": staple_b.id,
+		"faded": faded.id,
+		"bulk": bulk.id,
+	}
+
+
+func _test_rotation_crash_named_gate_and_fallbacks() -> void:
+	_expect_equal(
+		RotationCrashPolicy.DURATION_DAYS,
+		5,
+		"BS1: locked duration is 5 days"
+	)
+	_expect_equal(
+		is_equal_approx(RotationCrashPolicy.SURPRISE_WEIGHT, 0.5)
+		and is_equal_approx(RotationCrashPolicy.MULT_MIN, 0.45)
+		and is_equal_approx(RotationCrashPolicy.MULT_MAX, 0.70)
+		and is_equal_approx(RotationCrashPolicy.MILD_MULT, 0.90),
+		true,
+		"BS1: locked surprise weight 0.5, staple band ×0.45–0.70, mild ×0.90"
+	)
+	_expect_equal(
+		RotationCrashPolicy.BASE_SET_ID,
+		&"AA-BASE",
+		"BS1: evergreen BASE set never rotates"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.rotation_crash_duration_days == 5
+		and is_equal_approx(NORMAL_CONFIG.rotation_crash_surprise_weight, 0.5)
+		and is_equal_approx(NORMAL_CONFIG.rotation_crash_mult_min, 0.45)
+		and is_equal_approx(NORMAL_CONFIG.rotation_crash_mult_max, 0.70)
+		and is_equal_approx(NORMAL_CONFIG.rotation_mild_mult, 0.90),
+		true,
+		"BS1: Normal config matches locked Rotation crash levers"
+	)
+	_expect_equal(
+		EASY_CONFIG.rotation_crash_duration_days == 5
+		and HARD_CONFIG.rotation_crash_duration_days == 5
+		and is_equal_approx(EASY_CONFIG.rotation_crash_surprise_weight, 0.5)
+		and is_equal_approx(HARD_CONFIG.rotation_crash_surprise_weight, 0.5)
+		and is_equal_approx(EASY_CONFIG.rotation_crash_mult_min, 0.45)
+		and is_equal_approx(HARD_CONFIG.rotation_crash_mult_min, 0.45)
+		and is_equal_approx(EASY_CONFIG.rotation_crash_mult_max, 0.70)
+		and is_equal_approx(HARD_CONFIG.rotation_crash_mult_max, 0.70)
+		and is_equal_approx(EASY_CONFIG.rotation_mild_mult, 0.90)
+		and is_equal_approx(HARD_CONFIG.rotation_mild_mult, 0.90),
+		true,
+		"BS1: Easy/Hard inherit Rotation crash levers"
+	)
+	var missing := BalanceConfig.new()
+	missing.rotation_crash_duration_days = 0
+	missing.rotation_crash_surprise_weight = 0.0
+	missing.rotation_crash_mult_min = 0.0
+	missing.rotation_crash_mult_max = 0.0
+	missing.rotation_mild_mult = 0.0
+	_expect_equal(
+		RotationCrashPolicy.duration_days(0) == 5
+		and is_equal_approx(RotationCrashPolicy.surprise_weight(0.0), 0.5),
+		true,
+		"BS1: missing duration/weight fall back to 5 / 0.5"
+	)
+	_expect_equal(
+		RotationCrashPolicy.duration_days_for(missing) == 5
+		and RotationCrashPolicy.duration_days_for(null) == 5
+		and is_equal_approx(RotationCrashPolicy.surprise_weight_for(missing), 0.5)
+		and is_equal_approx(RotationCrashPolicy.surprise_weight_for(null), 0.5),
+		true,
+		"BS1: missing config duration/weight use defaults"
+	)
+	var inverted := BalanceConfig.new()
+	inverted.rotation_crash_mult_min = 0.80
+	inverted.rotation_crash_mult_max = 0.40
+	var over := BalanceConfig.new()
+	over.rotation_crash_mult_min = 0.50
+	over.rotation_crash_mult_max = 1.20
+	over.rotation_mild_mult = 1.10
+	var inverted_band := RotationCrashPolicy.crash_mult_band_for(inverted)
+	var missing_band := RotationCrashPolicy.crash_mult_band_for(missing)
+	var null_band := RotationCrashPolicy.crash_mult_band_for(null)
+	var over_band := RotationCrashPolicy.crash_mult_band_for(over)
+	_expect_equal(
+		is_equal_approx(inverted_band.x, 0.45)
+		and is_equal_approx(inverted_band.y, 0.70)
+		and is_equal_approx(missing_band.x, 0.45)
+		and is_equal_approx(missing_band.y, 0.70)
+		and is_equal_approx(null_band.x, 0.45)
+		and is_equal_approx(null_band.y, 0.70)
+		and is_equal_approx(over_band.x, 0.45)
+		and is_equal_approx(over_band.y, 0.70)
+		and is_equal_approx(RotationCrashPolicy.mild_mult_for(over), 0.90)
+		and is_equal_approx(RotationCrashPolicy.mild_mult_for(missing), 0.90)
+		and is_equal_approx(RotationCrashPolicy.mild_mult_for(null), 0.90),
+		true,
+		"BS1: invalid min/max/mild fall back to 0.45 / 0.70 / 0.90"
+	)
+	var live: Array[StringName] = [&"AA-BASE", &"AA-SKIE", &"AA-DUST"]
+	_expect_equal(
+		RotationCrashPolicy.oldest_non_base_set(live),
+		&"AA-DUST",
+		"BS1: surprise target is the oldest non-BASE live set"
+	)
+	_expect_equal(
+		RotationCrashPolicy.is_base_set(&"AA-BASE")
+		and not RotationCrashPolicy.is_base_set(&"AA-DUST"),
+		true,
+		"BS1: AA-BASE is the evergreen set"
+	)
+	var staple := _bs1_make_single(
+		&"AA-DUST-STPL",
+		"Dustway Staple",
+		1200,
+		&"AA-DUST",
+		&"staple"
+	)
+	var faded := _bs1_make_single(
+		&"AA-DUST-FADE",
+		"Dustway Faded",
+		900,
+		&"AA-DUST",
+		&"chase-faded"
+	)
+	var bulk := _bs1_make_single(
+		&"AA-DUST-BULK",
+		"Dustway Bulk",
+		40,
+		&"AA-DUST",
+		&"bulk"
+	)
+	var other := _bs1_make_single(
+		&"AA-SKIE-047",
+		"Skiefall Titan",
+		2200,
+		&"AA-SKIE",
+		&"staple"
+	)
+	_expect_equal(
+		is_equal_approx(
+			RotationCrashPolicy.market_mult_for_sku(staple, &"AA-DUST", 0.50, 0.90),
+			0.50
+		)
+		and is_equal_approx(
+			RotationCrashPolicy.market_mult_for_sku(faded, &"AA-DUST", 0.50, 0.90),
+			0.90
+		)
+		and is_equal_approx(
+			RotationCrashPolicy.market_mult_for_sku(bulk, &"AA-DUST", 0.50, 0.90),
+			1.0
+		)
+		and is_equal_approx(
+			RotationCrashPolicy.market_mult_for_sku(other, &"AA-DUST", 0.50, 0.90),
+			1.0
+		),
+		true,
+		"BS1: staple / mild / bulk / other-set mults match the named gate"
+	)
+	_expect_equal(
+		RotationCrashPolicy.banner_text("Dustway Chronicles"),
+		"Rotation: Dustway Chronicles staples cooling",
+		"BS1: Soft EventBanner copy names the set without the rolled mult"
+	)
+
+
+func _test_rotation_crash_leak_follow_on_and_surprise() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call("seed_event_rng", MarketEventService.EVENT_RNG_SEED)
+	var ids := _bs1_install_dustway_singles()
+	var leak: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION,
+		{"set_id": &"AA-DUST", "duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(leak != null, true, "BS1: C1 leak still starts")
+	_expect_equal(leak.kind, MarketEvent.KIND_ROTATION, "BS1: leak kind is unchanged")
+	_expect_equal(leak.set_id, &"AA-DUST", "BS1: leak binds set S")
+	_expect_equal(
+		_demand_signals.call("pending_rotation_crash_set_id"),
+		&"AA-DUST",
+		"BS1: leak schedules a crash follow-on on the same set"
+	)
+	_expect_equal(
+		_demand_signals.call("has_rotation_crash"),
+		false,
+		"BS1: leak alone is not a crash"
+	)
+	var payload: Dictionary = _demand_signals.call("roll_settle_events")
+	var crash: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		crash != null and crash.kind == MarketEvent.KIND_ROTATION_CRASH,
+		true,
+		"BS1: when the leak ends, rotation_crash becomes the next active event at that settle"
+	)
+	_expect_equal(crash.set_id, &"AA-DUST", "BS1: follow-on crash targets the leak set S")
+	_expect_equal(crash.duration_days, 5, "BS1: scheduled crash uses duration 5")
+	_expect_equal(crash.remaining_days, 5, "BS1: scheduled crash starts with 5 remaining days")
+	_expect_equal(
+		crash.rotation_crash_mult >= 0.45 - 0.0001
+		and crash.rotation_crash_mult <= 0.70 + 0.0001,
+		true,
+		"BS1: follow-on crash seeds staple mult in [0.45, 0.70]"
+	)
+	_expect_equal(
+		bool(payload.get("rotation_crash", false)),
+		true,
+		"BS1: scheduled follow-on is recorded, not a catalog re-roll of a different kind"
+	)
+	_expect_equal(
+		String(_demand_signals.call("pending_rotation_crash_set_id")),
+		"",
+		"BS1: pending follow-on is consumed when the crash starts"
+	)
+	_expect_equal(
+		ids.has("staple"),
+		true,
+		"BS1: Dustway staple fixtures installed for the leak path"
+	)
+	var base_fail: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{"set_id": &"AA-BASE", "duration_days": 5, "rotation_crash_mult": 0.50}
+	)
+	_expect_equal(base_fail == null, true, "BS1: bind fails rather than targeting AA-BASE")
+	_game_state.call("start_new_game")
+	_bs1_install_dustway_singles()
+	var surprise: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{"duration_days": 5, "rotation_crash_mult": 0.50}
+	)
+	_expect_equal(surprise != null, true, "BS1: surprise crash starts with no leak")
+	_expect_equal(
+		surprise.kind,
+		MarketEvent.KIND_ROTATION_CRASH,
+		"BS1: surprise kind is rotation_crash"
+	)
+	_expect_equal(
+		surprise.set_id,
+		&"AA-DUST",
+		"BS1: surprise path binds the oldest non-BASE live set"
+	)
+	_expect_equal(
+		is_equal_approx(surprise.rotation_crash_mult, 0.50),
+		true,
+		"BS1: surprise crash stores the seeded mult once"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var fired := false
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 64):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		_qa_autoload.call("clear")
+		for _day_index: int in range(20):
+			_game_state.call("start_floor")
+			_game_state.call("start_settle")
+			var rolled: MarketEvent = _demand_signals.call("active_event")
+			if rolled != null and rolled.kind == MarketEvent.KIND_ROTATION_CRASH:
+				fired = true
+				break
+			if int(_game_state.get("current_day")) < 20:
+				_game_state.call("advance_day")
+		if fired:
+			break
+	_expect_equal(fired, true, "BS1: seeded settle run can surprise-roll rotation_crash")
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_rotation_crash_market_and_prices() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call("seed_event_rng", MarketEventService.EVENT_RNG_SEED)
+	var ids := _bs1_install_dustway_singles()
+	var staple: StringName = ids["staple"]
+	var staple_b: StringName = ids["staple_b"]
+	var faded: StringName = ids["faded"]
+	var bulk: StringName = ids["bulk"]
+	var other_staple := &"AA-SKIE-047"
+	var base_staple := &"AA-BASE-088"
+	var base_bulk := &"AA-BASE-BULK"
+	var sealed := &"AA-DUST-ETB"
+	var skie_sealed := &"AA-SKIE-BLST"
+	var sleeves := &"ACC-SLV-60"
+	var baseline_staple := int(_demand_signals.call("market_cents_for", staple))
+	var baseline_staple_b := int(_demand_signals.call("market_cents_for", staple_b))
+	var baseline_faded := int(_demand_signals.call("market_cents_for", faded))
+	var baseline_bulk := int(_demand_signals.call("market_cents_for", bulk))
+	var baseline_other := int(_demand_signals.call("market_cents_for", other_staple))
+	var baseline_base := int(_demand_signals.call("market_cents_for", base_staple))
+	var baseline_base_bulk := int(_demand_signals.call("market_cents_for", base_bulk))
+	var baseline_sealed := int(_demand_signals.call("market_cents_for", sealed))
+	var baseline_skie_sealed := int(_demand_signals.call("market_cents_for", skie_sealed))
+	var baseline_sleeves := int(_demand_signals.call("market_cents_for", sleeves))
+	var listed_sealed := int(_inventory_service.call("listed_price_for", sealed))
+	var cash_before := int(_economy.get("balance_cents"))
+	var leak: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION,
+		{"set_id": &"AA-DUST", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(leak != null, true, "BS1: leak window starts for market checks")
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", staple)) == baseline_staple
+		and int(_demand_signals.call("market_cents_for", faded)) == baseline_faded
+		and int(_demand_signals.call("market_cents_for", bulk)) == baseline_bulk,
+		true,
+		"BS1: the leak alone still has no market effect"
+	)
+	_demand_signals.call("roll_settle_events")
+	var still_leak: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		still_leak != null and still_leak.kind == MarketEvent.KIND_ROTATION,
+		true,
+		"BS1: leak with remaining_days 2 is still the leak after one settle"
+	)
+	var crash: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{
+			"set_id": &"AA-DUST",
+			"duration_days": 5,
+			"remaining_days": 5,
+			"rotation_crash_mult": 0.50,
+		}
+	)
+	_expect_equal(crash != null, true, "BS1: crash starts for instrumented market checks")
+	_expect_equal(
+		_demand_signals.call("has_rotation_crash"),
+		true,
+		"BS1: crash window is active"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("rotation_crash_market_mult_for", staple)), 0.50)
+		and is_equal_approx(
+			float(_demand_signals.call("rotation_crash_market_mult_for", staple_b)),
+			0.50
+		),
+		true,
+		"BS1: every staple in S shares the same seeded crash mult"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("rotation_crash_market_mult_for", faded)), 0.90),
+		true,
+		"BS1: non-bulk non-staple single in S is ×0.90"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("rotation_crash_market_mult_for", bulk)), 1.0),
+		true,
+		"BS1: bulk singles in S are unchanged"
+	)
+	var crashed := int(_demand_signals.call("market_cents_for", staple))
+	_expect_equal(
+		crashed,
+		maxi(1, roundi(float(baseline_staple) * 0.50)),
+		"BS1: staple hidden market is ×[0.45, 0.70] vs pre-event baseline"
+	)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", staple_b)),
+		maxi(1, roundi(float(baseline_staple_b) * 0.50)),
+		"BS1: second staple uses the same event mult"
+	)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", faded)),
+		maxi(1, roundi(float(baseline_faded) * 0.90)),
+		"BS1: non-bulk non-staple hidden market is ×0.90"
+	)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", bulk)) == baseline_bulk
+		and int(_demand_signals.call("market_cents_for", other_staple)) == baseline_other
+		and int(_demand_signals.call("market_cents_for", base_staple)) == baseline_base
+		and int(_demand_signals.call("market_cents_for", base_bulk)) == baseline_base_bulk
+		and int(_demand_signals.call("market_cents_for", sealed)) == baseline_sealed
+		and int(_demand_signals.call("market_cents_for", skie_sealed)) == baseline_skie_sealed
+		and int(_demand_signals.call("market_cents_for", sleeves)) == baseline_sleeves,
+		true,
+		"BS1: bulk in S, other sets, AA-BASE, sealed, and accessories are unchanged"
+	)
+	var slab_card := CardInstance.new(staple, 600)
+	var slab := SlabInstance.new(slab_card, &"Prism Grade", 10.0, "CERT-BS1", 900)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", slab.sku_id())),
+		maxi(1, roundi(float(baseline_staple) * 0.50)),
+		"BS1: graded slabs follow the card ref"
+	)
+	var market_state := _demand_signals.get("_market_state") as MarketState
+	_expect_equal(
+		market_state.market_cents_for(staple),
+		baseline_staple,
+		"BS1: event mult is a modifier — AR1 base is not rewritten"
+	)
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", sealed)),
+		listed_sealed,
+		"BS1: listed prices are unchanged by the event alone"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"BS1: cash is unchanged by the event alone"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_traffic_mult")), 1.0)
+		and is_equal_approx(float(_demand_signals.call("active_event_whale_weight_mult")), 1.0),
+		true,
+		"BS1: buyer door spawn and whale weight stay 1.0"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", staple)), 1.0),
+		true,
+		"BS1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	_game_state.call("start_new_game")
+	var sealed_baseline := int(_demand_signals.call("market_cents_for", &"AA-DUST-ETB"))
+	var skie_baseline := int(_demand_signals.call("market_cents_for", &"AA-SKIE-047"))
+	var production: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{
+			"set_id": &"AA-DUST",
+			"duration_days": 5,
+			"rotation_crash_mult": 0.50,
+		}
+	)
+	_expect_equal(production != null, true, "BS1: production crash still starts without live staples")
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", &"AA-DUST-ETB")) == sealed_baseline
+		and int(_demand_signals.call("market_cents_for", &"AA-SKIE-047")) == skie_baseline
+		and is_equal_approx(
+			float(_demand_signals.call("rotation_crash_market_mult_for", &"AA-SKIE-047")),
+			1.0
+		),
+		true,
+		"BS1: with no Dustway staples, sealed and other-set singles stay off the crash"
+	)
+	_bs1_install_dustway_singles()
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("rotation_crash_market_mult_for", &"AA-DUST-FADE")),
+			0.90
+		),
+		true,
+		"BS1: production crash still applies non-bulk ×0.90 when staples are absent from Soft catalog"
+	)
+
+
+func _test_rotation_crash_duration_resume_and_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var ids := _bs1_install_dustway_singles()
+	var staple: StringName = ids["staple"]
+	var faded: StringName = ids["faded"]
+	var baseline_staple := int(_demand_signals.call("market_cents_for", staple))
+	var baseline_faded := int(_demand_signals.call("market_cents_for", faded))
+	var leak: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION,
+		{"set_id": &"AA-DUST", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(leak != null, true, "BS1 save: leak starts")
+	var leak_saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(leak_saved, "BS1 leak save")
+	var leak_stored: Dictionary = leak_saved.get("market_event", {})
+	_expect_equal(
+		String(leak_stored.get("kind", "")),
+		"soft_rotation_leak",
+		"BS1: leak save writes C1 kind"
+	)
+	_expect_equal(
+		String(leak_stored.get("pending_rotation_crash_set_id", "")),
+		"AA-DUST",
+		"BS1: save writes pending leak→crash follow-on"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_demand_signals.call("has_rotation_crash"),
+		false,
+		"BS1: new game clears crash"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", leak_saved),
+		true,
+		"BS1: restore_save accepts leak + pending follow-on"
+	)
+	_bs1_install_dustway_singles()
+	var restored_leak: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		restored_leak != null and restored_leak.kind == MarketEvent.KIND_ROTATION,
+		true,
+		"BS1: save/load restores the leak"
+	)
+	_expect_equal(
+		_demand_signals.call("pending_rotation_crash_set_id"),
+		&"AA-DUST",
+		"BS1: save/load restores pending leak→crash follow-on"
+	)
+	_demand_signals.call("roll_settle_events")
+	_demand_signals.call("roll_settle_events")
+	var follow: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		follow != null and follow.kind == MarketEvent.KIND_ROTATION_CRASH,
+		true,
+		"BS1: restored pending follow-on still becomes the crash when the leak ends"
+	)
+	_expect_equal(follow.set_id, &"AA-DUST", "BS1: restored follow-on keeps set S")
+	_game_state.call("start_new_game")
+	ids = _bs1_install_dustway_singles()
+	staple = ids["staple"]
+	faded = ids["faded"]
+	baseline_staple = int(_demand_signals.call("market_cents_for", staple))
+	baseline_faded = int(_demand_signals.call("market_cents_for", faded))
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{
+			"set_id": &"AA-DUST",
+			"duration_days": 5,
+			"remaining_days": 5,
+			"rotation_crash_mult": 0.55,
+		}
+	)
+	_expect_equal(started != null, true, "BS1 save: crash starts")
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "BS1 crash save")
+	var stored: Dictionary = saved.get("market_event", {})
+	_expect_equal(String(stored.get("id", "")), "rotation_crash", "BS1 save writes event id")
+	_expect_equal(String(stored.get("kind", "")), "rotation_crash", "BS1 save writes kind")
+	_expect_equal(int(stored.get("remaining_days", 0)), 5, "BS1 save writes remaining days")
+	_expect_equal(String(stored.get("set_id", "")), "AA-DUST", "BS1 save writes set_id")
+	_expect_equal(
+		is_equal_approx(float(stored.get("rotation_crash_mult", 0.0)), 0.55),
+		true,
+		"BS1 save writes rolled mult"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BS1: restore_save accepts crash snapshot"
+	)
+	_bs1_install_dustway_singles()
+	var restored: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(restored != null, true, "BS1: save/load restores active crash")
+	_expect_equal(restored.kind, MarketEvent.KIND_ROTATION_CRASH, "BS1: restored kind")
+	_expect_equal(restored.set_id, &"AA-DUST", "BS1: restored set_id")
+	_expect_equal(restored.remaining_days, 5, "BS1: restored remaining days")
+	_expect_equal(
+		is_equal_approx(restored.rotation_crash_mult, 0.55),
+		true,
+		"BS1: restored rolled mult"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("rotation_crash_market_mult_for", staple)), 0.55),
+		true,
+		"BS1: restored crash still multiplies staples"
+	)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", staple)),
+		maxi(1, roundi(float(baseline_staple) * 0.55)),
+		"BS1: restored crash still cools staple hidden market"
+	)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{
+			"set_id": &"AA-DUST",
+			"duration_days": 5,
+			"remaining_days": 1,
+			"rotation_crash_mult": 0.50,
+		}
+	)
+	_demand_signals.call("roll_settle_events")
+	_expect_equal(
+		_demand_signals.call("has_rotation_crash"),
+		false,
+		"BS1: clearing after duration drops the event"
+	)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", staple)) == baseline_staple
+		and int(_demand_signals.call("market_cents_for", faded)) == baseline_faded,
+		true,
+		"BS1: after duration the mults no longer apply and base resumes"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("rotation_crash_market_mult_for", staple)), 1.0),
+		true,
+		"BS1: a day with no Rotation crash active does not invent the mults"
+	)
+	_demand_signals.call("seed_market_drift_rng", 20261003)
+	var crash: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{
+			"set_id": &"AA-DUST",
+			"duration_days": 5,
+			"remaining_days": 5,
+			"rotation_crash_mult": 0.50,
+		}
+	)
+	_expect_equal(crash != null, true, "BS1: crash restart for AR1 non-compounding check")
+	var market_state := _demand_signals.get("_market_state") as MarketState
+	var base_before := market_state.market_cents_for(staple)
+	_demand_signals.call("apply_daily_market_drift")
+	var base_after := market_state.market_cents_for(staple)
+	_expect_equal(
+		int(_demand_signals.call("market_cents_for", staple)),
+		maxi(1, roundi(float(base_after) * 0.50)),
+		"BS1: AR1 drift writes the unmultiplied base; the event remultiplies at read"
+	)
+	_expect_equal(
+		base_after != maxi(1, roundi(float(base_before) * 0.50)),
+		true,
+		"BS1: drift does not bake the Rotation crash mult into MarketState"
+	)
+
+
+func _test_rotation_crash_levers_banner_and_visibility() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_bs1_install_dustway_singles()
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION,
+		{"set_id": &"AA-DUST", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(
+		String(_demand_signals.call("event_banner_text")),
+		"",
+		"BS1: leak visibility stays hidden without Research/Specialist"
+	)
+	_expect_equal(
+		String(_demand_signals.call("rotation_watch_text")),
+		"",
+		"BS1: Rotation watch copy stays gated"
+	)
+	var shop := _game_state.get("shop") as ShopState
+	shop.hire_specialist()
+	_expect_equal(
+		String(_demand_signals.call("event_banner_text")).contains("Rotation watch:"),
+		true,
+		"BS1: Specialist still sees C1 Rotation watch copy"
+	)
+	_expect_equal(
+		String(_demand_signals.call("event_banner_text")).contains("Dustway"),
+		true,
+		"BS1: C1 leak still names the set"
+	)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{
+			"set_id": &"AA-DUST",
+			"duration_days": 5,
+			"rotation_crash_mult": 0.62,
+		}
+	)
+	_expect_equal(shop.fire_staff(0) != null, true, "BS1: firing Specialist leaves an uninformed player")
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Rotation:"), true, "BS1: crash banner is visible to all players")
+	_expect_equal(banner.contains("staples cooling"), true, "BS1: crash banner uses Soft cooling copy")
+	_expect_equal(banner.contains("Dustway"), true, "BS1: crash banner names the set")
+	_expect_equal(banner.contains("0.62"), false, "BS1: banner never shows the rolled mult")
+	_expect_equal(
+		banner.contains("rotation_crash_mult"),
+		false,
+		"BS1: banner never names the rolled mult"
+	)
+	_expect_equal(banner.contains("true_market"), false, "BS1: banner has no true_market")
+	_assert_text_has_no_truth(banner, "BS1 Rotation crash banner")
+	var staple := &"AA-DUST-STPL"
+	var listed_before := int(_inventory_service.call("listed_price_for", &"AA-BASE-088"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var fire_sale := maxi(1, floori(float(listed_before) * 0.90))
+	_expect_equal(
+		_inventory_service.call("set_listed_price", &"AA-BASE-088", fire_sale),
+		true,
+		"BS1: fire-sell lever still works during the crash"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"BS1: repricing does not invent a cash change from the event"
+	)
+	var price_dto := _demand_signals.call(
+		"price_signal",
+		staple,
+		500,
+		_inventory_service.call("location_for", &"AA-BASE-088")
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(price_dto, "BS1 crash price confirm")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_dto),
+		"BS1 crash price summary"
+	)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"BS1: EventBanner does not open Option D PriceEditor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var payload: Dictionary = _demand_signals.call("roll_settle_events")
+	_assert_payload_has_no_truth(payload, "BS1 crash market_event_rolled")
+	_expect_equal(
+		payload.has("rotation_crash") and payload.has("rotation_crash_mult"),
+		true,
+		"BS1: instrumentation records the crash without showing it on screens"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BS1: HUD loads during Rotation crash")
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		_expect_equal(banner_label != null, true, "BS1: thin event banner exists")
+		_expect_equal(
+			banner_label != null
+			and banner_label.visible
+			and banner_label.text.contains("Rotation:")
+			and banner_label.text.contains("staples cooling")
+			and not banner_label.text.contains("0.62"),
+			true,
+			"BS1: HUD banner shows crash copy for all players without the rolled mult"
+		)
+		_assert_text_has_no_truth(
+			banner_label.text if banner_label != null else "",
+			"BS1 HUD Rotation crash banner"
+		)
+		var watch := hud.get_node_or_null("%RotationWatchLabel") as Label
+		if watch != null:
+			_expect_equal(
+				watch.text.contains("Rotation watch:") == false or watch.visible == false,
+				true,
+				"BS1: crash does not rewrite C1 Rotation watch gating"
+			)
+		var open_price := hud.get_node_or_null("%OpenPriceButton") as Button
+		_expect_equal(
+			open_price != null and not open_price.disabled,
+			true,
+			"BS1: player can still open PriceEditor to fire-sell or reprice"
+		)
+		hud.queue_free()
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"BS1: crash can open FLOOR — no soft-lock"
+	)
+	_expect_equal(
+		_game_state.call("start_settle"),
+		true,
+		"BS1: crash FLOOR can settle — no soft-lock"
+	)
+
+
+func _test_rotation_crash_untouched_and_parked() -> void:
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and BuylistDripPolicy.REP_HIT == 1,
+		true,
+		"BS1: BM1 drip stays 0.40 / −1"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50),
+		true,
+		"BS1: BN1 fewer-lots stays ×0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFloodPolicy.FLOOD_CEILING, 0.70)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BS1: BO1 flood stays 0.70 / ×1.50"
+	)
+	_expect_equal(
+		UtilitiesPolicy.SMALL_DAILY_CENTS == 4_000
+		and UtilitiesPolicy.MEDIUM_DAILY_CENTS == 7_000
+		and UtilitiesPolicy.LARGE_DAILY_CENTS == 11_000,
+		true,
+		"BS1: BP1 utilities stay $40 / $70 / $110"
+	)
+	_expect_equal(
+		SetReleaseHypePolicy.TELEGRAPH_DAYS == 3
+		and SetReleaseHypePolicy.DURATION_DAYS == 5
+		and is_equal_approx(SetReleaseHypePolicy.HYPE_NEW_MULT, 1.40)
+		and is_equal_approx(SetReleaseHypePolicy.HYPE_OLD_MULT, 0.70),
+		true,
+		"BS1: BQ1 set release stays telegraph 3 / duration 5 / ×1.40 / ×0.70"
+	)
+	_expect_equal(
+		ProTourSpikePolicy.TELEGRAPH_DAYS == 1
+		and ProTourSpikePolicy.DURATION_DAYS == 2
+		and is_equal_approx(ProTourSpikePolicy.MULT_MIN, 1.30)
+		and is_equal_approx(ProTourSpikePolicy.MULT_MAX, 1.80),
+		true,
+		"BS1: BR1 Pro tour stays telegraph 1 / duration 2 / ×1.30–1.80"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.FAIR_MULT, 1.10)
+		and is_equal_approx(FairPriceSettlePolicy.GOUGE_MULT, 1.25),
+		true,
+		"BS1: BK1 fair/gouge stays 1.10 / 1.25"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1,
+		true,
+		"BS1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0),
+		true,
+		"BS1: whale weight stays as shipped"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "rotation_crash")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"RotationCrashPolicy"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func active_event_traffic_mult(",
+			"ROTATION_CRASH"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func active_event_whale_weight_mult(",
+			"ROTATION_CRASH"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func apply_daily_market_drift(",
+			"rotation_crash"
+		),
+		true,
+		"BS1: Rotation crash stays off sell-through, door spawn, whale weight, and AR1 drift writes"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("rotation_crash") and events.contains("soft_rotation_leak"),
+		true,
+		"BS1: Rotation crash is a named settle event and C1 leak stays cataloged"
+	)
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("listed_band")
+		or events.contains("stop_day"),
+		false,
+		"BS1: Soft catalog stays closed"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/products.json").contains("AA-DUST-STPL"),
+		false,
+		"BS1: Soft catalog stays CLOSED — Dustway staple fixtures are test-only"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/rotation_crash_policy.gd"
+	)
+	_expect_equal(
+		not policy_src.contains(".tscn")
+		and not policy_src.contains(".png")
+		and not policy_src.contains(".webp")
+		and not FileAccess.file_exists("res://scripts/economy/rotation_crash_policy.tscn"),
+		true,
+		"BS1: No Art"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/economy/buylist_drip_policy.gd"
+		).contains("rotation_crash")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/buylist_fewer_lots_policy.gd"
+		).contains("rotation_crash")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/buylist_flood_policy.gd"
+		).contains("rotation_crash")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/utilities_policy.gd"
+		).contains("rotation_crash")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/set_release_hype_policy.gd"
+		).contains("rotation_crash")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/pro_tour_spike_policy.gd"
+		).contains("rotation_crash"),
+		false,
+		"BS1: BM1/BN1/BO1/BP1/BQ1/BR1 rule bodies stay untouched"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/rotation_crash_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BS1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BS1: %s never shows p_buy" % path
+		)
+	_expect_equal(
+		demand_src.contains("Rotation watch: %s"),
+		true,
+		"BS1: C1 Rotation watch copy stays as shipped"
+	)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"BS1: Soft _ensure_priceable_sku stays parked"
+	)
+	_game_state.call("start_new_game")
+	var first: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{"set_id": &"AA-DUST", "duration_days": 5, "rotation_crash_mult": 0.50}
+	)
+	_expect_equal(first != null, true, "BS1: max one crash — first start occupies the bus")
+	var second: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_ROTATION_CRASH,
+		{"set_id": &"AA-DUST", "duration_days": 5, "rotation_crash_mult": 0.60}
+	)
+	_expect_equal(second != null, true, "BS1: a later crash start replaces the first")
+	_expect_equal(
+		is_equal_approx(second.rotation_crash_mult, 0.60),
+		true,
+		"BS1: only the live crash mult applies — no stacked crashes"
+	)
+	var glut: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(glut != null, true, "BS1: Supply glut still starts")
+	_expect_equal(
+		_demand_signals.call("has_rotation_crash"),
+		false,
+		"BS1: glut replaces Rotation crash on the shared pack bus"
+	)
+	var set_release: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SET_RELEASE,
+		{
+			"duration_days": 5,
+			"remaining_days": 5,
+			"set_id": &"AA-SKIE",
+			"old_set_id": &"AA-DUST",
+		}
+	)
+	_expect_equal(set_release != null, true, "BS1: BQ1 Set release still starts")
+	var pro_tour: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_PRO_TOUR,
+		{
+			"duration_days": 2,
+			"remaining_days": 2,
+			"archetype_tag": &"archetype:aggro",
+			"pro_tour_mult": 1.50,
+		}
+	)
+	_expect_equal(pro_tour != null, true, "BS1: BR1 Pro tour still starts")
+	_expect_equal(
+		_demand_signals.call("has_pro_tour_spike"),
+		true,
+		"BS1: BR1 spike window still applies after occupying the bus"
 	)
 
 
