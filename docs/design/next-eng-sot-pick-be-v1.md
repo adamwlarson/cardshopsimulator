@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BE v1 — post BD1
 
-**Status:** **ADOPTED** 2026-10-05 — **BE1 Online fee cut at Rep ≥ 75**. Park BE2/BE3/BE4. Hard-park camera off-switch. Soft catalog CLOSED. Net-worth HUD and STOP stay parked. Do not turn prior packs into a sell weight. Door spawn math stays as shipped.
+**Status:** **BE1 ADOPTED** 2026-10-05 — Online fee cut at Rep ≥ 75 (8%→5% on ONLINE_HOLD). Spec on main `21e9cc18`. Park BE2/BE3/BE4. Hard-park camera off-switch. Soft catalog CLOSED. Net-worth HUD and STOP stay parked. Do not turn prior packs into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bd (BD1 Extend BB1 NM mismatch onto auction SHIPPED #86 @ `58fc3c13`); Soft catalog CLOSED
@@ -91,3 +91,6 @@
 |------|----------|
 | 2026-10-05 | Drafted post BD1 SHIPPED #86 @ `58fc3c13`. Lean **BE1 Online fee cut at Rep ≥ 75** (8%→5%). HUD / STOP / listed-band Soft parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM ADOPTED **BE1**. Sync to main; Eng bar = this commit. Soft CLOSED. No Art. |
+| 2026-10-05 | PM adopted **BE1**. Spec on main `21e9cc18`. Spike [BE1 Online fee cut](https://cursor.com/agents/bc-828a09a3-6751-51a1-9572-bfc5497b030f). Park BE2/BE3/BE4. No Art. Soft catalog CLOSED. Draft sha256 `e1228cf9`. |
+| 2026-10-05 | Eng bar locked BE1 against `21e9cc18`. ONLINE_HOLD 8%→5% at Rep ≥ 75. Awaiting tip-freeze. |
+| 2026-10-05 | PM tip-froze PR #87 @ `4b81341b`. Ready. 7 files, no docs. Agent archived. |
