@@ -262,7 +262,7 @@ func can_negotiate() -> bool:
 	return (
 		is_game_active
 		and current_phase == DayPhase.FLOOR
-		and attention_remaining >= CustomerQueue.NEGOTIATE_ATTENTION_COST
+		and attention_remaining >= NegotiatePolicy.attention_cost()
 	)
 
 

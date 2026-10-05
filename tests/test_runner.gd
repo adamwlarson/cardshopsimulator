@@ -212,6 +212,7 @@ func _initialize() -> void:
 	_test_auction_snipes()
 	_test_shady_trunk()
 	_test_one_counter_haggle()
+	_test_sell_side_negotiate()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -25467,6 +25468,919 @@ func _test_haggle_section_45_and_parked() -> void:
 		"AU1: AC1 through AT1 stay off the sell roll"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_sell_side_negotiate() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_negotiate_named_gate()
+	_test_negotiate_list_and_one_step()
+	_test_negotiate_attention_cashier_and_miss()
+	_test_negotiate_weights_and_no_truth()
+	_test_negotiate_door_whale_sale_fee_stay()
+	_test_negotiate_shipped_levers_stay()
+	_test_negotiate_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_negotiate_named_gate() -> void:
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.DIRECTION_WEIGHT_MINUS, 1.15),
+		true,
+		"AV1: minus 10% weight is 1.15"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.DIRECTION_WEIGHT_PLUS, 0.70),
+		true,
+		"AV1: plus 10% weight is 0.70"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.direction_weight(-0.10, -1.0), 1.15),
+		true,
+		"AV1: a missing minus weight falls back to 1.15"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.direction_weight(0.10, -1.0), 0.70),
+		true,
+		"AV1: a missing plus weight falls back to 0.70"
+	)
+	_expect_equal(
+		NegotiatePolicy.attention_cost(-1),
+		8,
+		"AV1: a missing Attention cost falls back to 8"
+	)
+	_expect_equal(
+		NegotiatePolicy.attention_cost(NegotiatePolicy.UNSET_INT),
+		8,
+		"AV1: an omitted Attention cost falls back to 8"
+	)
+	_expect_equal(
+		NegotiatePolicy.miss_rep_delta(NegotiatePolicy.UNSET_INT),
+		-1,
+		"AV1: a missing miss Rep falls back to minus 1"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.archetype_weight(&"kid_parent"), 1.10),
+		true,
+		"AV1: Kid weight is 1.10"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.archetype_weight(&"regular"), 1.05),
+		true,
+		"AV1: Regular weight is 1.05"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.archetype_weight(&"collector"), 1.00),
+		true,
+		"AV1: Collector weight is 1.00"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.archetype_weight(&"whale"), 0.90),
+		true,
+		"AV1: Whale weight is 0.90"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.archetype_weight(&"flipper"), 0.85),
+		true,
+		"AV1: Flipper weight is 0.85"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.archetype_weight(&"spike"), 0.70),
+		true,
+		"AV1: Spike weight is 0.70"
+	)
+	_expect_equal(
+		is_equal_approx(NegotiatePolicy.archetype_weight(&"unknown"), 1.00),
+		true,
+		"AV1: a missing archetype falls back to 1.00"
+	)
+	_expect_equal(
+		NegotiatePolicy.can_actor_negotiate(&"owner"),
+		true,
+		"AV1: the owner can Negotiate"
+	)
+	_expect_equal(
+		NegotiatePolicy.can_actor_negotiate(&"cashier"),
+		false,
+		"AV1: a cashier cannot Negotiate"
+	)
+	var buyer := CustomerProfile.new()
+	buyer.trade_intent = CustomerProfile.TradeIntent.BUYING_FROM_SHOP
+	_expect_equal(
+		NegotiatePolicy.can_negotiate_customer(buyer),
+		true,
+		"AV1: a shop-buy serve can Negotiate"
+	)
+	var seller := CustomerProfile.new()
+	seller.trade_intent = CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	_expect_equal(
+		NegotiatePolicy.can_negotiate_customer(seller),
+		false,
+		"AV1: buylist walk-ins are out"
+	)
+
+
+func _test_negotiate_list_and_one_step() -> void:
+	_av1_reset_floor(40, 1)
+	var listed := _av1_listed_sleeves()
+	_expect_equal(listed > 0, true, "AV1: Sell at list needs a listed sleeve")
+	if listed <= 0:
+		return
+	var queue := _av1_queue()
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var qty_before := _as1_stock_qty(&"ACC-SLV-60")
+	var buyer := _av1_enqueue_buyer(queue, &"regular", "List buyer")
+	_expect_equal(buyer != null, true, "AV1: Sell at list enqueues")
+	if buyer == null:
+		queue.free()
+		return
+	_expect_equal(queue.sell_listed(), true, "AV1: Sell at list still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed,
+		"AV1: Sell at list still pays listed"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed,
+		"AV1: Sell at list ledger is the listed price"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AV1: Sell at list spends no Attention"
+	)
+	_expect_equal(
+		_as1_stock_qty(&"ACC-SLV-60"),
+		qty_before - 1,
+		"AV1: Sell at list still removes stock"
+	)
+	queue.free()
+
+	_av1_reset_floor(100, 1)
+	listed = _av1_listed_sleeves()
+	queue = _av1_queue()
+	buyer = _av1_enqueue_buyer(queue, &"kid_parent", "Nudge kid")
+	_expect_equal(buyer != null, true, "AV1: minus 10% needs a buyer")
+	if buyer == null:
+		queue.free()
+		return
+	var minus_price := CustomerQueue.negotiated_price_cents(
+		listed,
+		NegotiatePolicy.DIRECTION_MINUS
+	)
+	_expect_equal(
+		minus_price,
+		maxi(1, roundi(float(listed) * 0.90)),
+		"AV1: minus 10% is round(listed × 0.90) in cents"
+	)
+	att_before = int(_game_state.get("attention_remaining"))
+	cash_before = int(_economy.get("balance_cents"))
+	qty_before = _as1_stock_qty(&"ACC-SLV-60")
+	_expect_equal(
+		queue.negotiate(NegotiatePolicy.DIRECTION_MINUS),
+		true,
+		"AV1: one minus 10% step is taken"
+	)
+	_expect_equal(
+		queue.last_negotiate_result,
+		NegotiatePolicy.RESULT_SOLD,
+		"AV1: Kid at Rep 100 always takes minus 10%"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + minus_price,
+		"AV1: a hit sells at the rounded negotiated cents"
+	)
+	_expect_equal(
+		_as1_stock_qty(&"ACC-SLV-60"),
+		qty_before - 1,
+		"AV1: a hit removes stock the same way Sell at list does"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 8,
+		"AV1: the taken minus 10% spends 8 Attention"
+	)
+	_expect_equal(
+		queue.negotiate(NegotiatePolicy.DIRECTION_PLUS),
+		false,
+		"AV1: a second Negotiate is refused"
+	)
+	_expect_equal(
+		queue.last_negotiate_result,
+		NegotiatePolicy.RESULT_REFUSED,
+		"AV1: the refused second step stays refused"
+	)
+	queue.free()
+
+	_av1_reset_floor(40, 1)
+	listed = _av1_listed_sleeves()
+	queue = _av1_queue()
+	buyer = _av1_enqueue_buyer(queue, &"spike", "Plus spike")
+	_expect_equal(buyer != null, true, "AV1: plus 10% needs a buyer")
+	if buyer == null:
+		queue.free()
+		return
+	var plus_price := CustomerQueue.negotiated_price_cents(
+		listed,
+		NegotiatePolicy.DIRECTION_PLUS
+	)
+	_expect_equal(
+		plus_price,
+		maxi(1, roundi(float(listed) * 1.10)),
+		"AV1: plus 10% is round(listed × 1.10) in cents"
+	)
+	var plus_day := _av1_find_outcome_day(
+		buyer,
+		NegotiatePolicy.DIRECTION_PLUS,
+		40,
+		true
+	)
+	if plus_day < 1:
+		plus_day = _av1_find_outcome_day(
+			buyer,
+			NegotiatePolicy.DIRECTION_PLUS,
+			40,
+			false
+		)
+	_expect_equal(plus_day >= 1, true, "AV1: plus 10% can roll once")
+	_game_state.set("current_day", plus_day)
+	cash_before = int(_economy.get("balance_cents"))
+	qty_before = _as1_stock_qty(&"ACC-SLV-60")
+	var will_hit := _av1_will_hit(
+		buyer,
+		plus_day,
+		NegotiatePolicy.DIRECTION_PLUS,
+		40
+	)
+	_expect_equal(
+		queue.negotiate(NegotiatePolicy.DIRECTION_PLUS),
+		true,
+		"AV1: one plus 10% step is taken"
+	)
+	if will_hit:
+		_expect_equal(
+			queue.last_negotiate_result,
+			NegotiatePolicy.RESULT_SOLD,
+			"AV1: a plus 10% hit sells at the rounded cents"
+		)
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before + plus_price,
+			"AV1: a plus 10% hit pays the negotiated price"
+		)
+		_expect_equal(
+			_as1_stock_qty(&"ACC-SLV-60"),
+			qty_before - 1,
+			"AV1: a plus 10% hit removes stock"
+		)
+	else:
+		_expect_equal(
+			queue.last_negotiate_result,
+			NegotiatePolicy.RESULT_WALKED,
+			"AV1: a plus 10% miss walks the customer"
+		)
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before,
+			"AV1: a plus 10% miss pays no cash"
+		)
+		_expect_equal(
+			_as1_stock_qty(&"ACC-SLV-60"),
+			qty_before,
+			"AV1: a plus 10% miss leaves stock"
+		)
+	_expect_equal(
+		queue.negotiate(NegotiatePolicy.DIRECTION_MINUS),
+		false,
+		"AV1: a second Negotiate after plus 10% is refused"
+	)
+	queue.free()
+
+
+func _test_negotiate_attention_cashier_and_miss() -> void:
+	_av1_reset_floor(40, 1)
+	var listed := _av1_listed_sleeves()
+	_expect_equal(listed > 0, true, "AV1: Attention path needs a listed sleeve")
+	if listed <= 0:
+		return
+	var queue := _av1_queue()
+	var buyer := _av1_enqueue_buyer(queue, &"regular", "Low Att")
+	_expect_equal(buyer != null, true, "AV1: Att < 8 needs a buyer")
+	if buyer == null:
+		queue.free()
+		return
+	_game_state.set("attention_remaining", 7)
+	_event_bus.emit_signal("attention_changed", 7)
+	var cash_before := int(_economy.get("balance_cents"))
+	var qty_before := _as1_stock_qty(&"ACC-SLV-60")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		queue.negotiate(NegotiatePolicy.DIRECTION_MINUS),
+		false,
+		"AV1: Att under 8 refuses the step"
+	)
+	_expect_equal(buyer.has_negotiated, false, "AV1: Att under 8 keeps the shot")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		7,
+		"AV1: Att under 8 leaves Attention unchanged"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AV1: a refused Att step leaves cash"
+	)
+	_expect_equal(
+		_as1_stock_qty(&"ACC-SLV-60"),
+		qty_before,
+		"AV1: a refused Att step leaves stock"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AV1: a refused Att step leaves Rep"
+	)
+	_expect_equal(
+		queue.sell_listed(),
+		true,
+		"AV1: Sell at list still works after a refused Negotiate"
+	)
+	queue.free()
+
+	_av1_reset_floor(40, 1)
+	queue = _av1_queue()
+	buyer = _av1_enqueue_buyer(queue, &"regular", "Cashier serve")
+	_expect_equal(buyer != null, true, "AV1: cashier gate needs a buyer")
+	if buyer == null:
+		queue.free()
+		return
+	var att_before := int(_game_state.get("attention_remaining"))
+	cash_before = int(_economy.get("balance_cents"))
+	qty_before = _as1_stock_qty(&"ACC-SLV-60")
+	_expect_equal(
+		queue.negotiate(
+			NegotiatePolicy.DIRECTION_MINUS,
+			NegotiatePolicy.ACTOR_CASHIER
+		),
+		false,
+		"AV1: a cashier cannot take Negotiate"
+	)
+	_expect_equal(buyer.has_negotiated, false, "AV1: cashier refuse keeps the shot")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AV1: cashier refuse leaves Attention unchanged"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AV1: cashier refuse leaves cash"
+	)
+	_expect_equal(
+		queue.sell_listed(),
+		true,
+		"AV1: the cashier can still Sell at list"
+	)
+	_expect_equal(
+		_as1_stock_qty(&"ACC-SLV-60"),
+		qty_before - 1,
+		"AV1: cashier Sell at list still moves stock"
+	)
+	queue.free()
+
+	_av1_reset_floor(40, 1)
+	queue = _av1_queue()
+	buyer = _av1_enqueue_buyer(queue, &"spike", "Miss spike")
+	_expect_equal(buyer != null, true, "AV1: miss path needs a buyer")
+	if buyer == null:
+		queue.free()
+		return
+	var miss_day := _av1_find_outcome_day(
+		buyer,
+		NegotiatePolicy.DIRECTION_PLUS,
+		40,
+		false
+	)
+	_expect_equal(miss_day >= 1, true, "AV1: plus 10% Spike can miss")
+	if miss_day < 1:
+		queue.free()
+		return
+	_game_state.set("current_day", miss_day)
+	att_before = int(_game_state.get("attention_remaining"))
+	cash_before = int(_economy.get("balance_cents"))
+	qty_before = _as1_stock_qty(&"ACC-SLV-60")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(
+		queue.negotiate(NegotiatePolicy.DIRECTION_PLUS),
+		true,
+		"AV1: a miss still takes the step"
+	)
+	_expect_equal(
+		queue.last_negotiate_result,
+		NegotiatePolicy.RESULT_WALKED,
+		"AV1: a miss walks the customer"
+	)
+	_expect_equal(buyer.has_negotiated, true, "AV1: a miss spends the one shot")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 8,
+		"AV1: a miss still spends 8 Attention"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AV1: a miss leaves cash unchanged"
+	)
+	_expect_equal(
+		_as1_stock_qty(&"ACC-SLV-60"),
+		qty_before,
+		"AV1: a miss leaves stock unchanged"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AV1: a miss applies Rep minus 1 once"
+	)
+	_expect_equal(
+		queue.negotiate(NegotiatePolicy.DIRECTION_PLUS),
+		false,
+		"AV1: a second Negotiate after a miss is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AV1: the miss Rep hit is applied once"
+	)
+	queue.free()
+
+
+func _test_negotiate_weights_and_no_truth() -> void:
+	const REP := 40
+	var minus_p := NegotiatePolicy.accept_chance(
+		NegotiatePolicy.DIRECTION_MINUS,
+		REP,
+		&"regular"
+	)
+	var plus_p := NegotiatePolicy.accept_chance(
+		NegotiatePolicy.DIRECTION_PLUS,
+		REP,
+		&"regular"
+	)
+	var spike_p := NegotiatePolicy.accept_chance(
+		NegotiatePolicy.DIRECTION_MINUS,
+		REP,
+		&"spike"
+	)
+	var regular_p := minus_p
+	_expect_equal(minus_p > plus_p, true, "AV1: minus 10% p is higher than plus 10%")
+	_expect_equal(
+		spike_p < regular_p,
+		true,
+		"AV1: Spike p is lower than Regular at the same direction"
+	)
+	_expect_equal(
+		is_equal_approx(minus_p, 1.15 * (0.45 + 40.0 * 0.005) * 1.05),
+		true,
+		"AV1: minus 10% Regular p uses weight 1.15"
+	)
+	_expect_equal(
+		is_equal_approx(plus_p, 0.70 * (0.45 + 40.0 * 0.005) * 1.05),
+		true,
+		"AV1: plus 10% Regular p uses weight 0.70"
+	)
+	_expect_equal(
+		is_equal_approx(spike_p, 1.15 * (0.45 + 40.0 * 0.005) * 0.70),
+		true,
+		"AV1: Spike minus 10% p uses weight 0.70"
+	)
+
+	_av1_reset_floor(40, 1)
+	var listed := _av1_listed_sleeves()
+	var queue := _av1_queue()
+	var buyer := _av1_enqueue_buyer(queue, &"regular", "HUD regular")
+	_expect_equal(buyer != null, true, "AV1: HUD path needs a buyer")
+	if buyer == null:
+		queue.free()
+		return
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AV1: HUD loads for CustomerServe")
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(buyer)
+		Callable(hud, "_on_customer_desk_ready").call(buyer, true)
+		var minus_button := hud.get_node_or_null("%NegotiateButton") as Button
+		var plus_button := hud.get_node_or_null("%NegotiatePlusButton") as Button
+		var sell := hud.get_node_or_null("%SellButton") as Button
+		var refuse := hud.get_node_or_null("%RefuseButton") as Button
+		var summary := hud.get_node_or_null("%CustomerSummary") as Label
+		_expect_equal(
+			minus_button != null and minus_button.visible,
+			true,
+			"AV1: placeholder minus 10% is present"
+		)
+		_expect_equal(
+			plus_button != null and plus_button.visible,
+			true,
+			"AV1: placeholder plus 10% is present"
+		)
+		_expect_equal(
+			sell != null and sell.visible and sell.text == "Sell at list",
+			true,
+			"AV1: placeholder Sell at list is present"
+		)
+		_expect_equal(
+			refuse != null and refuse.visible,
+			true,
+			"AV1: placeholder Refuse is present"
+		)
+		if summary != null:
+			_assert_text_has_no_truth(summary.text, "AV1 CustomerServe summary")
+			_expect_equal(
+				summary.text.to_lower().contains("true_market"),
+				false,
+				"AV1: CustomerServe never shows true_market"
+			)
+			_expect_equal(
+				_av1_text_shows_p(summary.text, minus_p)
+				or _av1_text_shows_p(summary.text, plus_p)
+				or _av1_text_shows_p(summary.text, spike_p),
+				false,
+				"AV1: CustomerServe never shows p"
+			)
+			_expect_equal(
+				summary.text.contains(DemandSignalPresenter.format_cents(listed)),
+				true,
+				"AV1: CustomerServe shows the list"
+			)
+		if minus_button != null:
+			_expect_equal(
+				_av1_text_shows_p(minus_button.text, minus_p),
+				false,
+				"AV1: minus 10% never shows p"
+			)
+		if plus_button != null:
+			_expect_equal(
+				_av1_text_shows_p(plus_button.text, plus_p),
+				false,
+				"AV1: plus 10% never shows p"
+			)
+		hud.free()
+	queue.free()
+
+
+func _test_negotiate_door_whale_sale_fee_stay() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"AV1: door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AV1: whale weight stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AV1: marketplace fee stays 8%"
+	)
+	_av1_reset_floor(40, 1)
+	var listed := _av1_listed_sleeves()
+	_expect_equal(listed > 0, true, "AV1: resolved-price sale needs a listed sleeve")
+	if listed <= 0:
+		return
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AV1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := _av1_queue()
+	var buyer := _av1_enqueue_buyer(queue, &"regular", "Resolved list")
+	_expect_equal(queue.sell_listed(), true, "AV1: a completed sale still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed,
+		"AV1: a completed sale pays the resolved listed price"
+	)
+	queue.free()
+
+	_av1_reset_floor(100, 1)
+	listed = _av1_listed_sleeves()
+	var negotiated := CustomerQueue.negotiated_price_cents(
+		listed,
+		NegotiatePolicy.DIRECTION_MINUS
+	)
+	queue = _av1_queue()
+	buyer = _av1_enqueue_buyer(queue, &"kid_parent", "Resolved nudge")
+	cash_before = int(_economy.get("balance_cents"))
+	_expect_equal(
+		queue.negotiate(NegotiatePolicy.DIRECTION_MINUS),
+		true,
+		"AV1: a completed negotiate still resolves"
+	)
+	_expect_equal(
+		queue.last_negotiate_result,
+		NegotiatePolicy.RESULT_SOLD,
+		"AV1: Kid minus 10% at Rep 100 is a hit"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + negotiated,
+		"AV1: a completed sale pays the resolved negotiated price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "negotiate")
+		and not _function_body_contains(queue_src, "func sell_listed()", "direction_w")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"negotiate"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"haggle"
+		),
+		true,
+		"AV1: Negotiate is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_negotiate_shipped_levers_stay() -> void:
+	_game_state.call("start_new_game")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.market_drift_sealed_low, 0.98)
+		and is_equal_approx(NORMAL_CONFIG.market_drift_sealed_high, 1.02),
+		true,
+		"AV1/AR1: daily hidden market drift stays as shipped"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.is_high_rep(75) and not MarketplaceLeadPolicy.is_high_rep(74),
+		true,
+		"AV1/AQ1: marketplace leads stay at Rep 75"
+	)
+	_expect_equal(
+		PlayerTradePolicy.is_unlocked(50) and not PlayerTradePolicy.is_unlocked(49),
+		true,
+		"AV1/AN1: player trades stay unlocked at Rep 50"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.is_unlocked(50) and not RegularsReturnPolicy.is_unlocked(49),
+		true,
+		"AV1/AO1: Regulars return stays unlocked at Rep 50"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.is_worse_moq(24) and not DistributorMoqPolicy.is_worse_moq(25),
+		true,
+		"AV1/AP1: distributor MOQ stays worse at Rep 24"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005)
+		and is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AV1/AK1/AL1: shrink stays 0.2%/0.7% and floor-sealed +0.3%"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(75)
+		and not CustomerSpawnPolicy.is_high_rep(74)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AV1/AJ1: high-rep whale pack stays ×1.5 at 75"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AV1: marketplace fee stays 8%"
+	)
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.REPORT_REP_GAIN == 2,
+		true,
+		"AV1/AT1: shady trunk Report stays +2 and Walk stays a dismiss"
+	)
+	_expect_equal(
+		HagglePolicy.can_haggle(&"marketplace")
+		and not HagglePolicy.can_haggle(&"auction"),
+		true,
+		"AV1/AU1: buy Counter stays on cash offers and out of snipes"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_negotiate_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("haggle")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("negotiate"),
+		false,
+		"AV1: Soft catalog stays closed"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AV1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AV1: marketplace fee stays 8% — this is not a fee cut"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AV1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("true_market")
+		and not hud_src.contains("accept_chance"),
+		true,
+		"AV1: HUD has no STOP, camera off-switch, true_market, or p"
+	)
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	_expect_equal(
+		not balance_src.contains("negotiate")
+		and not balance_src.contains("fee_cut")
+		and not balance_src.contains("true_market"),
+		true,
+		"AV1: Negotiate knobs live on the policy, not BalanceConfig"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/negotiate_policy.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AV1: %s stays §4.5 clean" % path
+		)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	_expect_equal(
+		queue_src.contains("func negotiate(")
+		and queue_src.contains("NegotiatePolicy"),
+		true,
+		"AV1: one ±10% step lives on the customer-buying serve"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "negotiate")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "haggle")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "counter")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "auction")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "snipe")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "trunk")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shady")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "moq")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AV1: AC1 through AU1 stay off the sell roll"
+	)
+	_expect_equal(
+		demand_src.contains("func counter_buy"),
+		true,
+		"AV1: AU1 buy Counter stays as shipped"
+	)
+	_game_state.call("start_new_game")
+
+
+func _av1_reset_floor(reputation: int, day: int) -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"AV1: FLOOR opens for Negotiate"
+	)
+	_game_state.set("current_day", day)
+	_game_state.set("current_reputation", reputation)
+	_event_bus.emit_signal("reputation_changed", reputation)
+
+
+func _av1_queue() -> CustomerQueue:
+	var queue := CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		Callable(_game_state, "adjust_reputation"),
+		Callable(_game_state, "spend_attention")
+	)
+	return queue
+
+
+func _av1_listed_sleeves() -> int:
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	if lot == null:
+		return 0
+	return lot.listed_price_cents
+
+
+func _av1_enqueue_buyer(
+	queue: CustomerQueue,
+	archetype_id: StringName,
+	display_name: String
+) -> CustomerProfile:
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	if lot == null or lot.listed_price_cents <= 0:
+		return null
+	var customer := CustomerProfile.new()
+	customer.archetype_id = archetype_id
+	customer.display_name = display_name
+	customer.trade_intent = CustomerProfile.TradeIntent.BUYING_FROM_SHOP
+	customer.budget_cents = maxi(lot.listed_price_cents * 2, 20_000)
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	if not queue.enqueue(customer):
+		return null
+	return customer
+
+
+func _av1_will_hit(
+	customer: CustomerProfile,
+	day: int,
+	percent_from_list: float,
+	reputation: int
+) -> bool:
+	var seed := NegotiatePolicy.roll_seed(
+		NegotiatePolicy.customer_seed_key(customer),
+		day,
+		percent_from_list
+	)
+	return NegotiatePolicy.roll_accept(
+		seed,
+		percent_from_list,
+		reputation,
+		customer.archetype_id
+	)
+
+
+func _av1_find_outcome_day(
+	customer: CustomerProfile,
+	percent_from_list: float,
+	reputation: int,
+	want_hit: bool
+) -> int:
+	for day: int in range(1, 400):
+		if _av1_will_hit(customer, day, percent_from_list, reputation) == want_hit:
+			return day
+	return -1
+
+
+func _av1_text_shows_p(text: String, chance: float) -> bool:
+	if text.is_empty() or chance <= 0.0:
+		return false
+	var lower := text.to_lower()
+	if lower.contains("p=") or lower.contains("p =") or lower.contains("accept chance"):
+		return true
+	var raw := "%.4f" % chance
+	if text.contains(raw):
+		return true
+	var pct := "%d%%" % roundi(chance * 100.0)
+	return text.contains(pct) and lower.contains("p")
 
 
 func _au1_reset() -> void:

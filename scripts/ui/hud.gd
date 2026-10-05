@@ -202,6 +202,13 @@ func _ready() -> void:
 	price_input.text_changed.connect(_update_price_preview)
 	%SellButton.pressed.connect(_sell_customer)
 	%NegotiateButton.pressed.connect(_negotiate_customer)
+	_ensure_negotiate_plus_button()
+	var negotiate_plus := get_node_or_null("%NegotiatePlusButton") as Button
+	if (
+		negotiate_plus != null
+		and not negotiate_plus.pressed.is_connected(_negotiate_plus_customer)
+	):
+		negotiate_plus.pressed.connect(_negotiate_plus_customer)
 	%RefuseButton.pressed.connect(_refuse_customer)
 	var pull_button := get_node_or_null("%PullButton") as Button
 	if pull_button != null:
@@ -1445,6 +1452,7 @@ func _sync_customer_serve() -> void:
 			_current_customer.buylist_signal
 		)
 		%NegotiateButton.hide()
+		_set_negotiate_plus_visible(false)
 		var pull_hide := get_node_or_null("%PullButton") as Button
 		if pull_hide != null:
 			pull_hide.hide()
@@ -1474,6 +1482,7 @@ func _sync_customer_serve() -> void:
 		]
 	)
 	%NegotiateButton.show()
+	_set_negotiate_plus_visible(true)
 	var pull_show := get_node_or_null("%PullButton") as Button
 	if pull_show != null:
 		pull_show.show()
@@ -1498,10 +1507,18 @@ func _sell_customer() -> void:
 
 
 func _negotiate_customer() -> void:
+	_request_negotiate(&"negotiate")
+
+
+func _negotiate_plus_customer() -> void:
+	_request_negotiate(&"negotiate_plus")
+
+
+func _request_negotiate(action: StringName) -> void:
 	if not GameState.can_negotiate():
 		_sync_serve_owner_verbs()
 		return
-	EventBus.customer_action_requested.emit(&"negotiate")
+	EventBus.customer_action_requested.emit(action)
 
 
 func _pull_customer() -> void:
@@ -1513,12 +1530,16 @@ func _pull_customer() -> void:
 
 
 func _sync_serve_owner_verbs() -> void:
+	var blocked := (
+		(_current_customer != null and _current_customer.has_negotiated)
+		or not GameState.can_negotiate()
+	)
 	var negotiate := get_node_or_null("%NegotiateButton") as Button
 	if negotiate != null:
-		var negotiated := (
-			_current_customer != null and _current_customer.has_negotiated
-		)
-		negotiate.disabled = negotiated or not GameState.can_negotiate()
+		negotiate.disabled = blocked
+	var negotiate_plus := get_node_or_null("%NegotiatePlusButton") as Button
+	if negotiate_plus != null:
+		negotiate_plus.disabled = blocked
 	var pull := get_node_or_null("%PullButton") as Button
 	if pull != null:
 		var sku := (
@@ -1536,6 +1557,36 @@ func _sync_serve_owner_verbs() -> void:
 
 func _refuse_customer() -> void:
 	EventBus.customer_action_requested.emit(&"refuse")
+
+
+func _set_negotiate_plus_visible(visible: bool) -> void:
+	_ensure_negotiate_plus_button()
+	var negotiate_plus := get_node_or_null("%NegotiatePlusButton") as Button
+	if negotiate_plus != null:
+		negotiate_plus.visible = visible
+
+
+func _ensure_negotiate_plus_button() -> void:
+	if get_node_or_null("%NegotiatePlusButton") != null:
+		return
+	var negotiate := get_node_or_null("%NegotiateButton") as Button
+	if negotiate == null:
+		return
+	var actions := negotiate.get_parent() as HBoxContainer
+	if actions == null:
+		return
+	var plus := Button.new()
+	plus.name = "NegotiatePlusButton"
+	plus.unique_name_in_owner = true
+	plus.custom_minimum_size = Vector2(0.0, 40.0)
+	plus.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	plus.text = "Negotiate +10%"
+	plus.visible = negotiate.visible
+	plus.disabled = negotiate.disabled
+	actions.add_child(plus)
+	actions.move_child(plus, negotiate.get_index() + 1)
+	if not plus.pressed.is_connected(_negotiate_plus_customer):
+		plus.pressed.connect(_negotiate_plus_customer)
 
 
 func _spend_for_floor(cost: int) -> bool:

@@ -181,7 +181,10 @@ func _on_customer_action_requested(action: StringName) -> void:
 		&"accept_buylist":
 			_queue.accept_buylist_offer()
 		&"negotiate":
-			_queue.negotiate(-0.10)
+			_queue.negotiate(NegotiatePolicy.DIRECTION_MINUS)
+			EventBus.customer_head_changed.emit(_queue.queue_head())
+		&"negotiate_plus":
+			_queue.negotiate(NegotiatePolicy.DIRECTION_PLUS)
 			EventBus.customer_head_changed.emit(_queue.queue_head())
 		&"pull":
 			_queue.pull_from_backstock()
