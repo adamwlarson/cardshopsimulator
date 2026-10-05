@@ -103,6 +103,16 @@
       "negative": false,
       "duration_days_min": 2,
       "duration_days_max": 2
+    },
+    {
+      "id": "rotation_crash",
+      "type": "rotation_crash",
+      "title": "Rotation crash",
+      "description": "Format moves on — tournament staples in the rotating set cool. Dump during the leak, or eat the crash.",
+      "weight": 1.0,
+      "negative": true,
+      "duration_days_min": 5,
+      "duration_days_max": 5
     }
   ]
 }

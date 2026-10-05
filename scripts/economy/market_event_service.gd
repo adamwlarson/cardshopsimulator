@@ -87,6 +87,8 @@ func roll_duration(def: Dictionary, config: BalanceConfig = null) -> int:
 		return SetReleaseHypePolicy.duration_days_for(config)
 	if kind == MarketEvent.KIND_PRO_TOUR:
 		return ProTourSpikePolicy.duration_days_for(config)
+	if kind == MarketEvent.KIND_ROTATION_CRASH:
+		return RotationCrashPolicy.duration_days_for(config)
 	var min_days := maxi(1, int(def.get("duration_days_min", 1)))
 	var max_days := maxi(min_days, int(def.get("duration_days_max", min_days)))
 	if max_days == min_days:
@@ -169,6 +171,39 @@ func roll_pro_tour_mult(config: BalanceConfig = null) -> float:
 	return ProTourSpikePolicy.roll_mult(rng, config)
 
 
+func pick_rotation_crash_target(set_id: StringName = &"") -> Dictionary:
+	if RotationCrashPolicy.is_base_set(set_id):
+		return {}
+	if not set_id.is_empty():
+		return {"set_id": set_id}
+	var oldest := RotationCrashPolicy.oldest_non_base_set(live_set_ids())
+	if oldest.is_empty() or RotationCrashPolicy.is_base_set(oldest):
+		return {}
+	return {"set_id": oldest}
+
+
+func roll_rotation_crash_mult(config: BalanceConfig = null) -> float:
+	return RotationCrashPolicy.roll_crash_mult(rng, config)
+
+
+func live_set_ids() -> Array[StringName]:
+	var seen := {}
+	var names: PackedStringArray = []
+	if InventoryService.model == null:
+		return []
+	for value: Variant in InventoryService.model.catalog.values():
+		var sku := value as ProductSKU
+		if sku == null or sku.set_id.is_empty() or seen.has(String(sku.set_id)):
+			continue
+		seen[String(sku.set_id)] = true
+		names.append(String(sku.set_id))
+	names.sort()
+	var ids: Array[StringName] = []
+	for name: String in names:
+		ids.append(StringName(name))
+	return ids
+
+
 func live_archetype_tags() -> Array[StringName]:
 	var seen := {}
 	var names: PackedStringArray = []
@@ -227,6 +262,8 @@ func _weight_for(def: Dictionary, config: BalanceConfig, day: int = 0) -> float:
 		weight *= convention_calendar_weight_mult(day)
 	elif kind == MarketEvent.KIND_SET_RELEASE:
 		weight *= set_release_calendar_weight_mult(day, config)
+	elif kind == MarketEvent.KIND_ROTATION_CRASH:
+		weight *= RotationCrashPolicy.surprise_weight_for(config)
 	return maxf(0.0, weight)
 
 
@@ -237,7 +274,7 @@ func _load_catalog() -> void:
 		for entry_value: Variant in (parsed as Dictionary).get("events", []):
 			if entry_value is Dictionary:
 				defs.append(entry_value as Dictionary)
-	if defs.size() >= 10:
+	if defs.size() >= 11:
 		return
 	defs = [
 		_fallback_def(&"hype_spike", "Hype spike", false, 1, 3),
@@ -250,6 +287,7 @@ func _load_catalog() -> void:
 		_fallback_def(&"supply_glut", "Supply glut", false, 3, 3),
 		_fallback_def(&"set_release_hype", "Set release hype", false, 5, 5),
 		_fallback_def(&"pro_tour_spike", "Pro tour spike", false, 2, 2),
+		_fallback_def(&"rotation_crash", "Rotation crash", true, 5, 5),
 	]
 
 
