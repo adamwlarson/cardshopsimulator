@@ -71,6 +71,10 @@ class FakeCustomerInventory:
 		bought = true
 		return true
 
+	func confirm_buylist_purchase(_dto: BuyConfirmSignal) -> bool:
+		bought = true
+		return true
+
 	func has_backstock(_sku_id: StringName) -> bool:
 		return false
 
@@ -213,6 +217,7 @@ func _initialize() -> void:
 	_test_shady_trunk()
 	_test_one_counter_haggle()
 	_test_sell_side_negotiate()
+	_test_buylist_buy_from_them()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -26381,6 +26386,754 @@ func _av1_text_shows_p(text: String, chance: float) -> bool:
 		return true
 	var pct := "%d%%" % roundi(chance * 100.0)
 	return text.contains(pct) and lower.contains("p")
+
+
+func _test_buylist_buy_from_them() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_buylist_named_gate()
+	_test_buylist_buy_walk_and_short_cash()
+	_test_buylist_default_offer_medium_width()
+	_test_buylist_walk_anger_and_no_truth()
+	_test_buylist_door_whale_sale_fee_stay()
+	_test_buylist_shipped_levers_stay()
+	_test_buylist_section_45_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_buylist_named_gate() -> void:
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.PCT_SEALED, 0.55),
+		true,
+		"AW1: sealed buylist percent is 0.55"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.PCT_SINGLES_NM, 0.50),
+		true,
+		"AW1: singles NM buylist percent is 0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.PCT_GRADED, 0.45),
+		true,
+		"AW1: graded buylist percent is 0.45"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.buylist_pct(&""), 0.50),
+		true,
+		"AW1: a missing category falls back to 0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.buylist_pct(&"accessory"), 0.50),
+		true,
+		"AW1: accessory falls back to 0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.comp_width(0.0), 0.10),
+		true,
+		"AW1: missing width falls back to 0.10"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.comp_width(-1.0), 0.10),
+		true,
+		"AW1: an omitted width falls back to 0.10"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.anger_floor(-1.0), 0.40),
+		true,
+		"AW1: missing anger floor falls back to 0.40"
+	)
+	_expect_equal(
+		BuylistPolicy.miss_rep_delta(BuylistPolicy.UNSET_INT),
+		-1,
+		"AW1: missing miss Rep falls back to minus 1"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("buylist_comp_width", 0.0)), 0.10),
+		true,
+		"AW1: DemandSignals omitted width is 0.10"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("buylist_anger_floor", -1.0)), 0.40),
+		true,
+		"AW1: DemandSignals omitted anger floor is 0.40"
+	)
+	_expect_equal(
+		int(_demand_signals.call("buylist_miss_rep_delta", BuylistPolicy.UNSET_INT)),
+		-1,
+		"AW1: DemandSignals omitted miss Rep is minus 1"
+	)
+	_expect_equal(
+		NegotiatePolicy.can_negotiate_customer(_aw1_seller_stub()),
+		false,
+		"AW1: no AV1 Negotiate on a buylist seller"
+	)
+	_expect_equal(
+		HagglePolicy.can_haggle(&"buylist"),
+		false,
+		"AW1: no AU1 Counter on a walk-in seller"
+	)
+
+
+func _test_buylist_buy_walk_and_short_cash() -> void:
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-DUST-ETB")
+	_expect_equal(dto != null, true, "AW1: Buy needs a sealed walk-in lot")
+	if dto == null:
+		return
+	var offer := dto.lot_total_cents
+	_expect_equal(offer > 0, true, "AW1: You offer is at least 1 cent")
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "Dust seller")
+	_expect_equal(seller != null, true, "AW1: a buylist seller enqueues")
+	if seller == null:
+		queue.free()
+		return
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AW1: HUD loads for the seller serve")
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var summary := hud.get_node_or_null("%CustomerSummary") as Label
+		var buy := hud.get_node_or_null("%SellButton") as Button
+		var walk := hud.get_node_or_null("%RefuseButton") as Button
+		var negotiate := hud.get_node_or_null("%NegotiateButton") as Button
+		var plus := hud.get_node_or_null("%NegotiatePlusButton") as Button
+		_expect_equal(
+			summary != null and summary.text.contains("You offer"),
+			true,
+			"AW1: the seller serve shows You offer"
+		)
+		if summary != null:
+			_expect_equal(
+				summary.text.contains("Ask") or summary.text.contains("Your list"),
+				false,
+				"AW1: the seller serve never says Ask or Your list"
+			)
+			_expect_equal(
+				summary.text.contains(dto.display_name),
+				true,
+				"AW1: the lot SKU is visible"
+			)
+		_expect_equal(
+			buy != null and buy.visible and buy.text == "Buy",
+			true,
+			"AW1: placeholder Buy is present"
+		)
+		_expect_equal(
+			walk != null and walk.visible and walk.text == "Walk",
+			true,
+			"AW1: placeholder Walk is present"
+		)
+		_expect_equal(
+			negotiate == null or not negotiate.visible,
+			true,
+			"AW1: Negotiate stays off the seller serve"
+		)
+		_expect_equal(
+			plus == null or not plus.visible,
+			true,
+			"AW1: plus 10% stays off the seller serve"
+		)
+		hud.free()
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	offer = dto.lot_total_cents
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var owned_before := int(_inventory_service.call("total_owned", &"AA-DUST-ETB"))
+	var back_before := _aw1_backstock_qty(&"AA-DUST-ETB")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Buy seller")
+	_expect_equal(queue.accept_buylist_offer(), true, "AW1: Buy takes the lot")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - offer,
+		"AW1: Buy drops cash by You offer"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-DUST-ETB")),
+		owned_before + 1,
+		"AW1: Buy lands the lot in inventory"
+	)
+	_expect_equal(
+		_aw1_backstock_qty(&"AA-DUST-ETB"),
+		back_before + 1,
+		"AW1: Buy lands the lot in backstock"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AW1: Buy spends no Attention"
+	)
+	_expect_equal(queue.size(), 0, "AW1: Buy clears the serve")
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	var singles := _aw1_signal(&"AA-BASE-088")
+	_expect_equal(singles != null, true, "AW1: singles Buy needs a lot")
+	if singles != null:
+		att_before = int(_game_state.get("attention_remaining"))
+		cash_before = int(_economy.get("balance_cents"))
+		owned_before = int(_inventory_service.call("total_owned", &"AA-BASE-088"))
+		back_before = _aw1_backstock_qty(&"AA-BASE-088")
+		queue = _aw1_queue()
+		seller = _aw1_enqueue_seller(queue, singles, "Singles seller")
+		_expect_equal(queue.accept_buylist_offer(), true, "AW1: Buy takes a singles NM lot")
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before - singles.lot_total_cents,
+			"AW1: singles Buy drops cash by You offer"
+		)
+		_expect_equal(
+			_aw1_backstock_qty(&"AA-BASE-088"),
+			back_before + 1,
+			"AW1: singles Buy lands NM in backstock"
+		)
+		_expect_equal(
+			int(_game_state.get("attention_remaining")),
+			att_before,
+			"AW1: singles Buy spends no Attention"
+		)
+		queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	offer = dto.lot_total_cents
+	_economy.set("balance_cents", offer - 1)
+	dto.remaining_cash_cents = int(_economy.get("balance_cents")) - offer
+	dto.can_confirm = false
+	att_before = int(_game_state.get("attention_remaining"))
+	cash_before = int(_economy.get("balance_cents"))
+	owned_before = int(_inventory_service.call("total_owned", &"AA-DUST-ETB"))
+	back_before = _aw1_backstock_qty(&"AA-DUST-ETB")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Short seller")
+	_expect_equal(
+		queue.accept_buylist_offer(),
+		false,
+		"AW1: short-cash Buy is refused"
+	)
+	_aw1_expect_nothing_moved(
+		att_before,
+		cash_before,
+		owned_before,
+		back_before,
+		&"AA-DUST-ETB",
+		"AW1: short-cash Buy"
+	)
+	_expect_equal(queue.size(), 1, "AW1: short-cash Buy leaves the offer")
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	att_before = int(_game_state.get("attention_remaining"))
+	cash_before = int(_economy.get("balance_cents"))
+	owned_before = int(_inventory_service.call("total_owned", &"AA-DUST-ETB"))
+	back_before = _aw1_backstock_qty(&"AA-DUST-ETB")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Walk seller")
+	_expect_equal(queue.walk_buylist(), true, "AW1: Walk clears the offer")
+	_aw1_expect_nothing_moved(
+		att_before,
+		cash_before,
+		owned_before,
+		back_before,
+		&"AA-DUST-ETB",
+		"AW1: Walk"
+	)
+	_expect_equal(queue.size(), 0, "AW1: Walk leaves no serve")
+	queue.free()
+
+
+func _test_buylist_default_offer_medium_width() -> void:
+	_aw1_reset_floor(40, 1)
+	var sealed := _aw1_signal(&"AA-DUST-ETB")
+	_expect_equal(sealed != null, true, "AW1: sealed walk-in builds")
+	if sealed != null:
+		var listed := BuylistPolicy.listed_comp_cents(sealed)
+		_expect_equal(
+			sealed.unit_cost_cents,
+			maxi(1, roundi(float(listed) * 0.55)),
+			"AW1: sealed offer is round(0.55 × listed_comp)"
+		)
+		_expect_equal(sealed.confidence, &"medium", "AW1: sealed confidence is Medium")
+	var singles := _aw1_signal(&"AA-BASE-088")
+	_expect_equal(singles != null, true, "AW1: singles NM walk-in builds")
+	if singles != null:
+		var listed_nm := BuylistPolicy.listed_comp_cents(singles)
+		_expect_equal(
+			singles.unit_cost_cents,
+			maxi(1, roundi(float(listed_nm) * 0.50)),
+			"AW1: singles NM offer is round(0.50 × listed_comp)"
+		)
+		_expect_equal(singles.confidence, &"medium", "AW1: singles confidence is Medium")
+	var graded := _aw1_signal(&"AA-SKIE-052", &"Prism", 10.0)
+	_expect_equal(graded != null, true, "AW1: graded walk-in builds")
+	if graded != null:
+		var listed_gr := BuylistPolicy.listed_comp_cents(graded)
+		_expect_equal(
+			graded.unit_cost_cents,
+			maxi(1, roundi(float(listed_gr) * 0.45)),
+			"AW1: graded offer is round(0.45 × listed_comp)"
+		)
+		_expect_equal(graded.confidence, &"medium", "AW1: graded confidence is Medium")
+	var missing := _aw1_signal(&"ACC-SLV-60")
+	_expect_equal(missing != null, true, "AW1: missing-category walk-in builds")
+	if missing != null:
+		var listed_acc := BuylistPolicy.listed_comp_cents(missing)
+		_expect_equal(
+			missing.unit_cost_cents,
+			maxi(1, roundi(float(listed_acc) * 0.50)),
+			"AW1: missing category offer is round(0.50 × listed_comp)"
+		)
+		_expect_equal(missing.confidence, &"medium", "AW1: missing-category confidence is Medium")
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.comp_width(), 0.10),
+		true,
+		"AW1: comp width is 0.10"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("buylist_comp_width")), 0.10),
+		true,
+		"AW1: DemandSignals width is 0.10"
+	)
+	_expect_equal(
+		BuylistPolicy.offer_cents(1, &"sealed"),
+		1,
+		"AW1: offer is at least 1 cent"
+	)
+
+
+func _test_buylist_walk_anger_and_no_truth() -> void:
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-DUST-ETB")
+	_expect_equal(dto != null, true, "AW1: anger Walk needs a lot")
+	if dto == null:
+		return
+	var listed := BuylistPolicy.listed_comp_cents(dto)
+	_expect_equal(listed > 0, true, "AW1: listed_comp is positive")
+	var stingy := maxi(1, int(floor(float(listed) * 0.39)))
+	if float(stingy) / float(listed) >= 0.40:
+		stingy = 1
+	_expect_equal(
+		float(stingy) / float(listed) < 0.40,
+		true,
+		"AW1: stingy offer is under the 0.40 floor"
+	)
+	dto.unit_cost_cents = stingy
+	dto.lot_total_cents = stingy
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "Stingy walk")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(queue.walk_buylist(), true, "AW1: stingy Walk is taken")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AW1: Walk under 0.40 applies Rep minus 1 once"
+	)
+	_expect_equal(
+		queue.walk_buylist(),
+		false,
+		"AW1: a second Walk after the offer is gone is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AW1: the stingy Rep hit is applied once"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	listed = BuylistPolicy.listed_comp_cents(dto)
+	var fair := maxi(1, int(ceil(float(listed) * 0.40)))
+	_expect_equal(
+		float(fair) / float(listed) >= 0.40,
+		true,
+		"AW1: fair offer is at or above the 0.40 floor"
+	)
+	dto.unit_cost_cents = fair
+	dto.lot_total_cents = fair
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Fair walk")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(queue.walk_buylist(), true, "AW1: fair Walk is taken")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AW1: Walk at or above 0.40 leaves Rep unchanged"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "HUD seller")
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AW1: HUD loads for truth scan")
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var summary := hud.get_node_or_null("%CustomerSummary") as Label
+		if summary != null:
+			_assert_text_has_no_truth(summary.text, "AW1 CustomerServe summary")
+			_expect_equal(
+				summary.text.to_lower().contains("true_market"),
+				false,
+				"AW1: CustomerServe never shows true_market"
+			)
+			_expect_equal(
+				summary.text.contains("0.40") or summary.text.contains("40%"),
+				false,
+				"AW1: CustomerServe never shows the anger floor"
+			)
+		var title := hud.get_node_or_null("%CustomerTitle") as Label
+		if title != null:
+			_assert_text_has_no_truth(title.text, "AW1 CustomerServe title")
+		hud.free()
+	queue.free()
+
+
+func _test_buylist_door_whale_sale_fee_stay() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"AW1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AW1: whale weight stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AW1: marketplace fee stays 8%"
+	)
+	_aw1_reset_floor(40, 1)
+	var listed := _av1_listed_sleeves()
+	_expect_equal(listed > 0, true, "AW1: a completed shop sale needs a listed sleeve")
+	if listed <= 0:
+		return
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AW1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := _av1_queue()
+	var buyer := _av1_enqueue_buyer(queue, &"regular", "Resolved list")
+	_expect_equal(queue.sell_listed(), true, "AW1: a completed shop sale still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed,
+		"AW1: a completed shop sale still pays its resolved price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "buylist")
+		and not _function_body_contains(queue_src, "func sell_listed()", "you offer")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"buylist"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"walk_buylist"
+		),
+		true,
+		"AW1: Buy/Walk is not folded into sell_listed or sell_through_mult_for"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_buylist_shipped_levers_stay() -> void:
+	_game_state.call("start_new_game")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.market_drift_sealed_low, 0.98)
+		and is_equal_approx(NORMAL_CONFIG.market_drift_sealed_high, 1.02),
+		true,
+		"AW1/AR1: daily hidden market drift stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005)
+		and is_equal_approx(InventoryModel.FLOOR_SEALED_SHRINK_PREMIUM, 0.003),
+		true,
+		"AW1/AK1/AL1: shrink stays 0.2%/0.7% and floor-sealed +0.3%"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.is_high_rep(75)
+		and not CustomerSpawnPolicy.is_high_rep(74)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AW1/AJ1: high-rep whale pack stays ×1.5 at 75"
+	)
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.REPORT_REP_GAIN == 2,
+		true,
+		"AW1/AT1: shady trunk stays as shipped"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST == 10
+		and is_equal_approx(AuctionSnipePolicy.COMP_WIDTH, 0.12),
+		true,
+		"AW1/AS1: auction snipes stay as shipped"
+	)
+	_expect_equal(
+		HagglePolicy.can_haggle(&"marketplace")
+		and not HagglePolicy.can_haggle(&"auction")
+		and not HagglePolicy.can_haggle(&"buylist"),
+		true,
+		"AW1/AU1: buy Counter stays on cash offers and out of walk-ins"
+	)
+	_expect_equal(
+		NegotiatePolicy.can_actor_negotiate(&"owner")
+		and not NegotiatePolicy.can_actor_negotiate(&"cashier")
+		and NegotiatePolicy.attention_cost() == 8,
+		true,
+		"AW1/AV1: sell-side Negotiate stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AW1: marketplace fee stays 8%"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_buylist_section_45_and_parked() -> void:
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("buylist_pct"),
+		false,
+		"AW1: Soft catalog stays closed"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"AW1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AW1: marketplace fee stays 8% — this is not a fee cut"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"AW1: no live all-modes net-worth HUD"
+	)
+	_expect_equal(
+		not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("true_market")
+		and not hud_src.contains("accept_chance"),
+		true,
+		"AW1: HUD has no STOP, camera off-switch, true_market, or p"
+	)
+	var balance_src := FileAccess.get_file_as_string(
+		"res://scripts/core/balance_config.gd"
+	)
+	_expect_equal(
+		not balance_src.contains("buylist_pct")
+		and not balance_src.contains("fee_cut")
+		and not balance_src.contains("true_market"),
+		true,
+		"AW1: buylist knobs live on the policy, not BalanceConfig"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/buylist_policy.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/customers/customer_spawn_policy.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"AW1: %s stays §4.5 clean" % path
+		)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	_expect_equal(
+		queue_src.contains("func accept_buylist_offer(")
+		and queue_src.contains("func walk_buylist(")
+		and queue_src.contains("BuylistPolicy"),
+		true,
+		"AW1: Buy and Walk live on the seller serve"
+	)
+	_expect_equal(
+		demand_src.contains("func counter_buy")
+		and queue_src.contains("func negotiate("),
+		true,
+		"AW1: AU1 Counter and AV1 Negotiate stay as shipped"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "buylist")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "negotiate")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "haggle")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "counter")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "auction")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "snipe")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "trunk")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shady")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "moq")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "walkout")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fire")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shrink"),
+		true,
+		"AW1: AC1 through AV1 stay off the sell roll"
+	)
+	_game_state.call("start_new_game")
+
+
+func _aw1_reset_floor(reputation: int, day: int) -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"AW1: FLOOR opens for the seller serve"
+	)
+	_game_state.set("current_day", day)
+	_game_state.set("current_reputation", reputation)
+	_event_bus.emit_signal("reputation_changed", reputation)
+
+
+func _aw1_queue() -> CustomerQueue:
+	var queue := CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		Callable(_game_state, "adjust_reputation"),
+		Callable(_game_state, "spend_attention")
+	)
+	return queue
+
+
+func _aw1_signal(
+	sku_id: StringName,
+	grader: StringName = &"",
+	grade: float = 0.0
+) -> BuyConfirmSignal:
+	return _demand_signals.call("buylist_signal", sku_id, 1, grader, grade) as BuyConfirmSignal
+
+
+func _aw1_enqueue_seller(
+	queue: CustomerQueue,
+	dto: BuyConfirmSignal,
+	display_name: String
+) -> CustomerProfile:
+	if dto == null:
+		return null
+	var customer := CustomerProfile.new()
+	customer.archetype_id = &"flipper"
+	customer.display_name = display_name
+	customer.trade_intent = CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	customer.buylist_signal = dto
+	if not queue.enqueue(customer):
+		return null
+	return customer
+
+
+func _aw1_seller_stub() -> CustomerProfile:
+	var seller := CustomerProfile.new()
+	seller.trade_intent = CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	return seller
+
+
+func _aw1_backstock_qty(sku_id: StringName) -> int:
+	var total := _as1_backstock_qty(sku_id)
+	var model := _inventory_service.get("model") as InventoryModel
+	if model == null:
+		return total
+	for card: CardInstance in model.cards:
+		if (
+			card != null
+			and card.sku_id == sku_id
+			and card.location != null
+			and card.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			total += 1
+	for slab: SlabInstance in model.slabs:
+		if (
+			slab != null
+			and slab.card_ref != null
+			and slab.card_ref.sku_id == sku_id
+			and slab.location != null
+			and slab.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			total += 1
+	return total
+
+
+func _aw1_expect_nothing_moved(
+	attention: int,
+	cash: int,
+	owned: int,
+	backstock: int,
+	sku_id: StringName,
+	label: String
+) -> void:
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		attention,
+		"%s leaves Attention unchanged" % label
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash,
+		"%s leaves cash unchanged" % label
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", sku_id)),
+		owned,
+		"%s leaves lots unchanged" % label
+	)
+	_expect_equal(
+		_aw1_backstock_qty(sku_id),
+		backstock,
+		"%s leaves backstock unchanged" % label
+	)
 
 
 func _au1_reset() -> void:

@@ -134,6 +134,55 @@ func confirm_stock_purchase(
 	return true
 
 
+func confirm_buylist_purchase(dto: BuyConfirmSignal) -> bool:
+	if dto == null:
+		return false
+	var qty := maxi(1, dto.quantity)
+	var unit := dto.unit_cost_cents
+	var total := dto.lot_total_cents if dto.lot_total_cents > 0 else unit * qty
+	if unit <= 0 or total <= 0 or not Economy.can_afford(total):
+		return false
+	var location := InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+	var shown_midpoint := (
+		dto.shown_comp_low_cents + dto.shown_comp_high_cents
+	) / 2
+	var margin := shown_midpoint - unit
+	if BuylistPolicy.is_graded_lot(dto):
+		var slab := receive_slab(
+			dto.sku_id,
+			dto.grader,
+			dto.grade,
+			unit,
+			location,
+			dto.channel
+		)
+		if slab == null:
+			return false
+		if not Economy.record_expense(total, &"inventory", "Buylist purchase"):
+			model.remove_slab(slab)
+			return false
+		QaInstrumentation.record_buy_confirm(dto.sku_id, qty, unit, margin)
+		return true
+	var sku := model.get_sku(dto.sku_id)
+	if sku != null and sku.product_class == ProductSKU.ProductClass.SINGLE:
+		var card := receive_card(dto.sku_id, unit, location)
+		if card == null:
+			return false
+		if not Economy.record_expense(total, &"inventory", "Buylist purchase"):
+			model.remove_card(card)
+			return false
+		QaInstrumentation.record_buy_confirm(dto.sku_id, qty, unit, margin)
+		return true
+	return confirm_stock_purchase(
+		dto.sku_id,
+		qty,
+		unit,
+		margin,
+		location,
+		total
+	)
+
+
 func remove_stock(sku_id: StringName, quantity: int) -> bool:
 	var removed := model.remove_stock(sku_id, quantity)
 	if removed:

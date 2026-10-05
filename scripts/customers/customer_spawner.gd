@@ -124,17 +124,31 @@ func _create_buylist_signal(
 		if sku == null or sku.product_class not in [
 			ProductSKU.ProductClass.SEALED,
 			ProductSKU.ProductClass.ACCESSORY,
+			ProductSKU.ProductClass.SINGLE,
+			ProductSKU.ProductClass.GRADED,
 		]:
 			continue
-		var class_tag := StringName(
-			ProductSKU.ProductClass.keys()[sku.product_class].to_lower()
-		)
-		if class_tag in interest_tags:
+		if _sku_matches_buylist_interest(sku, interest_tags):
 			candidates.append(sku)
 	if candidates.is_empty():
 		return null
 	var selected := candidates[_rng.randi_range(0, candidates.size() - 1)]
 	return DemandSignals.buylist_signal(selected.id)
+
+
+func _sku_matches_buylist_interest(
+	sku: ProductSKU,
+	interest_tags: Array[StringName]
+) -> bool:
+	var class_tag := StringName(
+		ProductSKU.ProductClass.keys()[sku.product_class].to_lower()
+	)
+	if class_tag in interest_tags:
+		return true
+	for tag: StringName in sku.tags:
+		if tag in interest_tags:
+			return true
+	return false
 
 
 func active_spawn_wait_seconds() -> float:
@@ -180,6 +194,8 @@ func _on_customer_action_requested(action: StringName) -> void:
 			_queue.sell_listed()
 		&"accept_buylist":
 			_queue.accept_buylist_offer()
+		&"walk_buylist":
+			_queue.walk_buylist()
 		&"negotiate":
 			_queue.negotiate(NegotiatePolicy.DIRECTION_MINUS)
 			EventBus.customer_head_changed.emit(_queue.queue_head())

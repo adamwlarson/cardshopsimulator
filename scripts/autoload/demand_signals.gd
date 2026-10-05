@@ -2,6 +2,7 @@ extends Node
 
 const EVENT_PRICE_BRIDGE := &"event_price_bridge"
 const MARKET_DRIFT_SEED := 20261003
+const BUYLIST_OFFER_PLACEHOLDER_CENTS := 1
 
 var _market_state := MarketState.new()
 var _service: DemandSignalService
@@ -1101,24 +1102,75 @@ func buy_signal(
 	)
 
 
-func buylist_signal(sku_id: StringName, quantity: int = 1) -> BuyConfirmSignal:
+func buylist_pct(category: Variant, configured: float = -1.0) -> float:
+	return BuylistPolicy.buylist_pct(category, configured)
+
+
+func buylist_offer_cents(
+	listed_comp_cents: int,
+	category: Variant,
+	configured_pct: float = -1.0
+) -> int:
+	return BuylistPolicy.offer_cents(listed_comp_cents, category, configured_pct)
+
+
+func buylist_comp_width(configured: float = 0.0) -> float:
+	return BuylistPolicy.comp_width(configured)
+
+
+func buylist_anger_floor(configured: float = -1.0) -> float:
+	return BuylistPolicy.anger_floor(configured)
+
+
+func buylist_miss_rep_delta(configured: int = BuylistPolicy.UNSET_INT) -> int:
+	return BuylistPolicy.miss_rep_delta(configured)
+
+
+func buylist_signal(
+	sku_id: StringName,
+	quantity: int = 1,
+	grader: StringName = &"",
+	grade: float = 0.0
+) -> BuyConfirmSignal:
 	var sku := InventoryService.model.get_sku(sku_id)
 	if sku == null:
 		return null
-	var unit_offer_cents := PricingService.suggested_buy_price_cents(
-		sku.base_market_cents
-	)
 	var dto := buy_signal(
 		sku_id,
 		DemandSignalService.Channel.BUYLIST,
-		unit_offer_cents,
+		BUYLIST_OFFER_PLACEHOLDER_CENTS,
 		quantity
 	)
+	if dto == null:
+		return null
 	dto.display_name = sku.display_name
 	dto.offer_label = "Walk-in seller"
 	dto.channel = &"buylist"
 	dto.quantity = quantity
+	if not grader.is_empty() and grade > 0.0 and _service != null:
+		_service.bind_graded_signal(dto, grader, grade)
+	_apply_buylist_offer(dto, sku)
 	return dto
+
+
+func _apply_buylist_offer(dto: BuyConfirmSignal, sku: ProductSKU) -> void:
+	if dto == null:
+		return
+	var listed := BuylistPolicy.listed_comp_cents(dto)
+	var category := BuylistPolicy.category_for(sku, dto)
+	var offer := BuylistPolicy.offer_cents(listed, category)
+	dto.unit_cost_cents = offer
+	dto.lot_total_cents = offer * maxi(1, dto.quantity)
+	dto.remaining_cash_cents = Economy.balance_cents - dto.lot_total_cents
+	dto.confidence = BuylistPolicy.CONFIDENCE
+	if _service != null:
+		_service.refresh_confirm_gate(dto)
+	else:
+		dto.can_confirm = (
+			dto.quantity > 0
+			and dto.remaining_cash_cents >= 0
+			and dto.space_required <= dto.space_free
+		)
 
 
 func priceable_stock_signals() -> Array[PriceConfirmSignal]:
