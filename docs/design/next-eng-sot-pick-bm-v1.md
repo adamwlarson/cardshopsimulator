@@ -94,3 +94,4 @@
 | 2026-10-05 | Drafted post BL1 SHIPPED #94 @ `78628a58`. Lean **BM1 Buylist low-% settle Rep drip**. STOP / Soft reopeners parked. Camera off-switch hard-parked. |
 | 2026-10-05 ~3:01pm ET | **ADOPTED** BM1. Park BM2 STOP / BM3 Soft / BM4 Soft. Camera off-switch hard-parked. Soft CLOSED. No Art. Eng bar locked; awaiting tip-freeze. |
 | 2026-10-05 ~3:08pm ET | **Tip-frozen** [#95](https://github.com/adamwlarson/cardshopsimulator/pull/95) @ `a47ec381` (branch `cursor/bm1-buylist-low-pct-rep-drip-2e37`). 10 files, no docs. Cloud agent bc-2439be34 archived. Eng review that SHA against bar `719356bc`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
+| 2026-10-05 ~3:15pm ET | **SHIPPED** — squash-merged [#95](https://github.com/adamwlarson/cardshopsimulator/pull/95) @ `dcc7f748` (reviewed `a47ec381`). QA PASS-with-notes harness 159/0/0. Soft OK list-time stays Soft. Soft CLOSED. No Art. Next pick is BN. |
