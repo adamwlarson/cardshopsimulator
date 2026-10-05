@@ -98,3 +98,4 @@
 | 2026-10-05 | PM tip-froze PR #83 @ `369d9836`. Ready. 7 files, no docs. Agent archived. |
 | 2026-10-05 | Eng **APPROVE**-with-notes BA1 [PR #83](https://github.com/adamwlarson/cardshopsimulator/pull/83) @ `369d9836`. Soft: HUD gate mirror; shady cue AT1 strongly recommended; unused apply_fog_cue. Soft OK MVP. QA cleared by PM. |
 | 2026-10-05 | PM SHIPPED **BA1**. Squash-merged #83 @ `c9a303c6` (reviewed `369d9836`). QA PASS, harness 140/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. Branch `cursor/ba1-marketplace-shady-inspect-069b` deleted. |
+| 2026-10-05 | Docs status `071d7280` noted on BA1 SHIP. |
