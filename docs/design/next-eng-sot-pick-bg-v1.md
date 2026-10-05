@@ -81,7 +81,7 @@
 
 - [x] Choose **BG1** (recommended)
 - [x] If BG1: Eng vs systems §4.4 — first cancel/day free, further cancels Rep −1 each; leave fees and door spawn alone; no Art
-- [x] Sync this file to main before cloud agent (pending commit SHA)
+- [x] Sync this file to main before cloud agent @ `74c35ad3`
 - [x] Soft catalog stays closed; STOP stays parked
 
 ---
