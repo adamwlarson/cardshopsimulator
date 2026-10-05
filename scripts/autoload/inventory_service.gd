@@ -134,6 +134,49 @@ func confirm_stock_purchase(
 	return true
 
 
+func confirm_channel_singles_purchase(
+	dto: BuyConfirmSignal,
+	quantity: int,
+	unit_cost_cents: int,
+	expected_margin_cents: int,
+	location: InventoryLocation,
+	paid_total_cents: int = -1
+) -> bool:
+	if dto == null:
+		return false
+	var paid_unit := unit_cost_cents
+	var total_cost_cents := quantity * unit_cost_cents
+	if paid_total_cents > 0:
+		total_cost_cents = paid_total_cents
+		paid_unit = maxi(1, paid_total_cents / maxi(1, quantity))
+	if quantity <= 0 or paid_unit <= 0 or not Economy.can_afford(total_cost_cents):
+		return false
+	var received: Array[CardInstance] = []
+	for _i in range(quantity):
+		var card := receive_card(dto.sku_id, paid_unit, location)
+		if card == null:
+			for prior: CardInstance in received:
+				model.remove_card(prior)
+			return false
+		MarketplaceInspectPolicy.apply_true_condition(
+			dto,
+			card,
+			GameState.current_day
+		)
+		received.append(card)
+	if not Economy.record_expense(total_cost_cents, &"inventory", "Stock purchase"):
+		for card: CardInstance in received:
+			model.remove_card(card)
+		return false
+	QaInstrumentation.record_buy_confirm(
+		dto.sku_id,
+		quantity,
+		paid_unit,
+		expected_margin_cents
+	)
+	return true
+
+
 func confirm_buylist_purchase(dto: BuyConfirmSignal) -> bool:
 	if dto == null:
 		return false

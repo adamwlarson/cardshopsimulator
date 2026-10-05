@@ -220,6 +220,8 @@ func buy_confirm(
 	dto.channel = StringName(Channel.keys()[channel].to_lower())
 	dto.condition_cue = _condition_cue(channel)
 	dto.inspected = false
+	if MarketplaceInspectPolicy.is_channel(channel):
+		MarketplaceInspectPolicy.ensure_lot_condition(dto, day)
 	dto.grader = &""
 	dto.grade = 0.0
 	dto.remaining_cash_cents = current_cash_cents - dto.lot_total_cents
@@ -383,12 +385,25 @@ func _base_sigma() -> float:
 	return 0.12
 
 
-func inspect_condition(dto: BuyConfirmSignal) -> bool:
+func inspect_condition(dto: BuyConfirmSignal, day: int = -1) -> bool:
 	if not can_inspect(dto):
 		return false
 	var key := _inspect_key(dto)
+	var resolved_day := day if day >= 1 else _inspect_day()
 	if _inspect_cue_by_key.has(key):
 		apply_inspect_state(dto)
+		if MarketplaceInspectPolicy.applies_to(dto):
+			MarketplaceInspectPolicy.ensure_lot_condition(dto, resolved_day)
+		return true
+	if MarketplaceInspectPolicy.applies_to(dto):
+		if not MarketplaceInspectPolicy.apply_inspect(
+			dto,
+			resolved_day,
+			_inspect_accuracy()
+		):
+			return false
+		_inspect_cue_by_key[key] = dto.condition_cue
+		refresh_confirm_gate(dto)
 		return true
 	var cue := ""
 	if _is_graded_signal(dto):
@@ -718,10 +733,23 @@ func _is_graded_signal(dto: BuyConfirmSignal) -> bool:
 
 
 func _inspect_hits() -> bool:
-	var accuracy := 0.85
+	return _rng.randf() < _inspect_accuracy()
+
+
+func _inspect_accuracy() -> float:
 	if _config != null:
-		accuracy = _config.inspect_accuracy
-	return _rng.randf() < accuracy
+		return clampf(_config.inspect_accuracy, 0.0, 1.0)
+	return BuylistPolicy.ACCURACY
+
+
+func _inspect_day() -> int:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return 1
+	var game_state := tree.root.get_node_or_null("GameState")
+	if game_state == null:
+		return 1
+	return maxi(1, int(game_state.get("current_day")))
 
 
 func _inspect_cert_cue(dto: BuyConfirmSignal) -> String:
