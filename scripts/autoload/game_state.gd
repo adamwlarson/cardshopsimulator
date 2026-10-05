@@ -54,6 +54,11 @@ var buylist_pcts := BuylistPctSettings.new()
 ## BN1/BO1: that day's seller-lot / seller-walk-in weight. 1.0 until open.
 ## Starve is < 1.0; flood is > 1.0. They never stack the same day.
 var seller_lots_weight_mult: float = 1.0
+## BP1: one utilities charge per settle day. Unpaid notes once; it is not
+## a utilities-specific bankruptcy and does not reuse unpaid_wages.
+var last_utilities_settle_cents: int = 0
+var last_utilities_unpaid: bool = false
+var utilities_applied: bool = false
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
 var _suppress_sandbox_bests: bool = false
@@ -107,6 +112,7 @@ func start_new_game() -> void:
 	buylist_drip_applied = false
 	buylist_pcts.reset()
 	seller_lots_weight_mult = 1.0
+	_reset_utilities_settle()
 	_unpaid_wages_this_settle = false
 	_suppress_lose_eval = false
 	_suppress_sandbox_bests = true
@@ -195,6 +201,7 @@ func advance_day() -> bool:
 	last_buylist_drip_rep_delta = 0
 	buylist_drip_applied = false
 	seller_lots_weight_mult = 1.0
+	_reset_utilities_settle()
 	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
 	EventBus.attention_changed.emit(attention_remaining)
@@ -454,6 +461,32 @@ func note_rent_missed() -> void:
 
 func note_unpaid_wage() -> void:
 	_unpaid_wages_this_settle = true
+
+
+func note_unpaid_utilities() -> void:
+	last_utilities_unpaid = true
+	last_utilities_settle_cents = 0
+	QaInstrumentation.record_utilities_settle({
+		"amount_cents": 0,
+		"unpaid": true,
+		"shop_tier": int(shop.tier),
+	})
+
+
+func note_utilities_paid(amount_cents: int) -> void:
+	last_utilities_unpaid = false
+	last_utilities_settle_cents = maxi(0, amount_cents)
+	QaInstrumentation.record_utilities_settle({
+		"amount_cents": last_utilities_settle_cents,
+		"unpaid": false,
+		"shop_tier": int(shop.tier),
+	})
+
+
+func _reset_utilities_settle() -> void:
+	last_utilities_settle_cents = 0
+	last_utilities_unpaid = false
+	utilities_applied = false
 
 
 func register_is_covered() -> bool:
@@ -992,6 +1025,7 @@ func restore_save(data: Dictionary) -> bool:
 		buylist_pcts.reset()
 	buylist_drip_applied = bool(data.get("buylist_drip_applied", false))
 	seller_lots_weight_mult = float(data.get("seller_lots_weight_mult", 1.0))
+	_reset_utilities_settle()
 	if seller_lots_weight_mult <= 0.0 or seller_lots_weight_mult > 3.0:
 		seller_lots_weight_mult = 1.0
 	register_walkout_count_today = maxi(

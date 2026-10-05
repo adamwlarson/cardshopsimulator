@@ -222,6 +222,7 @@ func settle_day(day: int) -> void:
 			String(wage.get("memo", "Staff wage"))
 		):
 			GameState.note_unpaid_wage()
+	_settle_utilities()
 	settle_payday_loan()
 	online_listings.tick_shipping()
 	_settle_shrink()
@@ -229,6 +230,23 @@ func settle_day(day: int) -> void:
 	GameState.apply_buylist_drip_settle_rep()
 	DemandSignals.apply_daily_market_drift()
 	DemandSignals.roll_settle_events()
+
+
+func _settle_utilities() -> void:
+	# BP1: one utilities expense per settle day, after wages, before shrink.
+	# Same unpaid path as wages (attempt record_expense; note once). Do not
+	# invent a utilities bankruptcy and do not use payday-loan forced drain.
+	if GameState.utilities_applied:
+		return
+	GameState.utilities_applied = true
+	var amount := UtilitiesPolicy.daily_cents_for_tier(
+		int(GameState.shop.tier),
+		GameState.balance_config
+	)
+	if not record_expense(amount, UtilitiesPolicy.CATEGORY, UtilitiesPolicy.MEMO):
+		GameState.note_unpaid_utilities()
+		return
+	GameState.note_utilities_paid(amount)
 
 
 func effective_shrink_rate() -> float:

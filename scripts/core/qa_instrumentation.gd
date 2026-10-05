@@ -202,6 +202,10 @@ func record_buylist_flood(payload: Dictionary) -> void:
 	_emit(&"buylist_flood", payload)
 
 
+func record_utilities_settle(payload: Dictionary) -> void:
+	_emit(&"utilities_settle", payload)
+
+
 func record_campaign_won(payload: Dictionary) -> void:
 	_emit(&"campaign_won", payload.duplicate(true))
 

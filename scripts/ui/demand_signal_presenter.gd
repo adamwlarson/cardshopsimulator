@@ -133,6 +133,14 @@ static func buylist_flood_toast(flooded: bool) -> String:
 	return "Generous buylist — the desk is busy"
 
 
+static func utilities_settle_toast(amount_cents: int, unpaid: bool) -> String:
+	if unpaid:
+		return "Utilities unpaid"
+	if amount_cents <= 0:
+		return ""
+	return "Utilities · %s" % format_cents(amount_cents)
+
+
 static func research_action_label(cash_cents: int, attention_cost: int) -> String:
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 
