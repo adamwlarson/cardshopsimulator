@@ -199,6 +199,9 @@ func _on_customer_action_requested(action: StringName) -> void:
 			_queue.accept_buylist_offer()
 		&"walk_buylist":
 			_queue.walk_buylist()
+		&"inspect_buylist":
+			_queue.inspect_buylist()
+			EventBus.customer_head_changed.emit(_queue.queue_head())
 		&"negotiate":
 			_queue.negotiate(NegotiatePolicy.DIRECTION_MINUS)
 			EventBus.customer_head_changed.emit(_queue.queue_head())

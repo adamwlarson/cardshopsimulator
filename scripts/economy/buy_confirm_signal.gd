@@ -22,3 +22,6 @@ extends Resource
 @export var space_free: int
 @export var can_confirm: bool
 @export var beat_id: StringName
+## Domain-only true condition for a buylist lot. HUD never reads this.
+var lot_condition: CardInstance.Condition = CardInstance.Condition.NM
+var lot_condition_ready: bool = false

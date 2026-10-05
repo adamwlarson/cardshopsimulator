@@ -219,6 +219,7 @@ func _initialize() -> void:
 	_test_sell_side_negotiate()
 	_test_buylist_buy_from_them()
 	_test_edit_you_offer_mid_serve()
+	_test_buylist_inspect()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -27718,6 +27719,700 @@ func _test_ax1_door_whale_fee_stay() -> void:
 	)
 	queue.free()
 	_game_state.call("start_new_game")
+
+
+func _test_buylist_inspect() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_ay1_named_gate()
+	_test_ay1_one_inspect_and_att_refuse()
+	_test_ay1_seeded_reveal()
+	_test_ay1_buy_walk_change_after_inspect()
+	_test_ay1_door_whale_fee_stay()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_ay1_named_gate() -> void:
+	_expect_equal(BuylistPolicy.ATTENTION_COST, 5, "AY1: Inspect costs 5 Attention")
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.ACCURACY, 0.85),
+		true,
+		"AY1: Inspect accuracy is 85%"
+	)
+	_expect_equal(
+		BuylistPolicy.FOG_CUE,
+		"Inspect optional",
+		"AY1: fog copy is inspect-optional"
+	)
+	_expect_equal(
+		BuylistPolicy.can_actor_inspect(&"owner"),
+		true,
+		"AY1: the owner can Inspect"
+	)
+	_expect_equal(
+		BuylistPolicy.can_actor_inspect(&"cashier"),
+		false,
+		"AY1: a cashier cannot Inspect"
+	)
+	_expect_equal(
+		BuylistPolicy.can_inspect(_aw1_seller_stub()),
+		false,
+		"AY1: a seller without a lot cannot Inspect"
+	)
+	var seller := _aw1_seller_stub()
+	seller.buylist_signal = BuyConfirmSignal.new()
+	_expect_equal(
+		BuylistPolicy.can_inspect(seller),
+		true,
+		"AY1: a buylist seller can Inspect once"
+	)
+	seller.has_inspected = true
+	_expect_equal(
+		BuylistPolicy.can_inspect(seller),
+		false,
+		"AY1: a second Inspect is refused"
+	)
+	var buyer := CustomerProfile.new()
+	buyer.trade_intent = CustomerProfile.TradeIntent.BUYING_FROM_SHOP
+	buyer.buylist_signal = BuyConfirmSignal.new()
+	_expect_equal(
+		BuylistPolicy.can_inspect(buyer),
+		false,
+		"AY1: shop-buy serve cannot Inspect"
+	)
+	_expect_equal(
+		NegotiatePolicy.can_negotiate_customer(_aw1_seller_stub()),
+		false,
+		"AY1: no AV1 Negotiate on a buylist seller"
+	)
+	_expect_equal(
+		HagglePolicy.can_haggle(&"buylist"),
+		false,
+		"AY1: no AU1 Counter on a walk-in seller"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.PCT_SEALED, 0.55)
+		and is_equal_approx(BuylistPolicy.PCT_SINGLES_NM, 0.50)
+		and is_equal_approx(BuylistPolicy.PCT_GRADED, 0.45)
+		and is_equal_approx(BuylistPolicy.anger_floor(), 0.40)
+		and is_equal_approx(BuylistPolicy.comp_width(), 0.10),
+		true,
+		"AY1: AX1 Change rules and AW1 percents stay as shipped"
+	)
+
+
+func _test_ay1_one_inspect_and_att_refuse() -> void:
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-BASE-088")
+	_expect_equal(dto != null, true, "AY1: Inspect needs a singles walk-in lot")
+	if dto == null:
+		return
+	_expect_equal(
+		dto.condition_cue,
+		BuylistPolicy.FOG_CUE,
+		"AY1: cue before Inspect is inspect-optional"
+	)
+	_expect_equal(dto.inspected, false, "AY1: the lot starts uninspected")
+	_expect_equal(
+		dto.lot_condition_ready,
+		true,
+		"AY1: true condition is seeded in domain before Inspect"
+	)
+	var true_band := dto.lot_condition
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "Inspect seller")
+	_expect_equal(seller != null, true, "AY1: a buylist seller enqueues")
+	if seller == null:
+		queue.free()
+		return
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AY1: HUD loads for the seller serve")
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var summary := hud.get_node_or_null("%CustomerSummary") as Label
+		var inspect := hud.get_node_or_null("%ServeInspectButton") as Button
+		var buy := hud.get_node_or_null("%SellButton") as Button
+		var walk := hud.get_node_or_null("%RefuseButton") as Button
+		var change := hud.get_node_or_null("%ChangeOfferButton") as Button
+		var marketplace_inspect := hud.get_node_or_null("%InspectButton") as Button
+		_expect_equal(
+			summary != null and summary.text.contains("Inspect optional"),
+			true,
+			"AY1: the seller serve shows inspect-optional copy"
+		)
+		if summary != null:
+			_assert_text_has_no_truth(summary.text, "AY1 fog CustomerServe")
+			_expect_equal(
+				_ay1_summary_shows_band(summary.text),
+				false,
+				"AY1: true condition stays hidden until Inspect"
+			)
+		_expect_equal(
+			inspect != null and inspect.visible and not inspect.disabled,
+			true,
+			"AY1: placeholder Inspect is present"
+		)
+		if inspect != null:
+			_expect_equal(
+				inspect.text,
+				"Inspect · Att 5",
+				"AY1: Inspect shows the 5 Att cost"
+			)
+		_expect_equal(
+			buy != null and buy.visible and buy.text == "Buy",
+			true,
+			"AY1: Buy stays on the seller serve"
+		)
+		_expect_equal(
+			walk != null and walk.visible and walk.text == "Walk",
+			true,
+			"AY1: Walk stays on the seller serve"
+		)
+		_expect_equal(
+			change != null and change.visible and change.text == "Change offer",
+			true,
+			"AY1: Change offer stays on the seller serve"
+		)
+		_expect_equal(
+			marketplace_inspect == null or not marketplace_inspect.visible,
+			true,
+			"AY1: marketplace Inspect★ stays off CustomerServe"
+		)
+		hud.free()
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var owned_before := int(_inventory_service.call("total_owned", &"AA-BASE-088"))
+	var offer_before := dto.unit_cost_cents
+	_expect_equal(queue.inspect_buylist(), true, "AY1: one Inspect spends 5 Att")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"AY1: one Inspect spends 5 Attention"
+	)
+	_expect_equal(seller.has_inspected, true, "AY1: the Inspect shot is spent")
+	_expect_equal(dto.inspected, true, "AY1: Inspect marks the lot inspected")
+	_expect_equal(
+		_ay1_is_band_cue(dto.condition_cue),
+		true,
+		"AY1: Inspect shows a condition band"
+	)
+	_expect_equal(
+		dto.lot_condition,
+		true_band,
+		"AY1: Inspect does not rewrite the true condition"
+	)
+	_expect_equal(dto.unit_cost_cents, offer_before, "AY1: Inspect does not Change offer")
+	_expect_equal(queue.size(), 1, "AY1: Inspect does not Buy or Walk")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"AY1: Inspect leaves cash unchanged"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-BASE-088")),
+		owned_before,
+		"AY1: Inspect leaves lots unchanged"
+	)
+	_assert_text_has_no_truth(dto.condition_cue, "AY1 inspect cue")
+	_free_lingering_gameplay_huds()
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var summary_after := hud.get_node_or_null("%CustomerSummary") as Label
+		var inspect_after := hud.get_node_or_null("%ServeInspectButton") as Button
+		if summary_after != null:
+			_expect_equal(
+				summary_after.text.contains(dto.condition_cue),
+				true,
+				"AY1: the serve shows the revealed band"
+			)
+			_expect_equal(
+				summary_after.text.contains("Inspect optional"),
+				false,
+				"AY1: inspect-optional copy clears after Inspect"
+			)
+			_assert_text_has_no_truth(summary_after.text, "AY1 revealed CustomerServe")
+		_expect_equal(
+			inspect_after != null and inspect_after.visible and inspect_after.disabled,
+			true,
+			"AY1: a spent Inspect is refused in the HUD"
+		)
+		hud.free()
+	var att_after := int(_game_state.get("attention_remaining"))
+	_expect_equal(queue.inspect_buylist(), false, "AY1: a second Inspect is refused")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_after,
+		"AY1: a second Inspect leaves Attention unchanged"
+	)
+	_expect_equal(queue.size(), 1, "AY1: a refused second Inspect leaves the shot")
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-BASE-088")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Short att seller")
+	_game_state.set("attention_remaining", 4)
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		queue.inspect_buylist(),
+		false,
+		"AY1: Inspect at Att < 5 is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AY1: a refused Inspect leaves Attention unchanged"
+	)
+	_expect_equal(seller.has_inspected, false, "AY1: a refused Inspect leaves the shot")
+	_expect_equal(dto.inspected, false, "AY1: a refused Inspect leaves the lot uninspected")
+	_expect_equal(
+		dto.condition_cue,
+		BuylistPolicy.FOG_CUE,
+		"AY1: a refused Inspect leaves inspect-optional copy"
+	)
+	_expect_equal(queue.size(), 1, "AY1: a refused Inspect does not Buy or Walk")
+	_free_lingering_gameplay_huds()
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var short_inspect := hud.get_node_or_null("%ServeInspectButton") as Button
+		_expect_equal(
+			short_inspect != null and short_inspect.visible and short_inspect.disabled,
+			true,
+			"AY1: Inspect is refused in the HUD at Att < 5"
+		)
+		hud.free()
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-BASE-088")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Cashier seller")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		queue.inspect_buylist(BuylistPolicy.ACTOR_CASHIER),
+		false,
+		"AY1: a cashier cannot Inspect"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AY1: a cashier Inspect spends no Attention"
+	)
+	_expect_equal(seller.has_inspected, false, "AY1: a cashier Inspect leaves the shot")
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	var shop := _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "AY1: Specialist hires for the parked discount")
+	_expect_equal(shop.inspect_attention_cost(), 2, "AY1: marketplace Inspect★ still discounts")
+	_expect_equal(
+		BuylistPolicy.attention_cost(),
+		5,
+		"AY1: buylist Inspect stays 5 with a Specialist on duty"
+	)
+	dto = _aw1_signal(&"AA-BASE-088")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Specialist seller")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(queue.inspect_buylist(), true, "AY1: owner Inspect still takes with Specialist")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"AY1: Specialist does not cut buylist Inspect to 2"
+	)
+	queue.free()
+
+
+func _test_ay1_seeded_reveal() -> void:
+	_expect_equal(
+		BuylistPolicy.band_label(CardInstance.Condition.NM),
+		"NM",
+		"AY1: NM band label"
+	)
+	_expect_equal(
+		BuylistPolicy.is_adjacent_band(
+			CardInstance.Condition.NM,
+			CardInstance.Condition.LP
+		),
+		true,
+		"AY1: NM sits next to LP"
+	)
+	_expect_equal(
+		BuylistPolicy.is_adjacent_band(
+			CardInstance.Condition.NM,
+			CardInstance.Condition.DMG
+		),
+		false,
+		"AY1: NM never leaps to DMG"
+	)
+	var hit := BuylistPolicy.revealed_band(CardInstance.Condition.MP, 7, 1.0)
+	var miss := BuylistPolicy.revealed_band(CardInstance.Condition.MP, 7, 0.0)
+	_expect_equal(hit, CardInstance.Condition.MP, "AY1: accuracy 1.0 shows the true band")
+	_expect_equal(
+		BuylistPolicy.is_adjacent_band(CardInstance.Condition.MP, miss),
+		true,
+		"AY1: accuracy 0.0 shows an adjacent wrong band"
+	)
+	_expect_equal(miss != CardInstance.Condition.MP, true, "AY1: a miss is not the true band")
+	var again := BuylistPolicy.revealed_band(CardInstance.Condition.MP, 7, 0.0)
+	_expect_equal(again, miss, "AY1: the same seed repeats the miss")
+	var hits := 0
+	var leaps := 0
+	var samples := 2000
+	for seed in range(samples):
+		var shown := BuylistPolicy.revealed_band(
+			CardInstance.Condition.HP,
+			seed
+		)
+		if shown == CardInstance.Condition.HP:
+			hits += 1
+		elif not BuylistPolicy.is_adjacent_band(CardInstance.Condition.HP, shown):
+			leaps += 1
+	_expect_equal(leaps, 0, "AY1: a miss never leaps NM↔DMG")
+	var rate := float(hits) / float(samples)
+	_expect_equal(
+		rate >= 0.82 and rate <= 0.88,
+		true,
+		"AY1: seeded Inspects match true condition about 85%% (got %.3f)" % rate
+	)
+	for band in [
+		CardInstance.Condition.NM,
+		CardInstance.Condition.LP,
+		CardInstance.Condition.MP,
+		CardInstance.Condition.HP,
+		CardInstance.Condition.DMG,
+	]:
+		for seed in range(40):
+			var shown := BuylistPolicy.revealed_band(band, seed, 0.0)
+			_expect_equal(
+				BuylistPolicy.is_adjacent_band(band, shown),
+				true,
+				"AY1: miss from %s stays adjacent" % BuylistPolicy.band_label(band)
+			)
+			_expect_equal(
+				absi(int(band) - int(CardInstance.Condition.DMG)) == 4
+				and shown == CardInstance.Condition.DMG,
+				false,
+				"AY1: NM never reveals as DMG"
+			)
+
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-BASE-088")
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "Reveal seller")
+	_expect_equal(queue.inspect_buylist(), true, "AY1: seeded serve Inspect succeeds")
+	_expect_equal(
+		_ay1_is_band_cue(dto.condition_cue),
+		true,
+		"AY1: the serve reveal is a condition band"
+	)
+	_assert_text_has_no_truth(dto.condition_cue, "AY1 seeded inspect cue")
+	_expect_dto_has_no_truth_fields(dto, "AY1 inspected buylist signal")
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var summary := hud.get_node_or_null("%CustomerSummary") as Label
+		var title := hud.get_node_or_null("%CustomerTitle") as Label
+		if summary != null:
+			_assert_text_has_no_truth(summary.text, "AY1 seeded CustomerServe")
+			_expect_equal(
+				summary.text.to_lower().contains("true_market"),
+				false,
+				"AY1: CustomerServe never shows true_market"
+			)
+			_expect_equal(
+				summary.text.to_lower().contains("cert_valid"),
+				false,
+				"AY1: CustomerServe never shows cert_valid"
+			)
+		if title != null:
+			_assert_text_has_no_truth(title.text, "AY1 seeded CustomerServe title")
+		hud.free()
+	queue.free()
+
+
+func _test_ay1_buy_walk_change_after_inspect() -> void:
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-BASE-088")
+	_expect_equal(dto != null, true, "AY1: Buy after Inspect needs a singles lot")
+	if dto == null:
+		return
+	dto.lot_condition = CardInstance.Condition.MP
+	dto.lot_condition_ready = true
+	_expect_equal(
+		BuylistPolicy.apply_inspect(dto, 1, 0.0),
+		true,
+		"AY1: a forced miss still Inspects"
+	)
+	var shown := BuylistPolicy.band_from_cue(dto.condition_cue)
+	_expect_equal(
+		shown != CardInstance.Condition.MP
+		and BuylistPolicy.is_adjacent_band(CardInstance.Condition.MP, shown),
+		true,
+		"AY1: the forced miss is an adjacent wrong band"
+	)
+	var offer := dto.lot_total_cents
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var owned_before := int(_inventory_service.call("total_owned", &"AA-BASE-088"))
+	var back_before := _aw1_backstock_qty(&"AA-BASE-088")
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "Wrong reveal buy")
+	seller.has_inspected = true
+	_expect_equal(queue.accept_buylist_offer(), true, "AY1: Buy after Inspect takes the lot")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - offer,
+		"AY1: Buy after Inspect pays current You offer"
+	)
+	_expect_equal(
+		_aw1_backstock_qty(&"AA-BASE-088"),
+		back_before + 1,
+		"AY1: Buy after Inspect lands the lot in backstock"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-BASE-088")),
+		owned_before + 1,
+		"AY1: Buy after Inspect lands the lot in inventory"
+	)
+	var acquired := _ay1_acquired_card(&"AA-BASE-088")
+	_expect_equal(acquired != null, true, "AY1: Buy after Inspect stores a card")
+	if acquired != null:
+		_expect_equal(
+			acquired.condition,
+			CardInstance.Condition.MP,
+			"AY1: a wrong reveal does not rewrite lot true condition"
+		)
+		_expect_equal(
+			acquired.condition != shown,
+			true,
+			"AY1: domain condition stays the true band after a miss"
+		)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AY1: Buy after a pre-applied Inspect spends no extra Attention"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	var listed := BuylistPolicy.listed_comp_cents(dto)
+	var stingy := maxi(1, int(floor(float(listed) * 0.39)))
+	if float(stingy) / float(listed) >= 0.40:
+		stingy = 1
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Inspect then stingy")
+	_expect_equal(queue.inspect_buylist(), true, "AY1: Walk path Inspects first")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		queue.change_buylist_offer(stingy),
+		true,
+		"AY1: Change still works after Inspect"
+	)
+	_expect_equal(queue.walk_buylist(), true, "AY1: Walk after Inspect still resolves")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before + BuylistPolicy.miss_rep_delta(),
+		"AY1: Walk anger floor stays as AX1/AW1 after Inspect"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	listed = BuylistPolicy.listed_comp_cents(dto)
+	var fair := maxi(1, int(ceil(float(listed) * 0.40)))
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Inspect then fair walk")
+	_expect_equal(queue.inspect_buylist(), true, "AY1: fair Walk path Inspects first")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(queue.change_buylist_offer(fair), true, "AY1: fair Change after Inspect")
+	_expect_equal(queue.walk_buylist(), true, "AY1: fair Walk after Inspect still resolves")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AY1: Walk at the 0.40 floor still leaves Rep unchanged"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Inspect then buy edit")
+	var edited := maxi(1, dto.lot_total_cents / 2)
+	cash_before = int(_economy.get("balance_cents"))
+	_expect_equal(queue.inspect_buylist(), true, "AY1: Buy-edit path Inspects first")
+	_expect_equal(queue.change_buylist_offer(edited), true, "AY1: one Change after Inspect")
+	_expect_equal(
+		queue.change_buylist_offer(edited + 1),
+		false,
+		"AY1: a second Change is still refused after Inspect"
+	)
+	_expect_equal(queue.accept_buylist_offer(), true, "AY1: Buy after Inspect pays the edit")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - edited,
+		"AY1: Buy after Inspect still pays current You offer"
+	)
+	queue.free()
+
+
+func _test_ay1_door_whale_fee_stay() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"AY1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AY1: whale weight stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AY1: marketplace fee stays 8%"
+	)
+	_aw1_reset_floor(40, 1)
+	var listed := _av1_listed_sleeves()
+	_expect_equal(listed > 0, true, "AY1: a completed shop sale needs a listed sleeve")
+	if listed <= 0:
+		return
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AY1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := _av1_queue()
+	var buyer := _av1_enqueue_buyer(queue, &"regular", "Resolved list")
+	_expect_equal(queue.sell_listed(), true, "AY1: a completed shop sale still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed,
+		"AY1: a completed shop sale still pays its resolved price"
+	)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	if hud != null and buyer != null:
+		Callable(hud, "_on_customer_head_changed").call(buyer)
+		Callable(hud, "_on_customer_desk_ready").call(buyer, true)
+		var inspect := hud.get_node_or_null("%ServeInspectButton") as Button
+		_expect_equal(
+			inspect == null or not inspect.visible,
+			true,
+			"AY1: Inspect stays off the shop-buy serve"
+		)
+		hud.free()
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/buylist_policy.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "inspect_buylist")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"inspect"
+		),
+		true,
+		"AY1: Inspect is not folded into sell_listed or sell_through_mult_for"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func inspect_buylist(", "_complete")
+		and not _function_body_contains(
+			queue_src,
+			"func inspect_buylist(",
+			"apply_offer_cents"
+		),
+		true,
+		"AY1: Inspect does not Buy, Walk, or Change offer"
+	)
+	_expect_equal(
+		queue_src.contains("func inspect_buylist(")
+		and queue_src.contains("func accept_buylist_offer(")
+		and queue_src.contains("func walk_buylist(")
+		and queue_src.contains("func change_buylist_offer("),
+		true,
+		"AY1: Inspect lives on the AW1/AX1 buylist serve"
+	)
+	_expect_equal(
+		policy_src.contains("const ATTENTION_COST := 5")
+		and not policy_src.contains("inspect_attention_specialist"),
+		true,
+		"AY1: buylist Inspect stays 5 — Specialist 5→2 stays parked"
+	)
+	_expect_equal(
+		demand_src.contains("func counter_buy")
+		and queue_src.contains("func negotiate("),
+		true,
+		"AY1: AU1 Counter and AV1 Negotiate stay as shipped"
+	)
+	_expect_equal(
+		not hud_src.contains("true_market")
+		and not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("cert_valid"),
+		true,
+		"AY1: HUD has no true_market, cert_valid, STOP, or camera off-switch"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"AY1: Soft catalog stays closed"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _ay1_is_band_cue(cue: String) -> bool:
+	return cue in ["NM", "LP", "MP", "HP", "DMG"]
+
+
+func _ay1_summary_shows_band(text: String) -> bool:
+	for band: String in ["NM", "LP", "MP", "HP", "DMG"]:
+		if text.contains(band):
+			return true
+	return false
+
+
+func _ay1_acquired_card(sku_id: StringName) -> CardInstance:
+	var model := _inventory_service.get("model") as InventoryModel
+	if model == null:
+		return null
+	var found: CardInstance = null
+	for card: CardInstance in model.cards:
+		if card != null and card.sku_id == sku_id:
+			found = card
+	return found
 
 
 func _au1_reset() -> void:
