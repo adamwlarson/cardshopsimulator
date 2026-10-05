@@ -227,6 +227,14 @@ enum Difficulty {
 @export var utilities_small_daily_cents: int = 4_000
 @export var utilities_medium_daily_cents: int = 7_000
 @export var utilities_large_daily_cents: int = 11_000
+## BQ1 / systems §8: calendar Set release hype. Missing / ≤0 telegraph
+## falls back in SetReleaseHypePolicy to 3. Missing / ≤0 duration falls
+## back to 5 (inclusive of release day). Missing / ≤0 new/old demand
+## mults fall back to 1.40 / 0.70. Easy/Hard inherit. Not a sell weight.
+@export var set_release_telegraph_days: int = 3
+@export var set_release_duration_days: int = 5
+@export var hype_new_mult: float = 1.40
+@export var hype_old_mult: float = 0.70
 
 
 func is_rent_due_day(day: int) -> bool:

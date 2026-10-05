@@ -116,10 +116,19 @@ func roll_settle_events() -> Dictionary:
 	var def := _event_service.roll_definition(config, GameState.current_day)
 	if def.is_empty():
 		return _record_roll(null, true)
-	var started := start_pack_event(
-		StringName(def.get("type", "")),
-		{"duration_days": _event_service.roll_duration(def)}
-	)
+	var kind := StringName(def.get("type", ""))
+	var opts := {
+		"duration_days": _event_service.roll_duration(def, config),
+	}
+	if kind == MarketEvent.KIND_SET_RELEASE:
+		var remaining := SetReleaseHypePolicy.remaining_days_on(
+			GameState.current_day,
+			config
+		)
+		if remaining <= 0:
+			return _record_roll(null, true)
+		opts["remaining_days"] = remaining
+	var started := start_pack_event(kind, opts)
 	if started == null or not started.is_active():
 		return _record_roll(null, true)
 	return _record_roll(started, true)
@@ -134,12 +143,13 @@ func start_pack_event(kind: StringName, opts: Dictionary = {}) -> MarketEvent:
 	event.id = StringName(def.get("id", kind))
 	event.kind = kind
 	event.title = String(def.get("title", String(kind)))
-	event.duration_days = int(opts.get("duration_days", _event_service.roll_duration(def)))
+	event.duration_days = int(opts.get("duration_days", _event_service.roll_duration(def, GameState.balance_config)))
 	event.duration_days = maxi(1, event.duration_days)
 	event.remaining_days = int(opts.get("remaining_days", event.duration_days))
 	event.remaining_days = maxi(1, event.remaining_days)
 	event.sku_id = StringName(opts.get("sku_id", &""))
 	event.set_id = StringName(opts.get("set_id", &""))
+	event.old_set_id = StringName(opts.get("old_set_id", &""))
 	event.fog_flag = bool(def.get("fog_flag", kind == MarketEvent.KIND_FOG))
 	if not _bind_event_targets(event):
 		return null
@@ -195,6 +205,17 @@ func has_recession_week() -> bool:
 func has_supply_glut() -> bool:
 	var event := active_event()
 	return event != null and event.kind == MarketEvent.KIND_SUPPLY_GLUT
+
+
+func has_set_release_hype() -> bool:
+	var event := active_event()
+	return event != null and event.kind == MarketEvent.KIND_SET_RELEASE
+
+
+func set_release_demand_mult_for(sku_id: StringName) -> float:
+	if _service == null or not has_set_release_hype():
+		return 1.0
+	return _service.set_release_demand_mult_for(sku_id)
 
 
 func active_event_demand_mult() -> float:
@@ -481,6 +502,8 @@ func event_banner_text() -> String:
 			return "Macro: Recession week — demand soft · sellers inbound"
 		MarketEvent.KIND_SUPPLY_GLUT:
 			return "Distributor: Supply glut — sealed cheap · retail race"
+		MarketEvent.KIND_SET_RELEASE:
+			return "Calendar: Set release — new sealed hot · old sealed cool"
 		MarketEvent.KIND_ROTATION:
 			if not _can_see_rotation_leak(event):
 				return ""
@@ -496,6 +519,11 @@ func calendar_telegraph_text() -> String:
 		return "Calendar: Event night — play table drawing a crowd"
 	if MarketEventService.is_convention_telegraph_day(GameState.current_day):
 		return "Calendar: Convention weekend incoming"
+	if MarketEventService.is_set_release_telegraph_day(
+		GameState.current_day,
+		GameState.balance_config
+	):
+		return "Calendar: Set release incoming"
 	return ""
 
 
@@ -2099,6 +2127,16 @@ func _bind_event_targets(event: MarketEvent) -> bool:
 			return true
 		MarketEvent.KIND_SUPPLY_GLUT:
 			return true
+		MarketEvent.KIND_SET_RELEASE:
+			var picked := _event_service.pick_set_release_targets(
+				event.set_id,
+				event.old_set_id
+			)
+			if picked.is_empty():
+				return false
+			event.set_id = StringName(picked.get("set_id", &""))
+			event.old_set_id = StringName(picked.get("old_set_id", &""))
+			return not event.set_id.is_empty() and not event.old_set_id.is_empty()
 	return false
 
 
@@ -2138,6 +2176,15 @@ func _apply_event_effects(event: MarketEvent) -> bool:
 				MarketEventService.SUPPLY_GLUT_SEALED_RACE_MULT
 			)
 			return true
+		MarketEvent.KIND_SET_RELEASE:
+			_service.set_set_release_hype(
+				true,
+				event.set_id,
+				event.old_set_id,
+				SetReleaseHypePolicy.hype_new_mult_for(GameState.balance_config),
+				SetReleaseHypePolicy.hype_old_mult_for(GameState.balance_config)
+			)
+			return true
 	return false
 
 
@@ -2174,6 +2221,8 @@ func _revert_event_effects(event: MarketEvent) -> void:
 			_service.set_recession_week(false)
 		MarketEvent.KIND_SUPPLY_GLUT:
 			_service.set_supply_glut(false)
+		MarketEvent.KIND_SET_RELEASE:
+			_service.set_set_release_hype(false)
 		MarketEvent.KIND_ROTATION:
 			pass
 
@@ -2215,6 +2264,7 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		"remaining_days": event.remaining_days if event != null else 0,
 		"sku_id": String(event.sku_id) if event != null else "",
 		"set_id": String(event.set_id) if event != null else "",
+		"old_set_id": String(event.old_set_id) if event != null else "",
 		"fog_flag": event.fog_flag if event != null else false,
 		"demand_band_sigma": active_demand_band_sigma(),
 		"inspect_mandatory": (
@@ -2239,6 +2289,17 @@ func _record_roll(event: MarketEvent, rolled: bool) -> Dictionary:
 		"sealed_wholesale_mult": active_sealed_wholesale_mult(),
 		"sealed_race_mult": active_sealed_race_mult(),
 		"supply_glut": has_supply_glut(),
+		"set_release_hype": has_set_release_hype(),
+		"hype_new_mult": (
+			SetReleaseHypePolicy.hype_new_mult_for(GameState.balance_config)
+			if has_set_release_hype()
+			else 1.0
+		),
+		"hype_old_mult": (
+			SetReleaseHypePolicy.hype_old_mult_for(GameState.balance_config)
+			if has_set_release_hype()
+			else 1.0
+		),
 	}
 	QaInstrumentation.record_market_event_rolled(payload)
 	return payload

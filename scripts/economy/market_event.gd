@@ -9,6 +9,7 @@ const KIND_CONVENTION := &"convention_weekend"
 const KIND_THEFT_RING := &"theft_ring"
 const KIND_RECESSION := &"recession_week"
 const KIND_SUPPLY_GLUT := &"supply_glut"
+const KIND_SET_RELEASE := &"set_release_hype"
 
 var id: StringName = &""
 var kind: StringName = &""
@@ -17,6 +18,7 @@ var remaining_days: int = 0
 var duration_days: int = 0
 var sku_id: StringName = &""
 var set_id: StringName = &""
+var old_set_id: StringName = &""
 var fog_flag: bool = false
 var price_editor_prompted: bool = false
 
@@ -34,6 +36,7 @@ func to_save() -> Dictionary:
 		"duration_days": duration_days,
 		"sku_id": String(sku_id),
 		"set_id": String(set_id),
+		"old_set_id": String(old_set_id),
 		"fog_flag": fog_flag,
 		"price_editor_prompted": price_editor_prompted,
 	}
@@ -50,6 +53,7 @@ static func from_save(data: Dictionary) -> MarketEvent:
 	event.duration_days = int(data.get("duration_days", event.remaining_days))
 	event.sku_id = StringName(data.get("sku_id", ""))
 	event.set_id = StringName(data.get("set_id", ""))
+	event.old_set_id = StringName(data.get("old_set_id", ""))
 	event.fog_flag = bool(data.get("fog_flag", event.kind == KIND_FOG))
 	event.price_editor_prompted = bool(data.get("price_editor_prompted", false))
 	return event
