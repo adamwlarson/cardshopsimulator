@@ -1448,20 +1448,27 @@ func _sync_customer_serve() -> void:
 		== CustomerProfile.TradeIntent.SELLING_TO_SHOP
 	):
 		customer_title.text = "SELLER · %s" % _current_customer.display_name
-		customer_summary.text = DemandSignalPresenter.buylist_seller_summary(
-			_current_customer.buylist_signal
-		)
+		if _current_customer.buylist_signal == null:
+			customer_summary.text = "Selling: —"
+		else:
+			customer_summary.text = DemandSignalPresenter.buylist_seller_summary(
+				_current_customer.buylist_signal
+			)
 		%NegotiateButton.hide()
 		_set_negotiate_plus_visible(false)
 		var pull_hide := get_node_or_null("%PullButton") as Button
 		if pull_hide != null:
 			pull_hide.hide()
-		%SellButton.text = "Buy at offer"
+		%SellButton.text = "Buy"
 		%SellButton.disabled = (
 			not GameState.register_is_covered()
 			or _current_customer.buylist_signal == null
 			or not _current_customer.buylist_signal.can_confirm
 		)
+		var walk := get_node_or_null("%RefuseButton") as Button
+		if walk != null:
+			walk.text = "Walk"
+			walk.show()
 		return
 	customer_title.text = "CUSTOMER · %s" % _current_customer.display_name
 	var signal_dto := DemandSignals.price_signal(
@@ -1492,6 +1499,10 @@ func _sync_customer_serve() -> void:
 	)
 	%SellButton.text = "Sell at list"
 	%SellButton.disabled = not GameState.register_is_covered()
+	var refuse := get_node_or_null("%RefuseButton") as Button
+	if refuse != null:
+		refuse.text = "Refuse"
+		refuse.show()
 	_sync_serve_owner_verbs()
 
 
@@ -1556,6 +1567,13 @@ func _sync_serve_owner_verbs() -> void:
 
 
 func _refuse_customer() -> void:
+	if (
+		_current_customer != null
+		and _current_customer.trade_intent
+		== CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	):
+		EventBus.customer_action_requested.emit(&"walk_buylist")
+		return
 	EventBus.customer_action_requested.emit(&"refuse")
 
 

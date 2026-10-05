@@ -164,23 +164,33 @@ func accept_buylist_offer() -> bool:
 		customer == null
 		or customer.trade_intent != CustomerProfile.TradeIntent.SELLING_TO_SHOP
 		or customer.buylist_signal == null
-		or not customer.buylist_signal.can_confirm
 	):
 		return false
 	var dto := customer.buylist_signal
-	var shown_midpoint := (
-		dto.shown_comp_low_cents + dto.shown_comp_high_cents
-	) / 2
-	if not bool(_inventory_service.call(
-		"confirm_stock_purchase",
-		dto.sku_id,
-		dto.quantity,
-		dto.unit_cost_cents,
-		shown_midpoint - dto.unit_cost_cents,
-		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
-	)):
+	if not bool(_inventory_service.call("confirm_buylist_purchase", dto)):
 		return false
 	_complete(customer, &"bought")
+	return true
+
+
+func walk_buylist() -> bool:
+	var customer := begin_serving_head()
+	if (
+		customer == null
+		or customer.trade_intent != CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	):
+		return false
+	var dto := customer.buylist_signal
+	if (
+		dto != null
+		and BuylistPolicy.is_stingy(
+			dto.unit_cost_cents,
+			BuylistPolicy.listed_comp_cents(dto)
+		)
+		and _reputation_hook.is_valid()
+	):
+		_reputation_hook.call(BuylistPolicy.miss_rep_delta())
+	_complete(customer, &"walked")
 	return true
 
 
@@ -253,6 +263,8 @@ func refuse() -> bool:
 	var customer := begin_serving_head()
 	if customer == null:
 		return false
+	if customer.trade_intent == CustomerProfile.TradeIntent.SELLING_TO_SHOP:
+		return walk_buylist()
 	customer.state = CustomerProfile.State.LEFT
 	if _reputation_hook.is_valid():
 		_reputation_hook.call(-1)
