@@ -181,6 +181,14 @@ func restore_payday_loan_days(days: int) -> void:
 	_payday_loan_days_remaining = maxi(0, days)
 
 
+func online_cancel_to_save() -> Dictionary:
+	return online_listings.cancel_day_to_save()
+
+
+func restore_online_cancel(data: Dictionary) -> void:
+	online_listings.apply_cancel_day_save(data)
+
+
 func settle_payday_loan() -> bool:
 	if _payday_loan_days_remaining <= 0:
 		return false

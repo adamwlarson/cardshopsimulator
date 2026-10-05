@@ -20,6 +20,23 @@ func reset(rng_seed: int = 1) -> void:
 	_rng.seed = rng_seed
 
 
+func cancel_day() -> int:
+	return _cancel_day
+
+
+func cancels_today() -> int:
+	return _cancels_today
+
+
+func cancel_day_to_save() -> Dictionary:
+	return OnlineCancelPolicy.snapshot(_cancel_day, _cancels_today)
+
+
+func apply_cancel_day_save(data: Dictionary) -> void:
+	_cancel_day = OnlineCancelPolicy.cancel_day_from_save(data)
+	_cancels_today = OnlineCancelPolicy.cancels_today_from_save(data)
+
+
 func is_unlocked() -> bool:
 	var config := _config()
 	return (

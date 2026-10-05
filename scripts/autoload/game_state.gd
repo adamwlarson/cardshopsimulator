@@ -817,6 +817,7 @@ func capture_save() -> Dictionary:
 		"register_walkout_count_today": register_walkout_count_today,
 		"register_walkout_rep_spent_today": register_walkout_rep_spent_today,
 		"payday_loan_days_remaining": Economy.payday_loan_days_remaining(),
+		"online_cancel": Economy.online_cancel_to_save(),
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
@@ -867,6 +868,11 @@ func restore_save(data: Dictionary) -> bool:
 		)
 	)
 	Economy.restore_payday_loan_days(int(data.get("payday_loan_days_remaining", 0)))
+	var online_cancel: Variant = data.get("online_cancel", {})
+	if online_cancel is Dictionary:
+		Economy.restore_online_cancel(online_cancel as Dictionary)
+	else:
+		Economy.restore_online_cancel({})
 	var saved_prestige := StringName(data.get("last_prestige", &""))
 	if not saved_prestige.is_empty():
 		last_prestige = saved_prestige
