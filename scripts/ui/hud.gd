@@ -411,6 +411,7 @@ func _update_phase(phase: int) -> void:
 		_maybe_show_buylist_flood_toast()
 	elif phase == GameState.DayPhase.SETTLE:
 		_maybe_show_fair_price_settle_toast()
+		_maybe_show_utilities_settle_toast(true)
 	_sync_modal_veil()
 	_maybe_open_event_price_editor()
 
@@ -451,6 +452,20 @@ func _maybe_show_buylist_fewer_lots_toast(append: bool = false) -> void:
 	else:
 		beat_toast.text = message
 	beat_toast.show()
+
+
+func _maybe_show_utilities_settle_toast(append: bool = false) -> void:
+	var message := DemandSignalPresenter.utilities_settle_toast(
+		GameState.last_utilities_settle_cents,
+		GameState.last_utilities_unpaid
+	)
+	if message.is_empty():
+		return
+	if append and not beat_toast.text.is_empty():
+		beat_toast.text = "%s\n%s" % [beat_toast.text, message]
+	else:
+		beat_toast.text = message
+		beat_toast.show()
 
 
 func _maybe_show_buylist_flood_toast(append: bool = false) -> void:

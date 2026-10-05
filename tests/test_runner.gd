@@ -234,6 +234,7 @@ func _initialize() -> void:
 	_test_buylist_drip_settle()
 	_test_buylist_fewer_lots()
 	_test_buylist_flood()
+	_test_daily_utilities_settle()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -2472,7 +2473,9 @@ func _test_rent_firesale_beat() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before_rent - NORMAL_CONFIG.rent_small_weekly_cents,
+		cash_before_rent
+		- NORMAL_CONFIG.rent_small_weekly_cents
+		- UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"dismissed rent still collects at SETTLE"
 	)
 
@@ -6721,7 +6724,9 @@ func _test_hire_cashier_beat() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before_wage - ShopState.CASHIER_WAGE_CENTS,
+		cash_before_wage
+		- ShopState.CASHIER_WAGE_CENTS
+		- UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"cashier wage posts at SETTLE"
 	)
 
@@ -6746,7 +6751,9 @@ func _test_hire_cashier_beat() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before_wage - ShopState.CHEAP_CASHIER_WAGE_CENTS,
+		cash_before_wage
+		- ShopState.CHEAP_CASHIER_WAGE_CENTS
+		- UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"cheap wage posts at SETTLE"
 	)
 
@@ -6766,7 +6773,7 @@ func _test_hire_cashier_beat() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before_wage,
+		cash_before_wage - UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"Keep solo posts no wage"
 	)
 
@@ -6824,7 +6831,7 @@ func _test_specialist_staff_path() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before - 14_000,
+		cash_before - 14_000 - UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"Specialist wage posts at SETTLE"
 	)
 
@@ -9086,7 +9093,9 @@ func _test_c2_hire_beat_paths() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before - ShopState.CASHIER_WAGE_CENTS,
+		cash_before
+		- ShopState.CASHIER_WAGE_CENTS
+		- UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"C2 gate 1: Hire wage posts at SETTLE"
 	)
 
@@ -9103,7 +9112,7 @@ func _test_c2_hire_beat_paths() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before,
+		cash_before - UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"C2 gate 1: Solo posts no wage"
 	)
 
@@ -11195,7 +11204,10 @@ func _test_i1_list_hold_fee_and_cancel() -> void:
 	)
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before + listed_price - filled.fee_cents,
+		cash_before
+		+ listed_price
+		- filled.fee_cents
+		- UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"I1: net cash is list price minus 8% fee"
 	)
 	_expect_equal(
@@ -11958,7 +11970,7 @@ func _test_flagship_win_award() -> void:
 
 	_game_state.call("start_new_game")
 	shop = _force_large_shop(40)
-	_economy.set("balance_cents", 5_000_000)
+	_economy.set("balance_cents", 5_000_000 + UtilitiesPolicy.LARGE_DAILY_CENTS)
 	_game_state.set("current_reputation", 80)
 	_game_state.set("current_phase", DayPhasePolicy.PREP)
 	_captured_campaign_won = {}
@@ -12609,7 +12621,7 @@ func _test_liquidity_king_win_award() -> void:
 
 	_game_state.call("start_new_game")
 	_game_state.set("campaign_mode", 2)
-	_economy.set("balance_cents", 10_000_000)
+	_economy.set("balance_cents", 10_000_000 + UtilitiesPolicy.SMALL_DAILY_CENTS)
 	_game_state.set("current_day", 30)
 	_game_state.set("current_phase", DayPhasePolicy.PREP)
 	_captured_campaign_won = {}
@@ -12653,7 +12665,7 @@ func _test_liquidity_king_win_award() -> void:
 
 	_game_state.call("start_new_game")
 	_game_state.set("campaign_mode", 2)
-	_economy.set("balance_cents", 10_000_000)
+	_economy.set("balance_cents", 10_000_000 + UtilitiesPolicy.SMALL_DAILY_CENTS)
 	_game_state.set("current_day", 60)
 	_game_state.set("current_phase", DayPhasePolicy.PREP)
 	_captured_campaign_won = {}
@@ -16347,7 +16359,7 @@ func _test_stocker_budget_and_role_lock() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before - 7_000,
+		cash_before - 7_000 - UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"AF1: Stocker wage posts at SETTLE"
 	)
 	var saved: Dictionary = _game_state.call("capture_save")
@@ -16906,7 +16918,7 @@ func _test_fire_removes_role_and_stops_wage() -> void:
 	_expect_equal(_game_state.call("start_settle"), true, "AG1: settle runs after Cashier fire")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before,
+		cash_before - UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"AG1: next settle charges no Cashier wage"
 	)
 	_expect_equal(_ag1_wage_ledger_cents(), 0, "AG1: wage ledger stays empty after Cashier fire")
@@ -16926,7 +16938,7 @@ func _test_fire_removes_role_and_stops_wage() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before,
+		cash_before - UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"AG1: next settle charges no Specialist wage"
 	)
 
@@ -16945,7 +16957,7 @@ func _test_fire_removes_role_and_stops_wage() -> void:
 	_game_state.call("start_settle")
 	_expect_equal(
 		int(_economy.get("balance_cents")),
-		cash_before,
+		cash_before - UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"AG1: next settle charges no Stocker wage"
 	)
 
@@ -22929,8 +22941,8 @@ func _test_daily_market_drift_class_bands() -> void:
 	)
 	_expect_equal(
 		int(first.get("cash_after", -1)),
-		int(first.get("cash_before", -2)),
-		"AR1: cash does not change"
+		int(first.get("cash_before", -2)) - UtilitiesPolicy.SMALL_DAILY_CENTS,
+		"AR1: cash does not change from drift"
 	)
 	_expect_equal(
 		bool(first.get("event_active", true)),
@@ -31610,7 +31622,10 @@ func _test_be1_same_seed_online_settle_fee() -> void:
 	_expect_equal(int(at_74.get("fee_cents", 0)), fee_8, "BE1: Rep 74 settle fee is 8%")
 	_expect_equal(
 		int(at_74.get("cash_after", 0)),
-		int(at_74.get("cash_before", 0)) + LISTED - fee_8,
+		int(at_74.get("cash_before", 0))
+		+ LISTED
+		- fee_8
+		- UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"BE1: Rep 74 net cash is list minus 8%"
 	)
 
@@ -31619,7 +31634,10 @@ func _test_be1_same_seed_online_settle_fee() -> void:
 	_expect_equal(int(at_75.get("fee_cents", 0)), fee_5, "BE1: Rep 75 settle fee is 5%")
 	_expect_equal(
 		int(at_75.get("cash_after", 0)),
-		int(at_75.get("cash_before", 0)) + LISTED - fee_5,
+		int(at_75.get("cash_before", 0))
+		+ LISTED
+		- fee_5
+		- UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"BE1: Rep 75 net cash is list minus 5%"
 	)
 
@@ -37443,6 +37461,583 @@ func _test_bo1_ui_door_whale_untouched() -> void:
 		"BO1: Soft OK list-time suggested persistence stays Soft"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_daily_utilities_settle() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bp1_named_gate_and_fallbacks()
+	_test_bp1_same_seed_small_and_next_day()
+	_test_bp1_medium_large_and_unpaid()
+	_test_bp1_ui_and_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bp1_named_gate_and_fallbacks() -> void:
+	_expect_equal(UtilitiesPolicy.SMALL_DAILY_CENTS, 4_000, "BP1: locked Small utilities is $40")
+	_expect_equal(UtilitiesPolicy.MEDIUM_DAILY_CENTS, 7_000, "BP1: locked Medium utilities is $70")
+	_expect_equal(UtilitiesPolicy.LARGE_DAILY_CENTS, 11_000, "BP1: locked Large utilities is $110")
+	_expect_equal(
+		UtilitiesPolicy.CATEGORY == &"utilities",
+		true,
+		"BP1: ledger category is utilities"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.utilities_small_daily_cents == 4_000
+		and NORMAL_CONFIG.utilities_medium_daily_cents == 7_000
+		and NORMAL_CONFIG.utilities_large_daily_cents == 11_000,
+		true,
+		"BP1: Normal config matches locked utilities amounts"
+	)
+	_expect_equal(
+		EASY_CONFIG.utilities_small_daily_cents == 4_000
+		and HARD_CONFIG.utilities_small_daily_cents == 4_000
+		and EASY_CONFIG.utilities_medium_daily_cents == 7_000
+		and HARD_CONFIG.utilities_medium_daily_cents == 7_000
+		and EASY_CONFIG.utilities_large_daily_cents == 11_000
+		and HARD_CONFIG.utilities_large_daily_cents == 11_000,
+		true,
+		"BP1: Easy/Hard inherit Small $40 / Medium $70 / Large $110"
+	)
+	_expect_equal(
+		UtilitiesPolicy.daily_cents(0, UtilitiesPolicy.SMALL_DAILY_CENTS) == 4_000
+		and UtilitiesPolicy.daily_cents(-1, UtilitiesPolicy.MEDIUM_DAILY_CENTS) == 7_000,
+		true,
+		"BP1: missing / ≤0 configured amounts fall back to the tier default"
+	)
+	var missing := BalanceConfig.new()
+	missing.utilities_small_daily_cents = 0
+	missing.utilities_medium_daily_cents = 0
+	missing.utilities_large_daily_cents = 0
+	_expect_equal(
+		UtilitiesPolicy.daily_cents_for_tier(int(ShopState.Tier.SMALL), missing),
+		4_000,
+		"BP1: zero Small config falls back to 4000¢"
+	)
+	_expect_equal(
+		UtilitiesPolicy.daily_cents_for_tier(int(ShopState.Tier.MEDIUM), missing),
+		7_000,
+		"BP1: zero Medium config falls back to 7000¢"
+	)
+	_expect_equal(
+		UtilitiesPolicy.daily_cents_for_tier(int(ShopState.Tier.LARGE), missing),
+		11_000,
+		"BP1: zero Large config falls back to 11000¢"
+	)
+	missing.utilities_small_daily_cents = -50
+	missing.utilities_medium_daily_cents = -1
+	missing.utilities_large_daily_cents = -9
+	_expect_equal(
+		UtilitiesPolicy.daily_cents_for_tier(int(ShopState.Tier.SMALL), missing) == 4_000
+		and UtilitiesPolicy.daily_cents_for_tier(int(ShopState.Tier.MEDIUM), missing) == 7_000
+		and UtilitiesPolicy.daily_cents_for_tier(int(ShopState.Tier.LARGE), missing) == 11_000,
+		true,
+		"BP1: negative config falls back to the tier defaults"
+	)
+	_expect_equal(
+		UtilitiesPolicy.daily_cents_for_tier(int(ShopState.Tier.SMALL), null) == 4_000
+		and UtilitiesPolicy.daily_cents_for_tier(int(ShopState.Tier.MEDIUM), null) == 7_000
+		and UtilitiesPolicy.daily_cents_for_tier(int(ShopState.Tier.LARGE), null) == 11_000,
+		true,
+		"BP1: null config still uses the locked tier amounts"
+	)
+	var economy_src := FileAccess.get_file_as_string("res://scripts/autoload/economy.gd")
+	var settle_at := economy_src.find("func settle_day(")
+	_expect_equal(
+		_function_body_contains(economy_src, "func settle_day(", "_settle_utilities")
+		and _function_body_contains(economy_src, "func settle_day(", "take_due_wages")
+		and _function_body_contains(economy_src, "func settle_day(", "_settle_shrink"),
+		true,
+		"BP1: settle_day charges utilities on the close-settle obligation pass"
+	)
+	_expect_equal(
+		settle_at >= 0
+		and economy_src.find("_settle_utilities()", settle_at)
+		> economy_src.find("take_due_wages", settle_at),
+		true,
+		"BP1: utilities is after wages"
+	)
+	_expect_equal(
+		settle_at >= 0
+		and economy_src.find("_settle_shrink()", settle_at)
+		> economy_src.find("_settle_utilities()", settle_at),
+		true,
+		"BP1: utilities is before shrink"
+	)
+	_expect_equal(
+		settle_at >= 0
+		and economy_src.find("settle_payday_loan()", settle_at)
+		> economy_src.find("_settle_utilities()", settle_at),
+		true,
+		"BP1: utilities is before the payday-loan drain"
+	)
+	_expect_equal(
+		_function_body_contains(economy_src, "func _settle_utilities(", "record_expense")
+		and not _function_body_contains(
+			economy_src,
+			"func _settle_utilities(",
+			"record_forced_expense"
+		),
+		true,
+		"BP1: utilities uses the wages unpaid path, not payday-loan forced drain"
+	)
+	_expect_equal(
+		_function_body_contains(economy_src, "func _settle_utilities(", "note_unpaid_utilities")
+		and not _function_body_contains(
+			economy_src,
+			"func _settle_utilities(",
+			"note_unpaid_wage"
+		),
+		true,
+		"BP1: unpaid utilities notes once and does not invent a wages-branded lose"
+	)
+
+
+func _test_bp1_same_seed_small_and_next_day() -> void:
+	_bp1_reset_for_settle()
+	var shop: ShopState = _game_state.get("shop")
+	_expect_equal(shop.tier, ShopState.Tier.SMALL, "BP1: same-seed shop starts Small")
+	var cash_before := int(_economy.get("balance_cents"))
+	var wage_before := _ag1_wage_ledger_cents()
+	_expect_equal(_game_state.call("start_floor"), true, "BP1: Small path can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BP1: Small path can settle")
+	_expect_equal(
+		_bp1_utilities_count(),
+		1,
+		"BP1: Small settle posts one utilities expense that day"
+	)
+	_expect_equal(
+		_bp1_utilities_cents_on_day(int(_game_state.get("current_day"))),
+		4_000,
+		"BP1: Small utilities expense is 4000¢"
+	)
+	_expect_equal(
+		int(_game_state.get("last_utilities_settle_cents")),
+		4_000,
+		"BP1: Small settle records 4000¢ paid"
+	)
+	_expect_equal(
+		bool(_game_state.get("last_utilities_unpaid")),
+		false,
+		"BP1: funded Small settle is not unpaid"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 4_000,
+		"BP1: cash is down 4000¢ from this rule"
+	)
+	_expect_equal(
+		_ag1_wage_ledger_cents(),
+		wage_before,
+		"BP1: Small utilities does not post a wage"
+	)
+	_economy.call("settle_day", int(_game_state.get("current_day")))
+	_expect_equal(
+		_bp1_utilities_count(),
+		1,
+		"BP1: a second settle pass the same day does not charge again"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 4_000,
+		"BP1: same-day second pass does not take another 4000¢"
+	)
+
+	_expect_equal(_game_state.call("advance_day"), true, "BP1: calendar day advances")
+	_expect_equal(
+		bool(_game_state.get("utilities_applied")),
+		false,
+		"BP1: next day clears the once-per-settle utilities flag"
+	)
+	cash_before = int(_economy.get("balance_cents"))
+	_expect_equal(_game_state.call("start_floor"), true, "BP1: next day can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BP1: next day can settle")
+	_expect_equal(_bp1_utilities_count(), 2, "BP1: the next settle day charges again")
+	_expect_equal(
+		_bp1_utilities_cents_on_day(int(_game_state.get("current_day"))),
+		4_000,
+		"BP1: next-day Small utilities is 4000¢ again"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 4_000,
+		"BP1: next-day cash is down another 4000¢ from this rule"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bp1_medium_large_and_unpaid() -> void:
+	_bp1_reset_for_settle()
+	var shop: ShopState = _game_state.get("shop")
+	_economy.set("balance_cents", 1_600_000)
+	_game_state.set("current_reputation", 55)
+	_expect_equal(
+		shop.expand_to_medium(int(_game_state.get("current_day")), 1_600_000, 55),
+		true,
+		"BP1: Sign Medium before settle"
+	)
+	_expect_equal(shop.tier, ShopState.Tier.MEDIUM, "BP1: shop is Medium before settle")
+	var cash_before := int(_economy.get("balance_cents"))
+	_expect_equal(_game_state.call("start_floor"), true, "BP1: Medium path can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BP1: Medium path can settle")
+	_expect_equal(
+		_bp1_utilities_cents_on_day(int(_game_state.get("current_day"))),
+		7_000,
+		"BP1: Sign Medium then settle charges 7000¢ (not Small)"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 7_000,
+		"BP1: Medium cash is down 7000¢ from this rule"
+	)
+	_expect_equal(_bp1_utilities_count(), 1, "BP1: Medium settle still posts one utilities line")
+
+	_bp1_reset_for_settle()
+	shop = _force_large_shop(int(_game_state.get("current_day")))
+	_expect_equal(shop.tier, ShopState.Tier.LARGE, "BP1: shop is Large before settle")
+	cash_before = int(_economy.get("balance_cents"))
+	_game_state.set("current_phase", DayPhasePolicy.PREP)
+	_expect_equal(_game_state.call("start_floor"), true, "BP1: Large path can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BP1: Large path can settle")
+	_expect_equal(
+		_bp1_utilities_cents_on_day(int(_game_state.get("current_day"))),
+		11_000,
+		"BP1: Large settle charges 11000¢"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 11_000,
+		"BP1: Large cash is down 11000¢ from this rule"
+	)
+
+	_bp1_reset_for_settle()
+	shop = _game_state.get("shop")
+	_expect_equal(_game_state.call("start_floor"), true, "BP1: mid-week expand starts on the floor")
+	_economy.set("balance_cents", 1_600_000)
+	_game_state.set("current_reputation", 55)
+	_expect_equal(
+		shop.expand_to_medium(int(_game_state.get("current_day")), 1_600_000, 55),
+		true,
+		"BP1: expanding mid-day uses the new tier on the next settle only"
+	)
+	cash_before = int(_economy.get("balance_cents"))
+	_expect_equal(_game_state.call("start_settle"), true, "BP1: mid-week expand can settle")
+	_expect_equal(
+		_bp1_utilities_cents_on_day(int(_game_state.get("current_day"))),
+		7_000,
+		"BP1: mid-week expand settle charges Medium, not Small"
+	)
+	_expect_equal(_bp1_utilities_count(), 1, "BP1: mid-week expand does not double-charge")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 7_000,
+		"BP1: mid-week expand cash only drops the new-tier amount"
+	)
+
+	_bp1_reset_for_settle()
+	var missing := (_game_state.get("balance_config") as BalanceConfig).duplicate() as BalanceConfig
+	missing.utilities_small_daily_cents = 0
+	missing.event_chance_settle = 0.0
+	_game_state.call("set_balance_config", missing)
+	_game_state.call("start_new_game")
+	cash_before = int(_economy.get("balance_cents"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		_bp1_utilities_cents_on_day(int(_game_state.get("current_day"))),
+		4_000,
+		"BP1: missing Small config still charges the 4000¢ default"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - 4_000,
+		"BP1: missing Small config still drops cash by 4000¢"
+	)
+
+	_bp1_reset_for_settle()
+	_economy.set("balance_cents", 100)
+	cash_before = int(_economy.get("balance_cents"))
+	_expect_equal(_game_state.call("start_floor"), true, "BP1: unpaid path can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BP1: unpaid path can settle")
+	_expect_equal(_bp1_utilities_count(), 0, "BP1: unpaid utilities does not post an expense")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"BP1: unpaid utilities does not force-drain cash"
+	)
+	_expect_equal(
+		bool(_game_state.get("last_utilities_unpaid")),
+		true,
+		"BP1: unpaid utilities notes once that settle"
+	)
+	_expect_equal(
+		bool(_game_state.get("_unpaid_wages_this_settle")),
+		false,
+		"BP1: unpaid utilities does not reuse the wages lose flag"
+	)
+	_expect_equal(
+		StringName(_game_state.call("bankruptcy_reason")),
+		&"",
+		"BP1: unpaid utilities does not invent a utilities bankruptcy"
+	)
+	_expect_equal(
+		bool(_game_state.get("campaign_lost")),
+		false,
+		"BP1: unpaid utilities leaves the shop open"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bp1_ui_and_untouched() -> void:
+	_bp1_reset_for_settle()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BP1: HUD loads for utilities toast")
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	if hud != null:
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("Utilities"),
+			true,
+			"BP1: settle line names utilities"
+		)
+		_expect_equal(
+			toast != null and toast.text.contains("$40.00"),
+			true,
+			"BP1: settle line shows the Small $40 memo"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BP1: utilities settle toast")
+		_expect_equal(
+			toast != null
+			and not toast.text.contains("true_market")
+			and not toast.text.contains("p_buy"),
+			true,
+			"BP1: toast never shows true_market or p_buy"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+
+	_bp1_reset_for_settle()
+	_economy.set("balance_cents", 50)
+	hud = _instantiate_gameplay_hud()
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	if hud != null:
+		var unpaid_toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			unpaid_toast != null and unpaid_toast.text.contains("Utilities unpaid"),
+			true,
+			"BP1: unpaid settle notes utilities once"
+		)
+		_assert_text_has_no_truth(
+			unpaid_toast.text if unpaid_toast != null else "",
+			"BP1: unpaid utilities toast"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+
+	_expect_equal(
+		NORMAL_CONFIG.rent_small_weekly_cents == 120_000
+		and NORMAL_CONFIG.rent_medium_weekly_cents == 240_000
+		and NORMAL_CONFIG.rent_large_weekly_cents == 400_000,
+		true,
+		"BP1: rent stays $1,200 / $2,400 / $4,000 weekly"
+	)
+	_expect_equal(
+		ShopState.CASHIER_WAGE_CENTS == 8_000
+		and NORMAL_CONFIG.specialist_wage_cents == 14_000
+		and NORMAL_CONFIG.stocker_wage_cents == 7_000,
+		true,
+		"BP1: wages stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.shrink_daily_base, 0.002)
+		and is_equal_approx(NORMAL_CONFIG.shrink_unstaffed_add, 0.005),
+		true,
+		"BP1: shrink stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_CEILING, 0.70)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BP1: BM1/BN1/BO1 stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.FAIR_MULT, 1.10)
+		and is_equal_approx(FairPriceSettlePolicy.GOUGE_MULT, 1.25),
+		true,
+		"BP1: BK1 fair/gouge mults stay 1.10 / 1.25"
+	)
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BP1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1,
+		true,
+		"BP1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BP1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BP1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BP1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BP1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BP1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "utilities")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "UtilitiesPolicy"),
+		true,
+		"BP1: utilities stays off the sell roll"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not spawn_src.contains("UtilitiesPolicy")
+		and not policy_src.contains("UtilitiesPolicy")
+		and not spawn_src.contains("utilities_")
+		and not policy_src.contains("utilities_"),
+		true,
+		"BP1: door spawn does not read utilities"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("listed_band")
+		or events.contains("stop_day")
+		or events.contains("utilities_outage")
+		or events.contains("utility_spike"),
+		false,
+		"BP1: Soft catalog stays closed"
+	)
+	var util_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/utilities_policy.gd"
+	)
+	_expect_equal(
+		not util_src.contains(".tscn")
+		and not util_src.contains(".png")
+		and not util_src.contains(".webp")
+		and not FileAccess.file_exists("res://scripts/economy/utilities_policy.tscn"),
+		true,
+		"BP1: No Art"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/utilities_policy.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/autoload/economy.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BP1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BP1: %s never shows p_buy" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	var presenter_src := FileAccess.get_file_as_string(
+		"res://scripts/ui/demand_signal_presenter.gd"
+	)
+	_expect_equal(
+		presenter_src.contains("utilities_settle_toast")
+		and presenter_src.contains("Utilities ·"),
+		true,
+		"BP1: settle beat stays a soft utilities line"
+	)
+	_expect_equal(
+		hud_src.contains("_maybe_show_utilities_settle_toast"),
+		true,
+		"BP1: HUD can show the utilities settle line"
+	)
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert")
+		and not hud_src.contains("camera_off"),
+		true,
+		"BP1: listed-band retag, STOP, and camera off-switch stay parked"
+	)
+	var save_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/online_listing_save_policy.gd"
+	)
+	_expect_equal(
+		not save_src.contains("suggested_at_list")
+		and not save_src.contains("UtilitiesPolicy"),
+		true,
+		"BP1: Soft OK list-time suggested persistence stays Soft"
+	)
+	_expect_equal(NmMismatchPolicy.REP_HIT, 2, "BP1: BB1/BD1 mismatch Rep stays −2")
+	_game_state.call("start_new_game")
+
+
+func _bp1_reset_for_settle() -> void:
+	var config := NORMAL_CONFIG.duplicate() as BalanceConfig
+	config.event_chance_settle = 0.0
+	_game_state.call("set_balance_config", config)
+	_game_state.call("start_new_game")
+
+
+func _bp1_utilities_count() -> int:
+	return _i1_ledger_count(&"utilities")
+
+
+func _bp1_utilities_cents_on_day(day: int) -> int:
+	var total := 0
+	var count := 0
+	for entry: LedgerEntry in _economy.call("get_ledger"):
+		if entry.category == &"utilities" and entry.day == day:
+			total += entry.amount_cents
+			count += 1
+	if count == 0:
+		return 0
+	return total
 
 
 func _bm1_reset_for_settle() -> void:

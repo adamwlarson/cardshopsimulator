@@ -221,6 +221,12 @@ enum Difficulty {
 ## sell weight. BN1 starve wins that day — do not also flood.
 @export var buylist_flood_ceiling: float = 0.70
 @export var buylist_flood_lots_mult: float = 1.50
+## BP1 / systems §1: close-settle daily utilities by current shop tier.
+## Missing / ≤0 falls back in UtilitiesPolicy to Small $40 / Medium $70 /
+## Large $110. Easy/Hard inherit. Not a sell weight.
+@export var utilities_small_daily_cents: int = 4_000
+@export var utilities_medium_daily_cents: int = 7_000
+@export var utilities_large_daily_cents: int = 11_000
 
 
 func is_rent_due_day(day: int) -> bool:
