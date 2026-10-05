@@ -91,3 +91,4 @@
 |------|----------|
 | 2026-10-05 | Drafted post BE1 SHIPPED #87 @ `a6a0bb3f`. Lean **BF1 Net-worth HUD** (AA1 formula, all modes). STOP / online-cancel polish / listed-band Soft parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM adopted **BF1 GO** Net-worth HUD (AA1 formula, all modes). Park BF2 STOP / BF3 online-cancel polish / BF4 listed-band Soft. Hard-park camera off-switch. Soft catalog CLOSED. No Art. |
+| 2026-10-05 ~1:06pm ET | **Tip-frozen** [#88](https://github.com/adamwlarson/cardshopsimulator/pull/88) @ `6f59c603` (branch `cursor/bf1-net-worth-hud-b517`). 6 files, no docs. Cloud agent bc-30e6c712 archived. Eng review that SHA against bar `a0e1efb8`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
