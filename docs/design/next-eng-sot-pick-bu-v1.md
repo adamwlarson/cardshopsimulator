@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BU v1 — post BT1
 
-**Status:** **ADOPTED** 2026-10-05 ~7:38pm ET — BU1 Recurring marketplace lots 1–3/day. Eng bar = this file on main after sync. Soft CLOSED. Soft OK list-time Soft. No Art. Park BU2 STOP / BU3 Soft / BU4 Soft. Camera hard-parked.
+**Status:** **TIP-FROZEN** 2026-10-05 ~7:52pm ET — BU1 [#103](https://github.com/adamwlarson/cardshopsimulator/pull/103) @ `966445c5` (branch `cursor/bu1-recurring-marketplace-lots-e248`). Eng review vs bar `5cbfbbf3`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bt (BT1 Distributor weekly restock menu SHIPPED #102 @ `c22525a5`, reviewed `a1c2b34c`; docs status `c376c6eb`); Soft catalog CLOSED
@@ -99,3 +99,4 @@
 |------|----------|
 | 2026-10-05 ~7:40pm ET | Drafted post BT1 SHIPPED #102 @ `c22525a5` (reviewed `a1c2b34c`; docs status `c376c6eb`). Lean **BU1 Recurring marketplace lots 1–3/day**. Verified on main `c376c6eb`: marketplace lines are only `dustway-marketplace-day-1` (`last_day` 2), the §10 #3 one-shot `marketplace-outing-steal`, and the AQ1 Rep ≥ 75 lead, with no daily roll. The outing costs (`marketplace_outing_attention` 25 / `marketplace_outing_floor_skip_seconds` 34 / `marketplace_courier_fee_cents` 3500) already ship in `BalanceConfig`. First day 4 keeps the day-3 beat's steal pick untouched. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. BT1 Soft notes stay Soft. No Art. BM1–BT1 stay as shipped. |
 | 2026-10-05 ~7:38pm ET | **ADOPTED** BU1. Park BU2 STOP / BU3 Soft / BU4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. Soft notes noted (AQ1 lead id not day-scoped; fetch per lot not per trip) — Soft CLOSED, not in scope. |
+| 2026-10-05 ~7:52pm ET | **Tip-frozen** [#103](https://github.com/adamwlarson/cardshopsimulator/pull/103) @ `966445c5` (branch `cursor/bu1-recurring-marketplace-lots-e248`). 6 files, no docs. Cloud agent bc-4c0c2de5 archived. Eng review that SHA against bar `5cbfbbf3`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
