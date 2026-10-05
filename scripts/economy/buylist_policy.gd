@@ -3,9 +3,9 @@ extends RefCounted
 
 ## systems §3 / §4.3 / §5.2 buylist buy-from-them. CustomerServe when the
 ## customer is selling to the shop. One lot: You offer, Buy, Walk,
-## one Change offer, and one optional Inspect. Out: AV1 shop-buy
-## Negotiate, AU1 buy Counter, auction, trades, trunk, marketplace
-## Inspect★.
+## one Change offer, and one optional Inspect. Owner Inspect is 5 Att;
+## Specialist on duty cuts that to 2. Out: AV1 shop-buy Negotiate,
+## AU1 buy Counter, auction, trades, trunk, marketplace Inspect★.
 const PCT_SEALED := 0.55
 const PCT_SINGLES_NM := 0.50
 const PCT_GRADED := 0.45
@@ -20,6 +20,7 @@ const CATEGORY_SINGLES_NM := &"singles_nm"
 const CATEGORY_GRADED := &"graded"
 const UNSET_INT := 0x7fffffff
 const ATTENTION_COST := 5
+const ATTENTION_COST_SPECIALIST := 2
 const ACCURACY := 0.85
 const FOG_CUE := "Inspect optional"
 const ACTOR_OWNER := &"owner"
@@ -142,10 +143,55 @@ static func apply_offer_cents(dto: BuyConfirmSignal, offer_cents: int) -> void:
 	dto.lot_total_cents = offer_cents * maxi(1, dto.quantity)
 
 
-static func attention_cost(configured: int = UNSET_INT) -> int:
-	if configured == UNSET_INT or configured < 0:
-		return ATTENTION_COST
-	return configured
+static func attention_cost(
+	specialist_on_duty: Variant = null,
+	owner_configured: int = UNSET_INT,
+	specialist_configured: int = UNSET_INT
+) -> int:
+	var owner := ATTENTION_COST
+	if owner_configured != UNSET_INT and owner_configured >= 0:
+		owner = owner_configured
+	if not _duty_flag(specialist_on_duty):
+		return owner
+	var discounted := ATTENTION_COST_SPECIALIST
+	if specialist_configured != UNSET_INT and specialist_configured >= 0:
+		discounted = specialist_configured
+	return discounted
+
+
+static func attention_cost_for(
+	shop: ShopState = null,
+	config: BalanceConfig = null
+) -> int:
+	var owner := UNSET_INT
+	var specialist := UNSET_INT
+	if config != null:
+		owner = config.inspect_attention
+		specialist = config.inspect_attention_specialist
+	return attention_cost(specialist_is_on_duty(shop), owner, specialist)
+
+
+static func specialist_is_on_duty(shop: ShopState) -> bool:
+	if shop == null:
+		return false
+	var hired := false
+	for member: StaffMember in shop.staff:
+		if member == null or not member.is_specialist():
+			continue
+		hired = true
+		if member.on_duty_today:
+			return true
+	if hired:
+		return false
+	return shop.has_specialist_on_duty()
+
+
+static func _duty_flag(flag: Variant) -> bool:
+	if flag == null:
+		return false
+	if typeof(flag) == TYPE_BOOL:
+		return flag
+	return bool(flag)
 
 
 static func accuracy(configured: float = -1.0) -> float:
