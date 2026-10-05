@@ -1045,8 +1045,12 @@ func _confirm_online_list() -> void:
 		return
 	var listing := result.get("listing") as OnlineListing
 	if listing != null:
-		beat_toast.text = "Listed · ships %d day(s) · fee %s" % [
+		beat_toast.text = "Listed · ships %d day(s) · fee %d%% · %s" % [
 			listing.ship_days,
+			OnlineFeePolicy.fee_percent_for(
+				GameState.current_reputation,
+				GameState.balance_config
+			),
 			DemandSignalPresenter.format_cents(listing.fee_cents),
 		]
 		beat_toast.show()

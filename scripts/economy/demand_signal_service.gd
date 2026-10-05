@@ -526,10 +526,13 @@ func list_confirm(
 		informed,
 		&"list_confirm"
 	)
-	dto.fee_percent = _config.online_fee
+	dto.fee_percent = OnlineFeePolicy.fee_rate_for(
+		GameState.current_reputation,
+		_config
+	)
 	dto.fee_cents = OnlineListingService.fee_cents_for(
 		listed_price_cents,
-		_config.online_fee
+		dto.fee_percent
 	)
 	dto.ship_days_min = _config.online_ship_days_min
 	dto.ship_days_max = _config.online_ship_days_max
@@ -546,6 +549,10 @@ func refresh_list_confirm(
 	if dto == null:
 		return null
 	refresh_price_confirm(dto, listed_price_cents, location)
+	dto.fee_percent = OnlineFeePolicy.fee_rate_for(
+		GameState.current_reputation,
+		_config
+	)
 	dto.fee_cents = OnlineListingService.fee_cents_for(
 		listed_price_cents,
 		dto.fee_percent

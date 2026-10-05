@@ -625,6 +625,29 @@ func marketplace_ask_cents(basis_cents: int, configured_rate: float = 0.0) -> in
 	return MarketplaceLeadPolicy.ask_cents(basis_cents, configured_rate)
 
 
+func online_fee_cut_percent(configured: int = 0) -> int:
+	return OnlineFeePolicy.cut_percent(configured)
+
+
+func online_fee_cut_rep(configured: int = 0) -> int:
+	return OnlineFeePolicy.cut_rep(configured)
+
+
+func is_online_fee_cut(reputation: int = -1) -> bool:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return OnlineFeePolicy.is_high_rep_for(resolved, GameState.balance_config)
+
+
+func online_listing_fee_rate(reputation: int = -1) -> float:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return OnlineFeePolicy.fee_rate_for(resolved, GameState.balance_config)
+
+
+func online_listing_fee_cents(sale_cents: int, reputation: int = -1) -> int:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return OnlineFeePolicy.fee_cents_for(sale_cents, resolved, GameState.balance_config)
+
+
 func auction_snipe_attention(configured: int = 0) -> int:
 	return AuctionSnipePolicy.attention_cost(configured)
 
