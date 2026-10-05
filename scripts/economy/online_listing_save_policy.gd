@@ -5,7 +5,7 @@ extends RefCounted
 ## Each active hold restores stock identity, listed ask, remaining
 ## ship days, and hold membership so the BI1 soft-cap count matches.
 ## Out: list/cancel verbs, fee ladder, BH1 cancel-day counter (separate
-## snapshot). Never serializes true_market / p_buy / cert_valid.
+## snapshot). Does not serialize fog market or buy-probability fields.
 const SAVE_NEXT_ID_KEY := "next_id"
 const SAVE_LISTINGS_KEY := "listings"
 
