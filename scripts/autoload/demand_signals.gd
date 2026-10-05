@@ -738,6 +738,36 @@ func distributor_minimum_units(
 	return DistributorMoqPolicy.minimum_units(today_moq, resolved, configured_mult)
 
 
+func distributor_menu_first_day(configured: int = 0) -> int:
+	return DistributorMenuPolicy.first_day(configured)
+
+
+func distributor_menu_interval_days(configured: int = 0) -> int:
+	return DistributorMenuPolicy.interval_days(configured)
+
+
+func distributor_menu_moq_sealed(configured: int = 0) -> int:
+	return DistributorMenuPolicy.moq_sealed(configured)
+
+
+func distributor_menu_moq_accessory(configured: int = 0) -> int:
+	return DistributorMenuPolicy.moq_accessory(configured)
+
+
+func is_distributor_menu_day(day: int = -1, config: BalanceConfig = null) -> bool:
+	var resolved_day := day if day >= 0 else GameState.current_day
+	var resolved_config := config if config != null else GameState.balance_config
+	return DistributorMenuPolicy.is_menu_day(resolved_day, resolved_config)
+
+
+func closed_opportunity_ids_to_save() -> Array:
+	return DistributorMenuPolicy.closed_ids_to_save(_closed_opportunity_ids)
+
+
+func apply_closed_opportunity_ids_save(value: Variant) -> void:
+	_closed_opportunity_ids = DistributorMenuPolicy.closed_ids_from_save(value)
+
+
 func marketplace_extra_lead_count(configured: int = 0) -> int:
 	return MarketplaceLeadPolicy.extra_lead_count(configured)
 
@@ -1531,6 +1561,9 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 	)
 	opportunities.append_array(_scripted_opportunities)
 	opportunities.append_array(_supply_glut_restock_lots())
+	# BT1: weekly restock menu from day 8 every 7 days. One line per
+	# live SEALED / ACCESSORY SKU. Unbought lines expire at close.
+	opportunities.append_array(_prep_distributor_menu())
 	# AQ1: read live Rep when today's marketplace list is prepared.
 	# Rep ≥ 75 appends one extra lead. Rep ≤ 74 keeps today's list.
 	opportunities.append_array(_high_rep_marketplace_leads(opportunities))
@@ -1548,6 +1581,54 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 		if not _closed_opportunity_ids.has(opportunity.id):
 			result.append(opportunity)
 	return result
+
+
+func _prep_distributor_menu() -> Array[BuyOpportunity]:
+	var lots: Array[BuyOpportunity] = []
+	var config := GameState.balance_config
+	var day := GameState.current_day
+	if not DistributorMenuPolicy.is_menu_day(day, config):
+		return lots
+	if InventoryService.model == null:
+		return lots
+	for sku_id: StringName in DistributorMenuPolicy.menu_sku_ids(
+		InventoryService.model.catalog
+	):
+		var lot := _make_distributor_menu_lot(day, sku_id, config)
+		if lot != null:
+			lots.append(lot)
+	return lots
+
+
+func _make_distributor_menu_lot(
+	day: int,
+	sku_id: StringName,
+	config: BalanceConfig
+) -> BuyOpportunity:
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null or not DistributorMenuPolicy.is_menu_sku(sku):
+		return null
+	var moq := DistributorMenuPolicy.base_moq_for(sku.product_class, config)
+	if moq <= 0:
+		return null
+	var wholesale := PricingService.distributor_wholesale_cents(
+		sku.base_market_cents,
+		config
+	)
+	if wholesale <= 0:
+		return null
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = DistributorMenuPolicy.offer_id(day, sku_id)
+	opportunity.sku_id = sku_id
+	opportunity.display_name = sku.display_name
+	opportunity.offer_label = DistributorMenuPolicy.OFFER_LABEL
+	opportunity.channel = DemandSignalService.Channel.DISTRIBUTOR
+	opportunity.unit_cost_cents = wholesale
+	opportunity.quantity = moq
+	opportunity.space_required = DistributorMenuPolicy.SPACE_REQUIRED
+	if not opportunity.is_valid():
+		return null
+	return opportunity
 
 
 func _prep_auction_snipe() -> BuyOpportunity:

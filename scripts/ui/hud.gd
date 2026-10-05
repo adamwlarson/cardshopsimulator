@@ -377,6 +377,7 @@ func _update_phase(phase: int) -> void:
 			phase_chip.theme_type_variation = &"PhaseChipPrep"
 			phase_label.theme_type_variation = &"ChipLabel"
 			phase_button.text = "Open floor"
+			_maybe_show_distributor_menu_toast()
 		GameState.DayPhase.FLOOR:
 			phase_chip.theme_type_variation = &"PhaseChipFloor"
 			phase_label.theme_type_variation = &"ChipLabelInverse"
@@ -471,6 +472,19 @@ func _maybe_show_utilities_settle_toast(append: bool = false) -> void:
 func _maybe_show_buylist_flood_toast(append: bool = false) -> void:
 	var message := DemandSignalPresenter.buylist_flood_toast(
 		GameState.seller_lots_weight_mult > 1.0
+	)
+	if message.is_empty():
+		return
+	if append and not beat_toast.text.is_empty():
+		beat_toast.text = "%s\n%s" % [beat_toast.text, message]
+	else:
+		beat_toast.text = message
+	beat_toast.show()
+
+
+func _maybe_show_distributor_menu_toast(append: bool = false) -> void:
+	var message := DemandSignalPresenter.distributor_menu_toast(
+		DemandSignals.is_distributor_menu_day()
 	)
 	if message.is_empty():
 		return

@@ -254,6 +254,15 @@ enum Difficulty {
 @export var rotation_crash_mult_min: float = 0.45
 @export var rotation_crash_mult_max: float = 0.70
 @export var rotation_mild_mult: float = 0.90
+## BT1 / systems §3: Distributor weekly restock menu. Menu day =
+## day ≥ first and (day − first) % interval == 0. Missing first → 8.
+## Missing interval → 7. Missing sealed min → 6. Missing accessory
+## min → 10. ≤0 falls back in DistributorMenuPolicy. Easy/Hard inherit.
+## Not a sell weight.
+@export var distributor_menu_first_day: int = 8
+@export var distributor_menu_interval_days: int = 7
+@export var distributor_menu_moq_sealed: int = 6
+@export var distributor_menu_moq_accessory: int = 10
 
 
 func is_rent_due_day(day: int) -> bool:
