@@ -6566,37 +6566,37 @@ func _test_set_release_hype_named_gate_and_fallbacks() -> void:
 		"BQ1: missing / ≤0 new/old mults fall back to 1.40 / 0.70"
 	)
 	_expect_equal(
-		MarketEventService.is_set_release_telegraph_day(1)
-		and MarketEventService.is_set_release_telegraph_day(3)
-		and not MarketEventService.is_set_release_calendar_day(3),
+		MarketEventService.is_set_release_telegraph_day(8)
+		and MarketEventService.is_set_release_telegraph_day(10)
+		and not MarketEventService.is_set_release_calendar_day(10),
 		true,
-		"BQ1: days 1–3 telegraph before the release window"
+		"BQ1: days 8–10 telegraph before the release window"
 	)
 	_expect_equal(
-		MarketEventService.is_set_release_calendar_day(4)
-		and MarketEventService.is_set_release_calendar_day(8)
-		and not MarketEventService.is_set_release_telegraph_day(4)
-		and not MarketEventService.is_set_release_calendar_day(9),
+		MarketEventService.is_set_release_calendar_day(11)
+		and MarketEventService.is_set_release_calendar_day(15)
+		and not MarketEventService.is_set_release_telegraph_day(11)
+		and not MarketEventService.is_set_release_calendar_day(16),
 		true,
 		"BQ1: release window is 5 days inclusive of release day"
 	)
 	_expect_equal(
-		SetReleaseHypePolicy.remaining_days_on(4) == 5
-		and SetReleaseHypePolicy.remaining_days_on(8) == 1
-		and SetReleaseHypePolicy.remaining_days_on(3) == 0
-		and SetReleaseHypePolicy.remaining_days_on(9) == 0,
+		SetReleaseHypePolicy.remaining_days_on(11) == 5
+		and SetReleaseHypePolicy.remaining_days_on(15) == 1
+		and SetReleaseHypePolicy.remaining_days_on(10) == 0
+		and SetReleaseHypePolicy.remaining_days_on(16) == 0,
 		true,
 		"BQ1: remaining days cover release day through the last duration day"
 	)
 	_expect_equal(
-		MarketEventService.set_release_calendar_weight_mult(4)
-		> MarketEventService.set_release_calendar_weight_mult(3),
+		MarketEventService.set_release_calendar_weight_mult(11)
+		> MarketEventService.set_release_calendar_weight_mult(10),
 		true,
 		"BQ1: calendar window boosts Set release settle weight"
 	)
 	_expect_equal(
-		is_equal_approx(MarketEventService.set_release_calendar_weight_mult(3), 0.0)
-		and is_equal_approx(MarketEventService.set_release_calendar_weight_mult(9), 0.0),
+		is_equal_approx(MarketEventService.set_release_calendar_weight_mult(10), 0.0)
+		and is_equal_approx(MarketEventService.set_release_calendar_weight_mult(16), 0.0),
 		true,
 		"BQ1: off-window days do not roll Set release"
 	)
@@ -6606,7 +6606,7 @@ func _test_set_release_hype_can_fire() -> void:
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
 	_demand_signals.call("seed_event_rng", MarketEventService.EVENT_RNG_SEED)
-	_game_state.set("current_day", 3)
+	_game_state.set("current_day", 10)
 	_expect_equal(
 		String(_demand_signals.call("calendar_telegraph_text")).contains("Set release"),
 		true,
@@ -6626,7 +6626,7 @@ func _test_set_release_hype_can_fire() -> void:
 		String(_demand_signals.call("calendar_telegraph_text")),
 		"BQ1 telegraph calendar text"
 	)
-	_game_state.set("current_day", 4)
+	_game_state.set("current_day", 11)
 	var started: MarketEvent = _demand_signals.call(
 		"start_pack_event",
 		MarketEvent.KIND_SET_RELEASE,
@@ -6688,7 +6688,7 @@ func _test_set_release_hype_demand_and_prices() -> void:
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
 	_demand_signals.call("seed_event_rng", MarketEventService.EVENT_RNG_SEED)
-	_game_state.set("current_day", 3)
+	_game_state.set("current_day", 10)
 	var new_sku := &"AA-SKIE-BLST"
 	var old_sku := &"AA-DUST-ETB"
 	var staple := &"AA-BASE-088"
@@ -6714,7 +6714,7 @@ func _test_set_release_hype_demand_and_prices() -> void:
 		true,
 		"BQ1: telegraph day does not invent old-set demand mult"
 	)
-	_game_state.set("current_day", 4)
+	_game_state.set("current_day", 11)
 	var started: MarketEvent = _demand_signals.call(
 		"start_pack_event",
 		MarketEvent.KIND_SET_RELEASE,
@@ -6819,9 +6819,9 @@ func _test_set_release_hype_demand_and_prices() -> void:
 		true,
 		"BQ1: sealed demand mults no longer apply after duration ends"
 	)
-	_game_state.set("current_day", 9)
+	_game_state.set("current_day", 16)
 	_expect_equal(
-		not MarketEventService.is_set_release_calendar_day(9)
+		not MarketEventService.is_set_release_calendar_day(16)
 		and is_equal_approx(float(_demand_signals.call("set_release_demand_mult_for", new_sku)), 1.0)
 		and is_equal_approx(float(_demand_signals.call("set_release_demand_mult_for", old_sku)), 1.0),
 		true,
@@ -6832,7 +6832,7 @@ func _test_set_release_hype_demand_and_prices() -> void:
 func _test_set_release_hype_levers_and_no_soft_lock() -> void:
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
-	_game_state.set("current_day", 4)
+	_game_state.set("current_day", 11)
 	_demand_signals.call(
 		"start_pack_event",
 		MarketEvent.KIND_SET_RELEASE,
@@ -6934,13 +6934,13 @@ func _bq1_scripted_buy_opportunity() -> BuyOpportunity:
 func _test_set_release_hype_section_45_and_banner() -> void:
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
 	_game_state.call("start_new_game")
-	_game_state.set("current_day", 3)
+	_game_state.set("current_day", 10)
 	_expect_equal(
 		String(_demand_signals.call("calendar_telegraph_text")).contains("incoming"),
 		true,
 		"BQ1: telegraph is calendar-known"
 	)
-	_game_state.set("current_day", 4)
+	_game_state.set("current_day", 11)
 	_demand_signals.call(
 		"start_pack_event",
 		MarketEvent.KIND_SET_RELEASE,
@@ -7111,7 +7111,7 @@ func _test_set_release_hype_save_load() -> void:
 		}
 	)
 	_expect_equal(started != null, true, "BQ1 save: Set release starts")
-	_game_state.set("current_day", 4)
+	_game_state.set("current_day", 11)
 	var saved: Dictionary = _game_state.call("capture_save")
 	_assert_payload_has_no_truth(saved, "BQ1 Set release save")
 	var stored: Dictionary = saved.get("market_event", {})
