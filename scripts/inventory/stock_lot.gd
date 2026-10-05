@@ -6,6 +6,8 @@ extends Resource
 @export_range(0, 100_000_000, 1) var acquired_cost_avg_cents: int = 0
 @export_range(0, 100_000_000, 1) var listed_price_cents: int = 0
 @export var location: InventoryLocation = InventoryLocation.new()
+## Domain-only true condition for fog buys (BC1 auction snipes).
+@export var condition: CardInstance.Condition = CardInstance.Condition.NM
 
 
 func unit_cost_cents() -> int:

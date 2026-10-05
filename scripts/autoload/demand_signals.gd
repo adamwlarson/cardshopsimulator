@@ -801,13 +801,14 @@ func bid_auction_snipe(dto: BuyConfirmSignal) -> bool:
 		return false
 	if not GameState.consume_attention(attention_cost):
 		return false
+	AuctionInspectPolicy.ensure_lot_condition(dto, GameState.current_day)
 	var shown_midpoint := (dto.shown_comp_low_cents + dto.shown_comp_high_cents) / 2
-	var purchased := InventoryService.confirm_stock_purchase(
-		opportunity.sku_id,
+	var purchased := _confirm_ungraded_purchase(
+		dto,
+		opportunity,
 		buy_qty,
 		opportunity.unit_cost_cents,
-		shown_midpoint - opportunity.unit_cost_cents,
-		InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
+		shown_midpoint
 	)
 	if not purchased:
 		_refund_attention(attention_cost)
@@ -1234,8 +1235,15 @@ func _confirm_ungraded_purchase(
 ) -> bool:
 	var location := InventoryLocation.new(InventoryLocation.Type.BACKSTOCK)
 	var margin := shown_midpoint - unit_cost
-	if MarketplaceInspectPolicy.applies_to(dto):
-		MarketplaceInspectPolicy.ensure_lot_condition(dto, GameState.current_day)
+	var fog_inspect := (
+		MarketplaceInspectPolicy.applies_to(dto)
+		or AuctionInspectPolicy.applies_to(dto)
+	)
+	if fog_inspect:
+		if MarketplaceInspectPolicy.applies_to(dto):
+			MarketplaceInspectPolicy.ensure_lot_condition(dto, GameState.current_day)
+		if AuctionInspectPolicy.applies_to(dto):
+			AuctionInspectPolicy.ensure_lot_condition(dto, GameState.current_day)
 		var sku := InventoryService.model.get_sku(opportunity.sku_id)
 		if sku != null and sku.product_class == ProductSKU.ProductClass.SINGLE:
 			return InventoryService.confirm_channel_singles_purchase(
@@ -1246,6 +1254,21 @@ func _confirm_ungraded_purchase(
 				location,
 				paid_total_cents
 			)
+		var purchased := InventoryService.confirm_stock_purchase(
+			opportunity.sku_id,
+			buy_qty,
+			unit_cost,
+			margin,
+			location,
+			paid_total_cents
+		)
+		if purchased and AuctionInspectPolicy.applies_to(dto):
+			AuctionInspectPolicy.apply_true_condition_to_stock(
+				dto,
+				_backstock_stock_lot(opportunity.sku_id),
+				GameState.current_day
+			)
+		return purchased
 	return InventoryService.confirm_stock_purchase(
 		opportunity.sku_id,
 		buy_qty,
@@ -1290,6 +1313,12 @@ func _confirm_graded_purchase(
 			slab.card_ref,
 			GameState.current_day
 		)
+	if AuctionInspectPolicy.applies_to(dto):
+		AuctionInspectPolicy.apply_true_condition(
+			dto,
+			slab.card_ref,
+			GameState.current_day
+		)
 	if not Economy.record_expense(total_cost, &"inventory", "Graded slab purchase"):
 		InventoryService.model.remove_slab(slab)
 		return false
@@ -1311,6 +1340,21 @@ func _existing_opportunity(opportunity_id: StringName) -> BuyOpportunity:
 		if opportunity.id == opportunity_id:
 			return opportunity
 	return null
+
+
+func _backstock_stock_lot(sku_id: StringName) -> StockLot:
+	if InventoryService.model == null:
+		return null
+	var found: StockLot = null
+	for lot: StockLot in InventoryService.model.stock_lots:
+		if lot == null or lot.sku == null:
+			continue
+		if lot.sku.id != sku_id:
+			continue
+		if lot.location == null or lot.location.type != InventoryLocation.Type.BACKSTOCK:
+			continue
+		found = lot
+	return found
 
 
 func _open_opportunities() -> Array[BuyOpportunity]:
@@ -1523,6 +1567,7 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 		if not dto.inspected:
 			dto.condition_cue = AuctionSnipePolicy.CONDITION_CUE
 		dto.confidence = AuctionSnipePolicy.CONFIDENCE
+		AuctionInspectPolicy.ensure_lot_condition(dto, GameState.current_day)
 		if GameState.attention_remaining < auction_snipe_attention():
 			dto.can_confirm = false
 	if ShadyTrunkPolicy.is_trunk_id(opportunity.id):
@@ -1535,6 +1580,11 @@ func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
 
 
 func inspect_attention_cost_for(dto: BuyConfirmSignal) -> int:
+	if AuctionInspectPolicy.applies_to(dto):
+		return AuctionInspectPolicy.attention_cost_for(
+			GameState.shop,
+			GameState.balance_config
+		)
 	if MarketplaceInspectPolicy.applies_to(dto):
 		return MarketplaceInspectPolicy.attention_cost_for(
 			GameState.shop,
@@ -1549,6 +1599,12 @@ func can_inspect(
 ) -> bool:
 	if dto == null or _service == null:
 		return false
+	if AuctionInspectPolicy.applies_to(dto):
+		if not AuctionInspectPolicy.can_inspect(dto, acting_role):
+			return false
+		if not GameState.is_game_active:
+			return false
+		return GameState.attention_remaining >= inspect_attention_cost_for(dto)
 	if MarketplaceInspectPolicy.applies_to(dto):
 		if not MarketplaceInspectPolicy.can_inspect(dto, acting_role):
 			return false
@@ -1571,6 +1627,7 @@ func inspect_buy(
 	if not GameState.consume_attention(cost):
 		return false
 	if not _service.inspect_condition(dto, GameState.current_day):
+		_refund_attention(cost)
 		return false
 	return true
 
