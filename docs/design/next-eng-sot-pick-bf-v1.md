@@ -80,7 +80,7 @@
 
 - [x] Choose **BF1** (recommended)
 - [x] If BF1: Eng vs AA1 NW formula on HUD for all modes; §4.5 never shows raw `true_market`; no Art
-- [x] Sync this file to main before cloud agent (pending commit SHA)
+- [x] Sync this file to main before cloud agent @ `cd55fceb`
 - [x] Soft catalog stays closed; STOP stays parked
 
 ---
