@@ -70,7 +70,7 @@ func weight_for(
 		weight *= config.whale_weight_mult * maxf(0.0, event_whale_mult)
 		weight *= CustomerSpawnPolicy.high_rep_whale_weight_mult(reputation)
 	elif archetype_id == &"flipper":
-		# BN1: stingy buylist at open applies seller_lots_mult once.
+		# BN1/BO1: open-day seller_lots_mult applies once (starve or flood).
 		# Recession event_buylist_mult still stacks. Not a sell weight.
 		weight *= (
 			config.flipper_weight_mult

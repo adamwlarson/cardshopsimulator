@@ -127,6 +127,12 @@ static func buylist_fewer_lots_toast(starved: bool) -> String:
 	return "Stingy buylist — the desk is quieter"
 
 
+static func buylist_flood_toast(flooded: bool) -> String:
+	if not flooded:
+		return ""
+	return "Generous buylist — the desk is busy"
+
+
 static func research_action_label(cash_cents: int, attention_cost: int) -> String:
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 
