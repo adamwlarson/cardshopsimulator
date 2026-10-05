@@ -96,3 +96,6 @@
 | 2026-10-05 | PM adopted **BD1**. Spec on main `f54e9335`. Spike [BD1 Extend BB1 NM mismatch onto auction](https://cursor.com/agents/bc-7959cef1-9fd5-5dd8-8f5a-7a878ac2dc50). Park BD2/BD3/BD4. No Art. Soft catalog CLOSED. Draft sha256 `4e30f141`. |
 | 2026-10-05 | Eng bar locked BD1 against `f54e9335`. Auction joins BB1 fog set. Awaiting tip-freeze. |
 | 2026-10-05 | PM tip-froze PR #86 @ `a0094b84`. Ready. 3 files, no docs. Agent archived. |
+| 2026-10-05 | PM tip-froze PR #86 @ `a0094b84`. Ready. 3 files, no docs. Agent archived. |
+| 2026-10-05 | Eng **APPROVE** BD1 [PR #86](https://github.com/adamwlarson/cardshopsimulator/pull/86) @ `a0094b84`. No Soft OK notes. Soft catalog CLOSED. QA formal released. |
+| 2026-10-05 | BD1 SHIPPED — squash-merged #86 @ `58fc3c13` (reviewed `a0094b84`). QA PASS harness 152/0/0. |
