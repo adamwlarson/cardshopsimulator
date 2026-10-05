@@ -51,7 +51,8 @@ var listed_sale_log := ListedSaleDayLog.new()
 var last_buylist_drip_rep_delta: int = 0
 var buylist_drip_applied: bool = false
 var buylist_pcts := BuylistPctSettings.new()
-## BN1: that day's seller-lot / seller-walk-in weight. 1.0 until open.
+## BN1/BO1: that day's seller-lot / seller-walk-in weight. 1.0 until open.
+## Starve is < 1.0; flood is > 1.0. They never stack the same day.
 var seller_lots_weight_mult: float = 1.0
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
@@ -140,6 +141,7 @@ func start_floor() -> bool:
 		})
 	_run_stocker_restock()
 	apply_buylist_fewer_lots_at_open()
+	apply_buylist_flood_at_open()
 	current_phase = DayPhase.FLOOR
 	EventBus.day_phase_changed.emit(current_phase)
 	_release_queued_regular_return()
@@ -561,6 +563,32 @@ func apply_buylist_fewer_lots_at_open() -> float:
 	return seller_lots_weight_mult
 
 
+func apply_buylist_flood_at_open() -> float:
+	# BO1: snapshot at floor open after BN1. Any category strictly above
+	# flood_ceiling and none below drip_floor → seller-lot / seller-walk-in
+	# weight × flood_lots_mult. Caps at one mult. If BN1 starved the day,
+	# starve wins — do not also flood. Buyer door / whale stay shipped.
+	if BuylistFewerLotsPolicy.is_starved(buylist_pcts, balance_config):
+		QaInstrumentation.record_buylist_flood({
+			"weight_mult": seller_lots_weight_mult,
+			"flooded": false,
+			"starved": true,
+			"day": current_day,
+		})
+		return seller_lots_weight_mult
+	seller_lots_weight_mult = BuylistFloodPolicy.seller_weight_mult(
+		buylist_pcts,
+		balance_config
+	)
+	QaInstrumentation.record_buylist_flood({
+		"weight_mult": seller_lots_weight_mult,
+		"flooded": seller_lots_weight_mult > 1.0,
+		"starved": false,
+		"day": current_day,
+	})
+	return seller_lots_weight_mult
+
+
 func fire_staff(index: int) -> StaffMember:
 	# AG1: role leaves the roster now. Wage stops on the next settle.
 	# Popular (roster age ≥ 3 floor days) eats Rep −5 once.
@@ -964,7 +992,7 @@ func restore_save(data: Dictionary) -> bool:
 		buylist_pcts.reset()
 	buylist_drip_applied = bool(data.get("buylist_drip_applied", false))
 	seller_lots_weight_mult = float(data.get("seller_lots_weight_mult", 1.0))
-	if seller_lots_weight_mult <= 0.0 or seller_lots_weight_mult > 1.0:
+	if seller_lots_weight_mult <= 0.0 or seller_lots_weight_mult > 3.0:
 		seller_lots_weight_mult = 1.0
 	register_walkout_count_today = maxi(
 		0,

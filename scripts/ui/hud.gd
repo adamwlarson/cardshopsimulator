@@ -405,8 +405,10 @@ func _update_phase(phase: int) -> void:
 		beat_toast.text = "Cashier no-show — floor understaffed"
 		beat_toast.show()
 		_maybe_show_buylist_fewer_lots_toast(true)
+		_maybe_show_buylist_flood_toast(true)
 	elif phase == GameState.DayPhase.FLOOR:
 		_maybe_show_buylist_fewer_lots_toast()
+		_maybe_show_buylist_flood_toast()
 	elif phase == GameState.DayPhase.SETTLE:
 		_maybe_show_fair_price_settle_toast()
 	_sync_modal_veil()
@@ -441,6 +443,19 @@ func _maybe_show_buylist_drip_toast(append: bool = false) -> void:
 func _maybe_show_buylist_fewer_lots_toast(append: bool = false) -> void:
 	var message := DemandSignalPresenter.buylist_fewer_lots_toast(
 		GameState.seller_lots_weight_mult < 1.0
+	)
+	if message.is_empty():
+		return
+	if append and not beat_toast.text.is_empty():
+		beat_toast.text = "%s\n%s" % [beat_toast.text, message]
+	else:
+		beat_toast.text = message
+	beat_toast.show()
+
+
+func _maybe_show_buylist_flood_toast(append: bool = false) -> void:
+	var message := DemandSignalPresenter.buylist_flood_toast(
+		GameState.seller_lots_weight_mult > 1.0
 	)
 	if message.is_empty():
 		return
