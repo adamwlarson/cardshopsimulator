@@ -22941,8 +22941,8 @@ func _test_daily_market_drift_class_bands() -> void:
 	)
 	_expect_equal(
 		int(first.get("cash_after", -1)),
-		int(first.get("cash_before", -2)),
-		"AR1: cash does not change"
+		int(first.get("cash_before", -2)) - UtilitiesPolicy.SMALL_DAILY_CENTS,
+		"AR1: cash does not change from drift"
 	)
 	_expect_equal(
 		bool(first.get("event_active", true)),
@@ -31622,7 +31622,10 @@ func _test_be1_same_seed_online_settle_fee() -> void:
 	_expect_equal(int(at_74.get("fee_cents", 0)), fee_8, "BE1: Rep 74 settle fee is 8%")
 	_expect_equal(
 		int(at_74.get("cash_after", 0)),
-		int(at_74.get("cash_before", 0)) + LISTED - fee_8,
+		int(at_74.get("cash_before", 0))
+		+ LISTED
+		- fee_8
+		- UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"BE1: Rep 74 net cash is list minus 8%"
 	)
 
@@ -31631,7 +31634,10 @@ func _test_be1_same_seed_online_settle_fee() -> void:
 	_expect_equal(int(at_75.get("fee_cents", 0)), fee_5, "BE1: Rep 75 settle fee is 5%")
 	_expect_equal(
 		int(at_75.get("cash_after", 0)),
-		int(at_75.get("cash_before", 0)) + LISTED - fee_5,
+		int(at_75.get("cash_before", 0))
+		+ LISTED
+		- fee_5
+		- UtilitiesPolicy.SMALL_DAILY_CENTS,
 		"BE1: Rep 75 net cash is list minus 5%"
 	)
 
