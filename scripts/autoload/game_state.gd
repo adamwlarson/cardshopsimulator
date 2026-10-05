@@ -981,6 +981,7 @@ func capture_save() -> Dictionary:
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
+		DistributorMenuPolicy.SAVE_KEY: DemandSignals.closed_opportunity_ids_to_save(),
 	}
 	var serialized := JSON.stringify(payload).to_utf8_buffer()
 	QaInstrumentation.record_save_pre_write(serialized)
@@ -1069,6 +1070,9 @@ func restore_save(data: Dictionary) -> bool:
 		DemandSignals.apply_event_save(market_event as Dictionary)
 	else:
 		DemandSignals.apply_event_save({})
+	DemandSignals.apply_closed_opportunity_ids_save(
+		data.get(DistributorMenuPolicy.SAVE_KEY, [])
+	)
 	var serialized := JSON.stringify(data).to_utf8_buffer()
 	QaInstrumentation.record_save_post_load(serialized)
 	EventBus.reputation_changed.emit(current_reputation)

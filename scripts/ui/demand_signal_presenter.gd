@@ -141,6 +141,12 @@ static func utilities_settle_toast(amount_cents: int, unpaid: bool) -> String:
 	return "Utilities · %s" % format_cents(amount_cents)
 
 
+static func distributor_menu_toast(is_menu_day: bool) -> String:
+	if not is_menu_day:
+		return ""
+	return DistributorMenuPolicy.TOAST
+
+
 static func research_action_label(cash_cents: int, attention_cost: int) -> String:
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 

@@ -238,6 +238,7 @@ func _initialize() -> void:
 	_test_buylist_fewer_lots()
 	_test_buylist_flood()
 	_test_daily_utilities_settle()
+	_test_distributor_weekly_menu()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -21550,8 +21551,8 @@ func _test_quiet_floor_section_45_and_parked() -> void:
 		"res://scripts/core/balance_config.gd"
 	)
 	_expect_equal(
-		balance_src.contains("moq") == false
-		and balance_src.contains("distributor_moq") == false
+		balance_src.contains("distributor_moq") == false
+		and shop_src.contains("distributor_moq") == false
 		and shop_src.contains("moq") == false,
 		true,
 		"AI1: distributor MOQ stays out"
@@ -25082,7 +25083,7 @@ func _test_distributor_moq_section_45_and_parked() -> void:
 		"res://scripts/core/balance_config.gd"
 	)
 	_expect_equal(
-		not balance_src.contains("moq")
+		not balance_src.contains("distributor_moq")
 		and not balance_src.contains("fee_cut")
 		and not shop_src.contains("moq"),
 		true,
@@ -40846,6 +40847,763 @@ func _test_bp1_ui_and_untouched() -> void:
 	_game_state.call("start_new_game")
 
 
+func _test_distributor_weekly_menu() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bt1_named_gate_and_fallbacks()
+	_test_bt1_cadence_and_sku_set()
+	_test_bt1_price_moq_buy_and_blockers()
+	_test_bt1_expire_save_load_and_toast()
+	_test_bt1_confirm_no_truth()
+	_test_bt1_untouched_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bt1_named_gate_and_fallbacks() -> void:
+	_expect_equal(DistributorMenuPolicy.FIRST_DAY, 8, "BT1: locked first menu day is 8")
+	_expect_equal(DistributorMenuPolicy.INTERVAL_DAYS, 7, "BT1: locked interval is 7")
+	_expect_equal(DistributorMenuPolicy.MOQ_SEALED, 6, "BT1: locked sealed min is 6")
+	_expect_equal(DistributorMenuPolicy.MOQ_ACCESSORY, 10, "BT1: locked accessory min is 10")
+	_expect_equal(
+		DistributorMenuPolicy.OFFER_LABEL,
+		"Weekly restock",
+		"BT1: offer label is Weekly restock"
+	)
+	_expect_equal(
+		DistributorMenuPolicy.TOAST,
+		"Distributor weekly sheet is in",
+		"BT1: menu-day toast copy is locked"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.distributor_menu_first_day == 8
+		and NORMAL_CONFIG.distributor_menu_interval_days == 7
+		and NORMAL_CONFIG.distributor_menu_moq_sealed == 6
+		and NORMAL_CONFIG.distributor_menu_moq_accessory == 10,
+		true,
+		"BT1: Normal config matches locked menu cadence and mins"
+	)
+	_expect_equal(
+		EASY_CONFIG.distributor_menu_first_day == 8
+		and HARD_CONFIG.distributor_menu_first_day == 8
+		and EASY_CONFIG.distributor_menu_interval_days == 7
+		and HARD_CONFIG.distributor_menu_interval_days == 7
+		and EASY_CONFIG.distributor_menu_moq_sealed == 6
+		and HARD_CONFIG.distributor_menu_moq_sealed == 6
+		and EASY_CONFIG.distributor_menu_moq_accessory == 10
+		and HARD_CONFIG.distributor_menu_moq_accessory == 10,
+		true,
+		"BT1: Easy/Hard inherit first 8 / interval 7 / sealed 6 / accessory 10"
+	)
+	_expect_equal(
+		DistributorMenuPolicy.first_day(0) == 8
+		and DistributorMenuPolicy.first_day(-3) == 8
+		and DistributorMenuPolicy.interval_days(0) == 7
+		and DistributorMenuPolicy.interval_days(-1) == 7
+		and DistributorMenuPolicy.moq_sealed(0) == 6
+		and DistributorMenuPolicy.moq_sealed(-4) == 6
+		and DistributorMenuPolicy.moq_accessory(0) == 10
+		and DistributorMenuPolicy.moq_accessory(-2) == 10,
+		true,
+		"BT1: missing / ≤0 cadence and mins fall back to locked defaults"
+	)
+	var missing := BalanceConfig.new()
+	missing.distributor_menu_first_day = 0
+	missing.distributor_menu_interval_days = 0
+	missing.distributor_menu_moq_sealed = 0
+	missing.distributor_menu_moq_accessory = 0
+	_expect_equal(
+		DistributorMenuPolicy.first_day_for(missing) == 8
+		and DistributorMenuPolicy.interval_days_for(missing) == 7
+		and DistributorMenuPolicy.moq_sealed_for(missing) == 6
+		and DistributorMenuPolicy.moq_accessory_for(missing) == 10,
+		true,
+		"BT1: zero config falls back to day 8 / 7 / 6 / 10"
+	)
+	missing.distributor_menu_first_day = -8
+	missing.distributor_menu_interval_days = -7
+	missing.distributor_menu_moq_sealed = -6
+	missing.distributor_menu_moq_accessory = -10
+	_expect_equal(
+		DistributorMenuPolicy.first_day_for(missing) == 8
+		and DistributorMenuPolicy.interval_days_for(missing) == 7
+		and DistributorMenuPolicy.moq_sealed_for(missing) == 6
+		and DistributorMenuPolicy.moq_accessory_for(missing) == 10,
+		true,
+		"BT1: negative config falls back to locked defaults"
+	)
+	_expect_equal(
+		DistributorMenuPolicy.first_day_for(null) == 8
+		and DistributorMenuPolicy.interval_days_for(null) == 7
+		and DistributorMenuPolicy.moq_sealed_for(null) == 6
+		and DistributorMenuPolicy.moq_accessory_for(null) == 10,
+		true,
+		"BT1: null config still uses locked defaults"
+	)
+	_expect_equal(
+		DistributorMenuPolicy.is_menu_day(8)
+		and DistributorMenuPolicy.is_menu_day(15)
+		and DistributorMenuPolicy.is_menu_day(22)
+		and not DistributorMenuPolicy.is_menu_day(1)
+		and not DistributorMenuPolicy.is_menu_day(2)
+		and not DistributorMenuPolicy.is_menu_day(7)
+		and not DistributorMenuPolicy.is_menu_day(9)
+		and not DistributorMenuPolicy.is_menu_day(14),
+		true,
+		"BT1: defaults open on days 8/15/22 and stay closed on the in-between days"
+	)
+	_expect_equal(
+		int(_demand_signals.call("distributor_menu_first_day", 0)) == 8
+		and int(_demand_signals.call("distributor_menu_interval_days", 0)) == 7
+		and int(_demand_signals.call("distributor_menu_moq_sealed", 0)) == 6
+		and int(_demand_signals.call("distributor_menu_moq_accessory", 0)) == 10
+		and bool(_demand_signals.call("is_distributor_menu_day", 8))
+		and not bool(_demand_signals.call("is_distributor_menu_day", 7)),
+		true,
+		"BT1: DemandSignals 0-config fallbacks match locked cadence"
+	)
+	_expect_equal(
+		String(DistributorMenuPolicy.offer_id(8, &"AA-SKIE-ETB")),
+		"distributor-weekly-d8-AA-SKIE-ETB",
+		"BT1: ids are distributor-weekly-d{day}-{sku}"
+	)
+	_expect_equal(
+		DistributorMenuPolicy.is_menu_id(&"distributor-weekly-d8-AA-SKIE-ETB")
+		and not DistributorMenuPolicy.is_menu_id(&"skiefall-distributor-moq-day-2"),
+		true,
+		"BT1: weekly ids do not collide with the day-2 scripted beat"
+	)
+
+
+func _test_bt1_cadence_and_sku_set() -> void:
+	var expected := _bt1_live_menu_skus()
+	_expect_equal(expected.size(), 5, "BT1: live catalog has five SEALED / ACCESSORY SKUs")
+	for day: int in [8, 15, 22]:
+		_bt1_reset_at(day, 40)
+		var menu := _bt1_menu_signals()
+		_expect_equal(menu.size(), expected.size(), "BT1: day %d opens one line per live SKU" % day)
+		var seen: Dictionary = {}
+		for dto: BuyConfirmSignal in menu:
+			_expect_equal(
+				DistributorMenuPolicy.is_menu_id(dto.opportunity_id),
+				true,
+				"BT1: day %d line uses a weekly id" % day
+			)
+			_expect_equal(
+				String(dto.opportunity_id),
+				String(DistributorMenuPolicy.offer_id(day, dto.sku_id)),
+				"BT1: day %d id encodes the day and SKU" % day
+			)
+			_expect_equal(dto.offer_label, "Weekly restock", "BT1: day %d label is Weekly restock" % day)
+			_expect_equal(dto.channel, &"distributor", "BT1: day %d stays on distributor" % day)
+			_expect_equal(
+				expected.has(dto.sku_id),
+				true,
+				"BT1: day %d SKU %s is live SEALED / ACCESSORY" % [day, dto.sku_id]
+			)
+			_expect_equal(seen.has(dto.sku_id), false, "BT1: day %d has one line per SKU" % day)
+			seen[dto.sku_id] = true
+			var sku: ProductSKU = _inventory_service.get("model").get_sku(dto.sku_id)
+			_expect_equal(
+				sku != null and DistributorMenuPolicy.is_menu_sku(sku),
+				true,
+				"BT1: day %d never lists singles or graded" % day
+			)
+		_expect_equal(seen.size(), expected.size(), "BT1: day %d covers every live menu SKU" % day)
+	for day: int in [3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21]:
+		_bt1_reset_at(day, 40)
+		_expect_equal(
+			_bt1_menu_signals().is_empty(),
+			true,
+			"BT1: day %d opens no weekly menu" % day
+		)
+	for day: int in [1, 2]:
+		_bt1_reset_at(day, 40)
+		_expect_equal(
+			_bt1_menu_signals().is_empty(),
+			true,
+			"BT1: day %d does not add a weekly menu" % day
+		)
+		_expect_equal(
+			_demand_signals.call("buy_signal_for_id", &"skiefall-distributor-moq-day-2") != null,
+			true,
+			"BT1: day %d still offers the scripted MOQ beat" % day
+		)
+	var catalog := FileAccess.get_file_as_string("res://data/buy_opportunities.json")
+	_expect_equal(
+		catalog.contains("skiefall-distributor-moq-day-2")
+		and catalog.contains("\"last_day\": 2"),
+		true,
+		"BT1: day-2 scripted distributor beat stays last_day 2"
+	)
+	_expect_equal(
+		not catalog.contains("distributor-weekly"),
+		true,
+		"BT1: weekly menu is not a JSON catalog rewrite"
+	)
+
+
+func _test_bt1_price_moq_buy_and_blockers() -> void:
+	_bt1_reset_at(8, 40)
+	var etb: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		DistributorMenuPolicy.offer_id(8, &"AA-SKIE-ETB")
+	)
+	var sleeves: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		DistributorMenuPolicy.offer_id(8, &"ACC-SLV-60")
+	)
+	_expect_equal(etb != null and sleeves != null, true, "BT1: day 8 offers sealed and accessory lines")
+	if etb == null or sleeves == null:
+		return
+	var etb_sku: ProductSKU = _inventory_service.get("model").get_sku(&"AA-SKIE-ETB")
+	var sleeve_sku: ProductSKU = _inventory_service.get("model").get_sku(&"ACC-SLV-60")
+	var etb_wholesale := PricingService.distributor_wholesale_cents(
+		etb_sku.base_market_cents,
+		NORMAL_CONFIG
+	)
+	var sleeve_wholesale := PricingService.distributor_wholesale_cents(
+		sleeve_sku.base_market_cents,
+		NORMAL_CONFIG
+	)
+	_expect_equal(etb.unit_cost_cents, etb_wholesale, "BT1: sealed unit cost is distributor_wholesale_cents")
+	_expect_equal(
+		sleeves.unit_cost_cents,
+		sleeve_wholesale,
+		"BT1: accessory unit cost is distributor_wholesale_cents"
+	)
+	_expect_equal(etb.quantity, 6, "BT1: sealed min is 6 at Rep ≥ 25")
+	_expect_equal(sleeves.quantity, 10, "BT1: accessory min is 10 at Rep ≥ 25")
+	_expect_equal(
+		int(_demand_signals.call("distributor_minimum_units", 6, 40)),
+		6,
+		"BT1: AP1 at Rep 40 keeps today's sealed min"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var stock_before := _an1_stock_qty(&"AA-SKIE-ETB")
+	_expect_equal(
+		_demand_signals.call("confirm_buy", etb, 5),
+		false,
+		"BT1: a buy under sealed min is refused"
+	)
+	_expect_equal(int(_economy.get("balance_cents")), cash_before, "BT1: under-min buy does not move cash")
+	_expect_equal(_an1_stock_qty(&"AA-SKIE-ETB"), stock_before, "BT1: under-min buy does not add stock")
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", etb.opportunity_id) != null,
+		true,
+		"BT1: refused under-min buy leaves the line open"
+	)
+	_expect_equal(
+		_demand_signals.call("confirm_buy", etb, 6),
+		true,
+		"BT1: a buy at sealed min succeeds"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - etb.unit_cost_cents * 6,
+		"BT1: min buy debits wholesale times count"
+	)
+	_expect_equal(
+		_an1_stock_qty(&"AA-SKIE-ETB"),
+		stock_before + 6,
+		"BT1: min buy adds sealed stock"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", etb.opportunity_id) == null,
+		true,
+		"BT1: buying a line closes only that line"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", sleeves.opportunity_id) != null,
+		true,
+		"BT1: other menu lines stay open after one buy"
+	)
+	_bt1_reset_at(8, 24)
+	var etb_quiet: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		DistributorMenuPolicy.offer_id(8, &"AA-SKIE-ETB")
+	)
+	var sleeves_quiet: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		DistributorMenuPolicy.offer_id(8, &"ACC-SLV-60")
+	)
+	_expect_equal(etb_quiet != null and sleeves_quiet != null, true, "BT1: Rep 24 still offers the menu")
+	if etb_quiet != null:
+		_expect_equal(etb_quiet.quantity, 12, "BT1: AP1 doubles sealed min at Rep ≤ 24")
+		_expect_equal(etb_quiet.unit_cost_cents, etb_wholesale, "BT1: AP1 does not change wholesale")
+		_expect_equal(
+			_demand_signals.call("confirm_buy", etb_quiet, 11),
+			false,
+			"BT1: a buy under the doubled sealed min is refused"
+		)
+		_expect_equal(
+			_demand_signals.call("confirm_buy", etb_quiet, 12),
+			true,
+			"BT1: a buy at the doubled sealed min succeeds"
+		)
+	if sleeves_quiet != null:
+		_expect_equal(sleeves_quiet.quantity, 20, "BT1: AP1 doubles accessory min at Rep ≤ 24")
+	_bt1_reset_at(8, 40)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var etb_glut: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		DistributorMenuPolicy.offer_id(8, &"AA-SKIE-ETB")
+	)
+	var sleeves_glut: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		DistributorMenuPolicy.offer_id(8, &"ACC-SLV-60")
+	)
+	var glut_deep: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		&"supply-glut-deep-skie-blst"
+	)
+	_expect_equal(etb_glut != null and sleeves_glut != null, true, "BT1: glut still offers the weekly menu")
+	_expect_equal(glut_deep != null, true, "BT1: Supply glut restock lots stay as shipped")
+	if etb_glut != null:
+		_expect_equal(
+			etb_glut.unit_cost_cents,
+			int(_demand_signals.call(
+				"sealed_wholesale_cents",
+				&"AA-SKIE-ETB",
+				etb_wholesale,
+				DemandSignalService.Channel.DISTRIBUTOR
+			)),
+			"BT1: glut discounts sealed weekly cost on the shipped path"
+		)
+		_expect_equal(
+			etb_glut.unit_cost_cents,
+			maxi(1, roundi(float(etb_wholesale) * MarketEventService.SUPPLY_GLUT_WHOLESALE_MULT)),
+			"BT1: sealed weekly cost uses Q1 ×0.75 — no new discount"
+		)
+	if sleeves_glut != null:
+		_expect_equal(
+			sleeves_glut.unit_cost_cents,
+			sleeve_wholesale,
+			"BT1: glut does not discount accessory weekly cost"
+		)
+	_bt1_reset_at(8, 40)
+	var cash_line: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		DistributorMenuPolicy.offer_id(8, &"AA-SKIE-BLST")
+	)
+	_expect_equal(cash_line != null, true, "BT1: cash blocker needs a weekly line")
+	if cash_line != null:
+		_economy.set("balance_cents", cash_line.lot_total_cents - 1)
+		var broke: BuyConfirmSignal = _demand_signals.call(
+			"buy_signal_for_id",
+			cash_line.opportunity_id
+		)
+		_expect_equal(broke != null and not broke.can_confirm, true, "BT1: over-cash is blocked as shipped")
+		_expect_equal(
+			_demand_signals.call("confirm_buy", broke),
+			false,
+			"BT1: over-cash confirm is refused"
+		)
+	_bt1_reset_at(8, 40)
+	var space_line: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		DistributorMenuPolicy.offer_id(8, &"AA-DUST-ETB")
+	)
+	_expect_equal(space_line != null, true, "BT1: space blocker needs a weekly line")
+	if space_line != null:
+		var model: InventoryModel = _inventory_service.get("model")
+		model.backstock_bin_bonus = -model.balance_config.backstock_bins
+		var packed: BuyConfirmSignal = _demand_signals.call(
+			"buy_signal_for_id",
+			space_line.opportunity_id
+		)
+		_expect_equal(packed != null and not packed.can_confirm, true, "BT1: over-space is blocked as shipped")
+		_expect_equal(
+			_demand_signals.call("confirm_buy", packed),
+			false,
+			"BT1: over-space confirm is refused"
+		)
+
+
+func _test_bt1_expire_save_load_and_toast() -> void:
+	_bt1_reset_at(8, 40)
+	var open_at_eight := _bt1_menu_signals()
+	_expect_equal(open_at_eight.size(), 5, "BT1: day 8 starts with five open lines")
+	var buy_id := DistributorMenuPolicy.offer_id(8, &"AA-SKIE-BLST")
+	var buy_dto: BuyConfirmSignal = _demand_signals.call("buy_signal_for_id", buy_id)
+	_expect_equal(buy_dto != null, true, "BT1: save/load needs a bought line")
+	if buy_dto != null:
+		_expect_equal(_demand_signals.call("confirm_buy", buy_dto, buy_dto.quantity), true, "BT1: buy one line")
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", buy_id) == null,
+		true,
+		"BT1: bought line is closed that day"
+	)
+	_expect_equal(_bt1_menu_signals().size(), 4, "BT1: four unbought lines remain")
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "BT1 menu save")
+	var closed_saved: Variant = saved.get(DistributorMenuPolicy.SAVE_KEY, [])
+	_expect_equal(closed_saved is Array, true, "BT1: save stores closed opportunity ids")
+	if closed_saved is Array:
+		_expect_equal(
+			(closed_saved as Array).has(String(buy_id)),
+			true,
+			"BT1: save records the bought weekly id"
+		)
+	var parsed_save: Variant = JSON.parse_string(JSON.stringify(saved))
+	_expect_equal(parsed_save is Dictionary, true, "BT1: JSON save roundtrips")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_bt1_menu_signals().is_empty(),
+		true,
+		"BT1: a fresh session on day 1 has no weekly menu"
+	)
+	_expect_equal(
+		parsed_save is Dictionary and _game_state.call("restore_save", parsed_save),
+		true,
+		"BT1: restore_save accepts the mid-menu-day snapshot"
+	)
+	_expect_equal(int(_game_state.get("current_day")), 8, "BT1: restore lands on the menu day")
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", buy_id) == null,
+		true,
+		"BT1: restore does not re-offer the bought line"
+	)
+	var restored := _bt1_menu_signals()
+	_expect_equal(restored.size(), 4, "BT1: restore keeps the unbought menu lines")
+	for dto: BuyConfirmSignal in restored:
+		_expect_equal(dto.opportunity_id != buy_id, true, "BT1: restored open lines are not the bought id")
+	_game_state.set("current_day", 9)
+	_expect_equal(
+		_bt1_menu_signals().is_empty(),
+		true,
+		"BT1: unbought lines are gone the next day"
+	)
+	_bt1_reset_at(9, 40)
+	var saved_off: Dictionary = _game_state.call("capture_save")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved_off),
+		true,
+		"BT1: restore accepts a non-menu-day snapshot"
+	)
+	_expect_equal(
+		_bt1_menu_signals().is_empty(),
+		true,
+		"BT1: loading on a non-menu day shows no menu lines"
+	)
+	_bt1_reset_at(8, 40)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BT1: HUD loads on a menu day")
+	if hud != null:
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("Distributor weekly sheet is in"),
+			true,
+			"BT1: PREP toast names the weekly sheet"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BT1 menu toast")
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		if open_buy != null:
+			open_buy.pressed.emit()
+		_expect_equal(_bt1_prep_menu_row_count(hud), 5, "BT1: Prep list shows five weekly rows")
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+	_bt1_reset_at(9, 40)
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		var quiet := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			quiet == null or not quiet.text.contains("weekly sheet"),
+			true,
+			"BT1: non-menu PREP does not toast the weekly sheet"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+
+
+func _test_bt1_confirm_no_truth() -> void:
+	_bt1_reset_at(8, 40)
+	var dto: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		DistributorMenuPolicy.offer_id(8, &"AA-DUST-ETB")
+	)
+	_expect_equal(dto != null, true, "BT1: confirm scan needs a weekly line")
+	if dto == null:
+		return
+	_expect_equal(dto.confidence, &"high", "BT1: buy-confirm is High confidence")
+	_expect_equal(dto.condition_cue, "NM assumed", "BT1: distributor cue stays NM assumed")
+	_expect_dto_has_no_truth_fields(dto, "BT1 weekly offer")
+	var row := DemandSignalPresenter.opportunity_row(dto)
+	var summary := DemandSignalPresenter.buy_summary(dto)
+	var snapshot := DemandSignalPresenter.buy_confirm_snapshot(dto)
+	_expect_equal(summary.contains("High"), true, "BT1: detail shows High confidence")
+	_expect_equal(snapshot.contains("HIGH"), true, "BT1: confirm snapshot shows HIGH confidence")
+	_expect_equal(row.contains("min ×6"), true, "BT1: list row shows the sealed min")
+	_assert_text_has_no_truth(row, "BT1 weekly row")
+	_assert_text_has_no_truth(summary, "BT1 weekly summary")
+	_assert_text_has_no_truth(snapshot, "BT1 weekly snapshot")
+	for text: String in [row, summary, snapshot, dto.condition_cue]:
+		var lower := text.to_lower()
+		_expect_equal(lower.contains("true_market"), false, "BT1: confirm never shows true_market")
+		_expect_equal(lower.contains("p_buy"), false, "BT1: confirm never shows p_buy")
+		_expect_equal(lower.contains("discount"), false, "BT1: confirm never shows discount %")
+		_expect_equal(lower.contains("wholesale"), false, "BT1: confirm never names wholesale")
+		_expect_equal(text.contains("day 15"), false, "BT1: confirm never leaks a future menu")
+		_expect_equal(text.contains("d15"), false, "BT1: confirm never leaks future menu ids")
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BT1: HUD loads for buy-confirm")
+	if hud != null:
+		_select_buy_on_hud(hud, dto)
+		var title := hud.get_node_or_null("%BuyOpportunityTitle") as Label
+		var hud_summary := hud.get_node_or_null("%BuySummary") as Label
+		if title != null:
+			_expect_equal(title.text.contains("Weekly restock"), true, "BT1: HUD title shows Weekly restock")
+			_assert_text_has_no_truth(title.text, "BT1 HUD buy title")
+		if hud_summary != null:
+			_expect_equal(hud_summary.text.contains("High"), true, "BT1: HUD summary shows High")
+			_assert_text_has_no_truth(hud_summary.text, "BT1 HUD buy summary")
+			_expect_equal(
+				not hud_summary.text.to_lower().contains("true_market")
+				and not hud_summary.text.to_lower().contains("p_buy")
+				and not hud_summary.text.to_lower().contains("discount"),
+				true,
+				"BT1: HUD offer never shows true_market, p_buy, or discount %"
+			)
+		hud.free()
+	_free_lingering_gameplay_huds()
+	_expect_equal(
+		is_equal_approx(HagglePolicy.CHANNEL_WEIGHT_DISTRIBUTOR, 1.10),
+		true,
+		"BT1: distributor haggle odds stay as shipped"
+	)
+
+
+func _test_bt1_untouched_and_parked() -> void:
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and BuylistDripPolicy.REP_HIT == 1,
+		true,
+		"BT1: BM1 drip stays 0.40 / −1"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50),
+		true,
+		"BT1: BN1 fewer-lots stays ×0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFloodPolicy.FLOOD_CEILING, 0.70)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BT1: BO1 flood stays 0.70 / ×1.50"
+	)
+	_expect_equal(
+		UtilitiesPolicy.SMALL_DAILY_CENTS == 4_000
+		and UtilitiesPolicy.MEDIUM_DAILY_CENTS == 7_000
+		and UtilitiesPolicy.LARGE_DAILY_CENTS == 11_000,
+		true,
+		"BT1: BP1 utilities stay $40 / $70 / $110"
+	)
+	_expect_equal(
+		SetReleaseHypePolicy.TELEGRAPH_DAYS == 3
+		and SetReleaseHypePolicy.DURATION_DAYS == 5
+		and is_equal_approx(SetReleaseHypePolicy.HYPE_NEW_MULT, 1.40)
+		and is_equal_approx(SetReleaseHypePolicy.HYPE_OLD_MULT, 0.70),
+		true,
+		"BT1: BQ1 set release stays telegraph 3 / duration 5 / ×1.40 / ×0.70"
+	)
+	_expect_equal(
+		ProTourSpikePolicy.TELEGRAPH_DAYS == 1
+		and ProTourSpikePolicy.DURATION_DAYS == 2
+		and is_equal_approx(ProTourSpikePolicy.MULT_MIN, 1.30)
+		and is_equal_approx(ProTourSpikePolicy.MULT_MAX, 1.80),
+		true,
+		"BT1: BR1 Pro tour stays telegraph 1 / duration 2 / ×1.30–1.80"
+	)
+	_expect_equal(
+		RotationCrashPolicy.DURATION_DAYS == 5
+		and is_equal_approx(RotationCrashPolicy.MULT_MIN, 0.45)
+		and is_equal_approx(RotationCrashPolicy.MULT_MAX, 0.70)
+		and is_equal_approx(RotationCrashPolicy.MILD_MULT, 0.90),
+		true,
+		"BT1: BS1 rotation crash stays duration 5 / ×0.45–0.70 / mild ×0.90"
+	)
+	_expect_equal(
+		DistributorMoqPolicy.QUIET_FLOOR_MAX_REP == 24
+		and is_equal_approx(DistributorMoqPolicy.QUIET_FLOOR_MOQ_MULT, 2.0),
+		true,
+		"BT1: AP1 MOQ policy stays Rep 24 / ×2"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.HIGH_REP_MIN_REP == 75
+		and MarketplaceLeadPolicy.EXTRA_LEAD_COUNT == 1,
+		true,
+		"BT1: AQ1 extra marketplace lead stays Rep 75 / +1"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST == 10
+		and is_equal_approx(AuctionSnipePolicy.COMP_WIDTH, 0.12),
+		true,
+		"BT1: AS1 snipe stays Att 10 / width 0.12"
+	)
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.REPORT_REP_GAIN == 2,
+		true,
+		"BT1: AT1 trunk stays 25% ask / Rep +2"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1,
+		true,
+		"BT1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BT1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BT1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_40 := catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, BASELINE)
+	var at_menu := catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_40.size(), at_menu.size(), "BT1: menu day does not change door spawn count")
+	_expect_equal(
+		is_equal_approx(catalog.weight_for(whale, 40, NORMAL_CONFIG), catalog.weight_for(whale, 40, NORMAL_CONFIG)),
+		true,
+		"BT1: whale weight is unchanged"
+	)
+	_bt1_reset_at(8, 40)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")), 1.0)
+		and is_equal_approx(float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-ETB")), 1.0),
+		true,
+		"BT1: weekly menu is not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string("res://scripts/autoload/demand_signals.gd")
+	_expect_equal(
+		demand_src.contains("func _open_opportunities")
+		and demand_src.contains("_prep_distributor_menu")
+		and demand_src.contains("DistributorMenuPolicy"),
+		true,
+		"BT1: weekly menu is built on the existing PREP open path"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "distributor_menu")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "DistributorMenuPolicy")
+		and not _function_body_contains(demand_src, "func active_event_traffic_mult(", "distributor_menu")
+		and not _function_body_contains(demand_src, "func active_event_whale_weight_mult(", "distributor_menu"),
+		true,
+		"BT1: weekly menu stays off sell-through, door spawn, and whale weight"
+	)
+	var policy_src := FileAccess.get_file_as_string("res://scripts/customers/customer_spawn_policy.gd")
+	var spawn_src := FileAccess.get_file_as_string("res://scripts/customers/customer_spawner.gd")
+	_expect_equal(
+		not policy_src.contains("DistributorMenuPolicy")
+		and not spawn_src.contains("DistributorMenuPolicy"),
+		true,
+		"BT1: door spawn path does not read the weekly menu"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("distributor_menu")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("weekly_restock")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("listed_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"BT1: Soft catalog stays closed"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("_maybe_show_distributor_menu_toast"),
+		true,
+		"BT1: HUD can show the weekly-sheet toast"
+	)
+	_expect_equal(
+		not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("AA-SKIE-ETB"),
+		true,
+		"BT1: no new screen, no Art, no hardcoded SKU, STOP stays parked"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/distributor_menu_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(source.contains("true_market"), false, "BT1: %s stays §4.5 clean" % path)
+		_expect_equal(source.contains("p_buy"), false, "BT1: %s never shows p_buy" % path)
+	var save_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/online_listing_save_policy.gd"
+	)
+	_expect_equal(
+		not save_src.contains("suggested_at_list"),
+		true,
+		"BT1: Soft OK list-time suggested persistence stays Soft"
+	)
+	_game_state.call("start_new_game")
+
+
+func _bt1_reset_at(day: int, reputation: int) -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", day)
+	_game_state.set("current_reputation", reputation)
+	_event_bus.emit_signal("reputation_changed", reputation)
+
+
+func _bt1_live_menu_skus() -> Dictionary:
+	var expected: Dictionary = {}
+	var inventory: InventoryModel = _inventory_service.get("model")
+	if inventory == null:
+		return expected
+	for sku_id: StringName in DistributorMenuPolicy.menu_sku_ids(inventory.catalog):
+		expected[sku_id] = true
+	return expected
+
+
+func _bt1_menu_signals() -> Array[BuyConfirmSignal]:
+	var result: Array[BuyConfirmSignal] = []
+	for dto: BuyConfirmSignal in _demand_signals.call("open_buy_signals"):
+		if dto != null and DistributorMenuPolicy.is_menu_id(dto.opportunity_id):
+			result.append(dto)
+	return result
+
+
+func _bt1_prep_menu_row_count(hud: Node) -> int:
+	var rows := hud.get_node_or_null("%BuyOpportunityRows") as VBoxContainer
+	if rows == null:
+		return 0
+	var count := 0
+	for child: Node in rows.get_children():
+		var row := child as Button
+		if row == null:
+			continue
+		if not row.text.begins_with("Distributor ·"):
+			continue
+		if row.text.contains("min ×"):
+			count += 1
+	return count
+
+
 func _bp1_reset_for_settle() -> void:
 	var config := NORMAL_CONFIG.duplicate() as BalanceConfig
 	config.event_chance_settle = 0.0
@@ -41765,8 +42523,8 @@ func _test_high_rep_section_45_and_parked() -> void:
 		"res://scripts/core/balance_config.gd"
 	)
 	_expect_equal(
-		balance_src.contains("moq") == false
-		and balance_src.contains("distributor_moq") == false
+		balance_src.contains("distributor_moq") == false
+		and shop_src.contains("distributor_moq") == false
 		and shop_src.contains("moq") == false,
 		true,
 		"AJ1: distributor MOQ stays out"
