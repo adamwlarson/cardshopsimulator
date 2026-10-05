@@ -31,6 +31,9 @@ func _ready() -> void:
 	EventBus.staff_changed.connect(_on_coverage_changed)
 	EventBus.attention_changed.connect(_on_attention_coverage_changed)
 	EventBus.customer_action_requested.connect(_on_customer_action_requested)
+	EventBus.buylist_offer_change_requested.connect(
+		_on_buylist_offer_change_requested
+	)
 	EventBus.scripted_customer_requested.connect(_on_scripted_customer_requested)
 	_queue.customer_finished.connect(_on_customer_finished)
 	_on_phase_changed(GameState.current_phase)
@@ -207,6 +210,11 @@ func _on_customer_action_requested(action: StringName) -> void:
 			EventBus.customer_head_changed.emit(_queue.queue_head())
 		&"refuse":
 			_queue.refuse()
+
+
+func _on_buylist_offer_change_requested(offer_cents: int) -> void:
+	_queue.change_buylist_offer(offer_cents)
+	EventBus.customer_head_changed.emit(_queue.queue_head())
 
 
 func _on_scripted_customer_requested(customer: CustomerProfile) -> void:

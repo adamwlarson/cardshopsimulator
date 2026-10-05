@@ -1041,6 +1041,13 @@ size_flags_vertical = 3
 text = "Waiting"
 autowrap_mode = 3
 
+[node name="ChangeOfferInput" type="LineEdit" parent="CustomerServe/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+placeholder_text = "You offer"
+
 [node name="Actions" type="HBoxContainer" parent="CustomerServe/Content"]
 layout_mode = 2
 theme_override_constants/separation = 16
@@ -1059,6 +1066,14 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"DangerButton"
 text = "Refuse"
+
+[node name="ChangeOfferButton" type="Button" parent="CustomerServe/Content/Actions"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Change offer"
 
 [node name="NegotiateButton" type="Button" parent="CustomerServe/Content/Actions"]
 unique_name_in_owner = true

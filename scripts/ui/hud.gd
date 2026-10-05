@@ -210,6 +210,13 @@ func _ready() -> void:
 	):
 		negotiate_plus.pressed.connect(_negotiate_plus_customer)
 	%RefuseButton.pressed.connect(_refuse_customer)
+	_ensure_change_offer_controls()
+	var change_offer := get_node_or_null("%ChangeOfferButton") as Button
+	if (
+		change_offer != null
+		and not change_offer.pressed.is_connected(_change_buylist_offer)
+	):
+		change_offer.pressed.connect(_change_buylist_offer)
 	var pull_button := get_node_or_null("%PullButton") as Button
 	if pull_button != null:
 		pull_button.pressed.connect(_pull_customer)
@@ -1469,7 +1476,9 @@ func _sync_customer_serve() -> void:
 		if walk != null:
 			walk.text = "Walk"
 			walk.show()
+		_set_change_offer_visible(true)
 		return
+	_set_change_offer_visible(false)
 	customer_title.text = "CUSTOMER · %s" % _current_customer.display_name
 	var signal_dto := DemandSignals.price_signal(
 		_current_customer.target_sku,
@@ -1582,6 +1591,86 @@ func _set_negotiate_plus_visible(visible: bool) -> void:
 	var negotiate_plus := get_node_or_null("%NegotiatePlusButton") as Button
 	if negotiate_plus != null:
 		negotiate_plus.visible = visible
+
+
+func _set_change_offer_visible(visible: bool) -> void:
+	_ensure_change_offer_controls()
+	var change := get_node_or_null("%ChangeOfferButton") as Button
+	if change != null:
+		change.visible = visible
+		change.disabled = (
+			not visible
+			or _current_customer == null
+			or _current_customer.has_changed_offer
+		)
+		change.text = "Change offer"
+	var input := get_node_or_null("%ChangeOfferInput") as LineEdit
+	if input != null:
+		input.visible = visible
+		input.editable = (
+			visible
+			and _current_customer != null
+			and not _current_customer.has_changed_offer
+		)
+		if not visible:
+			input.text = ""
+		else:
+			input.placeholder_text = "You offer"
+
+
+func _ensure_change_offer_controls() -> void:
+	var sell := get_node_or_null("%SellButton") as Button
+	if sell == null:
+		return
+	var actions := sell.get_parent() as HBoxContainer
+	if actions == null:
+		return
+	if get_node_or_null("%ChangeOfferInput") == null:
+		var content := serve_panel.get_node_or_null("Content") as VBoxContainer
+		var input := LineEdit.new()
+		input.name = "ChangeOfferInput"
+		input.unique_name_in_owner = true
+		input.visible = false
+		input.placeholder_text = "You offer"
+		input.custom_minimum_size = Vector2(0.0, 36.0)
+		if content != null:
+			content.add_child(input)
+			var actions_node := content.get_node_or_null("Actions")
+			if actions_node != null:
+				content.move_child(input, actions_node.get_index())
+		else:
+			actions.add_child(input)
+	if get_node_or_null("%ChangeOfferButton") != null:
+		return
+	var change := Button.new()
+	change.name = "ChangeOfferButton"
+	change.unique_name_in_owner = true
+	change.custom_minimum_size = Vector2(0.0, 40.0)
+	change.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	change.text = "Change offer"
+	change.visible = false
+	change.pressed.connect(_change_buylist_offer)
+	actions.add_child(change)
+	var walk := get_node_or_null("%RefuseButton") as Button
+	if walk != null:
+		actions.move_child(change, walk.get_index() + 1)
+	else:
+		actions.move_child(change, sell.get_index())
+
+
+func _change_buylist_offer() -> void:
+	if (
+		_current_customer == null
+		or _current_customer.trade_intent
+		!= CustomerProfile.TradeIntent.SELLING_TO_SHOP
+		or _current_customer.has_changed_offer
+	):
+		return
+	var cents := 0
+	var input := get_node_or_null("%ChangeOfferInput") as LineEdit
+	if input != null:
+		cents = DemandSignalPresenter.parse_cents(input.text)
+	EventBus.buylist_offer_change_requested.emit(cents)
 
 
 func _ensure_negotiate_plus_button() -> void:

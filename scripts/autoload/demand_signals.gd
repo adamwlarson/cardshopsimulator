@@ -1126,6 +1126,24 @@ func buylist_miss_rep_delta(configured: int = BuylistPolicy.UNSET_INT) -> int:
 	return BuylistPolicy.miss_rep_delta(configured)
 
 
+func is_valid_buylist_change(offer_cents: int) -> bool:
+	return BuylistPolicy.is_valid_change(offer_cents)
+
+
+func refresh_buylist_affordability(dto: BuyConfirmSignal) -> void:
+	if dto == null:
+		return
+	dto.remaining_cash_cents = Economy.balance_cents - dto.lot_total_cents
+	if _service != null:
+		_service.refresh_confirm_gate(dto)
+	else:
+		dto.can_confirm = (
+			dto.quantity > 0
+			and dto.remaining_cash_cents >= 0
+			and dto.space_required <= dto.space_free
+		)
+
+
 func buylist_signal(
 	sku_id: StringName,
 	quantity: int = 1,
