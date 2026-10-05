@@ -94,3 +94,4 @@
 | 2026-10-05 | Drafted post AX1 SHIPPED #80 @ `84cdf7c9`. Lean **AY1 Buylist Inspect**. Fee cut / HUD / STOP / Specialist discount parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM adopted **AY1**. Park AY2/AY3/AY4. Hard-park camera off-switch. Soft catalog CLOSED. One Inspect on the AW1/AX1 buylist serve. Draft sha256 `b9c2513b`. |
 | 2026-10-05 | PM adopted **AY1**. Spec on main `98b7e177`. Spike [AY1 buylist Inspect](https://cursor.com/agents/bc-7fa02845-7904-52da-b1d8-a1fe89e9a0a4). Park AY2/AY3/AY4. No Art. Soft catalog CLOSED. Draft sha256 `b9c2513b`. |
+| 2026-10-05 | PM tip-froze PR #81 @ `e8707aa3`. Ready. 11 files, no docs. Agent archived. |
