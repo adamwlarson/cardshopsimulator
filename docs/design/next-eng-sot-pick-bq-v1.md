@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BQ v1 — post BP1
 
-**Status:** **ADOPTED** 2026-10-05 ~4:59pm ET — **BQ1 Set release hype event**. Park BQ2 STOP / BQ3 Soft / BQ4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze.
+**Status:** **TIP-FROZEN** 2026-10-05 ~5:12pm ET — BQ1 [#99](https://github.com/adamwlarson/cardshopsimulator/pull/99) @ `3a59d2e5` (branch `cursor/bq1-set-release-hype-3dbd`). Eng review vs bar `e4f1a7cc`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bp (BP1 Daily utilities settle SHIPPED #98 @ `af1de62d`); Soft catalog CLOSED
@@ -93,3 +93,4 @@
 |------|----------|
 | 2026-10-05 ~4:59pm ET | Drafted post BP1 SHIPPED #98 @ `af1de62d` (reviewed `4b9f163e`). Lean **BQ1 Set release hype event**. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Pro tour stays Out. BM1/BN1/BO1/BP1 stay as shipped. |
 | 2026-10-05 ~4:59pm ET | **ADOPTED** BQ1. Park BQ2 STOP / BQ3 Soft / BQ4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~5:12pm ET | **Tip-frozen** [#99](https://github.com/adamwlarson/cardshopsimulator/pull/99) @ `3a59d2e5` (branch `cursor/bq1-set-release-hype-3dbd`). 8 files, no docs. Cloud agent bc-0ea64988 archived. Eng review that SHA against bar `e4f1a7cc`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
