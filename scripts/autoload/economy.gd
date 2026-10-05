@@ -14,8 +14,18 @@ func reset() -> void:
 	balance_cents = GameState.balance_config.start_cash_cents
 	_ledger.clear()
 	_payday_loan_days_remaining = 0
+	_reset_liquidity_haircuts()
 	online_listings.reset(GameState.current_day * 7919 + 35)
 	EventBus.publish_cash_changed(balance_cents)
+
+
+func _reset_liquidity_haircuts() -> void:
+	liquidity_haircuts = {
+		ProductSKU.ProductClass.SEALED: LIQUIDITY_HAIRCUT_SEALED,
+		ProductSKU.ProductClass.SINGLE: LIQUIDITY_HAIRCUT_SINGLES,
+		ProductSKU.ProductClass.GRADED: LIQUIDITY_HAIRCUT_GRADED,
+		ProductSKU.ProductClass.ACCESSORY: LIQUIDITY_HAIRCUT_ACCESSORIES,
+	}
 
 
 func record_income(amount_cents: int, category: StringName, memo: String = "") -> bool:
@@ -45,19 +55,29 @@ func can_afford(amount_cents: int) -> bool:
 	return amount_cents >= 0 and balance_cents >= amount_cents
 
 
-## systems §9.2 AA1: cash + inventory at hidden market × liquidity haircut.
+## systems §9.2 AA1 / BF1: cash + inventory at hidden market × liquidity haircut.
 ## Haircuts stay in economy math. UI only sees the summed cents.
 const LIQUIDITY_HAIRCUT_SEALED := 0.85
 const LIQUIDITY_HAIRCUT_SINGLES := 0.7
 const LIQUIDITY_HAIRCUT_GRADED := 0.6
 const LIQUIDITY_HAIRCUT_ACCESSORIES := 0.9
 
+## Class keys may be omitted; missing keys fall back to the sealed / singles /
+## graded / accessories defaults above.
+var liquidity_haircuts: Dictionary = {}
+
 
 func net_worth_cents() -> int:
-	return balance_cents + _liquidity_inventory_cents()
+	return balance_cents + liquidity_inventory_cents()
 
 
 func liquidity_haircut(product_class: ProductSKU.ProductClass) -> float:
+	if liquidity_haircuts.has(product_class):
+		return float(liquidity_haircuts[product_class])
+	return _default_liquidity_haircut(product_class)
+
+
+func _default_liquidity_haircut(product_class: ProductSKU.ProductClass) -> float:
 	match product_class:
 		ProductSKU.ProductClass.SEALED:
 			return LIQUIDITY_HAIRCUT_SEALED
@@ -68,10 +88,10 @@ func liquidity_haircut(product_class: ProductSKU.ProductClass) -> float:
 		ProductSKU.ProductClass.ACCESSORY:
 			return LIQUIDITY_HAIRCUT_ACCESSORIES
 		_:
-			return 0.0
+			return LIQUIDITY_HAIRCUT_SEALED
 
 
-func _liquidity_inventory_cents() -> int:
+func liquidity_inventory_cents() -> int:
 	var model := InventoryService.model
 	if model == null:
 		return 0

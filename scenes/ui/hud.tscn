@@ -50,6 +50,13 @@ theme_override_colors/font_color = Color(0.48, 0.94, 0.68, 1)
 theme_override_font_sizes/font_size = 20
 text = "Cash  $8000.00"
 
+[node name="NetWorth" type="Label" parent="StatusPanel/Margin/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.88, 0.94, 1)
+theme_override_font_sizes/font_size = 20
+text = "$8000.00"
+
 [node name="DayLabel" type="Label" parent="StatusPanel/Margin/Stats"]
 unique_name_in_owner = true
 layout_mode = 2

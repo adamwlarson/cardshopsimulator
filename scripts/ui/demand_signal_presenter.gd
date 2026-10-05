@@ -191,6 +191,10 @@ static func sandbox_bests_label(best_day: int, best_net_worth_cents: int) -> Str
 	]
 
 
+static func net_worth_label(net_worth_cents: int) -> String:
+	return format_cents(net_worth_cents)
+
+
 static func event_banner(text: String) -> String:
 	return text.strip_edges()
 

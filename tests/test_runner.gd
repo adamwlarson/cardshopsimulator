@@ -224,6 +224,7 @@ func _initialize() -> void:
 	_test_marketplace_shady_inspect()
 	_test_sell_side_nm_mismatch()
 	_test_online_fee_cut()
+	_test_net_worth_hud()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1970,6 +1971,20 @@ func _test_gameplay_hud_visual_smoke() -> void:
 	var price_button := hud.get_node_or_null("%OpenPriceButton") as Button
 	var serve := hud.get_node_or_null("%CustomerServe") as PanelContainer
 	_expect_equal(cash != null and cash.text == "$8,000.00", true, "HUD binds Prep $8,000.00")
+	var net_worth := hud.get_node_or_null("%NetWorth") as Label
+	_expect_equal(net_worth != null, true, "HUD binds live net-worth chip")
+	_expect_equal(
+		net_worth != null
+		and net_worth.visible
+		and net_worth.text
+		== DemandSignalPresenter.net_worth_label(_economy.call("net_worth_cents")),
+		true,
+		"HUD net worth matches AA1 formula at bind"
+	)
+	_assert_text_has_no_truth(
+		net_worth.text if net_worth != null else "",
+		"HUD net-worth chip"
+	)
 	_expect_equal(
 		attention != null and attention.text == "Att 100/100",
 		true,
@@ -14838,8 +14853,8 @@ func _test_sightline_section_45_and_parked() -> void:
 	)
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AC1: no live all-modes net-worth HUD"
+		true,
+		"AC1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		FileAccess.get_file_as_string(
@@ -15411,8 +15426,8 @@ func _test_location_ladder_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AD1: no live all-modes net-worth HUD"
+		true,
+		"AD1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		FileAccess.get_file_as_string(
@@ -16067,8 +16082,8 @@ func _test_impulse_shelf_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AE1: no live all-modes net-worth HUD"
+		true,
+		"AE1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		hud_src.contains("sandbox_best_net_worth_cents"),
@@ -16723,8 +16738,8 @@ func _test_stocker_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AF1: no live all-modes net-worth HUD"
+		true,
+		"AF1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		hud_src.contains("sandbox_best_net_worth_cents"),
@@ -17405,8 +17420,8 @@ func _test_fire_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AG1: no live all-modes net-worth HUD"
+		true,
+		"AG1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		hud_src.contains("sandbox_best_net_worth_cents"),
@@ -18084,8 +18099,8 @@ func _test_register_walkout_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AH1: no live all-modes net-worth HUD"
+		true,
+		"AH1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		hud_src.contains("sandbox_best_net_worth_cents"),
@@ -18711,8 +18726,8 @@ func _test_quiet_floor_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AI1: no live all-modes net-worth HUD"
+		true,
+		"AI1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		hud_src.contains("sandbox_best_net_worth_cents"),
@@ -19191,8 +19206,8 @@ func _test_daily_shrink_shipped_packs_unchanged() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AK1: no live all-modes net-worth HUD"
+		true,
+		"AK1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
@@ -19651,8 +19666,8 @@ func _test_sealed_floor_shipped_packs_unchanged() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AL1: no live all-modes net-worth HUD"
+		true,
+		"AL1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
@@ -20365,8 +20380,8 @@ func _test_mid_band_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AM1: no live all-modes net-worth HUD"
+		true,
+		"AM1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		hud_src.contains("sandbox_best_net_worth_cents"),
@@ -20857,8 +20872,8 @@ func _test_player_trade_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AN1: no live all-modes net-worth HUD"
+		true,
+		"AN1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("regulars_return")
@@ -21558,8 +21573,8 @@ func _test_regulars_return_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AO1: no live all-modes net-worth HUD"
+		true,
+		"AO1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("regulars_return")
@@ -22196,8 +22211,8 @@ func _test_distributor_moq_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AP1: no live all-modes net-worth HUD"
+		true,
+		"AP1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("STOP")
@@ -22788,8 +22803,8 @@ func _test_better_marketplace_lead_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AQ1: no live all-modes net-worth HUD"
+		true,
+		"AQ1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("STOP")
@@ -23264,8 +23279,8 @@ func _test_daily_market_drift_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AR1: no live all-modes net-worth HUD"
+		true,
+		"AR1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("STOP")
@@ -23799,8 +23814,8 @@ func _test_auction_snipe_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AS1: no live all-modes net-worth HUD"
+		true,
+		"AS1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("STOP")
@@ -25446,8 +25461,8 @@ func _test_shady_trunk_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AT1: no live all-modes net-worth HUD"
+		true,
+		"AT1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("STOP")
@@ -26209,8 +26224,8 @@ func _test_haggle_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AU1: no live all-modes net-worth HUD"
+		true,
+		"AU1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("STOP")
@@ -27021,8 +27036,8 @@ func _test_negotiate_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AV1: no live all-modes net-worth HUD"
+		true,
+		"AV1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("STOP")
@@ -27750,8 +27765,8 @@ func _test_buylist_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AW1: no live all-modes net-worth HUD"
+		true,
+		"AW1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		not hud_src.contains("STOP")
@@ -31919,8 +31934,8 @@ func _test_be1_ui_and_untouched() -> void:
 	)
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"BE1: no live all-modes net-worth HUD"
+		true,
+		"BE1: live all-modes net-worth HUD stays"
 	)
 	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
 	_expect_equal(
@@ -31977,6 +31992,598 @@ func _be1_fill_online_sale(
 		"cash_before": cash_before,
 		"cash_after": int(_economy.get("balance_cents")),
 	}
+
+
+func _test_net_worth_hud() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bf1_formula_and_fallback()
+	_test_bf1_sale_and_buy_refresh()
+	_test_bf1_online_hold_fee_refund()
+	_test_bf1_all_modes_and_sandbox_peak()
+	_test_bf1_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bf1_formula_and_fallback() -> void:
+	_reset_sandbox_bests_session()
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 0),
+		true,
+		"BF1: Flagship can be selected"
+	)
+	_game_state.call("start_new_game")
+	_clear_owned_inventory()
+	_economy.set("balance_cents", 100_000)
+	_economy.call("_reset_liquidity_haircuts")
+	var shelf := InventoryLocation.new(InventoryLocation.Type.SHELF)
+	var binder := InventoryLocation.new(InventoryLocation.Type.BINDER)
+	var case_location := InventoryLocation.new(InventoryLocation.Type.CASE)
+	_expect_equal(
+		_inventory_service.call("receive_stock", &"AA-SKIE-BLST", 1, 100, shelf),
+		true,
+		"BF1: seed sealed stock"
+	)
+	_expect_equal(
+		_inventory_service.call("receive_stock", &"ACC-SLV-60", 1, 50, shelf),
+		true,
+		"BF1: seed accessory stock"
+	)
+	_expect_equal(
+		_inventory_service.call("receive_card", &"AA-BASE-088", 80, binder) != null,
+		true,
+		"BF1: seed single"
+	)
+	_expect_equal(
+		_inventory_service.call(
+			"receive_slab",
+			&"AA-SKIE-052",
+			&"Prism Grade",
+			10.0,
+			70,
+			case_location
+		)
+		!= null,
+		true,
+		"BF1: seed graded slab"
+	)
+	var expected_nw := (
+		100_000
+		+ _aa1_haircut_units(2999, 0.85)
+		+ _aa1_haircut_units(599, 0.9)
+		+ _aa1_haircut_units(500, 0.7)
+		+ _aa1_haircut_units(7500, 0.6)
+	)
+	_expect_equal(
+		_economy.call("net_worth_cents"),
+		expected_nw,
+		"BF1: Economy NW matches AA1 cash + haircut inventory"
+	)
+	_expect_equal(
+		_economy.call("liquidity_inventory_cents"),
+		expected_nw - 100_000,
+		"BF1: inventory haircut is NW minus cash"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BF1: gameplay HUD loads")
+	if hud != null:
+		_expect_hud_net_worth(hud, expected_nw, "BF1: HUD matches AA1 formula")
+		hud.queue_free()
+	var haircuts: Dictionary = _economy.get("liquidity_haircuts")
+	haircuts.erase(ProductSKU.ProductClass.SEALED)
+	haircuts.erase(ProductSKU.ProductClass.SINGLE)
+	_economy.set("liquidity_haircuts", haircuts)
+	_expect_equal(
+		_economy.call("liquidity_haircut", ProductSKU.ProductClass.SEALED),
+		0.85,
+		"BF1: missing sealed haircut key falls back to 0.85"
+	)
+	_expect_equal(
+		_economy.call("liquidity_haircut", ProductSKU.ProductClass.SINGLE),
+		0.7,
+		"BF1: missing singles haircut key falls back to 0.70"
+	)
+	_expect_equal(
+		_economy.call("net_worth_cents"),
+		expected_nw,
+		"BF1: fallback keys keep the AA1 total"
+	)
+	_economy.set("liquidity_haircuts", {})
+	_expect_equal(
+		_economy.call("liquidity_haircut", ProductSKU.ProductClass.GRADED),
+		0.6,
+		"BF1: empty table falls back to graded 0.60"
+	)
+	_expect_equal(
+		_economy.call("liquidity_haircut", ProductSKU.ProductClass.ACCESSORY),
+		0.9,
+		"BF1: empty table falls back to accessories 0.90"
+	)
+	_economy.call("_reset_liquidity_haircuts")
+
+
+func _test_bf1_sale_and_buy_refresh() -> void:
+	_reset_sandbox_bests_session()
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 0),
+		true,
+		"BF1: Flagship selected for sale/buy"
+	)
+	_game_state.call("start_new_game")
+	_clear_owned_inventory()
+	_economy.set("balance_cents", 200_000)
+	_economy.call("_reset_liquidity_haircuts")
+	var shelf := InventoryLocation.new(InventoryLocation.Type.SHELF)
+	_expect_equal(
+		_inventory_service.call("receive_stock", &"AA-SKIE-BLST", 2, 100, shelf),
+		true,
+		"BF1: seed two sealed units for sale"
+	)
+	_inventory_service.call("set_listed_price", &"AA-SKIE-BLST", 2500)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BF1: HUD loads for sale")
+	var cash_before := int(_economy.get("balance_cents"))
+	var haircut_before: int = _economy.call("liquidity_inventory_cents")
+	var nw_before: int = _economy.call("net_worth_cents")
+	if hud != null:
+		_expect_hud_net_worth(hud, nw_before, "BF1: HUD before sale")
+	var sale_price := 2500
+	_expect_equal(
+		_inventory_service.call("confirm_customer_sale", &"AA-SKIE-BLST", sale_price),
+		true,
+		"BF1: cash sale settles"
+	)
+	var cash_after := int(_economy.get("balance_cents"))
+	var haircut_after: int = _economy.call("liquidity_inventory_cents")
+	var nw_after: int = _economy.call("net_worth_cents")
+	var cash_delta := cash_after - cash_before
+	var haircut_delta := haircut_after - haircut_before
+	_expect_equal(cash_delta, sale_price, "BF1: sale cash delta is the listed take")
+	_expect_equal(
+		haircut_delta,
+		-_aa1_haircut_units(2999, 0.85),
+		"BF1: sale removes one sealed haircut unit"
+	)
+	_expect_equal(
+		nw_after - nw_before,
+		cash_delta + haircut_delta,
+		"BF1: NW rises by cash delta plus inventory haircut change"
+	)
+	if hud != null:
+		_expect_hud_net_worth(
+			hud,
+			nw_after,
+			"BF1: HUD after sale reflects cash + haircut"
+		)
+	var buy_cash_before := int(_economy.get("balance_cents"))
+	var buy_haircut_before: int = _economy.call("liquidity_inventory_cents")
+	var buy_nw_before: int = _economy.call("net_worth_cents")
+	var buy_cost := 1_200
+	_expect_equal(
+		_inventory_service.call(
+			"confirm_stock_purchase",
+			&"ACC-SLV-60",
+			1,
+			buy_cost,
+			0,
+			shelf
+		),
+		true,
+		"BF1: buying stock settles"
+	)
+	var buy_cash_after := int(_economy.get("balance_cents"))
+	var buy_haircut_after: int = _economy.call("liquidity_inventory_cents")
+	var buy_nw_after: int = _economy.call("net_worth_cents")
+	_expect_equal(
+		buy_cash_after - buy_cash_before,
+		-buy_cost,
+		"BF1: buying stock spends cash"
+	)
+	_expect_equal(
+		buy_haircut_after - buy_haircut_before,
+		_aa1_haircut_units(599, 0.9),
+		"BF1: buying stock raises accessory haircut"
+	)
+	_expect_equal(
+		buy_nw_after - buy_nw_before,
+		(buy_cash_after - buy_cash_before) + (buy_haircut_after - buy_haircut_before),
+		"BF1: buy NW is cash down plus inventory haircut up"
+	)
+	if hud != null:
+		_expect_hud_net_worth(
+			hud,
+			buy_nw_after,
+			"BF1: HUD after buy reflects cash down and haircut up"
+		)
+		hud.queue_free()
+
+
+func _test_bf1_online_hold_fee_refund() -> void:
+	_reset_sandbox_bests_session()
+	_game_state.call("select_campaign_mode", 0)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 80)
+	_event_bus.emit_signal("reputation_changed", 80)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BF1: HUD loads for hold/fee")
+	var listed: Dictionary = _i1_list_unique_card(2500)
+	_expect_equal(bool(listed.get("ok", false)), true, "BF1: ONLINE_HOLD list settles")
+	var listing := listed.get("listing") as OnlineListing
+	var after_list: int = _economy.call("net_worth_cents")
+	if hud != null:
+		_expect_hud_net_worth(hud, after_list, "BF1: HUD after ONLINE_HOLD list")
+	var cancelled: Dictionary = {}
+	if listing != null:
+		cancelled = _economy.get("online_listings").call("cancel_listing", listing.id)
+	_expect_equal(bool(cancelled.get("ok", false)), true, "BF1: ONLINE_HOLD cancel settles")
+	var after_cancel: int = _economy.call("net_worth_cents")
+	if hud != null:
+		_expect_hud_net_worth(hud, after_cancel, "BF1: HUD after ONLINE_HOLD cancel")
+	var cash_before_fee := int(_economy.get("balance_cents"))
+	var nw_before_fee: int = _economy.call("net_worth_cents")
+	_expect_equal(
+		_economy.call("record_expense", 400, &"online_fee", "Marketplace fee"),
+		true,
+		"BF1: fee posts to cash"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")) - cash_before_fee,
+		-400,
+		"BF1: fee lowers cash"
+	)
+	_expect_equal(
+		_economy.call("net_worth_cents") - nw_before_fee,
+		-400,
+		"BF1: fee lowers NW by the cash delta"
+	)
+	if hud != null:
+		_expect_hud_net_worth(
+			hud,
+			_economy.call("net_worth_cents"),
+			"BF1: HUD after fee"
+		)
+	var cash_before_refund := int(_economy.get("balance_cents"))
+	_expect_equal(
+		_economy.call("record_income", 250, &"refund", "Sale refund"),
+		true,
+		"BF1: refund posts to cash"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")) - cash_before_refund,
+		250,
+		"BF1: refund raises cash"
+	)
+	if hud != null:
+		_expect_hud_net_worth(
+			hud,
+			_economy.call("net_worth_cents"),
+			"BF1: HUD after refund"
+		)
+		hud.queue_free()
+
+
+func _test_bf1_all_modes_and_sandbox_peak() -> void:
+	var modes: Array[Dictionary] = [
+		{"mode": 0, "label": "Flagship"},
+		{"mode": 1, "label": "Survive Y1"},
+		{"mode": 2, "label": "Liquidity"},
+		{"mode": 3, "label": "Sandbox"},
+	]
+	for entry: Dictionary in modes:
+		_reset_sandbox_bests_session()
+		_expect_equal(
+			_game_state.call("select_campaign_mode", int(entry["mode"])),
+			true,
+			"BF1: %s selectable" % entry["label"]
+		)
+		_game_state.call("start_new_game")
+		var hud := _instantiate_gameplay_hud()
+		_expect_equal(hud != null, true, "BF1: %s HUD loads" % entry["label"])
+		if hud != null:
+			var chip := hud.get_node_or_null("%NetWorth") as Label
+			_expect_equal(
+				chip != null and chip.visible,
+				true,
+				"BF1: %s shows live net-worth chip" % entry["label"]
+			)
+			_expect_hud_net_worth(
+				hud,
+				_economy.call("net_worth_cents"),
+				"BF1: %s HUD matches AA1" % entry["label"]
+			)
+			hud.queue_free()
+
+	_reset_sandbox_bests_session()
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 3),
+		true,
+		"BF1: Sandbox selected for peak"
+	)
+	_game_state.call("start_new_game")
+	_game_state.set("sandbox_best_day", 0)
+	_game_state.set("sandbox_best_net_worth_cents", 0)
+	_clear_owned_inventory()
+	_economy.set("balance_cents", 100_000)
+	var shelf := InventoryLocation.new(InventoryLocation.Type.SHELF)
+	_inventory_service.call("receive_stock", &"AA-SKIE-BLST", 1, 100, shelf)
+	_game_state.call("evaluate_campaign_win")
+	var peak_nw: int = _economy.call("net_worth_cents")
+	_expect_equal(
+		int(_game_state.get("sandbox_best_net_worth_cents")),
+		peak_nw,
+		"BF1: Sandbox peak records high water"
+	)
+	_economy.set("balance_cents", 40_000)
+	_event_bus.call("publish_cash_changed", 40_000)
+	_game_state.call("evaluate_campaign_win")
+	var live_nw: int = _economy.call("net_worth_cents")
+	_expect_equal(
+		live_nw < peak_nw,
+		true,
+		"BF1: live NW can sit below the peak"
+	)
+	_expect_equal(
+		int(_game_state.get("sandbox_best_net_worth_cents")),
+		peak_nw,
+		"BF1: Sandbox peak stays high water when live NW drops"
+	)
+	var sandbox_hud := _instantiate_gameplay_hud()
+	_expect_equal(sandbox_hud != null, true, "BF1: Sandbox HUD loads with peak")
+	if sandbox_hud != null:
+		_expect_hud_net_worth(sandbox_hud, live_nw, "BF1: Sandbox HUD shows live NW")
+		var bests := sandbox_hud.get_node_or_null("%SandboxBests") as Label
+		_expect_equal(
+			bests != null
+			and bests.visible
+			and bests.text == DemandSignalPresenter.sandbox_bests_label(1, peak_nw),
+			true,
+			"BF1: Sandbox peak chip sits beside live NW"
+		)
+		_assert_text_has_no_truth(
+			bests.text if bests != null else "",
+			"BF1: Sandbox peak chip"
+		)
+		sandbox_hud.queue_free()
+
+	_reset_sandbox_bests_session()
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 0),
+		true,
+		"BF1: Flagship win path selectable"
+	)
+	_game_state.call("start_new_game")
+	_force_large_shop(40)
+	_economy.set("balance_cents", 5_000_000)
+	_game_state.set("current_reputation", 80)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"BF1: Flagship award unchanged"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"flagship",
+		"BF1: Flagship win kind unchanged"
+	)
+
+	_reset_sandbox_bests_session()
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 1),
+		true,
+		"BF1: Survive Y1 win path selectable"
+	)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 365)
+	_economy.set("balance_cents", 1)
+	_game_state.set("current_reputation", 40)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"BF1: Survive Y1 award unchanged"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"survive_y1",
+		"BF1: Survive Y1 win kind unchanged"
+	)
+
+	_reset_sandbox_bests_session()
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 2),
+		true,
+		"BF1: Liquidity win path selectable"
+	)
+	_game_state.call("start_new_game")
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_day", 30)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		true,
+		"BF1: Liquidity king award unchanged"
+	)
+	_expect_equal(
+		String(_captured_campaign_won.get("mode", "")),
+		"liquidity_king",
+		"BF1: Liquidity king win kind unchanged"
+	)
+
+	_reset_sandbox_bests_session()
+	_expect_equal(
+		_game_state.call("select_campaign_mode", 3),
+		true,
+		"BF1: Sandbox still awards none"
+	)
+	_game_state.call("start_new_game")
+	_force_large_shop(40)
+	_economy.set("balance_cents", 10_000_000)
+	_game_state.set("current_reputation", 80)
+	_game_state.set("current_day", 390)
+	_game_state.set("current_phase", DayPhasePolicy.SETTLE)
+	_captured_campaign_won = {}
+	_expect_equal(
+		_game_state.call("evaluate_campaign_win"),
+		false,
+		"BF1: Sandbox still awards none at win gates"
+	)
+	_expect_equal(_captured_campaign_won.is_empty(), true, "BF1: no campaign_won in Sandbox")
+
+
+func _test_bf1_untouched() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BF1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BF1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BF1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BF1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BF1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BF1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BF1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("net_worth")
+		or events.contains("stop_day"),
+		false,
+		"BF1: Soft catalog stays closed"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "net_worth")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "NetWorth"),
+		true,
+		"BF1: net-worth HUD stays off the sell weight"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not spawn_src.contains("net_worth_cents")
+		and not policy_src.contains("net_worth_cents"),
+		true,
+		"BF1: door spawn does not read net worth"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+		"res://scripts/ui/main_menu.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BF1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BF1: %s never shows p_buy" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("%NetWorth") and hud_src.contains("func _sync_net_worth"),
+		true,
+		"BF1: live all-modes net-worth HUD is present"
+	)
+	_expect_equal(
+		hud_src.contains("sandbox_best_net_worth_cents"),
+		true,
+		"BF1: AA1 sandbox bests stay"
+	)
+	_expect_equal(
+		not _function_body_contains(hud_src, "func _process(", "net_worth"),
+		true,
+		"BF1: HUD does not poll net worth per frame"
+	)
+	_expect_equal(
+		hud_src.contains("EventBus.cash_changed")
+		and hud_src.contains("EventBus.inventory_changed"),
+		true,
+		"BF1: HUD refreshes on cash or inventory settle"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"BF1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("retag"),
+		true,
+		"BF1: listed-band retag stays parked"
+	)
+	_game_state.call("start_new_game")
+
+
+func _expect_hud_net_worth(hud: Node, expected_cents: int, label: String) -> void:
+	var chip := hud.get_node_or_null("%NetWorth") as Label
+	var expected_copy := DemandSignalPresenter.net_worth_label(expected_cents)
+	_expect_equal(
+		chip != null and chip.visible and chip.text == expected_copy,
+		true,
+		label
+	)
+	_assert_text_has_no_truth(chip.text if chip != null else "", label)
+	_expect_equal(
+		chip != null
+		and not String(chip.text).contains("haircut")
+		and not String(chip.text).contains("true_market")
+		and not String(chip.text).contains("p_buy"),
+		true,
+		"%s copy has no haircut table or true_market" % label
+	)
 
 
 func _bb1_reset() -> void:
@@ -32812,8 +33419,8 @@ func _test_high_rep_section_45_and_parked() -> void:
 	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
 	_expect_equal(
 		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
-		false,
-		"AJ1: no live all-modes net-worth HUD"
+		true,
+		"AJ1: live all-modes net-worth HUD stays"
 	)
 	_expect_equal(
 		hud_src.contains("sandbox_best_net_worth_cents"),
