@@ -1954,12 +1954,10 @@ func _test_gameplay_hud_visual_smoke() -> void:
 	_game_state.set("is_game_active", false)
 	_economy.set("balance_cents", 0)
 	_game_state.set("attention_remaining", 0)
-	var packed: PackedScene = load("res://scenes/ui/gameplay_hud.tscn") as PackedScene
-	_expect_equal(packed != null, true, "gameplay HUD scene loads")
-	if packed == null:
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "gameplay HUD scene loads")
+	if hud == null:
 		return
-	var hud: Node = packed.instantiate()
-	root.add_child(hud)
 	var cash := hud.get_node_or_null("%CashLabel") as Label
 	var attention := hud.get_node_or_null("%AttentionLabel") as Label
 	var day := hud.get_node_or_null("%DayLabel") as Label
@@ -1974,11 +1972,13 @@ func _test_gameplay_hud_visual_smoke() -> void:
 	var net_worth := hud.get_node_or_null("%NetWorth") as Label
 	_expect_equal(net_worth != null, true, "HUD binds live net-worth chip")
 	_expect_equal(
-		net_worth != null
-		and net_worth.visible
-		and net_worth.text
-		== DemandSignalPresenter.net_worth_label(_economy.call("net_worth_cents")),
+		net_worth != null and net_worth.visible,
 		true,
+		"HUD net-worth chip is visible"
+	)
+	_expect_equal(
+		net_worth.text if net_worth != null else "",
+		DemandSignalPresenter.net_worth_label(_economy.call("net_worth_cents")),
 		"HUD net worth matches AA1 formula at bind"
 	)
 	_assert_text_has_no_truth(
