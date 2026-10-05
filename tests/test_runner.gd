@@ -223,6 +223,7 @@ func _initialize() -> void:
 	_test_buylist_inspect()
 	_test_marketplace_shady_inspect()
 	_test_sell_side_nm_mismatch()
+	_test_online_fee_cut()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -31444,6 +31445,538 @@ func _test_bd1_negotiate_ui_and_untouched() -> void:
 		true,
 		"BD1: presenter has no true_market or cert_valid"
 	)
+
+
+func _test_online_fee_cut() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_be1_named_gate_and_fallbacks()
+	_test_be1_same_seed_online_settle_fee()
+	_test_be1_in_shop_sale_no_cut()
+	_test_be1_hold_ship_cancel_stay()
+	_test_be1_ui_and_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_be1_named_gate_and_fallbacks() -> void:
+	_expect_equal(OnlineFeePolicy.CUT_PERCENT, 5, "BE1: locked cut rate is 5%")
+	_expect_equal(OnlineFeePolicy.CUT_REP, 75, "BE1: locked cut gate is Rep 75")
+	_expect_equal(OnlineFeePolicy.BASE_PERCENT, 8, "BE1: locked base fee is 8%")
+	_expect_equal(
+		NORMAL_CONFIG.online_high_rep_fee_percent,
+		5,
+		"BE1: Normal cut percent is 5"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.online_high_rep_fee_gate,
+		75,
+		"BE1: Normal cut gate is Rep 75"
+	)
+	_expect_equal(
+		EASY_CONFIG.online_high_rep_fee_percent == 5
+		and HARD_CONFIG.online_high_rep_fee_percent == 5
+		and EASY_CONFIG.online_high_rep_fee_gate == 75
+		and HARD_CONFIG.online_high_rep_fee_gate == 75,
+		true,
+		"BE1: Easy/Hard inherit the 5% / Rep 75 cut"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"BE1: base fee stays 8% below the gate"
+	)
+	_expect_equal(OnlineFeePolicy.is_high_rep(75), true, "BE1: Rep 75 takes the cut")
+	_expect_equal(OnlineFeePolicy.is_high_rep(74), false, "BE1: Rep 74 keeps 8%")
+	_expect_equal(OnlineFeePolicy.is_high_rep(100), true, "BE1: Rep 100 matches Rep 75")
+	_expect_equal(OnlineFeePolicy.cut_percent(0), 5, "BE1: missing cut rate falls back to 5")
+	_expect_equal(OnlineFeePolicy.cut_percent(-2), 5, "BE1: negative cut rate falls back to 5")
+	_expect_equal(OnlineFeePolicy.cut_rep(0), 75, "BE1: missing gate falls back to 75")
+	_expect_equal(OnlineFeePolicy.cut_rep(-10), 75, "BE1: negative gate falls back to 75")
+	_expect_equal(
+		is_equal_approx(OnlineFeePolicy.base_rate(-1.0), 0.08),
+		true,
+		"BE1: missing base fee falls back to 8%"
+	)
+	_expect_equal(
+		is_equal_approx(OnlineFeePolicy.fee_rate(74), 0.08),
+		true,
+		"BE1: Rep 74 rate is 8%"
+	)
+	_expect_equal(
+		is_equal_approx(OnlineFeePolicy.fee_rate(75), 0.05),
+		true,
+		"BE1: Rep 75 rate is 5%"
+	)
+	_expect_equal(
+		is_equal_approx(OnlineFeePolicy.fee_rate(100), 0.05),
+		true,
+		"BE1: Rep 100 rate matches Rep 75"
+	)
+	_expect_equal(
+		is_equal_approx(OnlineFeePolicy.fee_rate_for(74, null), 0.08)
+		and is_equal_approx(OnlineFeePolicy.fee_rate_for(75, null), 0.05),
+		true,
+		"BE1: null config still uses 8% / 5%"
+	)
+	_expect_equal(
+		OnlineFeePolicy.fee_cents_for(2500, 74),
+		OnlineListingService.fee_cents_for(2500, 0.08),
+		"BE1: Rep 74 cents match today's 8% rounding"
+	)
+	_expect_equal(
+		OnlineFeePolicy.fee_cents_for(2500, 75),
+		OnlineListingService.fee_cents_for(2500, 0.05),
+		"BE1: Rep 75 cents use the same roundi path at 5%"
+	)
+	_expect_equal(
+		int(_demand_signals.call("online_fee_cut_percent", 0)),
+		5,
+		"BE1: DemandSignals 0-cut fallback is 5"
+	)
+	_expect_equal(
+		int(_demand_signals.call("online_fee_cut_rep", 0)),
+		75,
+		"BE1: DemandSignals 0-gate fallback is 75"
+	)
+	_expect_equal(
+		bool(_demand_signals.call("is_online_fee_cut", 75))
+		and not bool(_demand_signals.call("is_online_fee_cut", 74)),
+		true,
+		"BE1: DemandSignals cut gate follows Rep 75"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("online_listing_fee_rate", 74)), 0.08)
+		and is_equal_approx(float(_demand_signals.call("online_listing_fee_rate", 75)), 0.05),
+		true,
+		"BE1: DemandSignals live rate is 8% then 5%"
+	)
+	_expect_equal(
+		int(_demand_signals.call("online_listing_fee_cents", 2500, 74)),
+		200,
+		"BE1: DemandSignals 8% of $25.00 is $2.00"
+	)
+	_expect_equal(
+		int(_demand_signals.call("online_listing_fee_cents", 2500, 75)),
+		125,
+		"BE1: DemandSignals 5% of $25.00 is $1.25"
+	)
+
+
+func _test_be1_same_seed_online_settle_fee() -> void:
+	const LISTED := 2500
+	var fee_8 := OnlineListingService.fee_cents_for(LISTED, 0.08)
+	var fee_5 := OnlineListingService.fee_cents_for(LISTED, 0.05)
+	_expect_equal(fee_8, 200, "BE1: 8% of $25.00 is $2.00")
+	_expect_equal(fee_5, 125, "BE1: 5% of $25.00 is $1.25")
+
+	var at_74 := _be1_fill_online_sale(74, LISTED)
+	_expect_equal(bool(at_74.get("ok", false)), true, "BE1: same seed lists at Rep 74")
+	_expect_equal(int(at_74.get("fee_cents", 0)), fee_8, "BE1: Rep 74 settle fee is 8%")
+	_expect_equal(
+		int(at_74.get("cash_after", 0)),
+		int(at_74.get("cash_before", 0)) + LISTED - fee_8,
+		"BE1: Rep 74 net cash is list minus 8%"
+	)
+
+	var at_75 := _be1_fill_online_sale(75, LISTED)
+	_expect_equal(bool(at_75.get("ok", false)), true, "BE1: same seed lists at Rep 75")
+	_expect_equal(int(at_75.get("fee_cents", 0)), fee_5, "BE1: Rep 75 settle fee is 5%")
+	_expect_equal(
+		int(at_75.get("cash_after", 0)),
+		int(at_75.get("cash_before", 0)) + LISTED - fee_5,
+		"BE1: Rep 75 net cash is list minus 5%"
+	)
+
+	var at_100 := _be1_fill_online_sale(100, LISTED)
+	_expect_equal(bool(at_100.get("ok", false)), true, "BE1: same seed lists at Rep 100")
+	_expect_equal(
+		int(at_100.get("fee_cents", 0)),
+		fee_5,
+		"BE1: Rep 100 settle fee matches Rep 75"
+	)
+
+	var crossed := _be1_fill_online_sale(74, LISTED, 1, 75)
+	_expect_equal(
+		bool(crossed.get("ok", false)),
+		true,
+		"BE1: list at 74 still fills after crossing the gate"
+	)
+	_expect_equal(
+		int(crossed.get("fee_cents", 0)),
+		fee_5,
+		"BE1: settle uses live Rep — not a list-time lock and not a past-fee refund"
+	)
+
+
+func _test_be1_in_shop_sale_no_cut() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 75)
+	_event_bus.emit_signal("reputation_changed", 75)
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "BE1: in-shop sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	_expect_equal(listed_price > 0, true, "BE1: in-shop listed price stays set at Rep 75")
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := _ao1_listed_buyer()
+	_expect_equal(queue.enqueue(customer), true, "BE1: in-shop lot still enqueues at Rep 75")
+	_expect_equal(queue.sell_listed(), true, "BE1: in-shop sell still resolves at Rep 75")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"BE1: in-shop sale at Rep 75 pays the listed price with no fee cut"
+	)
+	_expect_equal(
+		_ad1_ledger_sale_cents(),
+		listed_price,
+		"BE1: customer_sale ledger is the listed price"
+	)
+	_expect_equal(
+		_i1_ledger_count(&"online_fee"),
+		0,
+		"BE1: in-shop sale does not post an online_fee"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var inventory_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/inventory_service.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "OnlineFeePolicy")
+		and not _function_body_contains(queue_src, "func sell_listed()", "online_fee")
+		and not _function_body_contains(
+			inventory_src,
+			"func confirm_customer_sale(",
+			"OnlineFeePolicy"
+		),
+		true,
+		"BE1: the shop sale path does not read the online fee cut"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_be1_hold_ship_cancel_stay() -> void:
+	_expect_equal(NORMAL_CONFIG.online_ship_days_min, 1, "BE1: ship min stays 1 day")
+	_expect_equal(NORMAL_CONFIG.online_ship_days_max, 3, "BE1: ship max stays 3 days")
+	_expect_equal(
+		NORMAL_CONFIG.online_cancel_frequent_threshold,
+		3,
+		"BE1: frequent-cancel threshold stays 3"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.online_cancel_rep_hit,
+		3,
+		"BE1: frequent-cancel Rep hit stays 3"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 75)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BE1: unique card for hold / ship timing")
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	const LISTED := 2500
+	var listed: Dictionary = _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(card),
+		LISTED,
+		{"ship_days": 2}
+	)
+	_expect_equal(bool(listed.get("ok", false)), true, "BE1: list at Rep 75 still holds")
+	var listing := listed.get("listing") as OnlineListing
+	_expect_equal(listing != null, true, "BE1: 2-day listing record exists")
+	_expect_equal(listing.ship_days, 2, "BE1: requested ship_days 2 is kept")
+	_expect_equal(
+		card.location.type,
+		InventoryLocation.Type.ONLINE_HOLD,
+		"BE1: listed card still moves to ONLINE_HOLD"
+	)
+	_expect_equal(
+		_inventory_service.call("find_listed_sku_offer", card.sku_id, LISTED),
+		{},
+		"BE1: held card still cannot be offered in-store"
+	)
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", card.sku_id, LISTED)),
+		false,
+		"BE1: held card still cannot sell in-store"
+	)
+	var service: Object = _economy.get("online_listings")
+	var cash_before := int(_economy.get("balance_cents"))
+	service.call("tick_shipping")
+	_expect_equal(
+		listing.status,
+		OnlineListing.Status.ACTIVE,
+		"BE1: 2-day ship is still ACTIVE after one tick"
+	)
+	_expect_equal(listing.remaining_days, 1, "BE1: remaining ship days tick 2 → 1")
+	_expect_equal(
+		card.location.type,
+		InventoryLocation.Type.ONLINE_HOLD,
+		"BE1: ONLINE_HOLD lock holds through the first ship day"
+	)
+	_expect_equal(
+		_i1_ledger_count(&"online_fee"),
+		0,
+		"BE1: fee does not post before fill"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"BE1: cash is unchanged until the listing fills"
+	)
+	service.call("tick_shipping")
+	_expect_equal(
+		listing.status,
+		OnlineListing.Status.FILLED,
+		"BE1: 2-day ship fills on the second tick"
+	)
+	_expect_equal(
+		listing.fee_cents,
+		OnlineListingService.fee_cents_for(LISTED, 0.05),
+		"BE1: fill at Rep 75 still takes the 5% cut"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + LISTED - listing.fee_cents,
+		"BE1: 2-day fill nets list minus the settle-time cut"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_be1_ui_and_untouched() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 74)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BE1: unique card for list-confirm %")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BE1: HUD loads for fee line")
+	if hud != null and card != null:
+		var dto_74: OnlineListConfirmSignal = _demand_signals.call(
+			"list_confirm_signal",
+			card.sku_id,
+			2500,
+			card.location
+		)
+		_expect_equal(dto_74 != null, true, "BE1: list confirm DTO exists at Rep 74")
+		if dto_74 != null:
+			_expect_dto_has_no_truth_fields(dto_74, "BE1: list confirm DTO at 74")
+			_expect_equal(
+				is_equal_approx(dto_74.fee_percent, 0.08),
+				true,
+				"BE1: confirm fee_percent is 8% at Rep 74"
+			)
+			var summary_74 := DemandSignalPresenter.list_confirm_summary(dto_74)
+			_expect_equal(
+				summary_74.contains("8%"),
+				true,
+				"BE1: confirm fee line shows 8% at Rep 74"
+			)
+			_assert_text_has_no_truth(summary_74, "BE1: confirm summary at 74")
+			_expect_equal(
+				summary_74.to_lower().contains("true_market")
+				or summary_74.to_lower().contains("p_buy"),
+				false,
+				"BE1: confirm never shows true_market or p_buy"
+			)
+		_game_state.set("current_reputation", 75)
+		_event_bus.emit_signal("reputation_changed", 75)
+		var dto_75: OnlineListConfirmSignal = _demand_signals.call(
+			"list_confirm_signal",
+			card.sku_id,
+			2500,
+			card.location
+		)
+		_expect_equal(dto_75 != null, true, "BE1: list confirm DTO exists at Rep 75")
+		if dto_75 != null:
+			_expect_dto_has_no_truth_fields(dto_75, "BE1: list confirm DTO at 75")
+			_expect_equal(
+				is_equal_approx(dto_75.fee_percent, 0.05),
+				true,
+				"BE1: confirm fee_percent is 5% at Rep 75"
+			)
+			var summary_75 := DemandSignalPresenter.list_confirm_summary(dto_75)
+			_expect_equal(
+				summary_75.contains("5%"),
+				true,
+				"BE1: confirm fee line shows 5% at Rep 75"
+			)
+			_assert_text_has_no_truth(summary_75, "BE1: confirm summary at 75")
+			var row_75 := DemandSignalPresenter.listable_stock_row(dto_75)
+			_expect_equal(
+				row_75.contains("5%"),
+				true,
+				"BE1: listable row shows the active 5%"
+			)
+			_assert_text_has_no_truth(row_75, "BE1: listable row at 75")
+		root.remove_child(hud)
+		hud.free()
+
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BE1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BE1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BE1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BE1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BE1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.extra_leads_for(75) == 1
+		and MarketplaceLeadPolicy.extra_leads_for(74) == 0,
+		true,
+		"BE1/AQ1: extra marketplace lead stays one at Rep 75"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BE1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("net_worth")
+		or events.contains("stop_day"),
+		false,
+		"BE1: Soft catalog stays closed"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "OnlineFeePolicy")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "online_fee"),
+		true,
+		"BE1: the fee cut stays off the sell weight"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not spawn_src.contains("OnlineFeePolicy")
+		and not policy_src.contains("OnlineFeePolicy"),
+		true,
+		"BE1: door spawn does not read the online fee cut"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		not hud_src.contains("true_market")
+		and not hud_src.contains("p_buy")
+		and not hud_src.contains("cert_valid"),
+		true,
+		"BE1: HUD has no true_market or p_buy"
+	)
+	var presenter_src := FileAccess.get_file_as_string(
+		"res://scripts/ui/demand_signal_presenter.gd"
+	)
+	_expect_equal(
+		not presenter_src.contains("true_market")
+		and not presenter_src.contains("p_buy"),
+		true,
+		"BE1: presenter has no true_market or p_buy"
+	)
+	_expect_equal(
+		hud_src.contains("%NetWorth") or hud_src.contains("func _sync_net_worth"),
+		false,
+		"BE1: no live all-modes net-worth HUD"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"BE1: cameras stay owned≡active (no off-switch)"
+	)
+	_game_state.call("start_new_game")
+
+
+func _be1_fill_online_sale(
+	list_rep: int,
+	listed_price: int,
+	ship_days: int = 1,
+	settle_rep: int = -1
+) -> Dictionary:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", list_rep)
+	_event_bus.emit_signal("reputation_changed", list_rep)
+	var card := _i1_unique_card()
+	if card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return {"ok": false}
+	var listed: Dictionary = _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(card),
+		listed_price,
+		{"ship_days": ship_days}
+	)
+	if not bool(listed.get("ok", false)):
+		_qa_autoload.call("set_force_enabled", false)
+		return {"ok": false}
+	var listing := listed.get("listing") as OnlineListing
+	if settle_rep >= 0:
+		_game_state.set("current_reputation", settle_rep)
+		_event_bus.emit_signal("reputation_changed", settle_rep)
+	if not bool(_game_state.call("start_floor")):
+		_qa_autoload.call("set_force_enabled", false)
+		return {"ok": false, "listing": listing}
+	var cash_before := int(_economy.get("balance_cents"))
+	if not bool(_game_state.call("start_settle")):
+		_qa_autoload.call("set_force_enabled", false)
+		return {"ok": false, "listing": listing, "cash_before": cash_before}
+	_qa_autoload.call("set_force_enabled", false)
+	return {
+		"ok": listing != null and listing.status == OnlineListing.Status.FILLED,
+		"listing": listing,
+		"fee_cents": listing.fee_cents if listing != null else 0,
+		"cash_before": cash_before,
+		"cash_after": int(_economy.get("balance_cents")),
+	}
 
 
 func _bb1_reset() -> void:

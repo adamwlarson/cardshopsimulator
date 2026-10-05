@@ -38,6 +38,10 @@ enum Difficulty {
 @export var online_cancel_window_days: int = 7
 @export var online_cancel_frequent_threshold: int = 3
 @export var online_cancel_rep_hit: int = 3
+## BE1: high-rep online listing settle cut. Missing / ≤0 falls back in
+## OnlineFeePolicy to 5% at Rep ≥ 75. Base `online_fee` stays below the gate.
+@export var online_high_rep_fee_percent: int = 5
+@export var online_high_rep_fee_gate: int = 75
 @export var shrink_daily_base: float = 0.002
 @export var shrink_unstaffed_add: float = 0.005
 ## HOLD H2: Easy/Hard inherit this Normal default when omitted from .tres.

@@ -103,7 +103,7 @@ func list_target(target: Dictionary, listed_price_cents: int, opts: Dictionary =
 	listing.display_name = String(target.get("display_name", String(sku_id)))
 	listing.quantity = 1
 	listing.listed_price_cents = listed_price_cents
-	listing.fee_cents = fee_cents_for(listed_price_cents, config.online_fee)
+	listing.fee_cents = fee_cents_for(listed_price_cents, _fee_rate(config))
 	listing.ship_days = _ship_days_from(opts, config)
 	listing.remaining_days = listing.ship_days
 	listing.listed_on_day = GameState.current_day
@@ -178,6 +178,8 @@ func tick_shipping() -> Array[OnlineListing]:
 func _fill_listing(listing: OnlineListing) -> bool:
 	if not _remove_held(listing):
 		return false
+	var rate := _fee_rate()
+	listing.fee_cents = fee_cents_for(listing.listed_price_cents, rate)
 	if listing.listed_price_cents > 0:
 		Economy.record_income(
 			listing.listed_price_cents,
@@ -188,7 +190,7 @@ func _fill_listing(listing: OnlineListing) -> bool:
 		Economy.record_expense(
 			listing.fee_cents,
 			&"online_fee",
-			"Online listing fee 8%"
+			"Online listing fee %d%%" % roundi(rate * 100.0)
 		)
 	listing.status = OnlineListing.Status.FILLED
 	listing.remaining_days = 0
@@ -301,6 +303,11 @@ func _cancels_in_window(day: int) -> int:
 		if cancel_day >= earliest:
 			count += 1
 	return count
+
+
+func _fee_rate(config: BalanceConfig = null) -> float:
+	var resolved := config if config != null else _config()
+	return OnlineFeePolicy.fee_rate_for(GameState.current_reputation, resolved)
 
 
 func _config() -> BalanceConfig:
