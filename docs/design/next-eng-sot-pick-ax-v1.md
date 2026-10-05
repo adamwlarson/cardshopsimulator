@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AX v1 — post AW1
 
-**Status:** **AX1 ADOPTED** 2026-10-05 — Edit You offer mid-serve. Park AX2/AX3/AX4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, AU1 haggle, AV1 Negotiate, or AW1 buylist into a sell weight. Door spawn math stays as shipped.
+**Status:** **AX1 SHIPPED** 2026-10-05 — squash-merged #80 @ `84cdf7c9` (reviewed `98c4c7c7`). Edit You offer mid-serve. Park AX2/AX3/AX4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, AU1 haggle, AV1 Negotiate, or AW1 buylist into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-aw (AW1 Buylist buy-from-them SHIPPED #79 @ `d5f21d1a`); Soft catalog CLOSED
@@ -93,3 +93,4 @@
 | 2026-10-05 | PM adopted **AX1**. Park AX2/AX3/AX4. Hard-park camera off-switch. Soft catalog CLOSED. One Change offer on the AW1 buylist serve. Draft sha256 `64b45fc6`. |
 | 2026-10-05 | PM adopted **AX1**. Spec on main `045810fb`. Spike [AX1 edit You offer mid-serve](https://cursor.com/agents/bc-871009e4-8775-5540-8156-1a24677782be). Park AX2/AX3/AX4. No Art. Soft catalog CLOSED. Draft sha256 `64b45fc6`. |
 | 2026-10-05 | PM tip-froze PR #80 @ `98c4c7c7`. Ready. 9 files, no docs. Agent archived. |
+| 2026-10-05 | PM SHIPPED **AX1**. Squash-merged #80 @ `84cdf7c9` (reviewed `98c4c7c7`). QA PASS, harness 126/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. Branch `cursor/ax1-edit-you-offer-82be` deleted. |
