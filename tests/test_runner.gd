@@ -147,6 +147,7 @@ func _initialize() -> void:
 	_test_security_camera_prop_stub_swap()
 	_test_recession_week_event()
 	_test_supply_glut_event()
+	_test_set_release_hype_event()
 	_test_day_ten_beat_serialization()
 	_test_marketplace_outing_beat()
 	_test_hire_cashier_beat()
@@ -2655,9 +2656,10 @@ func _test_market_events_seven_day_seeded_run() -> void:
 		and FileAccess.get_file_as_string("res://data/events.json").contains("convention_weekend")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("theft_ring")
 		and FileAccess.get_file_as_string("res://data/events.json").contains("recession_week")
-		and FileAccess.get_file_as_string("res://data/events.json").contains("supply_glut"),
+		and FileAccess.get_file_as_string("res://data/events.json").contains("supply_glut")
+		and FileAccess.get_file_as_string("res://data/events.json").contains("set_release_hype"),
 		true,
-		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, theft ring, recession, and supply glut"
+		"C1 pack catalogs hype, rotation leak, fog, counterfeit, convention, theft ring, recession, supply glut, and set release hype"
 	)
 	_qa_autoload.call("set_force_enabled", false)
 
@@ -6472,6 +6474,830 @@ func _test_supply_glut_save_load() -> void:
 		"Q1: restored banner still uses distributor email copy"
 	)
 	_assert_text_has_no_truth(restored_banner, "Q1 restored supply glut banner")
+
+
+func _test_set_release_hype_event() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_set_release_hype_named_gate_and_fallbacks()
+	_test_set_release_hype_can_fire()
+	_test_set_release_hype_demand_and_prices()
+	_test_set_release_hype_levers_and_no_soft_lock()
+	_test_set_release_hype_section_45_and_banner()
+	_test_set_release_hype_pack_coherence()
+	_test_set_release_hype_save_load()
+	_test_set_release_hype_untouched_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_set_release_hype_named_gate_and_fallbacks() -> void:
+	_expect_equal(
+		SetReleaseHypePolicy.TELEGRAPH_DAYS,
+		3,
+		"BQ1: locked telegraph is 3 days ahead"
+	)
+	_expect_equal(
+		SetReleaseHypePolicy.DURATION_DAYS,
+		5,
+		"BQ1: locked duration is 5 days inclusive of release day"
+	)
+	_expect_equal(
+		is_equal_approx(SetReleaseHypePolicy.HYPE_NEW_MULT, 1.40),
+		true,
+		"BQ1: locked new-set sealed demand is ×1.40"
+	)
+	_expect_equal(
+		is_equal_approx(SetReleaseHypePolicy.HYPE_OLD_MULT, 0.70),
+		true,
+		"BQ1: locked old-set sealed demand is ×0.70"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.set_release_telegraph_days == 3
+		and NORMAL_CONFIG.set_release_duration_days == 5
+		and is_equal_approx(NORMAL_CONFIG.hype_new_mult, 1.40)
+		and is_equal_approx(NORMAL_CONFIG.hype_old_mult, 0.70),
+		true,
+		"BQ1: Normal config matches locked Set release levers"
+	)
+	_expect_equal(
+		EASY_CONFIG.set_release_telegraph_days == 3
+		and HARD_CONFIG.set_release_telegraph_days == 3
+		and EASY_CONFIG.set_release_duration_days == 5
+		and HARD_CONFIG.set_release_duration_days == 5
+		and is_equal_approx(EASY_CONFIG.hype_new_mult, 1.40)
+		and is_equal_approx(HARD_CONFIG.hype_new_mult, 1.40)
+		and is_equal_approx(EASY_CONFIG.hype_old_mult, 0.70)
+		and is_equal_approx(HARD_CONFIG.hype_old_mult, 0.70),
+		true,
+		"BQ1: Easy/Hard inherit telegraph 3 / duration 5 / ×1.40 / ×0.70"
+	)
+	var missing := BalanceConfig.new()
+	missing.set_release_telegraph_days = 0
+	missing.set_release_duration_days = 0
+	missing.hype_new_mult = 0.0
+	missing.hype_old_mult = 0.0
+	_expect_equal(
+		SetReleaseHypePolicy.telegraph_days(0) == 3
+		and SetReleaseHypePolicy.duration_days(-1) == 5,
+		true,
+		"BQ1: missing / ≤0 telegraph and duration fall back"
+	)
+	_expect_equal(
+		SetReleaseHypePolicy.telegraph_days_for(missing) == 3
+		and SetReleaseHypePolicy.duration_days_for(missing) == 5
+		and SetReleaseHypePolicy.telegraph_days_for(null) == 3
+		and SetReleaseHypePolicy.duration_days_for(null) == 5,
+		true,
+		"BQ1: null / zero config falls back to 3 / 5"
+	)
+	_expect_equal(
+		is_equal_approx(SetReleaseHypePolicy.hype_new_mult(0.0), 1.40)
+		and is_equal_approx(SetReleaseHypePolicy.hype_old_mult(-0.2), 0.70)
+		and is_equal_approx(SetReleaseHypePolicy.hype_new_mult_for(missing), 1.40)
+		and is_equal_approx(SetReleaseHypePolicy.hype_old_mult_for(missing), 0.70)
+		and is_equal_approx(SetReleaseHypePolicy.hype_new_mult_for(null), 1.40)
+		and is_equal_approx(SetReleaseHypePolicy.hype_old_mult_for(null), 0.70),
+		true,
+		"BQ1: missing / ≤0 new/old mults fall back to 1.40 / 0.70"
+	)
+	_expect_equal(
+		MarketEventService.is_set_release_telegraph_day(8)
+		and MarketEventService.is_set_release_telegraph_day(10)
+		and not MarketEventService.is_set_release_calendar_day(10),
+		true,
+		"BQ1: days 8–10 telegraph before the release window"
+	)
+	_expect_equal(
+		MarketEventService.is_set_release_calendar_day(11)
+		and MarketEventService.is_set_release_calendar_day(15)
+		and not MarketEventService.is_set_release_telegraph_day(11)
+		and not MarketEventService.is_set_release_calendar_day(16),
+		true,
+		"BQ1: release window is 5 days inclusive of release day"
+	)
+	_expect_equal(
+		SetReleaseHypePolicy.remaining_days_on(11) == 5
+		and SetReleaseHypePolicy.remaining_days_on(15) == 1
+		and SetReleaseHypePolicy.remaining_days_on(10) == 0
+		and SetReleaseHypePolicy.remaining_days_on(16) == 0,
+		true,
+		"BQ1: remaining days cover release day through the last duration day"
+	)
+	_expect_equal(
+		MarketEventService.set_release_calendar_weight_mult(11)
+		> MarketEventService.set_release_calendar_weight_mult(10),
+		true,
+		"BQ1: calendar window boosts Set release settle weight"
+	)
+	_expect_equal(
+		is_equal_approx(MarketEventService.set_release_calendar_weight_mult(10), 0.0)
+		and is_equal_approx(MarketEventService.set_release_calendar_weight_mult(16), 0.0),
+		true,
+		"BQ1: off-window days do not roll Set release"
+	)
+
+
+func _test_set_release_hype_can_fire() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call("seed_event_rng", MarketEventService.EVENT_RNG_SEED)
+	_game_state.set("current_day", 10)
+	_expect_equal(
+		String(_demand_signals.call("calendar_telegraph_text")).contains("Set release"),
+		true,
+		"BQ1: calendar telegraphs Set release ≥1 day before active"
+	)
+	_expect_equal(
+		String(_demand_signals.call("calendar_telegraph_text")).contains("incoming"),
+		true,
+		"BQ1: telegraph is calendar-known incoming copy"
+	)
+	_expect_equal(
+		_demand_signals.call("has_set_release_hype"),
+		false,
+		"BQ1: telegraph day does not invent an active Set release"
+	)
+	_assert_text_has_no_truth(
+		String(_demand_signals.call("calendar_telegraph_text")),
+		"BQ1 telegraph calendar text"
+	)
+	_game_state.set("current_day", 11)
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SET_RELEASE,
+		{"duration_days": 5, "remaining_days": 5}
+	)
+	_expect_equal(started != null, true, "BQ1: formal start_pack_event fires Set release")
+	_expect_equal(started.kind, MarketEvent.KIND_SET_RELEASE, "BQ1: kind is set_release_hype")
+	_expect_equal(started.duration_days, 5, "BQ1: duration is 5 days")
+	_expect_equal(started.remaining_days, 5, "BQ1: remaining_days tracks the window")
+	_expect_equal(
+		not started.set_id.is_empty() and not started.old_set_id.is_empty(),
+		true,
+		"BQ1: seeded pick binds a new set and an old set"
+	)
+	_expect_equal(
+		started.set_id != started.old_set_id,
+		true,
+		"BQ1: new and old sealed set ids are distinct"
+	)
+	_expect_equal(
+		_demand_signals.call("has_set_release_hype"),
+		true,
+		"BQ1: pack exposes Set release hype flag"
+	)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"BQ1: Set release does not open Option D PriceEditor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var fired := false
+	var seeds: Array[int] = [MarketEventService.EVENT_RNG_SEED]
+	for extra: int in range(1, 64):
+		seeds.append(extra)
+	for rng_seed: int in seeds:
+		_game_state.call("start_new_game")
+		_demand_signals.call("seed_event_rng", rng_seed)
+		_qa_autoload.call("clear")
+		for _day_index: int in range(20):
+			_game_state.call("start_floor")
+			_game_state.call("start_settle")
+			var rolled: MarketEvent = _demand_signals.call("active_event")
+			if rolled != null and rolled.kind == MarketEvent.KIND_SET_RELEASE:
+				if MarketEventService.is_set_release_calendar_day(
+					int(_game_state.get("current_day"))
+				):
+					fired = true
+					break
+			if int(_game_state.get("current_day")) < 20:
+				_game_state.call("advance_day")
+		if fired:
+			break
+	_expect_equal(fired, true, "BQ1: seeded settle run can roll set_release_hype")
+	_qa_autoload.call("set_force_enabled", false)
+
+
+func _test_set_release_hype_demand_and_prices() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call("seed_event_rng", MarketEventService.EVENT_RNG_SEED)
+	_game_state.set("current_day", 10)
+	var new_sku := &"AA-SKIE-BLST"
+	var old_sku := &"AA-DUST-ETB"
+	var staple := &"AA-BASE-088"
+	var chase := &"AA-SKIE-047"
+	var sleeves := &"ACC-SLV-60"
+	var baseline_new := float(_demand_signals.call("effective_demand_score", new_sku))
+	var baseline_old := float(_demand_signals.call("effective_demand_score", old_sku))
+	var baseline_staple := float(_demand_signals.call("effective_demand_score", staple))
+	var baseline_chase := float(_demand_signals.call("effective_demand_score", chase))
+	var baseline_sleeves := float(_demand_signals.call("effective_demand_score", sleeves))
+	var listed_new := int(_inventory_service.call("listed_price_for", new_sku))
+	var listed_old := int(_inventory_service.call("listed_price_for", old_sku))
+	var cash_before := int(_economy.get("balance_cents"))
+	_expect_equal(baseline_new > 0.0, true, "BQ1: new sealed has baseline demand")
+	_expect_equal(baseline_old > 0.0, true, "BQ1: old sealed has baseline demand")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("set_release_demand_mult_for", new_sku)), 1.0),
+		true,
+		"BQ1: telegraph day does not invent new-set demand mult"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("set_release_demand_mult_for", old_sku)), 1.0),
+		true,
+		"BQ1: telegraph day does not invent old-set demand mult"
+	)
+	_game_state.set("current_day", 11)
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SET_RELEASE,
+		{
+			"duration_days": 5,
+			"remaining_days": 5,
+			"set_id": &"AA-SKIE",
+			"old_set_id": &"AA-DUST",
+		}
+	)
+	_expect_equal(started != null, true, "BQ1: Set release starts on release day")
+	_expect_equal(started.set_id, &"AA-SKIE", "BQ1: new set is the current sealed set")
+	_expect_equal(started.old_set_id, &"AA-DUST", "BQ1: old set is the previous sealed set")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("set_release_demand_mult_for", new_sku)),
+			SetReleaseHypePolicy.HYPE_NEW_MULT
+		),
+		true,
+		"BQ1: new-set sealed demand mult is ×1.40"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("set_release_demand_mult_for", old_sku)),
+			SetReleaseHypePolicy.HYPE_OLD_MULT
+		),
+		true,
+		"BQ1: old-set sealed demand mult is ×0.70"
+	)
+	var hype_new := float(_demand_signals.call("effective_demand_score", new_sku))
+	var hype_old := float(_demand_signals.call("effective_demand_score", old_sku))
+	_expect_equal(
+		is_equal_approx(hype_new, baseline_new * SetReleaseHypePolicy.HYPE_NEW_MULT),
+		true,
+		"BQ1: new-set sealed hidden demand is about ×1.40 vs baseline"
+	)
+	_expect_equal(
+		is_equal_approx(hype_old, baseline_old * SetReleaseHypePolicy.HYPE_OLD_MULT),
+		true,
+		"BQ1: old-set sealed hidden demand is about ×0.70 vs baseline"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("effective_demand_score", staple)), baseline_staple)
+		and is_equal_approx(float(_demand_signals.call("effective_demand_score", chase)), baseline_chase)
+		and is_equal_approx(
+			float(_demand_signals.call("effective_demand_score", sleeves)),
+			baseline_sleeves
+		),
+		true,
+		"BQ1: accessories / singles / graded stay out of this event's demand modifiers"
+	)
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", new_sku)) == listed_new
+		and int(_inventory_service.call("listed_price_for", old_sku)) == listed_old,
+		true,
+		"BQ1: listed prices are unchanged by the event alone"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before,
+		"BQ1: cash is unchanged by the event alone"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("active_event_traffic_mult")), 1.0)
+		and is_equal_approx(float(_demand_signals.call("active_event_whale_weight_mult")), 1.0),
+		true,
+		"BQ1: buyer door spawn and whale weight stay 1.0"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", new_sku)), 1.0)
+		and is_equal_approx(float(_demand_signals.call("sell_through_mult_for", old_sku)), 1.0),
+		true,
+		"BQ1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var wait: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(wait != null, true, "BQ1: duration window is active")
+	_demand_signals.call("roll_settle_events")
+	var after_one: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(
+		after_one != null and after_one.kind == MarketEvent.KIND_SET_RELEASE,
+		true,
+		"BQ1: day 1 wait-out keeps Set release active"
+	)
+	_expect_equal(after_one.remaining_days, 4, "BQ1: remaining_days ticks 5→4")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("effective_demand_score", new_sku)),
+			baseline_new * SetReleaseHypePolicy.HYPE_NEW_MULT
+		),
+		true,
+		"BQ1: new-set demand stays up while remaining_days > 0"
+	)
+	_demand_signals.call("apply_event_save", {})
+	_expect_equal(
+		_demand_signals.call("has_set_release_hype"),
+		false,
+		"BQ1: clearing after duration drops the flag"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("effective_demand_score", new_sku)), baseline_new)
+		and is_equal_approx(float(_demand_signals.call("effective_demand_score", old_sku)), baseline_old),
+		true,
+		"BQ1: sealed demand mults no longer apply after duration ends"
+	)
+	_game_state.set("current_day", 16)
+	_expect_equal(
+		not MarketEventService.is_set_release_calendar_day(16)
+		and is_equal_approx(float(_demand_signals.call("set_release_demand_mult_for", new_sku)), 1.0)
+		and is_equal_approx(float(_demand_signals.call("set_release_demand_mult_for", old_sku)), 1.0),
+		true,
+		"BQ1: a day with no Set release active does not invent the mults"
+	)
+
+
+func _test_set_release_hype_levers_and_no_soft_lock() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 11)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SET_RELEASE,
+		{
+			"duration_days": 5,
+			"remaining_days": 5,
+			"set_id": &"AA-SKIE",
+			"old_set_id": &"AA-DUST",
+		}
+	)
+	var shop: ShopState = _game_state.get("shop")
+	_expect_equal(shop.can_hire(), true, "BQ1: Set release PREP can still hire")
+	var old_sku := &"AA-DUST-ETB"
+	var listed_before := int(_inventory_service.call("listed_price_for", old_sku))
+	var fire_sale := maxi(1, floori(float(listed_before) * 0.90))
+	_expect_equal(
+		_inventory_service.call("set_listed_price", old_sku, fire_sale),
+		true,
+		"BQ1: fire-sale old sealed lever works during Set release"
+	)
+	_expect_equal(
+		int(_inventory_service.call("listed_price_for", old_sku)),
+		fire_sale,
+		"BQ1: fire-sale listed price persists"
+	)
+	var price_dto := _demand_signals.call(
+		"price_signal",
+		old_sku,
+		fire_sale,
+		_inventory_service.call("location_for", old_sku)
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(price_dto, "BQ1 Set release fire-sale price signal")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_dto),
+		"BQ1 Set release fire-sale PriceEditor summary"
+	)
+	var opportunity: bool = _demand_signals.call(
+		"inject_buy_opportunity",
+		_bq1_scripted_buy_opportunity()
+	)
+	_expect_equal(opportunity, true, "BQ1: pre-buy opportunity still injects")
+	var pre_buy := _demand_signals.call(
+		"buy_signal_for_id",
+		&"bq1_set_release_prebuy"
+	) as BuyConfirmSignal
+	_expect_equal(pre_buy != null, true, "BQ1: pre-buy signal builds")
+	_expect_dto_has_no_truth_fields(pre_buy, "BQ1 Set release pre-buy confirm")
+	_expect_equal(
+		_demand_signals.call("dismiss_buy_opportunity", &"bq1_set_release_prebuy"),
+		true,
+		"BQ1: ignore-buy dismiss still works"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", &"bq1_set_release_prebuy") == null,
+		true,
+		"BQ1: dismissed buy stays closed — no soft-lock"
+	)
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"BQ1: Set release can open FLOOR"
+	)
+	_expect_equal(
+		_game_state.call("start_settle"),
+		true,
+		"BQ1: Set release FLOOR can settle — no soft-lock"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BQ1: HUD loads during Set release levers")
+	if hud != null:
+		var open_price := hud.get_node_or_null("%OpenPriceButton") as Button
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		_expect_equal(
+			open_price != null and not open_price.disabled,
+			true,
+			"BQ1: player can still open PriceEditor to fire-sale or hold"
+		)
+		_expect_equal(
+			open_buy != null and not open_buy.disabled,
+			true,
+			"BQ1: player can still open buys to pre-buy or skip"
+		)
+		hud.queue_free()
+
+
+func _bq1_scripted_buy_opportunity() -> BuyOpportunity:
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = &"bq1_set_release_prebuy"
+	opportunity.sku_id = &"AA-SKIE-BLST"
+	opportunity.display_name = "Skiefall Ascension Blaster"
+	opportunity.offer_label = "Distributor lot"
+	opportunity.channel = DemandSignalService.Channel.DISTRIBUTOR
+	opportunity.unit_cost_cents = 2100
+	opportunity.quantity = 2
+	opportunity.space_required = 1
+	return opportunity
+
+
+func _test_set_release_hype_section_45_and_banner() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", 10)
+	_expect_equal(
+		String(_demand_signals.call("calendar_telegraph_text")).contains("incoming"),
+		true,
+		"BQ1: telegraph is calendar-known"
+	)
+	_game_state.set("current_day", 11)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SET_RELEASE,
+		{
+			"duration_days": 5,
+			"remaining_days": 5,
+			"set_id": &"AA-SKIE",
+			"old_set_id": &"AA-DUST",
+		}
+	)
+	var banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(banner.contains("Set release"), true, "BQ1: banner names Set release")
+	_expect_equal(banner.contains("Calendar"), true, "BQ1: banner is a calendar telegraph")
+	_expect_equal(
+		banner.to_lower().contains("sealed") or banner.to_lower().contains("hot"),
+		true,
+		"BQ1: banner telegraphs sealed hype"
+	)
+	_expect_equal(banner.contains("true_market"), false, "BQ1: banner has no true_market")
+	_assert_text_has_no_truth(banner, "BQ1 Set release banner")
+	var price_dto := _demand_signals.call(
+		"price_signal",
+		&"AA-SKIE-BLST",
+		int(_inventory_service.call("listed_price_for", &"AA-SKIE-BLST")),
+		_inventory_service.call("location_for", &"AA-SKIE-BLST")
+	) as PriceConfirmSignal
+	_expect_dto_has_no_truth_fields(price_dto, "BQ1 Set release price confirm")
+	_assert_text_has_no_truth(
+		DemandSignalPresenter.price_summary(price_dto),
+		"BQ1 Set release price summary"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	var payload: Dictionary = _demand_signals.call("roll_settle_events")
+	_assert_payload_has_no_truth(payload, "BQ1 Set release market_event_rolled")
+	_expect_equal(
+		payload.has("set_release_hype")
+		and payload.has("hype_new_mult")
+		and payload.has("hype_old_mult"),
+		true,
+		"BQ1: instrumentation records Set release demand multipliers"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		false,
+		"BQ1: calendar banner does not open Option D PriceEditor"
+	)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BQ1: HUD loads for Set release telegraph")
+	if hud != null:
+		var banner_label := hud.get_node_or_null("%EventBannerLabel") as Label
+		_expect_equal(banner_label != null, true, "BQ1: thin event banner exists")
+		_expect_equal(
+			banner_label != null
+			and banner_label.visible
+			and banner_label.text.contains("Set release")
+			and banner_label.text.contains("Calendar"),
+			true,
+			"BQ1: HUD banner shows Set release without a new screen"
+		)
+		_assert_text_has_no_truth(
+			banner_label.text if banner_label != null else "",
+			"BQ1 HUD Set release banner"
+		)
+		var price_panel := hud.get_node_or_null("%PriceEditor") as PanelContainer
+		_expect_equal(
+			price_panel == null or not price_panel.visible,
+			true,
+			"BQ1: HUD does not force PriceEditor for Set release"
+		)
+		hud.queue_free()
+
+
+func _test_set_release_hype_pack_coherence() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SET_RELEASE,
+		{
+			"duration_days": 5,
+			"remaining_days": 5,
+			"set_id": &"AA-SKIE",
+			"old_set_id": &"AA-DUST",
+		}
+	)
+	var glut: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(glut != null, true, "BQ1: Supply glut still starts")
+	_expect_equal(
+		_demand_signals.call("has_set_release_hype"),
+		false,
+		"BQ1: glut replaces Set release on the shared pack bus"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("set_release_demand_mult_for", &"AA-SKIE-BLST")),
+			1.0
+		),
+		true,
+		"BQ1: glut does not keep Set release sealed demand"
+	)
+	var recession: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_RECESSION,
+		{"duration_days": 7, "remaining_days": 7}
+	)
+	_expect_equal(recession != null, true, "BQ1: Recession week still starts")
+	var convention: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_CONVENTION,
+		{"duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(convention != null, true, "BQ1: Convention weekend still starts")
+	var theft: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_THEFT_RING,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	_expect_equal(theft != null, true, "BQ1: Theft ring still starts")
+	var scare: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_COUNTERFEIT,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(scare != null, true, "BQ1: Counterfeit scare still starts")
+	var hype: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_HYPE,
+		{"sku_id": &"AA-SKIE-047", "duration_days": 2, "remaining_days": 2}
+	)
+	_expect_equal(hype != null, true, "BQ1: Option D hype still starts")
+	_expect_equal(hype.sku_id, &"AA-SKIE-047", "BQ1: hype still targets Titan")
+	_expect_equal(
+		_demand_signals.call("wants_event_price_editor"),
+		true,
+		"BQ1: Option D hype still wants the PriceEditor"
+	)
+	var fog: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_FOG,
+		{"duration_days": 1, "remaining_days": 1}
+	)
+	_expect_equal(fog != null, true, "BQ1: fog day still starts")
+	_expect_equal(_demand_signals.call("has_fog_flag"), true, "BQ1: fog flag still applies")
+	_expect_equal(
+		_demand_signals.call("has_set_release_hype"),
+		false,
+		"BQ1: fog does not leak Set release demand"
+	)
+
+
+func _test_set_release_hype_save_load() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	var started: MarketEvent = _demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SET_RELEASE,
+		{
+			"duration_days": 5,
+			"remaining_days": 5,
+			"set_id": &"AA-SKIE",
+			"old_set_id": &"AA-DUST",
+		}
+	)
+	_expect_equal(started != null, true, "BQ1 save: Set release starts")
+	_game_state.set("current_day", 11)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "BQ1 Set release save")
+	var stored: Dictionary = saved.get("market_event", {})
+	_expect_equal(String(stored.get("id", "")), "set_release_hype", "BQ1 save writes event id")
+	_expect_equal(int(stored.get("remaining_days", 0)), 5, "BQ1 save writes remaining days")
+	_expect_equal(String(stored.get("kind", "")), "set_release_hype", "BQ1 save writes kind")
+	_expect_equal(String(stored.get("set_id", "")), "AA-SKIE", "BQ1 save writes new set")
+	_expect_equal(String(stored.get("old_set_id", "")), "AA-DUST", "BQ1 save writes old set")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_demand_signals.call("has_set_release_hype"),
+		false,
+		"BQ1: new game clears Set release"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BQ1: restore_save accepts Set release snapshot"
+	)
+	var restored: MarketEvent = _demand_signals.call("active_event")
+	_expect_equal(restored != null, true, "BQ1: save/load restores Set release")
+	_expect_equal(restored.kind, MarketEvent.KIND_SET_RELEASE, "BQ1: restored kind")
+	_expect_equal(restored.set_id, &"AA-SKIE", "BQ1: restored new set")
+	_expect_equal(restored.old_set_id, &"AA-DUST", "BQ1: restored old set")
+	_expect_equal(
+		_demand_signals.call("has_set_release_hype"),
+		true,
+		"BQ1: restored Set release re-applies sealed demand"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("set_release_demand_mult_for", &"AA-SKIE-BLST")),
+			SetReleaseHypePolicy.HYPE_NEW_MULT
+		),
+		true,
+		"BQ1: restored Set release still multiplies new-set demand"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("set_release_demand_mult_for", &"AA-DUST-ETB")),
+			SetReleaseHypePolicy.HYPE_OLD_MULT
+		),
+		true,
+		"BQ1: restored Set release still cools old-set demand"
+	)
+	var restored_banner := String(_demand_signals.call("event_banner_text"))
+	_expect_equal(
+		restored_banner.contains("Set release"),
+		true,
+		"BQ1: restored banner still names Set release"
+	)
+	_assert_text_has_no_truth(restored_banner, "BQ1 restored Set release banner")
+
+
+func _test_set_release_hype_untouched_and_parked() -> void:
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and BuylistDripPolicy.REP_HIT == 1,
+		true,
+		"BQ1: BM1 drip stays 0.40 / −1"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50),
+		true,
+		"BQ1: BN1 fewer-lots stays ×0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFloodPolicy.FLOOD_CEILING, 0.70)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BQ1: BO1 flood stays 0.70 / ×1.50"
+	)
+	_expect_equal(
+		UtilitiesPolicy.SMALL_DAILY_CENTS == 4_000
+		and UtilitiesPolicy.MEDIUM_DAILY_CENTS == 7_000
+		and UtilitiesPolicy.LARGE_DAILY_CENTS == 11_000,
+		true,
+		"BQ1: BP1 utilities stay $40 / $70 / $110"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.FAIR_MULT, 1.10)
+		and is_equal_approx(FairPriceSettlePolicy.GOUGE_MULT, 1.25),
+		true,
+		"BQ1: BK1 fair/gouge stays 1.10 / 1.25"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1,
+		true,
+		"BQ1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BQ1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BQ1: whale weight stays as shipped"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "set_release")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"SetReleaseHypePolicy"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func active_event_traffic_mult(",
+			"SET_RELEASE"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func active_event_whale_weight_mult(",
+			"SET_RELEASE"
+		),
+		true,
+		"BQ1: Set release stays off sell-through, door spawn, and whale weight"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("listed_band")
+		or events.contains("stop_day")
+		or events.contains("pro_tour")
+		or events.contains("influencer"),
+		false,
+		"BQ1: Soft catalog stays closed; Pro tour stays Out"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/set_release_hype_policy.gd"
+	)
+	_expect_equal(
+		not policy_src.contains(".tscn")
+		and not policy_src.contains(".png")
+		and not policy_src.contains(".webp")
+		and not FileAccess.file_exists("res://scripts/economy/set_release_hype_policy.tscn"),
+		true,
+		"BQ1: No Art"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string(
+			"res://scripts/economy/buylist_drip_policy.gd"
+		).contains("set_release")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/buylist_fewer_lots_policy.gd"
+		).contains("set_release")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/buylist_flood_policy.gd"
+		).contains("set_release")
+		or FileAccess.get_file_as_string(
+			"res://scripts/economy/utilities_policy.gd"
+		).contains("set_release"),
+		false,
+		"BQ1: BM1/BN1/BO1/BP1 rule bodies stay untouched"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/set_release_hype_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BQ1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BQ1: %s never shows p_buy" % path
+		)
+	_expect_equal(
+		demand_src.contains("func _ensure_priceable_sku"),
+		true,
+		"BQ1: Soft _ensure_priceable_sku stays parked"
+	)
 
 
 func _last_shrink_applied() -> Dictionary:

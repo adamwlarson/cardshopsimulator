@@ -42,6 +42,11 @@ var _recession_week: bool = false
 var _recession_demand_mult: float = 1.0
 var _supply_glut: bool = false
 var _glut_race_mult: float = 1.0
+var _set_release_hype: bool = false
+var _hype_new_set_id: StringName = &""
+var _hype_old_set_id: StringName = &""
+var _hype_new_mult: float = 1.0
+var _hype_old_mult: float = 1.0
 var _instrumentation: QaInstrumentationService
 
 
@@ -110,6 +115,39 @@ func has_supply_glut() -> bool:
 	return _supply_glut
 
 
+func set_set_release_hype(
+	active: bool,
+	new_set_id: StringName = &"",
+	old_set_id: StringName = &"",
+	new_mult: float = 1.40,
+	old_mult: float = 0.70
+) -> void:
+	_set_release_hype = active
+	_hype_new_set_id = new_set_id if active else &""
+	_hype_old_set_id = old_set_id if active else &""
+	_hype_new_mult = SetReleaseHypePolicy.hype_new_mult(new_mult) if active else 1.0
+	_hype_old_mult = SetReleaseHypePolicy.hype_old_mult(old_mult) if active else 1.0
+	_demand_cache.clear()
+
+
+func has_set_release_hype() -> bool:
+	return _set_release_hype
+
+
+func set_release_demand_mult_for(sku_id: StringName) -> float:
+	if not _set_release_hype:
+		return 1.0
+	if sku_id.is_empty() or InventoryService.model == null:
+		return 1.0
+	return SetReleaseHypePolicy.demand_mult_for_sku(
+		InventoryService.model.get_sku(sku_id),
+		_hype_new_set_id,
+		_hype_old_set_id,
+		_hype_new_mult,
+		_hype_old_mult
+	)
+
+
 func sealed_race_mult() -> float:
 	return _glut_race_mult if _supply_glut else 1.0
 
@@ -119,7 +157,7 @@ func demand_mult() -> float:
 
 
 func effective_demand_score_for(sku_id: StringName) -> float:
-	return _effective_demand(_market_state.demand_score_for(sku_id))
+	return _effective_demand(_market_state.demand_score_for(sku_id), sku_id)
 
 
 func effective_demand_band_for(sku_id: StringName) -> StringName:
@@ -208,7 +246,7 @@ func buy_confirm(
 ) -> BuyConfirmSignal:
 	var dto := BuyConfirmSignal.new()
 	var true_market_cents := _market_state.market_cents_for(sku_id)
-	var true_demand := _effective_demand(_market_state.demand_score_for(sku_id))
+	var true_demand := _effective_demand(_market_state.demand_score_for(sku_id), sku_id)
 	var comp := _comp_range(true_market_cents, channel, informed)
 	dto.sku_id = sku_id
 	dto.unit_cost_cents = unit_cost_cents
@@ -587,7 +625,7 @@ func _populate_price_fields(
 	screen: StringName
 ) -> void:
 	var true_market_cents := _retail_market_cents(sku_id)
-	var true_demand := _effective_demand(_market_state.demand_score_for(sku_id))
+	var true_demand := _effective_demand(_market_state.demand_score_for(sku_id), sku_id)
 	var comp := _comp_range(true_market_cents, channel, informed)
 	var midpoint: int = (comp.x + comp.y) / 2
 	dto.sku_id = sku_id
@@ -700,8 +738,8 @@ func _is_sealed_sku(sku_id: StringName) -> bool:
 	return sku != null and sku.product_class == ProductSKU.ProductClass.SEALED
 
 
-func _effective_demand(score: float) -> float:
-	return clampf(score * demand_mult(), 0.0, 1.0)
+func _effective_demand(score: float, sku_id: StringName = &"") -> float:
+	return clampf(score * demand_mult() * set_release_demand_mult_for(sku_id), 0.0, 1.0)
 
 
 func _true_demand_band(score: float) -> StringName:

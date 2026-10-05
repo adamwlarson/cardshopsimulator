@@ -82,6 +82,17 @@
       "negative": false,
       "duration_days_min": 3,
       "duration_days_max": 3
+    },
+    {
+      "id": "set_release_hype",
+      "type": "set_release_hype",
+      "title": "Set release hype",
+      "description": "Calendar set drop — new sealed runs hot while yesterday's boxes cool. Pre-buy depth, fire-sale old sealed, or skip.",
+      "weight": 1.0,
+      "negative": false,
+      "calendar": true,
+      "duration_days_min": 5,
+      "duration_days_max": 5
     }
   ]
 }

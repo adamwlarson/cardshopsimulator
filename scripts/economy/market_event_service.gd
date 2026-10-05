@@ -32,6 +32,7 @@ const RECESSION_BUYLIST_MULT := 2.0
 ## multi-distributor war and long glut seasons are out.
 const SUPPLY_GLUT_WHOLESALE_MULT := 0.75
 const SUPPLY_GLUT_SEALED_RACE_MULT := 0.90
+const SET_RELEASE_CALENDAR_WEIGHT_MULT := 2.5
 const TITAN_SKU := &"AA-SKIE-047"
 const ROTATION_SET_ID := &"AA-DUST"
 
@@ -80,7 +81,9 @@ func roll_definition(config: BalanceConfig, day: int = 0) -> Dictionary:
 	return weighted[weighted.size() - 1]["def"]
 
 
-func roll_duration(def: Dictionary) -> int:
+func roll_duration(def: Dictionary, config: BalanceConfig = null) -> int:
+	if StringName(def.get("type", "")) == MarketEvent.KIND_SET_RELEASE:
+		return SetReleaseHypePolicy.duration_days_for(config)
 	var min_days := maxi(1, int(def.get("duration_days_min", 1)))
 	var max_days := maxi(min_days, int(def.get("duration_days_max", min_days)))
 	if max_days == min_days:
@@ -110,6 +113,63 @@ static func convention_calendar_weight_mult(day: int) -> float:
 	return 1.0
 
 
+static func is_set_release_calendar_day(day: int, config: BalanceConfig = null) -> bool:
+	return SetReleaseHypePolicy.is_calendar_day(day, config)
+
+
+static func is_set_release_telegraph_day(day: int, config: BalanceConfig = null) -> bool:
+	return SetReleaseHypePolicy.is_telegraph_day(day, config)
+
+
+static func set_release_calendar_weight_mult(
+	day: int,
+	config: BalanceConfig = null
+) -> float:
+	return SetReleaseHypePolicy.calendar_weight_mult(day, config)
+
+
+func pick_set_release_targets(
+	new_set_id: StringName = &"",
+	old_set_id: StringName = &""
+) -> Dictionary:
+	var sealed_sets := live_sealed_set_ids()
+	if sealed_sets.size() < 2:
+		return {}
+	var new_id := new_set_id
+	var old_id := old_set_id
+	if new_id.is_empty() or not sealed_sets.has(new_id):
+		new_id = sealed_sets[rng.randi() % sealed_sets.size()]
+	if old_id.is_empty() or old_id == new_id or not sealed_sets.has(old_id):
+		var rest: Array[StringName] = []
+		for set_id: StringName in sealed_sets:
+			if set_id != new_id:
+				rest.append(set_id)
+		if rest.is_empty():
+			return {}
+		old_id = rest[rng.randi() % rest.size()]
+	return {"set_id": new_id, "old_set_id": old_id}
+
+
+func live_sealed_set_ids() -> Array[StringName]:
+	var seen := {}
+	var names: PackedStringArray = []
+	if InventoryService.model == null:
+		return []
+	for value: Variant in InventoryService.model.catalog.values():
+		var sku := value as ProductSKU
+		if sku == null or sku.product_class != ProductSKU.ProductClass.SEALED:
+			continue
+		if sku.set_id.is_empty() or seen.has(String(sku.set_id)):
+			continue
+		seen[String(sku.set_id)] = true
+		names.append(String(sku.set_id))
+	names.sort()
+	var ids: Array[StringName] = []
+	for name: String in names:
+		ids.append(StringName(name))
+	return ids
+
+
 static func is_event_night_day(day: int) -> bool:
 	# Weekend evenings share the Sat/Sun calendar used by convention.
 	return is_convention_calendar_day(day)
@@ -119,8 +179,11 @@ func _weight_for(def: Dictionary, config: BalanceConfig, day: int = 0) -> float:
 	var weight := float(def.get("weight", 1.0))
 	if bool(def.get("negative", false)) and config != null:
 		weight *= config.negative_event_weight_mult
-	if StringName(def.get("type", "")) == MarketEvent.KIND_CONVENTION:
+	var kind := StringName(def.get("type", ""))
+	if kind == MarketEvent.KIND_CONVENTION:
 		weight *= convention_calendar_weight_mult(day)
+	elif kind == MarketEvent.KIND_SET_RELEASE:
+		weight *= set_release_calendar_weight_mult(day, config)
 	return maxf(0.0, weight)
 
 
@@ -131,7 +194,7 @@ func _load_catalog() -> void:
 		for entry_value: Variant in (parsed as Dictionary).get("events", []):
 			if entry_value is Dictionary:
 				defs.append(entry_value as Dictionary)
-	if defs.size() >= 8:
+	if defs.size() >= 9:
 		return
 	defs = [
 		_fallback_def(&"hype_spike", "Hype spike", false, 1, 3),
@@ -142,6 +205,7 @@ func _load_catalog() -> void:
 		_fallback_def(&"theft_ring", "Theft ring", true, 3, 3),
 		_fallback_def(&"recession_week", "Recession week", true, 7, 7),
 		_fallback_def(&"supply_glut", "Supply glut", false, 3, 3),
+		_fallback_def(&"set_release_hype", "Set release hype", false, 5, 5),
 	]
 
 
