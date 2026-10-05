@@ -91,3 +91,4 @@
 |------|----------|
 | 2026-10-05 | Drafted post AW1 SHIPPED #79 @ `d5f21d1a`. Lean **AX1 Edit You offer mid-serve**. Fee cut / HUD / STOP / Inspect polish parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM adopted **AX1**. Park AX2/AX3/AX4. Hard-park camera off-switch. Soft catalog CLOSED. One Change offer on the AW1 buylist serve. Draft sha256 `64b45fc6`. |
+| 2026-10-05 | PM adopted **AX1**. Spec on main `045810fb`. Spike [AX1 edit You offer mid-serve](https://cursor.com/agents/bc-871009e4-8775-5540-8156-1a24677782be). Park AX2/AX3/AX4. No Art. Soft catalog CLOSED. Draft sha256 `64b45fc6`. |
