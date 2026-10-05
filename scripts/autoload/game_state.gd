@@ -169,6 +169,8 @@ func advance_day() -> bool:
 		return false
 	QaInstrumentation.end_day(current_day, Economy.balance_cents)
 	current_day += 1
+	# BL1: day id flip drops cached noisy suggested so PREP/HUD re-derives.
+	DemandSignals.clear_cached_noisy_suggested()
 	current_phase = DayPhase.PREP
 	attention_remaining = balance_config.attention_pool
 	pending_floor_skip_seconds = 0.0
