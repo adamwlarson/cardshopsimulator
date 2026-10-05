@@ -69,7 +69,8 @@ func _spawn_one_customer() -> bool:
 		GameState.balance_config,
 		_rng,
 		DemandSignals.active_event_whale_weight_mult(),
-		DemandSignals.active_event_buylist_mult()
+		DemandSignals.active_event_buylist_mult(),
+		GameState.seller_lots_weight_mult
 	)
 	if archetype.is_empty():
 		return false

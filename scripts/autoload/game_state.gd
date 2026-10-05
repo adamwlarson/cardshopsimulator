@@ -51,6 +51,8 @@ var listed_sale_log := ListedSaleDayLog.new()
 var last_buylist_drip_rep_delta: int = 0
 var buylist_drip_applied: bool = false
 var buylist_pcts := BuylistPctSettings.new()
+## BN1: that day's seller-lot / seller-walk-in weight. 1.0 until open.
+var seller_lots_weight_mult: float = 1.0
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
 var _suppress_sandbox_bests: bool = false
@@ -103,6 +105,7 @@ func start_new_game() -> void:
 	last_buylist_drip_rep_delta = 0
 	buylist_drip_applied = false
 	buylist_pcts.reset()
+	seller_lots_weight_mult = 1.0
 	_unpaid_wages_this_settle = false
 	_suppress_lose_eval = false
 	_suppress_sandbox_bests = true
@@ -136,6 +139,7 @@ func start_floor() -> bool:
 			"understaffed": shop.is_floor_understaffed(),
 		})
 	_run_stocker_restock()
+	apply_buylist_fewer_lots_at_open()
 	current_phase = DayPhase.FLOOR
 	EventBus.day_phase_changed.emit(current_phase)
 	_release_queued_regular_return()
@@ -188,6 +192,7 @@ func advance_day() -> bool:
 	listed_sale_log.reset()
 	last_buylist_drip_rep_delta = 0
 	buylist_drip_applied = false
+	seller_lots_weight_mult = 1.0
 	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
 	EventBus.attention_changed.emit(attention_remaining)
@@ -538,6 +543,22 @@ func apply_buylist_drip_settle_rep() -> int:
 		"reputation": current_reputation,
 	})
 	return delta
+
+
+func apply_buylist_fewer_lots_at_open() -> float:
+	# BN1: snapshot at floor open. Any category strictly below drip_floor
+	# → seller-lot / seller-walk-in weight × fewer_lots_mult. Caps at one
+	# mult. High % does not raise traffic. Buyer door / whale stay shipped.
+	seller_lots_weight_mult = BuylistFewerLotsPolicy.seller_weight_mult(
+		buylist_pcts,
+		balance_config
+	)
+	QaInstrumentation.record_buylist_fewer_lots({
+		"weight_mult": seller_lots_weight_mult,
+		"starved": seller_lots_weight_mult < 1.0,
+		"day": current_day,
+	})
+	return seller_lots_weight_mult
 
 
 func fire_staff(index: int) -> StaffMember:
@@ -895,6 +916,7 @@ func capture_save() -> Dictionary:
 		"listed_sale_day": listed_sale_log.snapshot(),
 		"buylist_pcts": buylist_pcts.snapshot(),
 		"buylist_drip_applied": buylist_drip_applied,
+		"seller_lots_weight_mult": seller_lots_weight_mult,
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
@@ -941,6 +963,9 @@ func restore_save(data: Dictionary) -> bool:
 	else:
 		buylist_pcts.reset()
 	buylist_drip_applied = bool(data.get("buylist_drip_applied", false))
+	seller_lots_weight_mult = float(data.get("seller_lots_weight_mult", 1.0))
+	if seller_lots_weight_mult <= 0.0 or seller_lots_weight_mult > 1.0:
+		seller_lots_weight_mult = 1.0
 	register_walkout_count_today = maxi(
 		0,
 		int(data.get("register_walkout_count_today", 0))

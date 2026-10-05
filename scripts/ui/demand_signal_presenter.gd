@@ -121,6 +121,12 @@ static func buylist_drip_toast(rep_delta: int) -> String:
 	return "Stingy buylist — regulars soured · Rep %d" % rep_delta
 
 
+static func buylist_fewer_lots_toast(starved: bool) -> String:
+	if not starved:
+		return ""
+	return "Stingy buylist — the desk is quieter"
+
+
 static func research_action_label(cash_cents: int, attention_cost: int) -> String:
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 
