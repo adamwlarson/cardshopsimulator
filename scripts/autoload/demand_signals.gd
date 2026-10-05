@@ -1181,6 +1181,8 @@ func _apply_buylist_offer(dto: BuyConfirmSignal, sku: ProductSKU) -> void:
 	dto.lot_total_cents = offer * maxi(1, dto.quantity)
 	dto.remaining_cash_cents = Economy.balance_cents - dto.lot_total_cents
 	dto.confidence = BuylistPolicy.CONFIDENCE
+	BuylistPolicy.apply_fog_cue(dto)
+	BuylistPolicy.ensure_lot_condition(dto, GameState.current_day)
 	if _service != null:
 		_service.refresh_confirm_gate(dto)
 	else:

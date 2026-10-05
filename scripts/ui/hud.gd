@@ -217,6 +217,13 @@ func _ready() -> void:
 		and not change_offer.pressed.is_connected(_change_buylist_offer)
 	):
 		change_offer.pressed.connect(_change_buylist_offer)
+	_ensure_serve_inspect_button()
+	var serve_inspect := get_node_or_null("%ServeInspectButton") as Button
+	if (
+		serve_inspect != null
+		and not serve_inspect.pressed.is_connected(_inspect_buylist_customer)
+	):
+		serve_inspect.pressed.connect(_inspect_buylist_customer)
 	var pull_button := get_node_or_null("%PullButton") as Button
 	if pull_button != null:
 		pull_button.pressed.connect(_pull_customer)
@@ -1477,8 +1484,10 @@ func _sync_customer_serve() -> void:
 			walk.text = "Walk"
 			walk.show()
 		_set_change_offer_visible(true)
+		_set_serve_inspect_visible(true)
 		return
 	_set_change_offer_visible(false)
+	_set_serve_inspect_visible(false)
 	customer_title.text = "CUSTOMER · %s" % _current_customer.display_name
 	var signal_dto := DemandSignals.price_signal(
 		_current_customer.target_sku,
@@ -1656,6 +1665,72 @@ func _ensure_change_offer_controls() -> void:
 		actions.move_child(change, walk.get_index() + 1)
 	else:
 		actions.move_child(change, sell.get_index())
+
+
+func _set_serve_inspect_visible(visible: bool) -> void:
+	_ensure_serve_inspect_button()
+	var inspect := get_node_or_null("%ServeInspectButton") as Button
+	if inspect == null:
+		return
+	var cost := BuylistPolicy.attention_cost()
+	inspect.visible = visible
+	inspect.text = DemandSignalPresenter.buylist_inspect_label(cost)
+	inspect.disabled = (
+		not visible
+		or _current_customer == null
+		or _current_customer.has_inspected
+		or (
+			_current_customer.buylist_signal != null
+			and _current_customer.buylist_signal.inspected
+		)
+		or GameState.attention_remaining < cost
+	)
+
+
+func _ensure_serve_inspect_button() -> void:
+	if get_node_or_null("%ServeInspectButton") != null:
+		return
+	var sell := get_node_or_null("%SellButton") as Button
+	if sell == null:
+		return
+	var actions := sell.get_parent() as HBoxContainer
+	if actions == null:
+		return
+	var inspect := Button.new()
+	inspect.name = "ServeInspectButton"
+	inspect.unique_name_in_owner = true
+	inspect.custom_minimum_size = Vector2(0.0, 40.0)
+	inspect.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inspect.text = DemandSignalPresenter.buylist_inspect_label(
+		BuylistPolicy.attention_cost()
+	)
+	inspect.visible = false
+	inspect.pressed.connect(_inspect_buylist_customer)
+	actions.add_child(inspect)
+	var change := get_node_or_null("%ChangeOfferButton") as Button
+	if change != null:
+		actions.move_child(inspect, change.get_index() + 1)
+	else:
+		var walk := get_node_or_null("%RefuseButton") as Button
+		if walk != null:
+			actions.move_child(inspect, walk.get_index() + 1)
+		else:
+			actions.move_child(inspect, sell.get_index())
+
+
+func _inspect_buylist_customer() -> void:
+	if (
+		_current_customer == null
+		or _current_customer.trade_intent
+		!= CustomerProfile.TradeIntent.SELLING_TO_SHOP
+		or _current_customer.has_inspected
+	):
+		_set_serve_inspect_visible(true)
+		return
+	if GameState.attention_remaining < BuylistPolicy.attention_cost():
+		_set_serve_inspect_visible(true)
+		return
+	EventBus.customer_action_requested.emit(&"inspect_buylist")
 
 
 func _change_buylist_offer() -> void:

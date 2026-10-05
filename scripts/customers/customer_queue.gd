@@ -167,9 +167,23 @@ func accept_buylist_offer() -> bool:
 	):
 		return false
 	var dto := customer.buylist_signal
+	BuylistPolicy.ensure_lot_condition(dto, _serve_day())
 	if not bool(_inventory_service.call("confirm_buylist_purchase", dto)):
 		return false
 	_complete(customer, &"bought")
+	return true
+
+
+func inspect_buylist(acting_role: StringName = BuylistPolicy.ACTOR_OWNER) -> bool:
+	var customer := begin_serving_head()
+	if not BuylistPolicy.can_inspect(customer, acting_role):
+		return false
+	var cost := BuylistPolicy.attention_cost()
+	if _attention_hook.is_valid() and not bool(_attention_hook.call(cost)):
+		return false
+	if not BuylistPolicy.apply_inspect(customer.buylist_signal, _serve_day()):
+		return false
+	customer.has_inspected = true
 	return true
 
 

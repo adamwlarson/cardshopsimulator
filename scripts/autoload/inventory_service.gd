@@ -158,6 +158,7 @@ func confirm_buylist_purchase(dto: BuyConfirmSignal) -> bool:
 		)
 		if slab == null:
 			return false
+		_apply_buylist_lot_condition(dto, slab.card_ref)
 		if not Economy.record_expense(total, &"inventory", "Buylist purchase"):
 			model.remove_slab(slab)
 			return false
@@ -168,6 +169,7 @@ func confirm_buylist_purchase(dto: BuyConfirmSignal) -> bool:
 		var card := receive_card(dto.sku_id, unit, location)
 		if card == null:
 			return false
+		_apply_buylist_lot_condition(dto, card)
 		if not Economy.record_expense(total, &"inventory", "Buylist purchase"):
 			model.remove_card(card)
 			return false
@@ -181,6 +183,12 @@ func confirm_buylist_purchase(dto: BuyConfirmSignal) -> bool:
 		location,
 		total
 	)
+
+
+func _apply_buylist_lot_condition(dto: BuyConfirmSignal, card: CardInstance) -> void:
+	if card == null:
+		return
+	card.condition = BuylistPolicy.lot_condition_of(dto)
 
 
 func remove_stock(sku_id: StringName, quantity: int) -> bool:
