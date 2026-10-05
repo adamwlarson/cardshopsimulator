@@ -93,3 +93,4 @@
 |------|----------|
 | 2026-10-05 | Drafted post AZ1 SHIPPED #82 @ `81657192`. Lean **BA1 Marketplace / shady Inspect**. Fee cut / HUD / STOP / sell-side mismatch parked. Camera off-switch hard-parked. |
 | 2026-10-05 | PM adopted **BA1**. Park BA2/BA3/BA4. Hard-park camera off-switch. Soft catalog CLOSED. Marketplace/shady Inspect with AZ1 Att ladder. Draft sha256 `2856e9a1`. |
+| 2026-10-05 | PM adopted **BA1**. Spec on main `ecbc538c`. Spike [BA1 Marketplace / shady Inspect](https://cursor.com/agents/bc-c4b171ba-02a7-581b-8c43-0a4cbbcd069b). Park BA2/BA3/BA4. No Art. Soft catalog CLOSED. Draft sha256 `2856e9a1`. |
