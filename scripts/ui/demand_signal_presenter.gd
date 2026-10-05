@@ -321,7 +321,7 @@ static func online_listing_row(listing: OnlineListing) -> String:
 
 
 static func list_confirm_summary(dto: OnlineListConfirmSignal) -> String:
-	return "\n".join([
+	var lines: PackedStringArray = [
 		price_summary(dto, false),
 		"Fee: %d%% · %s taken when the listing fills" % [
 			roundi(dto.fee_percent * 100.0),
@@ -331,7 +331,18 @@ static func list_confirm_summary(dto: OnlineListConfirmSignal) -> String:
 			dto.ship_days_min,
 			dto.ship_days_max,
 		],
-	])
+	]
+	if dto.unlocked and dto.hold_cap > 0:
+		if dto.at_hold_cap:
+			lines.append(
+				"Hold slots full · %d / %d. Cancel or wait for a fill to list another." % [
+					dto.hold_count,
+					dto.hold_cap,
+				]
+			)
+		else:
+			lines.append("Hold slots: %d / %d" % [dto.hold_count, dto.hold_cap])
+	return "\n".join(lines)
 
 
 static func buy_summary(dto: BuyConfirmSignal) -> String:

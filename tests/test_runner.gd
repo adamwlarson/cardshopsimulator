@@ -227,6 +227,7 @@ func _initialize() -> void:
 	_test_net_worth_hud()
 	_test_online_frequent_cancel_rep()
 	_test_online_cancel_day_persist()
+	_test_online_hold_soft_cap()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -33528,6 +33529,641 @@ func _test_bh1_untouched() -> void:
 		"BH1: STOP / win assert stay parked"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_online_hold_soft_cap() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bi1_named_gate_and_fallbacks()
+	_test_bi1_fifth_refused_then_cancel_or_fill()
+	_test_bi1_rep_band_raises_cap_without_cancel()
+	_test_bi1_drop_never_force_cancels()
+	_test_bi1_in_shop_and_completed_sales()
+	_test_bi1_ui_and_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bi1_named_gate_and_fallbacks() -> void:
+	_expect_equal(OnlineHoldCapPolicy.CAP_LOW, 4, "BI1: locked low cap is 4")
+	_expect_equal(OnlineHoldCapPolicy.CAP_MID, 8, "BI1: locked mid cap is 8")
+	_expect_equal(OnlineHoldCapPolicy.CAP_HIGH, 12, "BI1: locked high cap is 12")
+	_expect_equal(OnlineHoldCapPolicy.MID_REP, 50, "BI1: mid band starts at Rep 50")
+	_expect_equal(OnlineHoldCapPolicy.HIGH_REP, 75, "BI1: high band starts at Rep 75")
+	_expect_equal(
+		NORMAL_CONFIG.online_hold_cap_low == 4
+		and NORMAL_CONFIG.online_hold_cap_mid == 8
+		and NORMAL_CONFIG.online_hold_cap_high == 12,
+		true,
+		"BI1: Normal band caps are 4 / 8 / 12"
+	)
+	_expect_equal(
+		EASY_CONFIG.online_hold_cap_low == 4
+		and EASY_CONFIG.online_hold_cap_mid == 8
+		and EASY_CONFIG.online_hold_cap_high == 12
+		and HARD_CONFIG.online_hold_cap_low == 4
+		and HARD_CONFIG.online_hold_cap_mid == 8
+		and HARD_CONFIG.online_hold_cap_high == 12,
+		true,
+		"BI1: Easy/Hard inherit 4 / 8 / 12"
+	)
+	_expect_equal(OnlineHoldCapPolicy.low_cap(0), 4, "BI1: missing low cap falls back to 4")
+	_expect_equal(OnlineHoldCapPolicy.mid_cap(0), 8, "BI1: missing mid cap falls back to 8")
+	_expect_equal(OnlineHoldCapPolicy.high_cap(0), 12, "BI1: missing high cap falls back to 12")
+	_expect_equal(OnlineHoldCapPolicy.low_cap(-3), 4, "BI1: negative low cap falls back to 4")
+	_expect_equal(OnlineHoldCapPolicy.clamp_cap(0), 1, "BI1: cap ≤ 0 is 1 once unlocked")
+	_expect_equal(OnlineHoldCapPolicy.clamp_cap(-8), 1, "BI1: negative resolved cap is 1")
+	_expect_equal(OnlineHoldCapPolicy.band_cap(0, 0), 1, "BI1: zero fallback never goes infinite")
+	_expect_equal(OnlineHoldCapPolicy.cap_for(34), 0, "BI1: below Rep 35 stays locked (no cap)")
+	_expect_equal(OnlineHoldCapPolicy.cap_for(35), 4, "BI1: Rep 35 cap is 4")
+	_expect_equal(OnlineHoldCapPolicy.cap_for(40), 4, "BI1: Rep 40 cap is 4")
+	_expect_equal(OnlineHoldCapPolicy.cap_for(49), 4, "BI1: Rep 49 cap is 4")
+	_expect_equal(OnlineHoldCapPolicy.cap_for(50), 8, "BI1: Rep 50 cap is 8")
+	_expect_equal(OnlineHoldCapPolicy.cap_for(74), 8, "BI1: Rep 74 cap is 8")
+	_expect_equal(OnlineHoldCapPolicy.cap_for(75), 12, "BI1: Rep 75 cap is 12")
+	_expect_equal(OnlineHoldCapPolicy.cap_for(100), 12, "BI1: Rep 100 cap is 12")
+	_expect_equal(
+		OnlineHoldCapPolicy.cap_for_config(40, null) == 4
+		and OnlineHoldCapPolicy.cap_for_config(50, null) == 8
+		and OnlineHoldCapPolicy.cap_for_config(75, null) == 12,
+		true,
+		"BI1: null config still uses 4 / 8 / 12"
+	)
+	var missing := BalanceConfig.new()
+	missing.online_hold_cap_low = 0
+	missing.online_hold_cap_mid = 0
+	missing.online_hold_cap_high = 0
+	_expect_equal(
+		OnlineHoldCapPolicy.cap_for_config(40, missing) == 4
+		and OnlineHoldCapPolicy.cap_for_config(50, missing) == 8
+		and OnlineHoldCapPolicy.cap_for_config(75, missing) == 12,
+		true,
+		"BI1: zero config band caps fall back to 4 / 8 / 12"
+	)
+	_expect_equal(
+		int(_demand_signals.call("online_hold_cap", 40)) == 4
+		and int(_demand_signals.call("online_hold_cap", 50)) == 8
+		and int(_demand_signals.call("online_hold_cap", 75)) == 12
+		and int(_demand_signals.call("online_hold_cap", 34)) == 0,
+		true,
+		"BI1: DemandSignals live cap follows the Rep ladder"
+	)
+	_expect_equal(
+		OnlineHoldCapPolicy.is_at_cap(4, 4, true)
+		and not OnlineHoldCapPolicy.is_at_cap(3, 4, true)
+		and not OnlineHoldCapPolicy.is_at_cap(4, 4, false),
+		true,
+		"BI1: at-cap is hold_count ≥ cap only while unlocked"
+	)
+	_expect_equal(NORMAL_CONFIG.online_unlock_rep, 35, "BI1: I1 unlock Rep stays 35")
+
+
+func _test_bi1_fifth_refused_then_cancel_or_fill() -> void:
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var listed := _bi1_list_n(4, 1800, 3)
+	_expect_equal(listed.size(), 4, "BI1: four concurrent holds at Rep 40")
+	_expect_equal(
+		_bi1_all_ok(listed),
+		true,
+		"BI1: first four lists succeed at Rep 40"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		4,
+		"BI1: concurrent hold count is 4"
+	)
+	var fifth_card := _i1_unique_card()
+	_expect_equal(fifth_card != null, true, "BI1: unique card for the fifth list")
+	if fifth_card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var fifth := _bi1_list_card(fifth_card, 1800, 3)
+	_expect_equal(bool(fifth.get("ok", false)), false, "BI1: fifth list is refused at cap")
+	_expect_equal(
+		StringName(fifth.get("reason", &"")),
+		&"hold_cap",
+		"BI1: over-cap reason is hold_cap"
+	)
+	_expect_equal(
+		fifth_card.location.type,
+		InventoryLocation.Type.BINDER,
+		"BI1: refused list does not move stock onto ONLINE_HOLD"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		4,
+		"BI1: refused list does not consume a slot"
+	)
+	var first := listed[0].get("listing") as OnlineListing
+	var cancelled: Dictionary = _economy.get("online_listings").call(
+		"cancel_listing",
+		first.id
+	)
+	_expect_equal(bool(cancelled.get("ok", false)), true, "BI1: cancel frees a hold slot")
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		3,
+		"BI1: cancel drops concurrent holds to 3"
+	)
+	var after_cancel := _bi1_list_card(fifth_card, 1800, 3)
+	_expect_equal(
+		bool(after_cancel.get("ok", false)),
+		true,
+		"BI1: a new list succeeds after one cancel"
+	)
+	_expect_equal(
+		fifth_card.location.type,
+		InventoryLocation.Type.ONLINE_HOLD,
+		"BI1: re-list after cancel returns the card to ONLINE_HOLD"
+	)
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var fill_hold := _bi1_list_n(3, 1800, 3)
+	_expect_equal(_bi1_all_ok(fill_hold), true, "BI1: three long-ship holds at Rep 40")
+	var fill_card := _i1_unique_card()
+	_expect_equal(fill_card != null, true, "BI1: unique card for the fill slot")
+	if fill_card == null:
+		_qa_autoload.call("set_force_enabled", false)
+		return
+	var fill_listed := _bi1_list_card(fill_card, 1800, 1)
+	_expect_equal(bool(fill_listed.get("ok", false)), true, "BI1: 1-day hold is the fourth slot")
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		4,
+		"BI1: fill path starts at 4 concurrent holds"
+	)
+	var blocked := _i1_list_unique_card(1800)
+	_expect_equal(bool(blocked.get("ok", false)), false, "BI1: fifth list is refused before fill")
+	_economy.get("online_listings").call("tick_shipping")
+	var filled := fill_listed.get("listing") as OnlineListing
+	_expect_equal(
+		filled != null and filled.status == OnlineListing.Status.FILLED,
+		true,
+		"BI1: one fill completes the 1-day listing"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		3,
+		"BI1: fill frees a hold slot"
+	)
+	var after_fill := _i1_list_unique_card(1800)
+	_expect_equal(
+		bool(after_fill.get("ok", false)),
+		true,
+		"BI1: a new list succeeds after one fill"
+	)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("start_new_game")
+
+
+func _test_bi1_rep_band_raises_cap_without_cancel() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var first_band := _bi1_list_n(4, 1800, 3)
+	_expect_equal(_bi1_all_ok(first_band), true, "BI1: same save starts with 4 holds at Rep 40")
+	_expect_equal(
+		int(_economy.get("online_listings").call("hold_cap")),
+		4,
+		"BI1: live cap is 4 at Rep 40"
+	)
+	_game_state.set("current_reputation", 50)
+	_event_bus.emit_signal("reputation_changed", 50)
+	_expect_equal(
+		int(_economy.get("online_listings").call("hold_cap")),
+		8,
+		"BI1: crossing Rep 50 raises the cap immediately"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		4,
+		"BI1: raising the cap does not cancel the existing four"
+	)
+	_expect_equal(
+		_bi1_still_active(first_band),
+		true,
+		"BI1: original four listings stay ACTIVE at Rep 50"
+	)
+	var second_band := _bi1_list_n(4, 1800, 3)
+	_expect_equal(_bi1_all_ok(second_band), true, "BI1: Rep 50 allows up to 8 concurrent holds")
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		8,
+		"BI1: eight holds sit under the mid-band cap"
+	)
+	var ninth := _i1_list_unique_card(1800)
+	_expect_equal(bool(ninth.get("ok", false)), false, "BI1: ninth list is refused at cap 8")
+	_game_state.set("current_reputation", 75)
+	_event_bus.emit_signal("reputation_changed", 75)
+	_expect_equal(
+		int(_economy.get("online_listings").call("hold_cap")),
+		12,
+		"BI1: at Rep 75 the cap is 12"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		8,
+		"BI1: raising to Rep 75 keeps the existing eight"
+	)
+	var third_band := _bi1_list_n(4, 1800, 3)
+	_expect_equal(_bi1_all_ok(third_band), true, "BI1: Rep 75 allows four more holds (12 total)")
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		12,
+		"BI1: twelve concurrent holds at Rep 75"
+	)
+	var thirteenth := _i1_list_unique_card(1800)
+	_expect_equal(bool(thirteenth.get("ok", false)), false, "BI1: thirteenth list is refused at cap 12")
+	_expect_equal(
+		_bi1_still_active(first_band)
+		and _bi1_still_active(second_band)
+		and _bi1_still_active(third_band),
+		true,
+		"BI1: band raises never cancel existing holds"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bi1_drop_never_force_cancels() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 50)
+	var holds := _bi1_list_n(8, 1800, 3)
+	_expect_equal(_bi1_all_ok(holds), true, "BI1: eight holds at Rep 50")
+	_game_state.set("current_reputation", 40)
+	_event_bus.emit_signal("reputation_changed", 40)
+	_expect_equal(
+		int(_economy.get("online_listings").call("hold_cap")),
+		4,
+		"BI1: dropping to Rep 40 lowers the live cap to 4"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		8,
+		"BI1: dropping below a band never force-cancels existing holds"
+	)
+	_expect_equal(_bi1_still_active(holds), true, "BI1: all eight listings stay ACTIVE after the drop")
+	var extra := _i1_list_unique_card(1800)
+	_expect_equal(
+		bool(extra.get("ok", false)),
+		false,
+		"BI1: new lists stay refused while holds ≥ the lower cap"
+	)
+	_expect_equal(
+		StringName(extra.get("reason", &"")),
+		&"hold_cap",
+		"BI1: post-drop refuse still uses hold_cap"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bi1_in_shop_and_completed_sales() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var holds := _bi1_list_n(4, 1800, 3)
+	_expect_equal(_bi1_all_ok(holds), true, "BI1: four holds for the in-shop check")
+	var lot: StockLot = _inventory_service.call("get_lot", &"ACC-SLV-60")
+	_expect_equal(lot != null, true, "BI1: in-shop sale needs the seeded sleeve lot")
+	if lot == null:
+		return
+	var listed_price := lot.listed_price_cents
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := _ao1_listed_buyer()
+	_expect_equal(queue.enqueue(customer), true, "BI1: in-shop lot still enqueues under the hold cap")
+	_expect_equal(queue.sell_listed(), true, "BI1: in-shop sell still resolves under the hold cap")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed_price,
+		"BI1: in-shop sale pays the listed price with no online cap interaction"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		4,
+		"BI1: an in-shop sale does not consume or free an ONLINE_HOLD slot"
+	)
+	queue.free()
+
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var fill_all := _bi1_list_n(4, 1800, 1)
+	_expect_equal(_bi1_all_ok(fill_all), true, "BI1: four 1-day holds to complete")
+	_economy.get("online_listings").call("tick_shipping")
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		0,
+		"BI1: completed sales free every hold slot"
+	)
+	_expect_equal(
+		_bi1_all_filled(fill_all),
+		true,
+		"BI1: filled listings are completed sales, not holds"
+	)
+	var after_complete := _bi1_list_n(4, 1800, 3)
+	_expect_equal(
+		_bi1_all_ok(after_complete),
+		true,
+		"BI1: cap never applies to completed sales — four new holds succeed"
+	)
+	_expect_equal(
+		int(_economy.get("online_listings").call("concurrent_hold_count")),
+		4,
+		"BI1: only ACTIVE ONLINE_HOLD lots count toward the cap"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bi1_ui_and_untouched() -> void:
+	_free_lingering_gameplay_huds()
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+	var holds := _bi1_list_n(4, 1800, 3)
+	_expect_equal(_bi1_all_ok(holds), true, "BI1: four holds for the HUD refuse beat")
+	var extra := _i1_unique_card()
+	_expect_equal(extra != null, true, "BI1: unique card for HUD refuse")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BI1: HUD loads for hold-cap refuse")
+	if hud != null and extra != null:
+		Callable(hud, "_sync_online_button").call()
+		var button := hud.get_node_or_null("%OpenOnlineButton") as Button
+		_expect_equal(
+			button != null and button.text.contains("4/4"),
+			true,
+			"BI1: HUD Online button shows 4/4 hold slots"
+		)
+		_expect_equal(
+			button != null and not button.disabled,
+			true,
+			"BI1: Online stays unlocked at cap so cancel remains reachable"
+		)
+		var dto: OnlineListConfirmSignal = _demand_signals.call(
+			"list_confirm_signal",
+			extra.sku_id,
+			1800,
+			extra.location
+		)
+		_expect_equal(dto != null, true, "BI1: list confirm DTO exists at cap")
+		if dto != null:
+			_expect_dto_has_no_truth_fields(dto, "BI1: list confirm DTO at cap")
+			_expect_equal(dto.unlocked, true, "BI1: I1 unlock stays true at cap")
+			_expect_equal(dto.at_hold_cap, true, "BI1: confirm DTO flags at_hold_cap")
+			_expect_equal(dto.lock_reason, &"hold_cap", "BI1: confirm lock_reason is hold_cap")
+			_expect_equal(dto.hold_count, 4, "BI1: confirm hold_count is 4")
+			_expect_equal(dto.hold_cap, 4, "BI1: confirm hold_cap is 4")
+			var summary := DemandSignalPresenter.list_confirm_summary(dto)
+			_expect_equal(
+				summary.contains("Hold slots full"),
+				true,
+				"BI1: confirm summary is the soft refuse beat"
+			)
+			_assert_text_has_no_truth(summary, "BI1: confirm summary at cap")
+			_expect_equal(
+				summary.to_lower().contains("true_market")
+				or summary.to_lower().contains("p_buy"),
+				false,
+				"BI1: confirm never shows true_market or p_buy"
+			)
+		hud.set("_online_target", _i1_card_target(extra))
+		hud.set("_online_signal", dto)
+		var price_input := hud.get_node_or_null("%OnlinePriceInput") as LineEdit
+		if price_input != null:
+			price_input.text = DemandSignalPresenter.format_cents(1800)
+		Callable(hud, "_confirm_online_list").call()
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("Hold slots full"),
+			true,
+			"BI1: HUD refuse toast is the soft hold-cap beat"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BI1: hold-cap toast")
+		_expect_equal(
+			extra.location.type,
+			InventoryLocation.Type.BINDER,
+			"BI1: HUD refuse leaves in-shop stock in place"
+		)
+		if hud.get_parent() == root:
+			root.remove_child(hud)
+		hud.free()
+
+	_expect_equal(
+		bool(_economy.get("online_listings").call("can_list")),
+		true,
+		"BI1: can_list stays the I1 unlock (not the cap)"
+	)
+	_expect_equal(
+		bool(_economy.get("online_listings").call("is_unlocked")),
+		true,
+		"BI1: I1 unlock is unchanged at Rep 40 / cap"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BI1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BI1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BI1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BI1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BI1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BI1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(NORMAL_CONFIG.online_ship_days_min, 1, "BI1: ship min stays 1 day")
+	_expect_equal(NORMAL_CONFIG.online_ship_days_max, 3, "BI1: ship max stays 3 days")
+	_expect_equal(
+		OnlineCancelPolicy.FREE_PER_DAY == 1 and OnlineCancelPolicy.REP_HIT == 1,
+		true,
+		"BI1: BG1 cancel rules stay 1 free / −1"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.online_cancel_free_per_day == 1
+		and NORMAL_CONFIG.online_cancel_rep_hit == 1,
+		true,
+		"BI1: Normal cancel fallbacks stay 1 free / −1"
+	)
+	_expect_equal(NmMismatchPolicy.REP_HIT, 2, "BI1: BB1/BD1 mismatch Rep stays −2")
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BI1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("frequent_cancel")
+		or events.contains("hold_cap")
+		or events.contains("stop_day"),
+		false,
+		"BI1: Soft catalog stays closed"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "OnlineHoldCapPolicy")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "hold_cap"),
+		true,
+		"BI1: the hold cap stays off the sell weight"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not spawn_src.contains("OnlineHoldCapPolicy")
+		and not policy_src.contains("OnlineHoldCapPolicy"),
+		true,
+		"BI1: door spawn does not read the hold cap"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+		"res://scripts/ui/main_menu.gd",
+		"res://scripts/economy/online_hold_cap_policy.gd",
+		"res://scripts/economy/online_listing_service.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BI1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BI1: %s never shows p_buy" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("Hold slots full"),
+		true,
+		"BI1: HUD has the hold-cap refuse beat"
+	)
+	_expect_equal(
+		hud_src.contains("frequent cancels cost Rep"),
+		true,
+		"BI1: HUD still has the frequent-cancel trust ding"
+	)
+	_expect_equal(
+		hud_src.contains("%NetWorth") and hud_src.contains("func _sync_net_worth"),
+		true,
+		"BI1: BF1 net-worth HUD stays"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"BI1: cameras stay owned≡active (no off-switch)"
+	)
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("retag"),
+		true,
+		"BI1: listed-band retag stays parked"
+	)
+	_expect_equal(
+		not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert"),
+		true,
+		"BI1: STOP / win assert stay parked"
+	)
+	_game_state.call("start_new_game")
+
+
+func _bi1_list_card(
+	card: CardInstance,
+	listed_price_cents: int,
+	ship_days: int
+) -> Dictionary:
+	return _economy.get("online_listings").call(
+		"list_target",
+		_i1_card_target(card),
+		listed_price_cents,
+		{"ship_days": ship_days}
+	)
+
+
+func _bi1_list_n(count: int, listed_price_cents: int, ship_days: int) -> Array[Dictionary]:
+	var results: Array[Dictionary] = []
+	for _index: int in count:
+		var card := _i1_unique_card()
+		if card == null:
+			results.append({"ok": false, "reason": &"no_card"})
+			continue
+		results.append(_bi1_list_card(card, listed_price_cents, ship_days))
+	return results
+
+
+func _bi1_all_ok(results: Array[Dictionary]) -> bool:
+	if results.is_empty():
+		return false
+	for result: Dictionary in results:
+		if not bool(result.get("ok", false)):
+			return false
+	return true
+
+
+func _bi1_all_filled(results: Array[Dictionary]) -> bool:
+	if results.is_empty():
+		return false
+	for result: Dictionary in results:
+		var listing := result.get("listing") as OnlineListing
+		if listing == null or listing.status != OnlineListing.Status.FILLED:
+			return false
+	return true
+
+
+func _bi1_still_active(results: Array[Dictionary]) -> bool:
+	if results.is_empty():
+		return false
+	for result: Dictionary in results:
+		var listing := result.get("listing") as OnlineListing
+		if listing == null or not listing.is_active():
+			return false
+	return true
 
 
 func _expect_hud_net_worth(hud: Node, expected_cents: int, label: String) -> void:

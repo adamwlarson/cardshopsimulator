@@ -7,3 +7,6 @@ extends PriceConfirmSignal
 @export var ship_days_max: int = 3
 @export var unlocked: bool = false
 @export var lock_reason: StringName = &""
+@export var hold_count: int = 0
+@export var hold_cap: int = 0
+@export var at_hold_cap: bool = false

@@ -537,7 +537,7 @@ func list_confirm(
 	dto.ship_days_min = _config.online_ship_days_min
 	dto.ship_days_max = _config.online_ship_days_max
 	dto.unlocked = GameState.current_reputation >= _config.online_unlock_rep
-	dto.lock_reason = &"" if dto.unlocked else &"rep_locked"
+	_apply_hold_cap(dto)
 	return dto
 
 
@@ -557,7 +557,23 @@ func refresh_list_confirm(
 		listed_price_cents,
 		dto.fee_percent
 	)
+	_apply_hold_cap(dto)
 	return dto
+
+
+func _apply_hold_cap(dto: OnlineListConfirmSignal) -> void:
+	if dto == null:
+		return
+	var listings: OnlineListingService = Economy.online_listings
+	dto.hold_count = listings.concurrent_hold_count()
+	dto.hold_cap = listings.hold_cap()
+	dto.at_hold_cap = listings.is_at_hold_cap()
+	if not dto.unlocked:
+		dto.lock_reason = &"rep_locked"
+	elif dto.at_hold_cap:
+		dto.lock_reason = &"hold_cap"
+	else:
+		dto.lock_reason = &""
 
 
 func _populate_price_fields(

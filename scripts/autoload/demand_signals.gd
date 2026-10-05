@@ -648,6 +648,15 @@ func online_listing_fee_cents(sale_cents: int, reputation: int = -1) -> int:
 	return OnlineFeePolicy.fee_cents_for(sale_cents, resolved, GameState.balance_config)
 
 
+func online_hold_cap(reputation: int = -1) -> int:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return OnlineHoldCapPolicy.cap_for_config(resolved, GameState.balance_config)
+
+
+func online_hold_count() -> int:
+	return Economy.online_listings.concurrent_hold_count()
+
+
 func auction_snipe_attention(configured: int = 0) -> int:
 	return AuctionSnipePolicy.attention_cost(configured)
 

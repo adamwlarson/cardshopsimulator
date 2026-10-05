@@ -44,6 +44,12 @@ enum Difficulty {
 ## OnlineFeePolicy to 5% at Rep ≥ 75. Base `online_fee` stays below the gate.
 @export var online_high_rep_fee_percent: int = 5
 @export var online_high_rep_fee_gate: int = 75
+## BI1: concurrent ONLINE_HOLD soft cap. Missing band caps fall back
+## in OnlineHoldCapPolicy to 4 / 8 / 12. Cap ≤ 0 treated as 1 once
+## unlocked (never silent infinite).
+@export var online_hold_cap_low: int = 4
+@export var online_hold_cap_mid: int = 8
+@export var online_hold_cap_high: int = 12
 @export var shrink_daily_base: float = 0.002
 @export var shrink_unstaffed_add: float = 0.005
 ## HOLD H2: Easy/Hard inherit this Normal default when omitted from .tres.
