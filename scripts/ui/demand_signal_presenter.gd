@@ -147,6 +147,21 @@ static func distributor_menu_toast(is_menu_day: bool) -> String:
 	return DistributorMenuPolicy.TOAST
 
 
+static func marketplace_lots_toast(count: int) -> String:
+	return MarketplaceLotPolicy.toast_for(count)
+
+
+static func marketplace_lot_drive_label(attention_cost: int = 0) -> String:
+	if attention_cost <= 0:
+		return MarketplaceLotPolicy.drive_label()
+	return MarketplaceLotPolicy.DRIVE_LABEL % attention_cost
+
+
+static func marketplace_lot_courier_label(fee_cents: int = 0) -> String:
+	var fee := fee_cents if fee_cents > 0 else MarketplaceLotPolicy.courier_fee_for()
+	return MarketplaceLotPolicy.COURIER_LABEL % format_cents(fee)
+
+
 static func research_action_label(cash_cents: int, attention_cost: int) -> String:
 	return "Research · %s · Att %d" % [format_cents(cash_cents), attention_cost]
 

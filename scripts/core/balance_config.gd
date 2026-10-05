@@ -263,6 +263,15 @@ enum Difficulty {
 @export var distributor_menu_interval_days: int = 7
 @export var distributor_menu_moq_sealed: int = 6
 @export var distributor_menu_moq_accessory: int = 10
+## BU1 / systems §3: Recurring marketplace lots 1–3/day. Lot day =
+## day ≥ first. Missing first → 4. Missing min → 1. Missing max → 3.
+## Missing ask min → 0.40. Missing ask max → 0.70. Bad values fall
+## back in MarketplaceLotPolicy. Easy/Hard inherit. Not a sell weight.
+@export var marketplace_lots_first_day: int = 4
+@export var marketplace_lots_min_per_day: int = 1
+@export var marketplace_lots_max_per_day: int = 3
+@export var marketplace_lot_ask_min: float = 0.40
+@export var marketplace_lot_ask_max: float = 0.70
 
 
 func is_rent_due_day(day: int) -> bool:
