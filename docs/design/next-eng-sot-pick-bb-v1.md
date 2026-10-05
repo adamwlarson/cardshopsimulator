@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BB v1 — post BA1
 
-**Status:** **BB1 ADOPTED** 2026-10-05 — Sell-side uninspected NM mismatch. Park BB2/BB3/BB4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn prior packs into a sell weight. Door spawn math stays as shipped.
+**Status:** **BB1 SHIPPED** 2026-10-05 — squash-merged #84 @ `17deced0` (reviewed `12ff5011`). Sell-side uninspected NM mismatch. Park BB2/BB3/BB4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn prior packs into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-ba (BA1 Marketplace / shady Inspect SHIPPED #83 @ `c9a303c6`); Soft catalog CLOSED
@@ -12,10 +12,10 @@
 
 | Pack | Result |
 |------|--------|
-| A–BA1 | Full loop + buy Inspect on buylist / marketplace / shady |
-| Soft | Catalog CLOSED; AC1 through BA1 Soft OK MVP notes stay Soft |
+| A–BB1 | Full loop + buy Inspect + sell-side uninspected NM mismatch |
+| Soft | Catalog CLOSED; AC1 through BB1 Soft OK MVP notes stay Soft |
 
-**Gap:** Sell-side uninspected NM mismatch (systems §2.2) still dark. Fee cut stays parked. Camera off-switch Soft hard-parked. Fees / HUD / STOP parked by PM.
+**Gap:** Fee cut stays parked. Camera off-switch Soft hard-parked. Fees / HUD / STOP parked by PM. Auction Inspect still dark.
 
 ---
 
@@ -95,3 +95,6 @@
 | 2026-10-05 | PM adopted **BB1**. Spec on main `908e80fe`. Park BB2/BB3/BB4. No Art. Soft catalog CLOSED. Draft sha256 `692fbfc4`. |
 | 2026-10-05 | PM adopted **BB1**. Spec on main `0ba5560c`. Spike [BB1 Sell-side uninspected NM mismatch](https://cursor.com/agents/bc-4d048863-d53c-5c84-b669-14b804622eea). Park BB2/BB3/BB4. No Art. Soft catalog CLOSED. Draft sha256 `692fbfc4`. |
 | 2026-10-05 | PM tip-froze PR #84 @ `12ff5011`. Ready. 9 files, no docs. Agent archived. |
+| 2026-10-05 | Eng **APPROVE**-with-notes BB1 [PR #84](https://github.com/adamwlarson/cardshopsimulator/pull/84) @ `12ff5011`. Soft: no player listed-band retag UI this pick. Soft OK MVP. Soft catalog CLOSED. |
+| 2026-10-05 | Design Soft OK MVP on Eng Soft (no listed-band retag UI). QA formal released; Soft OK notes not fail criteria. |
+| 2026-10-05 | PM SHIPPED **BB1**. Squash-merged #84 @ `17deced0` (reviewed `12ff5011`). QA PASS, harness 135/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. Branch `cursor/bb1-nm-mismatch-2eea` deleted. |
