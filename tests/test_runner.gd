@@ -232,6 +232,7 @@ func _initialize() -> void:
 	_test_fair_price_settle()
 	_test_noisy_suggested_day_clear()
 	_test_buylist_drip_settle()
+	_test_buylist_fewer_lots()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1753,6 +1754,7 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 		"res://scripts/economy/fair_price_settle_policy.gd",
 		"res://scripts/economy/listed_sale_day_log.gd",
 		"res://scripts/economy/buylist_drip_policy.gd",
+		"res://scripts/economy/buylist_fewer_lots_policy.gd",
 		"res://scripts/economy/buylist_pct_settings.gd",
 		"res://scripts/ui/player_trade_presenter.gd",
 		"res://scripts/economy/player_trade_offer.gd",
@@ -36228,6 +36230,517 @@ func _test_bm1_ui_bk1_ah1_untouched() -> void:
 		not save_src.contains("suggested_at_list"),
 		true,
 		"BM1: Soft OK list-time suggested persistence stays Soft"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_buylist_fewer_lots() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bn1_named_gate_and_fallbacks()
+	_test_bn1_same_seed_sealed_starve_and_floor()
+	_test_bn1_two_low_once_and_bm1_drip()
+	_test_bn1_ui_door_whale_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bn1_named_gate_and_fallbacks() -> void:
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50),
+		true,
+		"BN1: locked fewer_lots_mult is 0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40),
+		true,
+		"BN1: starve shares BM1 drip_floor 0.40"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.buylist_fewer_lots_mult, 0.50)
+		and is_equal_approx(EASY_CONFIG.buylist_fewer_lots_mult, 0.50)
+		and is_equal_approx(HARD_CONFIG.buylist_fewer_lots_mult, 0.50),
+		true,
+		"BN1: Easy/Normal/Hard inherit fewer_lots_mult 0.50"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.buylist_drip_floor, 0.40)
+		and is_equal_approx(EASY_CONFIG.buylist_drip_floor, 0.40)
+		and is_equal_approx(HARD_CONFIG.buylist_drip_floor, 0.40),
+		true,
+		"BN1: Easy/Normal/Hard inherit drip_floor 0.40"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.fewer_lots_mult(0.0), 0.50)
+		and is_equal_approx(BuylistFewerLotsPolicy.fewer_lots_mult(-1.0), 0.50)
+		and is_equal_approx(BuylistFewerLotsPolicy.fewer_lots_mult(1.25), 0.50),
+		true,
+		"BN1: missing / ≤0 / >1 fewer_lots_mult falls back to 0.50"
+	)
+	var missing := BalanceConfig.new()
+	missing.buylist_fewer_lots_mult = 0.0
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.fewer_lots_mult_for(missing), 0.50),
+		true,
+		"BN1: floor-config ≤ 0 falls back to 0.50"
+	)
+	missing.buylist_fewer_lots_mult = 1.5
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.fewer_lots_mult_for(missing), 0.50),
+		true,
+		"BN1: fewer_lots_mult > 1 falls back to 0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.fewer_lots_mult_for(null), 0.50),
+		true,
+		"BN1: null config still uses fewer_lots_mult 0.50"
+	)
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.39, 0.40, 0.40)
+	var settings: BuylistPctSettings = _game_state.get("buylist_pcts")
+	_expect_equal(
+		BuylistFewerLotsPolicy.is_starved(settings, _game_state.get("balance_config")),
+		true,
+		"BN1: sealed at 0.39 trips the starve floor"
+	)
+	_expect_equal(
+		is_equal_approx(
+			BuylistFewerLotsPolicy.seller_weight_mult(
+				settings,
+				_game_state.get("balance_config")
+			),
+			0.50
+		),
+		true,
+		"BN1: one low category yields ×0.50"
+	)
+	_bm1_set_pcts(0.40, 0.40, 0.40)
+	settings = _game_state.get("buylist_pcts")
+	_expect_equal(
+		BuylistFewerLotsPolicy.is_starved(settings, _game_state.get("balance_config")),
+		false,
+		"BN1: a category at exactly the floor does not starve"
+	)
+	_expect_equal(
+		is_equal_approx(
+			BuylistFewerLotsPolicy.seller_weight_mult(
+				settings,
+				_game_state.get("balance_config")
+			),
+			1.0
+		),
+		true,
+		"BN1: floor-exact percents keep seller weight ×1.00"
+	)
+	_bm1_set_pcts(0.90, 0.90, 0.90)
+	settings = _game_state.get("buylist_pcts")
+	_expect_equal(
+		is_equal_approx(
+			BuylistFewerLotsPolicy.seller_weight_mult(
+				settings,
+				_game_state.get("balance_config")
+			),
+			1.0
+		),
+		true,
+		"BN1: high buylist % does not raise seller traffic"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.PCT_SEALED, 0.55)
+		and is_equal_approx(BuylistPolicy.PCT_SINGLES_NM, 0.50)
+		and is_equal_approx(BuylistPolicy.PCT_GRADED, 0.45),
+		true,
+		"BN1: AW1 buylist defaults stay 0.55 / 0.50 / 0.45"
+	)
+	var floor_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/game_state.gd"
+	)
+	_expect_equal(
+		_function_body_contains(
+			floor_src,
+			"func start_floor(",
+			"apply_buylist_fewer_lots_at_open"
+		),
+		true,
+		"BN1: start_floor snapshots the starve at open"
+	)
+	_expect_equal(
+		not _function_body_contains(
+			FileAccess.get_file_as_string("res://scripts/autoload/economy.gd"),
+			"func settle_day(",
+			"apply_buylist_fewer_lots_at_open"
+		),
+		true,
+		"BN1: starve is not a settle-day drip rewrite"
+	)
+
+
+func _test_bn1_same_seed_sealed_starve_and_floor() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var flipper := _aj1_archetype(catalog, &"flipper")
+	var whale := _aj1_whale_archetype(catalog)
+	var regular := _aj1_archetype(catalog, &"regular")
+	_expect_equal(flipper.is_empty(), false, "BN1: flipper archetype loads")
+	var baseline := catalog.weight_for(flipper, 40, NORMAL_CONFIG)
+	_expect_equal(baseline > 0.0, true, "BN1: seller-walk-in baseline weight is positive")
+
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.39, 0.40, 0.40)
+	_expect_equal(
+		is_equal_approx(float(_game_state.call("player_buylist_pct", &"sealed")), 0.39)
+		and is_equal_approx(float(_game_state.call("player_buylist_pct", &"singles_nm")), 0.40)
+		and is_equal_approx(float(_game_state.call("player_buylist_pct", &"graded")), 0.40),
+		true,
+		"BN1: sealed buylist is stored at 0.39 with others at the floor"
+	)
+	_qa_autoload.call("set_force_enabled", true)
+	_qa_autoload.call("clear")
+	_expect_equal(_game_state.call("start_floor"), true, "BN1: low-sealed path can open the floor")
+	var starve := float(_game_state.get("seller_lots_weight_mult"))
+	_expect_equal(
+		is_equal_approx(starve, 0.50),
+		true,
+		"BN1: sealed at 0.39 (others ≥ 0.40) applies ×0.50 at open"
+	)
+	var starved := catalog.weight_for(flipper, 40, NORMAL_CONFIG, 1.0, 1.0, starve)
+	_expect_equal(
+		is_equal_approx(starved, baseline * 0.50),
+		true,
+		"BN1: instrumented seller-lot / seller-walk-in weight is half the baseline"
+	)
+	const SEED := 20261005
+	var baseline_roll := catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, 8)
+	var starved_roll := catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, 8, 1.0, 1.0, starve)
+	_expect_equal(
+		starved_roll.size(),
+		baseline_roll.size(),
+		"BN1: same seed keeps today's buyer door spawn count"
+	)
+	_expect_equal(
+		catalog.weight_for(whale, 40, NORMAL_CONFIG, 1.0, 1.0, starve),
+		catalog.weight_for(whale, 40, NORMAL_CONFIG),
+		"BN1: whale weight is unchanged by the starve"
+	)
+	_expect_equal(
+		catalog.weight_for(regular, 40, NORMAL_CONFIG, 1.0, 1.0, starve),
+		catalog.weight_for(regular, 40, NORMAL_CONFIG),
+		"BN1: buyer archetypes are unchanged by the starve"
+	)
+	var qa_events: Array = _qa_autoload.call("get_events")
+	var saw_starve := false
+	for event_value: Variant in qa_events:
+		var event := event_value as Dictionary
+		if String(event.get("event", "")) != "buylist_fewer_lots":
+			continue
+		var payload: Dictionary = event.get("payload", {})
+		saw_starve = true
+		_expect_equal(
+			is_equal_approx(float(payload.get("weight_mult", 0.0)), 0.50)
+			and bool(payload.get("starved", false)),
+			true,
+			"BN1: QA payload instruments weight × 0.50"
+		)
+		_assert_payload_has_no_truth(payload, "BN1: fewer-lots QA payload")
+	_expect_equal(saw_starve, true, "BN1: open day records the starve")
+	_qa_autoload.call("set_force_enabled", false)
+
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.40, 0.40, 0.40)
+	_game_state.call("start_floor")
+	_expect_equal(
+		is_equal_approx(float(_game_state.get("seller_lots_weight_mult")), 1.0),
+		true,
+		"BN1: all categories at 0.40 → no starve from this rule"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(
+				flipper,
+				40,
+				NORMAL_CONFIG,
+				1.0,
+				1.0,
+				float(_game_state.get("seller_lots_weight_mult"))
+			),
+			baseline
+		),
+		true,
+		"BN1: floor-exact open day keeps the baseline seller weight"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bn1_two_low_once_and_bm1_drip() -> void:
+	var catalog := CustomerArchetypeCatalog.new()
+	var flipper := _aj1_archetype(catalog, &"flipper")
+	var baseline := catalog.weight_for(flipper, 40, NORMAL_CONFIG)
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.39, 0.30, 0.40)
+	var settings: BuylistPctSettings = _game_state.get("buylist_pcts")
+	_expect_equal(
+		is_equal_approx(
+			BuylistFewerLotsPolicy.seller_weight_mult(
+				settings,
+				_game_state.get("balance_config")
+			),
+			0.50
+		),
+		true,
+		"BN1: two categories below the floor still yield one ×0.50"
+	)
+	_expect_equal(_game_state.call("start_floor"), true, "BN1: two-low path can open the floor")
+	var starve := float(_game_state.get("seller_lots_weight_mult"))
+	_expect_equal(
+		is_equal_approx(starve, 0.50),
+		true,
+		"BN1: two low categories do not stack below one mult"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(flipper, 40, NORMAL_CONFIG, 1.0, 1.0, starve),
+			baseline * 0.50
+		),
+		true,
+		"BN1: double-low day still instruments weight × 0.50"
+	)
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(_game_state.call("start_settle"), true, "BN1: two-low path can settle")
+	_expect_equal(
+		int(_game_state.get("last_buylist_drip_rep_delta")),
+		-1,
+		"BN1: BM1 settle still −1 once if still low at close"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"BN1: BM1 drip still drops reputation by 1 once"
+	)
+	_expect_equal(
+		int(_game_state.call("apply_buylist_drip_settle_rep")),
+		0,
+		"BN1: a second settle pass the same day does not add another −1"
+	)
+	_game_state.call("start_new_game")
+
+
+func _test_bn1_ui_door_whale_untouched() -> void:
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.39, 0.50, 0.45)
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BN1: HUD loads for empty-desk beat")
+	_game_state.call("start_floor")
+	if hud != null:
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("desk is quieter"),
+			true,
+			"BN1: stingy open toast is a soft empty-desk beat"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BN1: fewer-lots toast")
+		_expect_equal(
+			toast != null
+			and not toast.text.contains("true_market")
+			and not toast.text.contains("p_buy")
+			and not toast.text.contains("drip_floor")
+			and not toast.text.contains("fewer_lots_mult")
+			and not toast.text.contains("0.40")
+			and not toast.text.contains("0.50"),
+			true,
+			"BN1: toast never shows true_market, p_buy, or the starve math"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+
+	_bm1_reset_for_settle()
+	_bm1_set_pcts(0.40, 0.40, 0.40)
+	hud = _instantiate_gameplay_hud()
+	_game_state.call("start_floor")
+	if hud != null:
+		var quiet := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			quiet == null or not quiet.text.contains("desk is quieter"),
+			true,
+			"BN1: floor-exact open day has no starve empty-desk beat"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+
+	_expect_equal(CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1, true, "BN1: buyer door spawn stays one customer per live roll")
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BN1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BN1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BN1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BN1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 75, NORMAL_CONFIG, 1.0, 1.0, 0.50),
+			weight_75
+		),
+		true,
+		"BN1: starve mult does not rewrite whale weight"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BN1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "buylist_fewer")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "fewer_lots")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "seller_lots"),
+		true,
+		"BN1: fewer-lots stays off the sell roll"
+	)
+	var spawn_policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not spawn_policy_src.contains("BuylistFewerLotsPolicy")
+		and not spawn_policy_src.contains("seller_lots_weight_mult")
+		and not spawn_policy_src.contains("fewer_lots")
+		and not spawn_policy_src.contains("drip_floor"),
+		true,
+		"BN1: buyer door spawn_count does not take the starve"
+	)
+	var inventory := InventoryModel.new(NORMAL_CONFIG)
+	var lots := BuyOpportunityCatalog.new().open_for_day(1, inventory.catalog)
+	var marketplace_count := 0
+	var distributor_count := 0
+	var auction_count := 0
+	for opportunity: BuyOpportunity in lots:
+		match opportunity.channel:
+			DemandSignalService.Channel.MARKETPLACE:
+				marketplace_count += 1
+			DemandSignalService.Channel.DISTRIBUTOR:
+				distributor_count += 1
+			DemandSignalService.Channel.AUCTION:
+				auction_count += 1
+	_expect_equal(marketplace_count >= 1, true, "BN1: marketplace lots stay in the seeded catalog")
+	_expect_equal(distributor_count >= 1, true, "BN1: distributor lots stay in the seeded catalog")
+	_expect_equal(auction_count == 0, true, "BN1: catalog does not invent auction lots")
+	var catalog_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/buy_opportunity_catalog.gd"
+	)
+	_expect_equal(
+		not catalog_src.contains("fewer_lots")
+		and not catalog_src.contains("seller_lots")
+		and not catalog_src.contains("BuylistFewerLots"),
+		true,
+		"BN1: does not invent marketplace / auction / distributor lot counts"
+	)
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BN1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.PCT_SEALED, 0.55)
+		and is_equal_approx(BuylistPolicy.PCT_SINGLES_NM, 0.50)
+		and is_equal_approx(BuylistPolicy.PCT_GRADED, 0.45),
+		true,
+		"BN1: AW1 defaults stay as shipped"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	_expect_equal(
+		queue_src.contains("func change_buylist_offer(")
+		and queue_src.contains("func accept_buylist_offer(")
+		and queue_src.contains("func walk_buylist("),
+		true,
+		"BN1: AX1 Change offer stays on the AW1 buylist serve"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("listed_band")
+		or events.contains("stop_day")
+		or events.contains("buylist_pct")
+		or events.contains("fewer_lots"),
+		false,
+		"BN1: Soft catalog stays closed"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/buylist_fewer_lots_policy.gd",
+		"res://scripts/economy/buylist_drip_policy.gd",
+		"res://scripts/economy/buylist_pct_settings.gd",
+		"res://scripts/customers/customer_archetype_catalog.gd",
+		"res://scripts/customers/customer_spawner.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BN1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BN1: %s never shows p_buy" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	var presenter_src := FileAccess.get_file_as_string(
+		"res://scripts/ui/demand_signal_presenter.gd"
+	)
+	_expect_equal(
+		presenter_src.contains("desk is quieter"),
+		true,
+		"BN1: empty-desk beat stays a soft ding"
+	)
+	_expect_equal(
+		hud_src.contains("_maybe_show_buylist_fewer_lots_toast"),
+		true,
+		"BN1: HUD can show the empty-desk ding on floor open"
+	)
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert")
+		and not hud_src.contains("camera_off"),
+		true,
+		"BN1: listed-band retag, STOP, and camera off-switch stay parked"
+	)
+	var save_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/online_listing_save_policy.gd"
+	)
+	_expect_equal(
+		not save_src.contains("suggested_at_list"),
+		true,
+		"BN1: Soft OK list-time suggested persistence stays Soft"
 	)
 	_game_state.call("start_new_game")
 

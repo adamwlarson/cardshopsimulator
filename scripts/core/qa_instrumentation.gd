@@ -194,6 +194,10 @@ func record_buylist_drip_settle(payload: Dictionary) -> void:
 	_emit(&"buylist_drip_settle", payload)
 
 
+func record_buylist_fewer_lots(payload: Dictionary) -> void:
+	_emit(&"buylist_fewer_lots", payload)
+
+
 func record_campaign_won(payload: Dictionary) -> void:
 	_emit(&"campaign_won", payload.duplicate(true))
 

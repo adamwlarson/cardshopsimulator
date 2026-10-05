@@ -4,7 +4,7 @@ extends RefCounted
 ## BM1: close-settle reputation drip for stingy buylist % of market.
 ## Reads the player's sealed / singles NM / graded percents as AW1 stores
 ## them. Any category strictly below drip_floor → Rep −1 once that day.
-## Multiple low categories do not stack. Out: fewer-lots spawn. Not a sell weight.
+## Multiple low categories do not stack. Out: fewer-lots spawn (BN1). Not a sell weight.
 const DRIP_FLOOR := 0.40
 const REP_HIT := 1
 const CATEGORIES: Array[StringName] = [

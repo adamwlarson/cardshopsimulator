@@ -20,7 +20,8 @@ func total_weight(
 	reputation: int,
 	config: BalanceConfig,
 	event_whale_mult: float = 1.0,
-	event_buylist_mult: float = 1.0
+	event_buylist_mult: float = 1.0,
+	seller_lots_mult: float = 1.0
 ) -> float:
 	var total := 0.0
 	for archetype: Dictionary in archetypes:
@@ -29,7 +30,8 @@ func total_weight(
 			reputation,
 			config,
 			event_whale_mult,
-			event_buylist_mult
+			event_buylist_mult,
+			seller_lots_mult
 		)
 	return total
 
@@ -39,7 +41,8 @@ func weight_for(
 	reputation: int,
 	config: BalanceConfig,
 	event_whale_mult: float = 1.0,
-	event_buylist_mult: float = 1.0
+	event_buylist_mult: float = 1.0,
+	seller_lots_mult: float = 1.0
 ) -> float:
 	var archetype_id := StringName(archetype.get("id", ""))
 	# AI1: quiet floor zeros whale weight before Convention / play-table bumps.
@@ -67,7 +70,13 @@ func weight_for(
 		weight *= config.whale_weight_mult * maxf(0.0, event_whale_mult)
 		weight *= CustomerSpawnPolicy.high_rep_whale_weight_mult(reputation)
 	elif archetype_id == &"flipper":
-		weight *= config.flipper_weight_mult * maxf(0.0, event_buylist_mult)
+		# BN1: stingy buylist at open applies seller_lots_mult once.
+		# Recession event_buylist_mult still stacks. Not a sell weight.
+		weight *= (
+			config.flipper_weight_mult
+			* maxf(0.0, event_buylist_mult)
+			* maxf(0.0, seller_lots_mult)
+		)
 	return maxf(0.0, weight)
 
 
@@ -79,7 +88,8 @@ func roll_spawn(
 	config: BalanceConfig,
 	baseline_count: int,
 	event_whale_mult: float = 1.0,
-	event_buylist_mult: float = 1.0
+	event_buylist_mult: float = 1.0,
+	seller_lots_mult: float = 1.0
 ) -> Array[Dictionary]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
@@ -91,7 +101,8 @@ func roll_spawn(
 			config,
 			rng,
 			event_whale_mult,
-			event_buylist_mult
+			event_buylist_mult,
+			seller_lots_mult
 		)
 		if not archetype.is_empty():
 			rolled.append(archetype)
@@ -103,13 +114,15 @@ func pick_weighted(
 	config: BalanceConfig,
 	rng: RandomNumberGenerator,
 	event_whale_mult: float = 1.0,
-	event_buylist_mult: float = 1.0
+	event_buylist_mult: float = 1.0,
+	seller_lots_mult: float = 1.0
 ) -> Dictionary:
 	var total := total_weight(
 		reputation,
 		config,
 		event_whale_mult,
-		event_buylist_mult
+		event_buylist_mult,
+		seller_lots_mult
 	)
 	if total <= 0.0:
 		return {}
@@ -120,7 +133,8 @@ func pick_weighted(
 			reputation,
 			config,
 			event_whale_mult,
-			event_buylist_mult
+			event_buylist_mult,
+			seller_lots_mult
 		)
 		if roll <= 0.0:
 			return archetype.duplicate(true)

@@ -208,6 +208,11 @@ enum Difficulty {
 ## % of market is strictly below this floor. Missing / ≤0 falls back
 ## in BuylistDripPolicy to 0.40. Easy/Hard inherit. Not a sell weight.
 @export var buylist_drip_floor: float = 0.40
+## BN1 / systems §4.3: open-day seller-lot / seller-walk-in weight when
+## any player buylist % of market is strictly below drip_floor. Missing /
+## ≤0 / >1 falls back in BuylistFewerLotsPolicy to 0.50. Shares BM1's
+## drip_floor. Easy/Hard inherit. Not a sell weight.
+@export var buylist_fewer_lots_mult: float = 0.50
 
 
 func is_rent_due_day(day: int) -> bool:
