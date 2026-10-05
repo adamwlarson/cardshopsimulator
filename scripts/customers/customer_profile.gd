@@ -32,6 +32,7 @@ enum TradeIntent {
 
 var waited_seconds: float = 0.0
 var has_negotiated: bool = false
+var has_changed_offer: bool = false
 var patience_tick_scale: float = 1.0
 
 

@@ -218,6 +218,7 @@ func _initialize() -> void:
 	_test_one_counter_haggle()
 	_test_sell_side_negotiate()
 	_test_buylist_buy_from_them()
+	_test_edit_you_offer_mid_serve()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -27134,6 +27135,589 @@ func _aw1_expect_nothing_moved(
 		backstock,
 		"%s leaves backstock unchanged" % label
 	)
+
+
+func _test_edit_you_offer_mid_serve() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_ax1_named_gate()
+	_test_ax1_default_and_one_change()
+	_test_ax1_buy_walk_after_edit()
+	_test_ax1_attention_and_out_of_path()
+	_test_ax1_door_whale_fee_stay()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_ax1_named_gate() -> void:
+	_expect_equal(BuylistPolicy.is_valid_change(1), true, "AX1: 1¢ is a valid Change")
+	_expect_equal(BuylistPolicy.is_valid_change(0), false, "AX1: 0¢ Change is refused")
+	_expect_equal(
+		BuylistPolicy.is_valid_change(-5),
+		false,
+		"AX1: a negative Change is refused"
+	)
+	_expect_equal(
+		BuylistPolicy.can_change_offer(_aw1_seller_stub()),
+		false,
+		"AX1: a seller without a lot cannot Change"
+	)
+	var seller := _aw1_seller_stub()
+	seller.buylist_signal = BuyConfirmSignal.new()
+	_expect_equal(
+		BuylistPolicy.can_change_offer(seller),
+		true,
+		"AX1: a buylist seller can Change once"
+	)
+	seller.has_changed_offer = true
+	_expect_equal(
+		BuylistPolicy.can_change_offer(seller),
+		false,
+		"AX1: a second Change is refused"
+	)
+	var buyer := CustomerProfile.new()
+	buyer.trade_intent = CustomerProfile.TradeIntent.BUYING_FROM_SHOP
+	buyer.buylist_signal = BuyConfirmSignal.new()
+	_expect_equal(
+		BuylistPolicy.can_change_offer(buyer),
+		false,
+		"AX1: shop-buy serve cannot Change offer"
+	)
+	_expect_equal(
+		NegotiatePolicy.can_negotiate_customer(_aw1_seller_stub()),
+		false,
+		"AX1: no AV1 Negotiate on a buylist seller"
+	)
+	_expect_equal(
+		HagglePolicy.can_haggle(&"buylist"),
+		false,
+		"AX1: no AU1 Counter on a walk-in seller"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.PCT_SEALED, 0.55)
+		and is_equal_approx(BuylistPolicy.PCT_SINGLES_NM, 0.50)
+		and is_equal_approx(BuylistPolicy.PCT_GRADED, 0.45),
+		true,
+		"AX1: buylist percent defaults stay as AW1 shipped"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.anger_floor(), 0.40)
+		and is_equal_approx(BuylistPolicy.comp_width(), 0.10),
+		true,
+		"AX1: Medium width 0.10 and anger floor 0.40 stay as shipped"
+	)
+
+
+func _test_ax1_default_and_one_change() -> void:
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-DUST-ETB")
+	_expect_equal(dto != null, true, "AX1: Change needs a sealed walk-in lot")
+	if dto == null:
+		return
+	var listed := BuylistPolicy.listed_comp_cents(dto)
+	var default_offer := maxi(1, roundi(float(listed) * 0.55))
+	_expect_equal(
+		dto.unit_cost_cents,
+		default_offer,
+		"AX1: default You offer still matches AW1"
+	)
+	_expect_equal(
+		dto.lot_total_cents,
+		default_offer,
+		"AX1: default lot total still matches AW1"
+	)
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "Change seller")
+	_expect_equal(seller != null, true, "AX1: a buylist seller enqueues")
+	if seller == null:
+		queue.free()
+		return
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "AX1: HUD loads for the seller serve")
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var summary := hud.get_node_or_null("%CustomerSummary") as Label
+		var buy := hud.get_node_or_null("%SellButton") as Button
+		var walk := hud.get_node_or_null("%RefuseButton") as Button
+		var change := hud.get_node_or_null("%ChangeOfferButton") as Button
+		var input := hud.get_node_or_null("%ChangeOfferInput") as LineEdit
+		var negotiate := hud.get_node_or_null("%NegotiateButton") as Button
+		var plus := hud.get_node_or_null("%NegotiatePlusButton") as Button
+		var counter := hud.get_node_or_null("CounterButton") as Button
+		_expect_equal(
+			summary != null and summary.text.contains("You offer"),
+			true,
+			"AX1: the seller serve shows You offer"
+		)
+		if summary != null:
+			_expect_equal(
+				summary.text.contains("Ask") or summary.text.contains("Your list"),
+				false,
+				"AX1: the seller serve never says Ask or Your list"
+			)
+			_expect_equal(
+				summary.text.contains(DemandSignalPresenter.format_cents(default_offer)),
+				true,
+				"AX1: default You offer cents are visible"
+			)
+			_assert_text_has_no_truth(summary.text, "AX1 default CustomerServe summary")
+		_expect_equal(
+			buy != null and buy.visible and buy.text == "Buy",
+			true,
+			"AX1: placeholder Buy is present"
+		)
+		_expect_equal(
+			walk != null and walk.visible and walk.text == "Walk",
+			true,
+			"AX1: placeholder Walk is present"
+		)
+		_expect_equal(
+			change != null and change.visible and change.text == "Change offer",
+			true,
+			"AX1: placeholder Change offer is present"
+		)
+		_expect_equal(
+			input != null and input.visible and input.placeholder_text == "You offer",
+			true,
+			"AX1: Change offer input keeps the You offer label"
+		)
+		_expect_equal(
+			negotiate == null or not negotiate.visible,
+			true,
+			"AX1: Negotiate stays off the seller serve"
+		)
+		_expect_equal(
+			plus == null or not plus.visible,
+			true,
+			"AX1: plus 10% stays off the seller serve"
+		)
+		_expect_equal(
+			counter == null or not counter.visible,
+			true,
+			"AX1: buy Counter stays off the seller serve"
+		)
+		hud.free()
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var owned_before := int(_inventory_service.call("total_owned", &"AA-DUST-ETB"))
+	var back_before := _aw1_backstock_qty(&"AA-DUST-ETB")
+	_expect_equal(
+		queue.change_buylist_offer(0),
+		false,
+		"AX1: a 0¢ Change is refused"
+	)
+	_expect_equal(seller.has_changed_offer, false, "AX1: a refused Change leaves the shot")
+	_expect_equal(
+		dto.unit_cost_cents,
+		default_offer,
+		"AX1: a refused Change leaves the default You offer"
+	)
+	_expect_equal(queue.size(), 1, "AX1: a refused Change does not Buy or Walk")
+	_expect_equal(
+		queue.change_buylist_offer(1),
+		true,
+		"AX1: one Change offer sets cents of at least 1¢"
+	)
+	_expect_equal(seller.has_changed_offer, true, "AX1: the Change shot is spent")
+	_expect_equal(dto.unit_cost_cents, 1, "AX1: You offer becomes the edited cents")
+	_expect_equal(dto.lot_total_cents, 1, "AX1: lot total follows the edited cents")
+	_expect_equal(
+		queue.change_buylist_offer(250),
+		false,
+		"AX1: a second Change is refused"
+	)
+	_expect_equal(dto.unit_cost_cents, 1, "AX1: a second Change leaves the first edit")
+	_expect_equal(queue.size(), 1, "AX1: Change does not Buy or Walk by itself")
+	_aw1_expect_nothing_moved(
+		att_before,
+		cash_before,
+		owned_before,
+		back_before,
+		&"AA-DUST-ETB",
+		"AX1: Change"
+	)
+	_free_lingering_gameplay_huds()
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var summary_after := hud.get_node_or_null("%CustomerSummary") as Label
+		var change_after := hud.get_node_or_null("%ChangeOfferButton") as Button
+		_expect_equal(
+			summary_after != null
+			and summary_after.text.contains("You offer")
+			and summary_after.text.contains(DemandSignalPresenter.format_cents(1)),
+			true,
+			"AX1: the edited serve keeps the You offer label"
+		)
+		if summary_after != null:
+			_expect_equal(
+				summary_after.text.contains("Ask")
+				or summary_after.text.contains("Your list"),
+				false,
+				"AX1: the edited serve never says Ask or Your list"
+			)
+			_assert_text_has_no_truth(summary_after.text, "AX1 edited CustomerServe")
+		_expect_equal(
+			change_after != null and change_after.visible and change_after.disabled,
+			true,
+			"AX1: a spent Change offer is refused in the HUD"
+		)
+		hud.free()
+	queue.free()
+
+
+func _test_ax1_buy_walk_after_edit() -> void:
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-DUST-ETB")
+	_expect_equal(dto != null, true, "AX1: Buy after an edit needs a lot")
+	if dto == null:
+		return
+	var edited := maxi(1, dto.lot_total_cents / 2)
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var owned_before := int(_inventory_service.call("total_owned", &"AA-DUST-ETB"))
+	var back_before := _aw1_backstock_qty(&"AA-DUST-ETB")
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "Edited buy")
+	_expect_equal(queue.change_buylist_offer(edited), true, "AX1: Buy path takes one edit")
+	_expect_equal(queue.accept_buylist_offer(), true, "AX1: Buy after an edit takes the lot")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - edited,
+		"AX1: Buy after an edit pays the edited cents"
+	)
+	_expect_equal(
+		_aw1_backstock_qty(&"AA-DUST-ETB"),
+		back_before + 1,
+		"AX1: Buy after an edit lands the lot in backstock"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", &"AA-DUST-ETB")),
+		owned_before + 1,
+		"AX1: Buy after an edit lands the lot in inventory"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AX1: Buy after an edit spends no Attention"
+	)
+	_expect_equal(queue.size(), 0, "AX1: Buy after an edit clears the serve")
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	var listed := BuylistPolicy.listed_comp_cents(dto)
+	var stingy := maxi(1, int(floor(float(listed) * 0.39)))
+	if float(stingy) / float(listed) >= 0.40:
+		stingy = 1
+	_expect_equal(
+		float(stingy) / float(listed) < 0.40,
+		true,
+		"AX1: stingy edit is under the 0.40 anger floor"
+	)
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Stingy edit walk")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		queue.change_buylist_offer(stingy),
+		true,
+		"AX1: Walk path takes a stingy edit"
+	)
+	_expect_equal(queue.walk_buylist(), true, "AX1: Walk after a stingy edit is taken")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AX1: Walk after an edit under 0.40 applies Rep minus 1 once"
+	)
+	_expect_equal(
+		queue.walk_buylist(),
+		false,
+		"AX1: a second Walk after the offer is gone is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"AX1: the stingy Rep hit after an edit is applied once"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	listed = BuylistPolicy.listed_comp_cents(dto)
+	var fair := maxi(1, int(ceil(float(listed) * 0.40)))
+	_expect_equal(
+		float(fair) / float(listed) >= 0.40,
+		true,
+		"AX1: fair edit is at or above the 0.40 anger floor"
+	)
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Fair edit walk")
+	rep_before = int(_game_state.get("current_reputation"))
+	_expect_equal(queue.change_buylist_offer(fair), true, "AX1: Walk path takes a fair edit")
+	_expect_equal(queue.walk_buylist(), true, "AX1: Walk after a fair edit is taken")
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"AX1: Walk after an edit at or above 0.40 leaves Rep unchanged"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	var expensive := int(_economy.get("balance_cents")) + 500
+	_expect_equal(expensive > 1, true, "AX1: short-cash edit is above cash")
+	att_before = int(_game_state.get("attention_remaining"))
+	cash_before = int(_economy.get("balance_cents"))
+	owned_before = int(_inventory_service.call("total_owned", &"AA-DUST-ETB"))
+	back_before = _aw1_backstock_qty(&"AA-DUST-ETB")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Short edit")
+	_expect_equal(
+		queue.change_buylist_offer(expensive),
+		true,
+		"AX1: Change can set an unaffordable You offer"
+	)
+	_expect_equal(
+		queue.accept_buylist_offer(),
+		false,
+		"AX1: short-cash Buy after an edit is refused"
+	)
+	_aw1_expect_nothing_moved(
+		att_before,
+		cash_before,
+		owned_before,
+		back_before,
+		&"AA-DUST-ETB",
+		"AX1: short-cash Buy after an edit"
+	)
+	_expect_equal(queue.size(), 1, "AX1: short-cash Buy after an edit leaves the offer")
+	queue.free()
+
+
+func _test_ax1_attention_and_out_of_path() -> void:
+	_aw1_reset_floor(40, 1)
+	var dto := _aw1_signal(&"AA-DUST-ETB")
+	_expect_equal(dto != null, true, "AX1: Attention scan needs a lot")
+	if dto == null:
+		return
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "Att seller")
+	var att_before := int(_game_state.get("attention_remaining"))
+	_expect_equal(queue.change_buylist_offer(75), true, "AX1: Change spends no Attention")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AX1: Change spends no Attention"
+	)
+	_expect_equal(
+		queue.negotiate(),
+		false,
+		"AX1: shop-buy Negotiate stays out of the buylist path"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AX1: a refused Negotiate on a seller spends no Attention"
+	)
+	queue.free()
+
+	_av1_reset_floor(40, 1)
+	var listed := _av1_listed_sleeves()
+	_expect_equal(listed > 0, true, "AX1: shop-buy serve needs a listed sleeve")
+	if listed > 0:
+		queue = _av1_queue()
+		var buyer := _av1_enqueue_buyer(queue, &"regular", "No change buyer")
+		_expect_equal(buyer != null, true, "AX1: a shop-buy customer enqueues")
+		att_before = int(_game_state.get("attention_remaining"))
+		_expect_equal(
+			queue.change_buylist_offer(100),
+			false,
+			"AX1: Change offer stays out of the shop-buy serve"
+		)
+		_expect_equal(
+			buyer != null and not buyer.has_changed_offer,
+			true,
+			"AX1: a shop-buy customer never spends a Change shot"
+		)
+		_free_lingering_gameplay_huds()
+		var hud := _instantiate_gameplay_hud()
+		if hud != null and buyer != null:
+			Callable(hud, "_on_customer_head_changed").call(buyer)
+			Callable(hud, "_on_customer_desk_ready").call(buyer, true)
+			var change := hud.get_node_or_null("%ChangeOfferButton") as Button
+			var negotiate := hud.get_node_or_null("%NegotiateButton") as Button
+			_expect_equal(
+				change == null or not change.visible,
+				true,
+				"AX1: Change offer stays off the shop-buy serve"
+			)
+			_expect_equal(
+				negotiate != null and negotiate.visible,
+				true,
+				"AX1: shop-buy Negotiate stays on its own path"
+			)
+			hud.free()
+		_expect_equal(
+			int(_game_state.get("attention_remaining")),
+			att_before,
+			"AX1: a refused Change on a buyer spends no Attention"
+		)
+		queue.free()
+
+	_expect_equal(
+		HagglePolicy.can_haggle(&"marketplace")
+		and not HagglePolicy.can_haggle(&"buylist"),
+		true,
+		"AX1: buy Counter stays on cash offers and out of this path"
+	)
+	_aw1_reset_floor(40, 1)
+	dto = _aw1_signal(&"AA-DUST-ETB")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Truth seller")
+	_free_lingering_gameplay_huds()
+	var truth_hud := _instantiate_gameplay_hud()
+	_expect_equal(truth_hud != null, true, "AX1: HUD loads for truth scan")
+	if truth_hud != null:
+		Callable(truth_hud, "_on_customer_head_changed").call(seller)
+		Callable(truth_hud, "_on_customer_desk_ready").call(seller, true)
+		var summary := truth_hud.get_node_or_null("%CustomerSummary") as Label
+		if summary != null:
+			_assert_text_has_no_truth(summary.text, "AX1 CustomerServe summary")
+			_expect_equal(
+				summary.text.to_lower().contains("true_market"),
+				false,
+				"AX1: CustomerServe never shows true_market"
+			)
+			_expect_equal(
+				summary.text.contains("0.40") or summary.text.contains("40%"),
+				false,
+				"AX1: CustomerServe never shows the anger ratio"
+			)
+		var title := truth_hud.get_node_or_null("%CustomerTitle") as Label
+		if title != null:
+			_assert_text_has_no_truth(title.text, "AX1 CustomerServe title")
+		var input := truth_hud.get_node_or_null("%ChangeOfferInput") as LineEdit
+		if input != null:
+			_assert_text_has_no_truth(input.placeholder_text, "AX1 Change offer input")
+		truth_hud.free()
+	queue.free()
+
+
+func _test_ax1_door_whale_fee_stay() -> void:
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"AX1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"AX1: whale weight stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AX1: marketplace fee stays 8%"
+	)
+	_aw1_reset_floor(40, 1)
+	var listed := _av1_listed_sleeves()
+	_expect_equal(listed > 0, true, "AX1: a completed shop sale needs a listed sleeve")
+	if listed <= 0:
+		return
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AX1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var cash_before := int(_economy.get("balance_cents"))
+	var queue := _av1_queue()
+	var buyer := _av1_enqueue_buyer(queue, &"regular", "Resolved list")
+	_expect_equal(queue.sell_listed(), true, "AX1: a completed shop sale still resolves")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before + listed,
+		"AX1: a completed shop sale still pays its resolved price"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		not _function_body_contains(queue_src, "func sell_listed()", "buylist")
+		and not _function_body_contains(queue_src, "func sell_listed()", "change_buylist")
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"buylist"
+		)
+		and not _function_body_contains(
+			demand_src,
+			"func sell_through_mult_for(",
+			"change_buylist"
+		),
+		true,
+		"AX1: Change offer is not folded into sell_listed or sell_through_mult_for"
+	)
+	_expect_equal(
+		not _function_body_contains(
+			queue_src,
+			"func change_buylist_offer(",
+			"attention"
+		)
+		and not _function_body_contains(
+			queue_src,
+			"func change_buylist_offer(",
+			"_complete"
+		),
+		true,
+		"AX1: Change spends no Attention and does not Buy or Walk"
+	)
+	_expect_equal(
+		queue_src.contains("func change_buylist_offer(")
+		and queue_src.contains("func accept_buylist_offer(")
+		and queue_src.contains("func walk_buylist("),
+		true,
+		"AX1: Change lives on the AW1 buylist serve"
+	)
+	_expect_equal(
+		demand_src.contains("func counter_buy")
+		and queue_src.contains("func negotiate("),
+		true,
+		"AX1: AU1 Counter and AV1 Negotiate stay as shipped"
+	)
+	_expect_equal(
+		not hud_src.contains("true_market")
+		and not hud_src.contains("STOP")
+		and not hud_src.contains("camera_off"),
+		true,
+		"AX1: HUD has no true_market, STOP, or camera off-switch"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("fee_cut")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("net_worth")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"AX1: Soft catalog stays closed"
+	)
+	queue.free()
+	_game_state.call("start_new_game")
 
 
 func _au1_reset() -> void:

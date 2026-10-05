@@ -173,6 +173,18 @@ func accept_buylist_offer() -> bool:
 	return true
 
 
+func change_buylist_offer(offer_cents: int) -> bool:
+	var customer := begin_serving_head()
+	if not BuylistPolicy.can_change_offer(customer):
+		return false
+	if not BuylistPolicy.is_valid_change(offer_cents):
+		return false
+	BuylistPolicy.apply_offer_cents(customer.buylist_signal, offer_cents)
+	customer.has_changed_offer = true
+	_refresh_buylist_affordability(customer.buylist_signal)
+	return true
+
+
 func walk_buylist() -> bool:
 	var customer := begin_serving_head()
 	if (
@@ -309,6 +321,16 @@ func _read_game_state_int(property: String, fallback: int) -> int:
 	if game_state == null:
 		return fallback
 	return int(game_state.get(property))
+
+
+func _refresh_buylist_affordability(dto: BuyConfirmSignal) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var demand := tree.root.get_node_or_null("DemandSignals")
+	if demand == null:
+		return
+	demand.call("refresh_buylist_affordability", dto)
 
 
 func _complete(customer: CustomerProfile, outcome: StringName) -> void:

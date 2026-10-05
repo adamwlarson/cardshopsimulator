@@ -2,8 +2,9 @@ class_name BuylistPolicy
 extends RefCounted
 
 ## systems §3 / §4.3 / §5.2 buylist buy-from-them. CustomerServe when the
-## customer is selling to the shop. One lot: You offer, Buy, or Walk.
-## Out: AV1 shop-buy Negotiate, AU1 buy Counter, auction, trades, trunk.
+## customer is selling to the shop. One lot: You offer, Buy, Walk, and
+## one Change offer. Out: AV1 shop-buy Negotiate, AU1 buy Counter,
+## auction, trades, trunk.
 const PCT_SEALED := 0.55
 const PCT_SINGLES_NM := 0.50
 const PCT_GRADED := 0.45
@@ -112,6 +113,26 @@ static func is_stingy(
 		float(offer_cents) / float(listed_comp_cents)
 		< anger_floor(configured_floor)
 	)
+
+
+static func is_valid_change(offer_cents: int) -> bool:
+	return offer_cents >= MIN_OFFER_CENTS
+
+
+static func can_change_offer(customer: CustomerProfile) -> bool:
+	return (
+		customer != null
+		and customer.trade_intent == CustomerProfile.TradeIntent.SELLING_TO_SHOP
+		and customer.buylist_signal != null
+		and not customer.has_changed_offer
+	)
+
+
+static func apply_offer_cents(dto: BuyConfirmSignal, offer_cents: int) -> void:
+	if dto == null:
+		return
+	dto.unit_cost_cents = offer_cents
+	dto.lot_total_cents = offer_cents * maxi(1, dto.quantity)
 
 
 static func _named_category(category: Variant) -> StringName:
