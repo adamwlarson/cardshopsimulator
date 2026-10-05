@@ -172,6 +172,14 @@ func list_target(target: Dictionary, listed_price_cents: int, opts: Dictionary =
 	listing.card = card
 	listing.slab = slab
 	listing.status = OnlineListing.Status.ACTIVE
+	var suggested := int(opts.get("suggested_price_cents", 0))
+	if suggested <= 0:
+		suggested = DemandSignals.suggested_for_online_list(
+			sku_id,
+			listed_price_cents,
+			location
+		)
+	listing.suggested_at_list_cents = maxi(0, suggested)
 	_listings.append(listing)
 	QaInstrumentation.record_online_listed({
 		"listing_id": String(listing.id),
@@ -248,6 +256,18 @@ func _fill_listing(listing: OnlineListing) -> bool:
 			listing.listed_price_cents,
 			&"online_sale",
 			"Online sale"
+		)
+		var suggested := listing.suggested_at_list_cents
+		if suggested <= 0:
+			suggested = DemandSignals.suggested_for_online_list(
+				listing.sku_id,
+				listing.listed_price_cents,
+				InventoryLocation.new(InventoryLocation.Type.ONLINE_HOLD)
+			)
+		GameState.note_completed_listed_sale(
+			listing.sku_id,
+			listing.listed_price_cents,
+			suggested
 		)
 	if listing.fee_cents > 0:
 		Economy.record_expense(

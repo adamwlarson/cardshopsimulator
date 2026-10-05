@@ -229,6 +229,7 @@ func _initialize() -> void:
 	_test_online_cancel_day_persist()
 	_test_online_hold_soft_cap()
 	_test_online_hold_listing_persist()
+	_test_fair_price_settle()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -1747,6 +1748,8 @@ func _test_ui_helpers_do_not_read_hidden_values() -> void:
 		"res://scripts/economy/online_listing.gd",
 		"res://scripts/economy/online_list_confirm_signal.gd",
 		"res://scripts/economy/online_listing_service.gd",
+		"res://scripts/economy/fair_price_settle_policy.gd",
+		"res://scripts/economy/listed_sale_day_log.gd",
 		"res://scripts/ui/player_trade_presenter.gd",
 		"res://scripts/economy/player_trade_offer.gd",
 		"res://scripts/economy/player_trade_policy.gd",
@@ -34710,6 +34713,709 @@ func _test_bj1_untouched() -> void:
 		"BJ1: STOP / win assert stay parked"
 	)
 	_game_state.call("start_new_game")
+
+
+func _test_fair_price_settle() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bk1_named_gate_and_fallbacks()
+	_test_bk1_same_seed_fair_plus_one()
+	_test_bk1_same_seed_gouge_minus_one_skips_fair()
+	_test_bk1_no_sales_and_second_fair_once()
+	_test_bk1_online_fill_counts_cancel_does_not()
+	_test_bk1_walkout_refuse_haggle_do_not()
+	_test_bk1_ui_and_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	NORMAL_CONFIG.event_chance_settle = 0.18
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bk1_named_gate_and_fallbacks() -> void:
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.FAIR_MULT, 1.10),
+		true,
+		"BK1: locked fair mult is 1.10"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.GOUGE_MULT, 1.25),
+		true,
+		"BK1: locked gouge mult is 1.25"
+	)
+	_expect_equal(FairPriceSettlePolicy.FAIR_REP_GAIN, 1, "BK1: locked fair Rep gain is +1")
+	_expect_equal(FairPriceSettlePolicy.GOUGE_REP_HIT, 1, "BK1: locked gouge Rep hit is 1")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.fair_price_fair_mult, 1.10)
+		and is_equal_approx(NORMAL_CONFIG.fair_price_gouge_mult, 1.25)
+		and NORMAL_CONFIG.fair_price_fair_rep_gain == 1
+		and NORMAL_CONFIG.fair_price_gouge_rep_hit == 1,
+		true,
+		"BK1: Normal config matches locked fair/overprice scalars"
+	)
+	_expect_equal(
+		is_equal_approx(EASY_CONFIG.fair_price_fair_mult, 1.10)
+		and is_equal_approx(HARD_CONFIG.fair_price_fair_mult, 1.10)
+		and is_equal_approx(EASY_CONFIG.fair_price_gouge_mult, 1.25)
+		and is_equal_approx(HARD_CONFIG.fair_price_gouge_mult, 1.25)
+		and EASY_CONFIG.fair_price_fair_rep_gain == 1
+		and HARD_CONFIG.fair_price_fair_rep_gain == 1
+		and EASY_CONFIG.fair_price_gouge_rep_hit == 1
+		and HARD_CONFIG.fair_price_gouge_rep_hit == 1,
+		true,
+		"BK1: Easy/Hard inherit fair/overprice scalars"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.fair_mult(0.0), 1.10)
+		and is_equal_approx(FairPriceSettlePolicy.fair_mult(-2.0), 1.10),
+		true,
+		"BK1: missing fair_mult falls back to 1.10"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.gouge_mult(0.0), 1.25)
+		and is_equal_approx(FairPriceSettlePolicy.gouge_mult(-0.5), 1.25),
+		true,
+		"BK1: missing gouge_mult falls back to 1.25"
+	)
+	_expect_equal(FairPriceSettlePolicy.fair_rep_gain(0), 1, "BK1: missing fair Rep delta falls back to +1")
+	_expect_equal(FairPriceSettlePolicy.gouge_rep_hit(-3), 1, "BK1: missing gouge Rep delta falls back to −1")
+	_expect_equal(
+		FairPriceSettlePolicy.fair_rep_delta_for(null) == 1
+		and FairPriceSettlePolicy.gouge_rep_delta_for(null) == -1,
+		true,
+		"BK1: null config still uses +1 / −1"
+	)
+	var missing := BalanceConfig.new()
+	missing.fair_price_fair_mult = 0.0
+	missing.fair_price_gouge_mult = 0.0
+	missing.fair_price_fair_rep_gain = 0
+	missing.fair_price_gouge_rep_hit = 0
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.fair_mult_for(missing), 1.10),
+		true,
+		"BK1: zero config fair_mult falls back to 1.10"
+	)
+	_expect_equal(
+		is_equal_approx(FairPriceSettlePolicy.gouge_mult_for(missing), 1.25),
+		true,
+		"BK1: zero config gouge_mult falls back to 1.25"
+	)
+	_expect_equal(
+		FairPriceSettlePolicy.settle_rep_delta(true, false, missing),
+		1,
+		"BK1: zero config fair settle is +1"
+	)
+	_expect_equal(
+		FairPriceSettlePolicy.settle_rep_delta(true, true, missing),
+		-1,
+		"BK1: gouge skips fair even when both flags are set"
+	)
+	_expect_equal(
+		FairPriceSettlePolicy.is_fair(110, 100),
+		true,
+		"BK1: ask at noisy×1.10 is fair"
+	)
+	_expect_equal(
+		FairPriceSettlePolicy.is_fair(111, 100),
+		false,
+		"BK1: ask above noisy×1.10 is not fair"
+	)
+	_expect_equal(
+		FairPriceSettlePolicy.is_gouge(125, 100),
+		true,
+		"BK1: ask at noisy×1.25 is gouge"
+	)
+	_expect_equal(
+		FairPriceSettlePolicy.is_gouge(124, 100),
+		false,
+		"BK1: ask below noisy×1.25 is not gouge"
+	)
+	_expect_equal(
+		FairPriceSettlePolicy.settle_rep_delta(false, false),
+		0,
+		"BK1: no completed listed sales yield no tick"
+	)
+	var economy_src := FileAccess.get_file_as_string("res://scripts/autoload/economy.gd")
+	_expect_equal(
+		_function_body_contains(economy_src, "func settle_day(", "apply_fair_price_settle_rep")
+		and _function_body_contains(economy_src, "func settle_day(", "_settle_shrink"),
+		true,
+		"BK1: settle_day applies the fair/overprice tick after shrink"
+	)
+	_expect_equal(
+		economy_src.find("apply_fair_price_settle_rep")
+		> economy_src.find("_settle_shrink()"),
+		true,
+		"BK1: fair/overprice tick is after wages/rent/shrink"
+	)
+
+
+func _test_bk1_same_seed_fair_plus_one() -> void:
+	var events_chance := _bk1_silence_events()
+	_bk1_reset_for_settle()
+	var suggested := _bk1_shop_suggested()
+	_expect_equal(suggested > 0, true, "BK1: noisy suggested is positive")
+	var sold := _bk1_sell_sleeves_at(suggested)
+	_expect_equal(sold, true, "BK1: one fair listed sale completes")
+	var log: ListedSaleDayLog = _game_state.get("listed_sale_log")
+	_expect_equal(log.had_fair, true, "BK1: day log records a fair listed sale")
+	_expect_equal(log.had_gouge, false, "BK1: fair-only day has no gouge flag")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(_game_state.call("start_floor"), true, "BK1: fair path can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BK1: fair path can settle")
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		1,
+		"BK1: fair listed sale settles Rep +1 once"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before + 1,
+		"BK1: reputation rises by 1 on a fair-only day"
+	)
+	_expect_equal(
+		int(_game_state.call("apply_fair_price_settle_rep")),
+		0,
+		"BK1: a second settle pass the same day does not add another +1"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before + 1,
+		"BK1: reputation stays +1 after a repeated settle pass"
+	)
+	_bk1_restore_events(events_chance)
+	_game_state.call("start_new_game")
+
+
+func _test_bk1_same_seed_gouge_minus_one_skips_fair() -> void:
+	var events_chance := _bk1_silence_events()
+	_bk1_reset_for_settle()
+	var suggested := _bk1_shop_suggested()
+	var gouge_ask := _bk1_gouge_ask(suggested)
+	_expect_equal(
+		FairPriceSettlePolicy.is_gouge(gouge_ask, suggested),
+		true,
+		"BK1: gouge ask meets noisy×1.25"
+	)
+	var gouge_only := _bk1_sell_sleeves_at(gouge_ask)
+	_expect_equal(gouge_only, true, "BK1: one gouge listed sale completes")
+	var log: ListedSaleDayLog = _game_state.get("listed_sale_log")
+	_expect_equal(log.had_gouge, true, "BK1: day log records a gouge listed sale")
+	_expect_equal(log.had_fair, false, "BK1: gouge-only day has no fair flag")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		-1,
+		"BK1: gouge listed sale settles Rep −1 once"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"BK1: reputation drops by 1 on a gouge day"
+	)
+
+	_bk1_reset_for_settle()
+	suggested = _bk1_shop_suggested()
+	var fair_ask := suggested
+	var mixed_fair := _bk1_sell_sleeves_at(fair_ask)
+	var mixed_gouge := _bk1_sell_sleeves_at(_bk1_gouge_ask(suggested))
+	_expect_equal(mixed_fair and mixed_gouge, true, "BK1: fair then gouge sales both complete")
+	log = _game_state.get("listed_sale_log")
+	_expect_equal(log.had_fair, true, "BK1: mixed day still notes the fair sale")
+	_expect_equal(log.had_gouge, true, "BK1: mixed day notes the gouge sale")
+	rep_before = int(_game_state.get("current_reputation"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		-1,
+		"BK1: a gouge sale skips the fair +1 that day"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before - 1,
+		"BK1: mixed day reputation is −1, not net zero"
+	)
+	_bk1_restore_events(events_chance)
+	_game_state.call("start_new_game")
+
+
+func _test_bk1_no_sales_and_second_fair_once() -> void:
+	var events_chance := _bk1_silence_events()
+	_bk1_reset_for_settle()
+	var log: ListedSaleDayLog = _game_state.get("listed_sale_log")
+	_expect_equal(log.had_fair or log.had_gouge, false, "BK1: a fresh day has no listed-sale flags")
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(_game_state.call("start_floor"), true, "BK1: empty day can open the floor")
+	_expect_equal(_game_state.call("start_settle"), true, "BK1: empty day can settle")
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		0,
+		"BK1: no completed listed sales → neither tick"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"BK1: empty settle leaves reputation unchanged"
+	)
+
+	_bk1_reset_for_settle()
+	var suggested := _bk1_shop_suggested()
+	_expect_equal(_bk1_sell_sleeves_at(suggested), true, "BK1: first fair sale completes")
+	_expect_equal(_bk1_sell_sleeves_at(suggested), true, "BK1: second fair sale the same day completes")
+	log = _game_state.get("listed_sale_log")
+	_expect_equal(log.had_fair, true, "BK1: two fair sales still set the fair flag once")
+	rep_before = int(_game_state.get("current_reputation"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		1,
+		"BK1: a second fair sale the same day does not add a second +1"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before + 1,
+		"BK1: two fair sales still raise reputation by 1"
+	)
+	_bk1_restore_events(events_chance)
+	_game_state.call("start_new_game")
+
+
+func _test_bk1_online_fill_counts_cancel_does_not() -> void:
+	var events_chance := _bk1_silence_events()
+	_bk1_reset_for_settle()
+	_game_state.set("current_reputation", 40)
+	var card := _i1_unique_card()
+	_expect_equal(card != null, true, "BK1: unique card for online fill")
+	if card != null:
+		var suggested := _bk1_online_suggested(card)
+		_expect_equal(suggested > 0, true, "BK1: online noisy suggested is positive")
+		var listed: Dictionary = _economy.get("online_listings").call(
+			"list_target",
+			_i1_card_target(card),
+			suggested,
+			{
+				"ship_days": 1,
+				"suggested_price_cents": suggested,
+			}
+		)
+		_expect_equal(bool(listed.get("ok", false)), true, "BK1: online list at fair ask holds")
+		var listing := listed.get("listing") as OnlineListing
+		_expect_equal(
+			listing != null and listing.suggested_at_list_cents == suggested,
+			true,
+			"BK1: listing snapshots the noisy suggested at list time"
+		)
+		var log: ListedSaleDayLog = _game_state.get("listed_sale_log")
+		_expect_equal(log.had_fair, false, "BK1: listing alone is not a completed sale")
+		var rep_before := int(_game_state.get("current_reputation"))
+		_game_state.call("start_floor")
+		_game_state.call("start_settle")
+		_expect_equal(
+			listing != null and listing.status == OnlineListing.Status.FILLED,
+			true,
+			"BK1: ship-1 hold fills on settle"
+		)
+		_expect_equal(
+			int(_game_state.get("last_fair_price_settle_rep_delta")),
+			1,
+			"BK1: completed online hold counts as a fair listed sale"
+		)
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			rep_before + 1,
+			"BK1: filled fair hold raises reputation by 1"
+		)
+
+	_bk1_reset_for_settle()
+	_game_state.set("current_reputation", 40)
+	var cancel_card := _i1_unique_card()
+	_expect_equal(cancel_card != null, true, "BK1: unique card for cancel")
+	if cancel_card != null:
+		var suggested := _bk1_online_suggested(cancel_card)
+		var listed: Dictionary = _economy.get("online_listings").call(
+			"list_target",
+			_i1_card_target(cancel_card),
+			suggested,
+			{
+				"ship_days": 3,
+				"suggested_price_cents": suggested,
+			}
+		)
+		_expect_equal(bool(listed.get("ok", false)), true, "BK1: cancel path can list")
+		var listing := listed.get("listing") as OnlineListing
+		var cancelled: Dictionary = _economy.get("online_listings").call(
+			"cancel_listing",
+			listing.id if listing != null else &""
+		)
+		_expect_equal(bool(cancelled.get("ok", false)), true, "BK1: cancel before fill works")
+		_expect_equal(int(cancelled.get("rep_delta", -99)), 0, "BK1: first cancel stays free")
+		var log: ListedSaleDayLog = _game_state.get("listed_sale_log")
+		_expect_equal(
+			log.had_fair or log.had_gouge,
+			false,
+			"BK1: a cancel is not a completed listed sale"
+		)
+		var rep_before := int(_game_state.get("current_reputation"))
+		_game_state.call("start_floor")
+		_game_state.call("start_settle")
+		_expect_equal(
+			int(_game_state.get("last_fair_price_settle_rep_delta")),
+			0,
+			"BK1: cancelled holds do not tick fair or gouge"
+		)
+		_expect_equal(
+			int(_game_state.get("current_reputation")),
+			rep_before,
+			"BK1: cancel-only settle leaves reputation unchanged"
+		)
+	_bk1_restore_events(events_chance)
+	_game_state.call("start_new_game")
+
+
+func _test_bk1_walkout_refuse_haggle_do_not() -> void:
+	var events_chance := _bk1_silence_events()
+	_bk1_reset_for_settle()
+	var suggested := _bk1_shop_suggested()
+	_inventory_service.call("set_listed_price", &"ACC-SLV-60", suggested)
+	var queue := CustomerQueue.new()
+	queue.configure(
+		_inventory_service,
+		Callable(_game_state, "adjust_reputation"),
+		Callable(_game_state, "spend_attention"),
+		Callable(_game_state, "register_is_covered"),
+		Callable(_game_state, "apply_register_walkout_rep")
+	)
+	_game_state.set("attention_remaining", 0)
+	var walked := _bk1_listed_buyer(suggested)
+	_expect_equal(queue.enqueue(walked), true, "BK1: walkout customer enqueues")
+	_expect_equal(queue.resolve_register_walkouts() >= 1, true, "BK1: uncovered register walks out")
+	var log: ListedSaleDayLog = _game_state.get("listed_sale_log")
+	_expect_equal(log.had_fair or log.had_gouge, false, "BK1: a walkout is not a listed sale")
+	queue.free()
+	var rep_before := int(_game_state.get("current_reputation"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		0,
+		"BK1: AH1 walkouts do not apply the fair/overprice tick"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"BK1: walkout-only settle does not add fair +1"
+	)
+
+	_bk1_reset_for_settle()
+	suggested = _bk1_shop_suggested()
+	_inventory_service.call("set_listed_price", &"ACC-SLV-60", suggested)
+	queue = CustomerQueue.new()
+	queue.configure(_inventory_service, Callable(_game_state, "adjust_reputation"))
+	var refused := _bk1_listed_buyer(suggested)
+	_expect_equal(queue.enqueue(refused) and queue.refuse(), true, "BK1: refuse completes")
+	log = _game_state.get("listed_sale_log")
+	_expect_equal(log.had_fair or log.had_gouge, false, "BK1: a refuse is not a listed sale")
+	queue.free()
+	rep_before = int(_game_state.get("current_reputation"))
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	_expect_equal(
+		int(_game_state.get("last_fair_price_settle_rep_delta")),
+		0,
+		"BK1: refuses do not tick fair or gouge"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before,
+		"BK1: refuse-only settle leaves the fair/overprice tick off"
+	)
+	var queue_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_queue.gd"
+	)
+	_expect_equal(
+		_function_body_contains(queue_src, "func sell_listed(", "note_completed_listed_sale"),
+		true,
+		"BK1: in-shop listed sales record on sell_listed"
+	)
+	_expect_equal(
+		not _function_body_contains(queue_src, "func negotiate(", "note_completed_listed_sale")
+		and not _function_body_contains(queue_src, "func refuse(", "note_completed_listed_sale")
+		and not _function_body_contains(queue_src, "func resolve_register_walkouts(", "note_completed_listed_sale"),
+		true,
+		"BK1: negotiate / refuse / walkout do not record listed-sale flags"
+	)
+	_bk1_restore_events(events_chance)
+	_game_state.call("start_new_game")
+
+
+func _test_bk1_ui_and_untouched() -> void:
+	var events_chance := _bk1_silence_events()
+	_bk1_reset_for_settle()
+	var suggested := _bk1_shop_suggested()
+	_expect_equal(_bk1_sell_sleeves_at(suggested), true, "BK1: HUD path can complete a fair sale")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BK1: HUD loads for settle toast")
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	if hud != null:
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("earned trust"),
+			true,
+			"BK1: fair settle toast is a soft boost"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BK1: fair settle toast")
+		_expect_equal(
+			toast != null
+			and not toast.text.contains("1.10")
+			and not toast.text.contains("1.25")
+			and not toast.text.contains("fair_mult")
+			and not toast.text.contains("gouge_mult"),
+			true,
+			"BK1: toast never shows the mult math"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+
+	_bk1_reset_for_settle()
+	suggested = _bk1_shop_suggested()
+	_expect_equal(
+		_bk1_sell_sleeves_at(_bk1_gouge_ask(suggested)),
+		true,
+		"BK1: HUD path can complete a gouge sale"
+	)
+	hud = _instantiate_gameplay_hud()
+	_game_state.call("start_floor")
+	_game_state.call("start_settle")
+	if hud != null:
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("spent trust"),
+			true,
+			"BK1: overprice settle toast is a soft ding"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BK1: overprice settle toast")
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+
+	_expect_equal(
+		OnlineCancelPolicy.FREE_PER_DAY == 1 and OnlineCancelPolicy.REP_HIT == 1,
+		true,
+		"BK1: BG1 cancel rules stay 1 free / −1"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.register_walkout_rep_hit == 1
+		and NORMAL_CONFIG.register_walkout_rep_cap == 3,
+		true,
+		"BK1: AH1 walkout hit/cap stay 1 / 3"
+	)
+	_expect_equal(NmMismatchPolicy.REP_HIT, 2, "BK1: BB1/BD1 mismatch Rep stays −2")
+	_expect_equal(
+		NORMAL_CONFIG.fire_rep_hit == 5 and NORMAL_CONFIG.fire_popular_roster_age == 3,
+		true,
+		"BK1: AG1 Fire scalars stay −5 at roster age 3"
+	)
+	_expect_equal(OnlineHoldCapPolicy.CAP_LOW, 4, "BK1: BI1 low cap stays 4")
+	_expect_equal(
+		OnlineFeePolicy.BASE_PERCENT == 8
+		and OnlineFeePolicy.CUT_PERCENT == 5
+		and OnlineFeePolicy.CUT_REP == 75,
+		true,
+		"BK1: fee ladder stays 8%/5% at Rep 75"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.QUIET_FLOOR_COUNT_MULT, 0.5),
+		true,
+		"BK1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BK1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BK1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	var weight_74 := catalog.weight_for(whale, 74, NORMAL_CONFIG)
+	var weight_75 := catalog.weight_for(whale, 75, NORMAL_CONFIG)
+	_expect_equal(weight_74 > 0.0, true, "BK1/AJ1: Rep 74 keeps today's whale weight")
+	_expect_equal(
+		is_equal_approx(weight_75, weight_74 * 1.5),
+		true,
+		"BK1/AJ1: whale weight stays the shipped ×1.5"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"BK1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "fair_price")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "gouge")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "listed_sale"),
+		true,
+		"BK1: fair/overprice settle stays off the sell roll"
+	)
+	var spawn_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawner.gd"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/customers/customer_spawn_policy.gd"
+	)
+	_expect_equal(
+		not spawn_src.contains("FairPriceSettlePolicy")
+		and not policy_src.contains("FairPriceSettlePolicy")
+		and not spawn_src.contains("listed_sale_log")
+		and not policy_src.contains("listed_sale_log"),
+		true,
+		"BK1: door spawn does not read the fair/overprice log"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("listed_band")
+		or events.contains("stop_day"),
+		false,
+		"BK1: Soft catalog stays closed"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/fair_price_settle_policy.gd",
+		"res://scripts/economy/listed_sale_day_log.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/autoload/economy.gd",
+		"res://scripts/economy/online_listing.gd",
+		"res://scripts/economy/online_listing_service.gd",
+		"res://scenes/ui/gameplay_hud.tscn",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BK1: %s never shows raw true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BK1: %s never shows p_buy" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("earned trust") and hud_src.contains("spent trust"),
+		true,
+		"BK1: HUD keeps the fair/overprice settle beats"
+	)
+	_expect_equal(
+		not hud_src.contains("listed_band")
+		and not hud_src.contains("retag")
+		and not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert")
+		and not hud_src.contains("camera_off"),
+		true,
+		"BK1: listed-band retag, STOP, and camera off-switch stay parked"
+	)
+	var save_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/online_listing_save_policy.gd"
+	)
+	_expect_equal(
+		not save_src.contains("suggested_at_list")
+		and not save_src.contains("FairPriceSettlePolicy"),
+		true,
+		"BK1: BJ1 listing save stays on hold identity, not settle ticks"
+	)
+	_bk1_restore_events(events_chance)
+	_game_state.call("start_new_game")
+
+
+func _bk1_reset_for_settle() -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_reputation", 40)
+
+
+func _bk1_silence_events() -> float:
+	var previous := float(NORMAL_CONFIG.event_chance_settle)
+	NORMAL_CONFIG.event_chance_settle = 0.0
+	return previous
+
+
+func _bk1_restore_events(previous: float) -> void:
+	NORMAL_CONFIG.event_chance_settle = previous
+
+
+func _bk1_shop_suggested(sku_id: StringName = &"ACC-SLV-60") -> int:
+	var listed: int = int(_inventory_service.call("listed_price_for", sku_id))
+	var location: InventoryLocation = _inventory_service.call("location_for", sku_id)
+	var dto: PriceConfirmSignal = _demand_signals.call(
+		"price_signal",
+		sku_id,
+		listed,
+		location
+	)
+	if dto == null:
+		return 0
+	return dto.suggested_price_cents
+
+
+func _bk1_online_suggested(card: CardInstance) -> int:
+	if card == null:
+		return 0
+	var dto: OnlineListConfirmSignal = _demand_signals.call(
+		"list_confirm_signal",
+		card.sku_id,
+		card.listed_price_cents,
+		card.location
+	)
+	if dto == null:
+		return 0
+	return dto.suggested_price_cents
+
+
+func _bk1_gouge_ask(suggested_cents: int) -> int:
+	return maxi(1, ceili(float(suggested_cents) * FairPriceSettlePolicy.GOUGE_MULT))
+
+
+func _bk1_listed_buyer(ask_cents: int, sku_id: StringName = &"ACC-SLV-60") -> CustomerProfile:
+	var customer := CustomerProfile.new()
+	customer.budget_cents = maxi(ask_cents, 50_000)
+	customer.desired_skus = [sku_id]
+	customer.interest_tags = _ae1_accessory_walk_in_tags()
+	return customer
+
+
+func _bk1_sell_sleeves_at(ask_cents: int) -> bool:
+	if ask_cents <= 0:
+		return false
+	if not bool(_inventory_service.call("set_listed_price", &"ACC-SLV-60", ask_cents)):
+		return false
+	var queue := CustomerQueue.new()
+	queue.configure(_inventory_service)
+	var customer := _bk1_listed_buyer(ask_cents)
+	var sold := queue.enqueue(customer) and queue.sell_listed()
+	queue.free()
+	return sold
 
 
 func _bj1_active_rows() -> Array[Dictionary]:

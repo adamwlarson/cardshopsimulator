@@ -154,6 +154,10 @@ func sell_listed() -> bool:
 		customer.listed_price_cents
 	)):
 		return false
+	GameState.note_completed_listed_sale(
+		customer.target_sku,
+		customer.listed_price_cents
+	)
 	_complete(customer, &"sold")
 	return true
 

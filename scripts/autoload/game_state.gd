@@ -46,6 +46,8 @@ var register_walkout_rep_spent_today: int = 0
 var last_nm_mismatch_sale: bool = false
 var last_nm_mismatch_refund_cents: int = 0
 var last_nm_mismatch_rep_delta: int = 0
+var last_fair_price_settle_rep_delta: int = 0
+var listed_sale_log := ListedSaleDayLog.new()
 var _unpaid_wages_this_settle: bool = false
 var _suppress_lose_eval: bool = false
 var _suppress_sandbox_bests: bool = false
@@ -93,6 +95,8 @@ func start_new_game() -> void:
 	register_walkout_count_today = 0
 	register_walkout_rep_spent_today = 0
 	clear_last_nm_mismatch()
+	last_fair_price_settle_rep_delta = 0
+	listed_sale_log.reset()
 	_unpaid_wages_this_settle = false
 	_suppress_lose_eval = false
 	_suppress_sandbox_bests = true
@@ -172,6 +176,8 @@ func advance_day() -> bool:
 	last_register_walkout_rep_delta = 0
 	register_walkout_count_today = 0
 	register_walkout_rep_spent_today = 0
+	last_fair_price_settle_rep_delta = 0
+	listed_sale_log.reset()
 	QaInstrumentation.begin_day(current_day, Economy.balance_cents)
 	EventBus.day_started.emit(current_day)
 	EventBus.attention_changed.emit(attention_remaining)
@@ -465,6 +471,36 @@ func note_nm_mismatch(refund_cents: int, rep_delta: int) -> void:
 	last_nm_mismatch_sale = true
 	last_nm_mismatch_refund_cents = maxi(0, refund_cents)
 	last_nm_mismatch_rep_delta = rep_delta
+
+
+func note_completed_listed_sale(
+	sku_id: StringName,
+	ask_cents: int,
+	suggested_cents: int = 0
+) -> void:
+	# BK1: completed listed-price sale (in-shop list or filled online hold).
+	# Suggested is the same noisy figure the player already sees for that SKU.
+	if suggested_cents <= 0:
+		suggested_cents = DemandSignals.suggested_for_listed_sale(sku_id, ask_cents)
+	listed_sale_log.note_completed_sale(ask_cents, suggested_cents, balance_config)
+
+
+func apply_fair_price_settle_rep() -> int:
+	# BK1: once per close-settle, after wages/rent/shrink.
+	# Gouge −1 skips fair +1. Caps are once each per day.
+	last_fair_price_settle_rep_delta = 0
+	var delta := listed_sale_log.settle_rep_delta(balance_config)
+	last_fair_price_settle_rep_delta = delta
+	if delta == 0:
+		return 0
+	adjust_reputation(delta)
+	QaInstrumentation.record_fair_price_settle({
+		"rep_delta": delta,
+		"had_fair": listed_sale_log.had_fair,
+		"had_gouge": listed_sale_log.had_gouge,
+		"reputation": current_reputation,
+	})
+	return delta
 
 
 func fire_staff(index: int) -> StaffMember:
@@ -819,6 +855,7 @@ func capture_save() -> Dictionary:
 		"payday_loan_days_remaining": Economy.payday_loan_days_remaining(),
 		"online_cancel": Economy.online_cancel_to_save(),
 		"online_listings": Economy.online_listings_to_save(),
+		"listed_sale_day": listed_sale_log.snapshot(),
 		"shop": shop.to_save(),
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
@@ -851,7 +888,13 @@ func restore_save(data: Dictionary) -> bool:
 	missed_rent_weeks = int(data.get("missed_rent_weeks", 0))
 	last_fire_rep_delta = 0
 	last_register_walkout_rep_delta = 0
+	last_fair_price_settle_rep_delta = 0
 	clear_last_nm_mismatch()
+	var listed_sale_day: Variant = data.get("listed_sale_day", {})
+	if listed_sale_day is Dictionary:
+		listed_sale_log.apply_save(listed_sale_day as Dictionary)
+	else:
+		listed_sale_log.reset()
 	register_walkout_count_today = maxi(
 		0,
 		int(data.get("register_walkout_count_today", 0))
