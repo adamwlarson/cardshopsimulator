@@ -1,6 +1,7 @@
 extends Control
 
 @onready var cash_label: Label = %CashLabel
+@onready var net_worth_label: Label = %NetWorth
 @onready var sandbox_bests_label: Label = get_node_or_null("%SandboxBests") as Label
 @onready var day_label: Label = %DayLabel
 @onready var phase_chip: PanelContainer = %PhaseChip
@@ -307,6 +308,7 @@ func _bind_seeded_status() -> void:
 		GameState.start_new_game()
 	_update_cash(Economy.balance_cents)
 	_update_day(GameState.current_day)
+	_sync_net_worth()
 	_sync_sandbox_bests()
 	_update_phase(GameState.current_phase)
 	_update_attention(GameState.attention_remaining)
@@ -316,16 +318,30 @@ func _bind_seeded_status() -> void:
 	_sync_loan_shark()
 	_sync_game_over()
 	_maybe_open_event_price_editor()
+	_sync_net_worth()
 
 
 func _update_cash(balance_cents: int) -> void:
 	cash_label.text = DemandSignalPresenter.format_cents(balance_cents)
+	_sync_net_worth()
 	_sync_sandbox_bests()
 	_sync_prep_action_buttons()
 
 
 func _on_inventory_changed_bests(_sku: StringName, _quantity: int) -> void:
+	_sync_net_worth()
 	_sync_sandbox_bests()
+
+
+func _sync_net_worth() -> void:
+	if net_worth_label == null:
+		net_worth_label = get_node_or_null("%NetWorth") as Label
+	if net_worth_label == null:
+		return
+	net_worth_label.text = DemandSignalPresenter.net_worth_label(
+		Economy.net_worth_cents()
+	)
+	net_worth_label.show()
 
 
 func _sync_sandbox_bests() -> void:
@@ -346,6 +362,7 @@ func _sync_sandbox_bests() -> void:
 
 func _update_day(day: int) -> void:
 	day_label.text = "Day %d" % day
+	_sync_net_worth()
 	_sync_sandbox_bests()
 	_sync_rotation_watch()
 	_sync_event_banner()
@@ -354,6 +371,7 @@ func _update_day(day: int) -> void:
 func _update_phase(phase: int) -> void:
 	var phase_name: String = String(GameState.DayPhase.keys()[phase])
 	phase_label.text = phase_name
+	_sync_net_worth()
 	match phase:
 		GameState.DayPhase.PREP:
 			phase_chip.theme_type_variation = &"PhaseChipPrep"
@@ -2000,6 +2018,7 @@ func _close_research() -> void:
 
 
 func _on_market_event_changed(_payload: Dictionary) -> void:
+	_sync_net_worth()
 	_sync_event_banner()
 	_sync_rotation_watch()
 	_maybe_open_event_price_editor()
