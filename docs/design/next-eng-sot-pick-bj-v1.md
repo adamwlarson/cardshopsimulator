@@ -91,3 +91,4 @@
 |------|----------|
 | 2026-10-05 | Drafted post BI1 SHIPPED #91 @ `d018f567`. Lean **BJ1 Persist ONLINE_HOLD listings**. STOP / Soft reopeners parked. Camera off-switch hard-parked. |
 | 2026-10-05 ~2:01pm ET | **ADOPTED** BJ1. Park BJ2 STOP / BJ3 listed-band Soft / BJ4 display-bonus Soft. Camera off-switch hard-parked. Soft CLOSED. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~2:13pm ET | **Tip-frozen** [#92](https://github.com/adamwlarson/cardshopsimulator/pull/92) @ `71274114` (branch `cursor/bj1-persist-online-hold-listings-303c`). 5 files, no docs. Cloud agent bc-c9048320 archived. Eng review that SHA against bar `dbec78cf`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
