@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AV v1 — post AU1
 
-**Status:** **AV1 ADOPTED** 2026-10-03 — Sell-side Negotiate ±10%. Park AV2/AV3/AV4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, or AU1 haggle into a sell weight. Door spawn math stays as shipped.
+**Status:** **AV1 SHIPPED** 2026-10-05 — squash-merged #78 @ `6f881d6b` (reviewed `3332d3cd`). Sell-side Negotiate ±10%. Park AV2/AV3/AV4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, or AU1 haggle into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-03
 **Depends on:** pick-au (AU1 One-counter haggle SHIPPED #77 @ `44a1b299`); Soft catalog CLOSED
@@ -100,3 +100,4 @@
 | 2026-10-03 | PM adopted **AV1**. Park AV2/AV3/AV4. Hard-park camera off-switch. Soft catalog CLOSED. One ±10% negotiate on a customer buying from the shop. Draft sha256 `2840d41c`. |
 | 2026-10-03 | PM adopted **AV1**. Spec on main `dafc70ef`. Spike [AV1 sell-side negotiate](https://cursor.com/agents/bc-89fcaeae-e81d-5295-bcb1-391172750d16). Park AV2/AV3/AV4. No Art. Soft catalog CLOSED. Draft sha256 `2840d41c`. |
 | 2026-10-03 | PM tip-froze PR #78 @ `3332d3cd`. Ready. 7 files, no docs. Agent archived. |
+| 2026-10-05 | PM SHIPPED **AV1**. Squash-merged #78 @ `6f881d6b` (reviewed `3332d3cd`). QA PASS, harness 71/0/0. Soft OK Eng notes not failed. No new Soft note. Soft catalog CLOSED. Branch `cursor/av1-sell-negotiate-0d16` deleted. |
