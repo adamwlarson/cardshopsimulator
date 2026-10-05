@@ -53,6 +53,23 @@ func can_list() -> bool:
 	return is_unlocked()
 
 
+func concurrent_hold_count() -> int:
+	return active_listings().size()
+
+
+func hold_cap(reputation: int = -1) -> int:
+	var resolved := reputation if reputation >= 0 else GameState.current_reputation
+	return OnlineHoldCapPolicy.cap_for_config(resolved, _config())
+
+
+func is_at_hold_cap() -> bool:
+	return OnlineHoldCapPolicy.is_at_cap(
+		concurrent_hold_count(),
+		hold_cap(),
+		is_unlocked()
+	)
+
+
 func active_listings() -> Array[OnlineListing]:
 	var result: Array[OnlineListing] = []
 	for listing: OnlineListing in _listings:
@@ -89,6 +106,8 @@ func listable_targets() -> Array[Dictionary]:
 func list_target(target: Dictionary, listed_price_cents: int, opts: Dictionary = {}) -> Dictionary:
 	if not can_list():
 		return _result(false, &"locked")
+	if concurrent_hold_count() >= hold_cap():
+		return _hold_cap_result()
 	if target.is_empty() or listed_price_cents <= 0:
 		return _result(false, &"invalid")
 	var location := target.get("location") as InventoryLocation
@@ -331,6 +350,16 @@ func _fee_rate(config: BalanceConfig = null) -> float:
 
 func _config() -> BalanceConfig:
 	return GameState.balance_config
+
+
+func _hold_cap_result() -> Dictionary:
+	return {
+		"ok": false,
+		"reason": &"hold_cap",
+		"listing": null,
+		"hold_count": concurrent_hold_count(),
+		"hold_cap": hold_cap(),
+	}
 
 
 func _result(ok: bool, reason: StringName, listing: OnlineListing = null) -> Dictionary:

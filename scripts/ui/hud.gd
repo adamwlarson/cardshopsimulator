@@ -924,13 +924,12 @@ func _sync_online_button() -> void:
 		return
 	var unlock_rep := Economy.online_listings.unlock_rep()
 	var unlocked := Economy.online_listings.is_unlocked()
-	var active_count := Economy.online_listings.active_listings().size()
+	var active_count := Economy.online_listings.concurrent_hold_count()
 	if unlocked:
-		open_online_button.text = (
-			"Online listings"
-			if active_count == 0
-			else "Online · %d hold" % active_count
-		)
+		open_online_button.text = "Online · %d/%d hold" % [
+			active_count,
+			Economy.online_listings.hold_cap(),
+		]
 	else:
 		open_online_button.text = "Online · Rep %d" % unlock_rep
 	open_online_button.disabled = not GameState.is_game_active or not unlocked
@@ -1057,7 +1056,13 @@ func _confirm_online_list() -> void:
 		listed_price_cents = DemandSignalPresenter.parse_cents(online_price_input.text)
 	var result := Economy.online_listings.list_target(_online_target, listed_price_cents)
 	if not bool(result.get("ok", false)):
-		beat_toast.text = "Could not list online"
+		if StringName(result.get("reason", &"")) == &"hold_cap":
+			beat_toast.text = "Hold slots full · %d / %d" % [
+				int(result.get("hold_count", Economy.online_listings.concurrent_hold_count())),
+				int(result.get("hold_cap", Economy.online_listings.hold_cap())),
+			]
+		else:
+			beat_toast.text = "Could not list online"
 		beat_toast.show()
 		_sync_online_button()
 		return
