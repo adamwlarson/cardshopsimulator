@@ -1667,12 +1667,19 @@ func _ensure_change_offer_controls() -> void:
 		actions.move_child(change, sell.get_index())
 
 
+func _buylist_inspect_attention_cost() -> int:
+	return BuylistPolicy.attention_cost_for(
+		GameState.shop,
+		GameState.balance_config
+	)
+
+
 func _set_serve_inspect_visible(visible: bool) -> void:
 	_ensure_serve_inspect_button()
 	var inspect := get_node_or_null("%ServeInspectButton") as Button
 	if inspect == null:
 		return
-	var cost := BuylistPolicy.attention_cost()
+	var cost := _buylist_inspect_attention_cost()
 	inspect.visible = visible
 	inspect.text = DemandSignalPresenter.buylist_inspect_label(cost)
 	inspect.disabled = (
@@ -1702,7 +1709,7 @@ func _ensure_serve_inspect_button() -> void:
 	inspect.custom_minimum_size = Vector2(0.0, 40.0)
 	inspect.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inspect.text = DemandSignalPresenter.buylist_inspect_label(
-		BuylistPolicy.attention_cost()
+		_buylist_inspect_attention_cost()
 	)
 	inspect.visible = false
 	inspect.pressed.connect(_inspect_buylist_customer)
@@ -1727,7 +1734,7 @@ func _inspect_buylist_customer() -> void:
 	):
 		_set_serve_inspect_visible(true)
 		return
-	if GameState.attention_remaining < BuylistPolicy.attention_cost():
+	if GameState.attention_remaining < _buylist_inspect_attention_cost():
 		_set_serve_inspect_visible(true)
 		return
 	EventBus.customer_action_requested.emit(&"inspect_buylist")

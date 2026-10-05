@@ -27731,6 +27731,7 @@ func _test_buylist_inspect() -> void:
 	_test_ay1_seeded_reveal()
 	_test_ay1_buy_walk_change_after_inspect()
 	_test_ay1_door_whale_fee_stay()
+	_test_az1_specialist_inspect_discount()
 	_qa_autoload.call("set_force_enabled", false)
 	_qa.set_force_enabled(false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
@@ -27739,6 +27740,36 @@ func _test_buylist_inspect() -> void:
 
 func _test_ay1_named_gate() -> void:
 	_expect_equal(BuylistPolicy.ATTENTION_COST, 5, "AY1: Inspect costs 5 Attention")
+	_expect_equal(
+		BuylistPolicy.ATTENTION_COST_SPECIALIST,
+		2,
+		"AZ1: Specialist Inspect costs 2 Attention"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost(),
+		5,
+		"AZ1: missing duty flag keeps Inspect at 5"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost(false),
+		5,
+		"AZ1: off-duty Inspect stays 5"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost(true),
+		2,
+		"AZ1: missing Specialist discount falls back to 2 on duty"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost(true, BuylistPolicy.UNSET_INT, 2),
+		2,
+		"AZ1: missing owner cost falls back to 5 only off duty; on duty uses 2"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost(false, BuylistPolicy.UNSET_INT, 2),
+		5,
+		"AZ1: missing owner cost falls back to 5"
+	)
 	_expect_equal(
 		is_equal_approx(BuylistPolicy.ACCURACY, 0.85),
 		true,
@@ -28014,22 +28045,22 @@ func _test_ay1_one_inspect_and_att_refuse() -> void:
 
 	_aw1_reset_floor(40, 1)
 	var shop := _game_state.get("shop") as ShopState
-	_expect_equal(shop.hire_specialist() != null, true, "AY1: Specialist hires for the parked discount")
-	_expect_equal(shop.inspect_attention_cost(), 2, "AY1: marketplace Inspect★ still discounts")
+	_expect_equal(shop.hire_specialist() != null, true, "AZ1: Specialist hires for the inspect discount")
+	_expect_equal(shop.inspect_attention_cost(), 2, "AZ1: marketplace Inspect★ still discounts")
 	_expect_equal(
-		BuylistPolicy.attention_cost(),
-		5,
-		"AY1: buylist Inspect stays 5 with a Specialist on duty"
+		BuylistPolicy.attention_cost_for(shop, _game_state.get("balance_config") as BalanceConfig),
+		2,
+		"AZ1: buylist Inspect costs 2 with a Specialist on duty"
 	)
 	dto = _aw1_signal(&"AA-BASE-088")
 	queue = _aw1_queue()
 	seller = _aw1_enqueue_seller(queue, dto, "Specialist seller")
 	att_before = int(_game_state.get("attention_remaining"))
-	_expect_equal(queue.inspect_buylist(), true, "AY1: owner Inspect still takes with Specialist")
+	_expect_equal(queue.inspect_buylist(), true, "AZ1: owner Inspect still takes with Specialist")
 	_expect_equal(
 		int(_game_state.get("attention_remaining")),
-		att_before - 5,
-		"AY1: Specialist does not cut buylist Inspect to 2"
+		att_before - 2,
+		"AZ1: Specialist on duty cuts buylist Inspect to 2"
 	)
 	queue.free()
 
@@ -28363,9 +28394,10 @@ func _test_ay1_door_whale_fee_stay() -> void:
 	)
 	_expect_equal(
 		policy_src.contains("const ATTENTION_COST := 5")
-		and not policy_src.contains("inspect_attention_specialist"),
+		and policy_src.contains("const ATTENTION_COST_SPECIALIST := 2")
+		and policy_src.contains("func specialist_is_on_duty("),
 		true,
-		"AY1: buylist Inspect stays 5 — Specialist 5→2 stays parked"
+		"AZ1: buylist Inspect is 5 off duty and 2 with Specialist on duty"
 	)
 	_expect_equal(
 		demand_src.contains("func counter_buy")
@@ -28390,6 +28422,308 @@ func _test_ay1_door_whale_fee_stay() -> void:
 		"AY1: Soft catalog stays closed"
 	)
 	queue.free()
+	_game_state.call("start_new_game")
+
+
+func _test_az1_specialist_inspect_discount() -> void:
+	_expect_equal(
+		BuylistPolicy.attention_cost(),
+		5,
+		"AZ1: missing duty flag keeps Inspect at 5"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost(true),
+		2,
+		"AZ1: missing Specialist config falls back to 2 on duty"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost(false, BuylistPolicy.UNSET_INT, 9),
+		5,
+		"AZ1: missing owner config falls back to 5 off duty"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost(true, 9, BuylistPolicy.UNSET_INT),
+		2,
+		"AZ1: missing Specialist config ignores owner override"
+	)
+	_expect_equal(
+		BuylistPolicy.specialist_is_on_duty(null),
+		false,
+		"AZ1: a missing shop duty flag stays off duty"
+	)
+
+	_aw1_reset_floor(40, 1)
+	var shop := _game_state.get("shop") as ShopState
+	var config := _game_state.get("balance_config") as BalanceConfig
+	_expect_equal(
+		BuylistPolicy.attention_cost_for(shop, config),
+		5,
+		"AZ1: no Specialist on duty → Inspect costs 5"
+	)
+	_expect_equal(shop.research_attention_cost(), 15, "AZ1: Research stays 15 without Specialist")
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AZ1: marketplace fee stays 8%"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistPolicy.ACCURACY, 0.85),
+		true,
+		"AZ1: AY1 85/15 accuracy stays as shipped"
+	)
+
+	var dto := _aw1_signal(&"AA-BASE-088")
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "Off-duty inspect")
+	_game_state.set("attention_remaining", 4)
+	var att_before := int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		queue.inspect_buylist(),
+		false,
+		"AZ1: off-duty Inspect at Att < 5 is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AZ1: refused off-duty Inspect leaves Att unchanged"
+	)
+	_expect_equal(seller.has_inspected, false, "AZ1: refused off-duty Inspect leaves the shot")
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "AZ1: hire Specialist for on-duty discount")
+	_expect_equal(shop.has_specialist_on_duty(), true, "AZ1: hired Specialist is on duty")
+	_expect_equal(
+		BuylistPolicy.specialist_is_on_duty(shop),
+		true,
+		"AZ1: hired Specialist counts as present today"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost_for(shop, config),
+		2,
+		"AZ1: Specialist on duty → Inspect costs 2"
+	)
+	_expect_equal(shop.inspect_attention_cost(), 2, "AZ1: marketplace Inspect★ still discounts")
+	_expect_equal(shop.research_attention_cost(), 10, "AZ1: Research Att stays 15→10")
+	_expect_equal(
+		NegotiatePolicy.attention_cost(),
+		8,
+		"AZ1: AV1 Negotiate Att stays 8"
+	)
+
+	dto = _aw1_signal(&"AA-BASE-088")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "On-duty HUD")
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var inspect := hud.get_node_or_null("%ServeInspectButton") as Button
+		var buy := hud.get_node_or_null("%SellButton") as Button
+		var walk := hud.get_node_or_null("%RefuseButton") as Button
+		var change := hud.get_node_or_null("%ChangeOfferButton") as Button
+		var marketplace_inspect := hud.get_node_or_null("%InspectButton") as Button
+		_expect_equal(
+			inspect != null and inspect.visible and not inspect.disabled,
+			true,
+			"AZ1: on-duty Inspect is present"
+		)
+		if inspect != null:
+			_expect_equal(
+				inspect.text,
+				"Inspect · Att 2",
+				"AZ1: HUD mirrors Specialist Inspect cost 2"
+			)
+		_expect_equal(
+			buy != null and buy.visible and buy.text == "Buy",
+			true,
+			"AZ1: Buy stays on the seller serve"
+		)
+		_expect_equal(
+			walk != null and walk.visible and walk.text == "Walk",
+			true,
+			"AZ1: Walk stays on the seller serve"
+		)
+		_expect_equal(
+			change != null and change.visible and change.text == "Change offer",
+			true,
+			"AZ1: Change offer stays on the seller serve"
+		)
+		_expect_equal(
+			marketplace_inspect == null or not marketplace_inspect.visible,
+			true,
+			"AZ1: marketplace Inspect★ stays off CustomerServe"
+		)
+		hud.free()
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(queue.inspect_buylist(), true, "AZ1: on-duty Inspect spends 2 Att")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 2,
+		"AZ1: on-duty Inspect spends 2 Attention"
+	)
+	_expect_equal(seller.has_inspected, true, "AZ1: on-duty Inspect spends the shot")
+	_expect_equal(
+		queue.inspect_buylist(),
+		false,
+		"AZ1: second Inspect is still refused on duty"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 2,
+		"AZ1: refused second Inspect leaves Att unchanged"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "AZ1: hire Specialist for Att-below-cost")
+	dto = _aw1_signal(&"AA-BASE-088")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Short att on duty")
+	_game_state.set("attention_remaining", 1)
+	att_before = int(_game_state.get("attention_remaining"))
+	_free_lingering_gameplay_huds()
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		Callable(hud, "_on_customer_head_changed").call(seller)
+		Callable(hud, "_on_customer_desk_ready").call(seller, true)
+		var short_inspect := hud.get_node_or_null("%ServeInspectButton") as Button
+		_expect_equal(
+			short_inspect != null and short_inspect.visible and short_inspect.disabled,
+			true,
+			"AZ1: Inspect is refused in the HUD at Att < 2"
+		)
+		if short_inspect != null:
+			_expect_equal(
+				short_inspect.text,
+				"Inspect · Att 2",
+				"AZ1: HUD still shows Specialist cost 2 when Att is short"
+			)
+		hud.free()
+	_expect_equal(
+		queue.inspect_buylist(),
+		false,
+		"AZ1: on-duty Inspect at Att < 2 is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AZ1: refused on-duty Inspect leaves Att unchanged"
+	)
+	_expect_equal(seller.has_inspected, false, "AZ1: refused on-duty Inspect leaves the shot")
+	_expect_equal(dto.inspected, false, "AZ1: refused on-duty Inspect leaves the lot uninspected")
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "AZ1: hire Specialist for Att 4 on duty")
+	dto = _aw1_signal(&"AA-BASE-088")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Att 4 on duty")
+	_game_state.set("attention_remaining", 4)
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		queue.inspect_buylist(),
+		true,
+		"AZ1: Att 4 is enough for on-duty Inspect at cost 2"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 2,
+		"AZ1: Att 4 on-duty Inspect spends 2"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	shop = _game_state.get("shop") as ShopState
+	_expect_equal(shop.hire_specialist() != null, true, "AZ1: hire Specialist to clear today's duty")
+	for member: StaffMember in shop.staff:
+		if member != null and member.is_specialist():
+			member.on_duty_today = false
+	_expect_equal(
+		BuylistPolicy.specialist_is_on_duty(shop),
+		false,
+		"AZ1: hired Specialist not present today stays off duty"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost_for(shop, config),
+		5,
+		"AZ1: missing today-duty flag keeps Inspect at 5"
+	)
+	dto = _aw1_signal(&"AA-BASE-088")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Off-floor specialist")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(queue.inspect_buylist(), true, "AZ1: off-floor Specialist still Inspects at 5")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 5,
+		"AZ1: off-floor Specialist does not take the 2 Att discount"
+	)
+	queue.free()
+
+	_aw1_reset_floor(40, 1)
+	shop = _game_state.get("shop") as ShopState
+	shop.set_specialist_on_duty(true)
+	_expect_equal(
+		BuylistPolicy.specialist_is_on_duty(shop),
+		true,
+		"AZ1: shop duty flag without a roster Specialist still counts"
+	)
+	_expect_equal(
+		BuylistPolicy.attention_cost_for(shop, config),
+		2,
+		"AZ1: shop duty flag alone still discounts Inspect to 2"
+	)
+	dto = _aw1_signal(&"AA-BASE-088")
+	queue = _aw1_queue()
+	seller = _aw1_enqueue_seller(queue, dto, "Duty-flag seller")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		queue.inspect_buylist(BuylistPolicy.ACTOR_CASHIER),
+		false,
+		"AZ1: cashier still cannot Inspect on duty"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"AZ1: cashier Inspect spends no Attention on duty"
+	)
+	_expect_equal(queue.inspect_buylist(), true, "AZ1: duty-flag Inspect spends 2")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - 2,
+		"AZ1: duty-flag Inspect spends 2 Attention"
+	)
+	queue.free()
+
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.online_fee, 0.08),
+		true,
+		"AZ1: door spawn, whale weight, and 8% fee stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")),
+			1.0
+		),
+		true,
+		"AZ1: sell_through_mult_for stays 1.0 — not a sell weight"
+	)
+	var events := FileAccess.get_file_as_string("res://data/events.json")
+	_expect_equal(
+		events.contains("fee_cut")
+		or events.contains("camera_off")
+		or events.contains("net_worth")
+		or events.contains("stop_day"),
+		false,
+		"AZ1: Soft catalog stays closed"
+	)
 	_game_state.call("start_new_game")
 
 

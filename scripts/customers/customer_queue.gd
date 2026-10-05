@@ -178,7 +178,7 @@ func inspect_buylist(acting_role: StringName = BuylistPolicy.ACTOR_OWNER) -> boo
 	var customer := begin_serving_head()
 	if not BuylistPolicy.can_inspect(customer, acting_role):
 		return false
-	var cost := BuylistPolicy.attention_cost()
+	var cost := _buylist_inspect_attention_cost()
 	if _attention_hook.is_valid() and not bool(_attention_hook.call(cost)):
 		return false
 	if not BuylistPolicy.apply_inspect(customer.buylist_signal, _serve_day()):
@@ -327,14 +327,28 @@ func _serve_day() -> int:
 	return _read_game_state_int("current_day", 1)
 
 
+func _buylist_inspect_attention_cost() -> int:
+	var game_state := _game_state_node()
+	var shop: ShopState = null
+	var config: BalanceConfig = null
+	if game_state != null:
+		shop = game_state.get("shop") as ShopState
+		config = game_state.get("balance_config") as BalanceConfig
+	return BuylistPolicy.attention_cost_for(shop, config)
+
+
 func _read_game_state_int(property: String, fallback: int) -> int:
-	var tree := Engine.get_main_loop() as SceneTree
-	if tree == null:
-		return fallback
-	var game_state := tree.root.get_node_or_null("GameState")
+	var game_state := _game_state_node()
 	if game_state == null:
 		return fallback
 	return int(game_state.get(property))
+
+
+func _game_state_node() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	return tree.root.get_node_or_null("GameState")
 
 
 func _refresh_buylist_affordability(dto: BuyConfirmSignal) -> void:
