@@ -1,6 +1,6 @@
 # Next Eng SoT Pick AW v1 — post AV1
 
-**Status:** **AW1 ADOPTED** 2026-10-05 — Buylist buy-from-them. Park AW2/AW3/AW4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, AU1 haggle, or AV1 Negotiate into a sell weight. Door spawn math stays as shipped.
+**Status:** **AW1 SHIPPED** 2026-10-05 — squash-merged #79 @ `d5f21d1a` (reviewed `b52af462`). Buylist buy-from-them. Park AW2/AW3/AW4. Hard-park camera off-switch. Soft catalog CLOSED. Fees, net-worth HUD, and STOP stay parked. Do not turn rep bands, trades, shrink, walkouts, Fire, AU1 haggle, or AV1 Negotiate into a sell weight. Door spawn math stays as shipped.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-av (AV1 Sell-side Negotiate SHIPPED #78 @ `6f881d6b`); Soft catalog CLOSED
@@ -97,3 +97,4 @@
 | 2026-10-05 | PM adopted **AW1**. Park AW2/AW3/AW4. Hard-park camera off-switch. Soft catalog CLOSED. Buylist seller serve with You offer, Buy, Walk. Draft sha256 `ddf0e9c9`. |
 | 2026-10-05 | PM adopted **AW1**. Spec on main `a675de76`. Spike [AW1 buylist buy-from-them](https://cursor.com/agents/bc-93a95cb7-d057-5673-a238-5bb9ef062be8). Park AW2/AW3/AW4. No Art. Soft catalog CLOSED. Draft sha256 `ddf0e9c9`. |
 | 2026-10-05 | PM tip-froze PR #79 @ `b52af462`. Ready. 7 files, no docs. Agent archived. |
+| 2026-10-05 | PM SHIPPED **AW1**. Squash-merged #79 @ `d5f21d1a` (reviewed `b52af462`). QA PASS, harness 90/0/0. Soft OK Eng notes not failed. Soft catalog CLOSED. Branch `cursor/aw1-buylist-buy-from-them-2be8` deleted. |
