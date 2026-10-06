@@ -1,6 +1,6 @@
 # Next Eng SoT Pick CA v1 — post BZ1
 
-**Status:** TIP-FROZEN — PR #109 at `397524ad` (branch `cursor/ca1-price-confirm-last-sold-5aee`). Eng bar `a6d96f99`. Reuses `sale_history` (no new save key). Soft CLOSED. Soft OK list-time Soft. No Art. Eng review pending; QA held.
+**Status:** SHIPPED — squash-merged #109 @ `8b48d370` (reviewed `397524ad`). QA PASS-with-notes harness 1034/0/4 +4 Soft OK. Reuses `sale_history` (no new save key). Soft CLOSED. Soft OK list-time Soft. No Art. Docs status this commit.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bz (BZ1 Buy-confirm "Last sold in-shop" history line SHIPPED #108 @ `df1fd35a`, reviewed `d1801c97`; QA PASS-with-notes harness 991/0/4 +4 Soft OK; save key `sale_history`; docs status `099ca43d`); Soft catalog CLOSED
