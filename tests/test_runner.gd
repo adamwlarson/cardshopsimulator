@@ -23377,17 +23377,17 @@ func _test_player_trade_same_seed_shows_at_50_not_49() -> void:
 			"AN1: receive qty is 1"
 		)
 		_expect_equal(
-			String(at_50.get("give_condition", "")).is_empty(),
+			String(at_50.get("give_condition")).is_empty(),
 			false,
 			"AN1: give side shows condition"
 		)
 		_expect_equal(
-			String(at_50.get("receive_condition", "")).is_empty(),
+			String(at_50.get("receive_condition")).is_empty(),
 			false,
 			"AN1: receive side shows condition"
 		)
 		_expect_equal(
-			String(at_50.get("give_condition", "")).to_lower().contains("photo"),
+			String(at_50.get("give_condition")).to_lower().contains("photo"),
 			false,
 			"AN1/BV1: give condition is never photo-fog"
 		)
@@ -23532,25 +23532,25 @@ func _test_player_trade_never_shows_true_market() -> void:
 			"AN1: offer copy never shows true_market"
 		)
 	_expect_equal(
-		row.contains(String(offer.get("give_display_name", "")))
-		or row.contains(String(offer.get("give_sku_id", ""))),
+		row.contains(String(offer.get("give_display_name")))
+		or row.contains(String(offer.get("give_sku_id"))),
 		true,
 		"AN1: row shows the give SKU"
 	)
 	_expect_equal(
-		row.contains(String(offer.get("receive_display_name", "")))
-		or row.contains(String(offer.get("receive_sku_id", ""))),
+		row.contains(String(offer.get("receive_display_name")))
+		or row.contains(String(offer.get("receive_sku_id"))),
 		true,
 		"AN1: row shows the receive SKU"
 	)
 	_expect_equal(
-		detail.contains(String(offer.get("give_condition", "")))
-		and confirm.contains(String(offer.get("give_condition", ""))),
+		detail.contains(String(offer.get("give_condition")))
+		and confirm.contains(String(offer.get("give_condition"))),
 		true,
 		"AN1: detail and confirm show condition"
 	)
 	_expect_equal(
-		confirm.contains(String(offer.get("counterparty_label", ""))),
+		confirm.contains(String(offer.get("counterparty_label"))),
 		true,
 		"AN1/BV1: confirm names the counterparty"
 	)
@@ -23839,9 +23839,9 @@ func _test_player_trade_hud_plain_text() -> void:
 	var give_id: StringName = offer.get("give_sku_id")
 	var receive_id: StringName = offer.get("receive_sku_id")
 	var give_before := _bv1_owned_qty(give_id)
-	var give_name := String(offer.get("give_display_name", ""))
-	var receive_name := String(offer.get("receive_display_name", ""))
-	var give_condition := String(offer.get("give_condition", ""))
+	var give_name := String(offer.get("give_display_name"))
+	var receive_name := String(offer.get("receive_display_name"))
+	var give_condition := String(offer.get("give_condition"))
 	_free_lingering_gameplay_huds()
 	var hud := _instantiate_gameplay_hud()
 	_expect_equal(hud != null, true, "AN1: HUD loads for the plain-text offer")
@@ -24039,13 +24039,13 @@ func _test_bv1_cadence_pool_and_identity() -> void:
 		if offer == null:
 			continue
 		_expect_equal(
-			String(offer.get("id", "")),
+			String(offer.get("id")),
 			"player-trade-d%d" % day,
 			"BV1: day %d uses the day-scoped id" % day
 		)
 		_expect_equal(_bv1_offer_is_legal_pair(offer), true, "BV1: day %d pair stays in the live pool" % day)
 		_expect_equal(
-			int(offer.get("give_qty", 0)) == 1 and int(offer.get("receive_qty", 0)) == 1,
+			int(offer.get("give_qty")) == 1 and int(offer.get("receive_qty")) == 1,
 			true,
 			"BV1: day %d qtys stay 1" % day
 		)
@@ -24141,7 +24141,7 @@ func _test_bv1_expire_save_load_and_toast() -> void:
 	_expect_equal(open_first != null, true, "BV1: day 3 starts with an open trade")
 	if open_first == null:
 		return
-	var open_id := String(open_first.get("id", ""))
+	var open_id := String(open_first.get("id"))
 	var give_id: StringName = open_first.get("give_sku_id")
 	var receive_id: StringName = open_first.get("receive_sku_id")
 	_expect_equal(
@@ -24191,7 +24191,7 @@ func _test_bv1_expire_save_load_and_toast() -> void:
 			_expect_equal(
 				restored.get("give_sku_id") == mid_give
 				and restored.get("receive_sku_id") == mid_receive
-				and String(restored.get("id", "")) == String(mid.get("id", "")),
+				and String(restored.get("id")) == String(mid.get("id")),
 				true,
 				"BV1: same seed, day, and owned pool restore the same pair"
 			)
@@ -24242,7 +24242,7 @@ func _test_bv1_expire_save_load_and_toast() -> void:
 	_expect_equal(next_day != null, true, "BV1: a new day can offer again")
 	if leftover != null and next_day != null:
 		_expect_equal(
-			String(next_day.get("id", "")) != String(leftover.get("id", "")),
+			String(next_day.get("id")) != String(leftover.get("id")),
 			true,
 			"BV1: unaccepted trades do not carry over"
 		)
@@ -24300,8 +24300,8 @@ func _test_bv1_confirm_no_truth() -> void:
 		"BV1: confirm shows counterparty and qtys"
 	)
 	_expect_equal(
-		confirm.contains(String(offer.get("give_condition", "")))
-		and confirm.contains(String(offer.get("receive_condition", ""))),
+		confirm.contains(String(offer.get("give_condition")))
+		and confirm.contains(String(offer.get("receive_condition"))),
 		true,
 		"BV1: confirm shows both visible conditions"
 	)
