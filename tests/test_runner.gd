@@ -26716,6 +26716,11 @@ func _test_cb1_same_seed_seller_summary_line() -> void:
 			false,
 			"CB1: a different sku_id hides the seller line"
 		)
+	_expect_equal(
+		_game_state.call("start_floor"),
+		true,
+		"CB1: FLOOR opens so AY1 Inspect can spend Attention"
+	)
 	var edited := maxi(1, dto.unit_cost_cents / 2)
 	_expect_equal(queue.change_buylist_offer(edited), true, "CB1: AX1 You-offer edit lands")
 	_expect_equal(dto.unit_cost_cents, edited, "CB1: AX1 edit changes You offer")
