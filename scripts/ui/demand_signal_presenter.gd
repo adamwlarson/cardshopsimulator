@@ -440,7 +440,7 @@ static func buy_summary(dto: BuyConfirmSignal) -> String:
 
 
 static func buylist_seller_summary(dto: BuyConfirmSignal) -> String:
-	return "\n".join([
+	var lines: PackedStringArray = [
 		"Selling: %s ×%d" % [dto.display_name, dto.quantity],
 		"%s: %s each · %s total" % [
 			price_label(PriceContext.CUSTOMER_SELLING_TO_SHOP),
@@ -455,8 +455,12 @@ static func buylist_seller_summary(dto: BuyConfirmSignal) -> String:
 			band_chip(dto.shown_demand_band),
 			String(dto.confidence).capitalize(),
 		],
-		condition_line(dto.condition_cue, dto.grader, dto.grade),
-	])
+	]
+	var history_line := last_sold_in_shop_line(dto.sku_id)
+	if not history_line.is_empty():
+		lines.append(history_line)
+	lines.append(condition_line(dto.condition_cue, dto.grader, dto.grade))
+	return "\n".join(lines)
 
 
 static func price_summary(
