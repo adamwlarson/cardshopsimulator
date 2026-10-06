@@ -1,6 +1,6 @@
 # Next Eng SoT Pick CB v1 — post CA1
 
-**Status:** TIP-FROZEN — PR #110 at `0f7110c1` (branch `cursor/cb1-walk-in-seller-last-sold-ab0f`). Eng bar `213977b8`. Reuses `sale_history` (no new save key). Soft CLOSED. Soft OK list-time Soft. No Art. Eng review pending; QA held. Harness EXIT 0. Docs tip-freeze this commit.
+**Status:** TIP-FROZEN — PR #110 at `0f7110c1` (branch `cursor/cb1-walk-in-seller-last-sold-ab0f`). Eng bar `213977b8`. Soft CLOSED. Soft OK list-time Soft. No Art. Eng review pending; QA held.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-ca (CA1 Price-confirm "Last sold in-shop" history line SHIPPED #109 @ `8b48d370`, reviewed `397524ad`; QA PASS-with-notes harness 1034/0/4 +4 Soft OK; reuses `sale_history` (no new save key); docs status `b171e1cf`); pick-bz (BZ1 Buy-confirm "Last sold in-shop" SHIPPED #108 @ `df1fd35a`; save key `sale_history`); Soft catalog CLOSED
