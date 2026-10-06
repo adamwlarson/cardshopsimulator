@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BX v1 — post BW1
 
-**Status:** **ENG APPROVE + Soft OK** 2026-10-05 ~9:02pm ET — BX1 [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `1046fd24` (bar `f817422e`). Soft CLOSED. Soft OK list-time Soft. No Art. Design Soft OK on Soft notes. QA formal running; hold merge until PASS.
+**Status:** **SHIPPED** 2026-10-05 ~9:09pm ET — BX1 squash-merged [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `d94a7c6f` (reviewed `1046fd24`). QA PASS-with-notes harness 818/0/4 +5 Soft OK. Soft OK list-time Soft. Soft CLOSED. Soft catalog CLOSED. No Art. Next pick is BY.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bw (BW1 Auction snipe SKU pool SHIPPED #105 @ `f2b1eb61`, reviewed `fb7b1e1c`; docs status `eaab995a`); Soft catalog CLOSED
@@ -100,3 +100,4 @@
 | 2026-10-05 ~9:00pm ET | **Tip-frozen** [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `1046fd24` (branch `cursor/bx1-shady-trunk-sku-pool-26d3`). 3 files, no docs. Cloud agent bc-fd6dee9b archived. Eng review that SHA against bar `f817422e`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
 | 2026-10-05 ~9:02pm ET | **Eng APPROVE** [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `1046fd24` (SoT `f817422e`). Soft CLOSED. Soft OK list-time Soft. No Art. Soft notes Soft (haggle wording vs AU1; Prism 10.0; empty-catalog existence skip test-only; Empress dual-pool). QA formal released. Do not merge until PASS. |
 | 2026-10-05 ~9:02pm ET | **Design Soft OK** on BX1 Eng Soft notes (haggle wording vs AU1; Prism 10.0; empty-catalog existence skip test-only; Empress dual-pool) — Soft CLOSED, not a fail. Soft OK list-time Soft. QA formal still running on #106 @ `1046fd24`; hold merge until PASS. |
+| 2026-10-05 ~9:09pm ET | **SHIPPED** squash-merged [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `d94a7c6f` (reviewed `1046fd24`). QA PASS-with-notes harness 818/0/4 +5 Soft OK. Soft OK list-time Soft. Soft CLOSED. Soft catalog CLOSED. Branch `cursor/bx1-shady-trunk-sku-pool-26d3` deleted. No Art. Next pick is BY. |
