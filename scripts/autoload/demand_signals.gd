@@ -714,6 +714,18 @@ func regulars_queued_count() -> int:
 	return _regulars.queued_count()
 
 
+func regulars_remembered_sku() -> StringName:
+	return _regulars.remembered_sku()
+
+
+func regulars_return_to_save() -> Dictionary:
+	return _regulars.to_save()
+
+
+func apply_regulars_return_save(value: Variant) -> void:
+	_regulars.apply_save(value)
+
+
 func regulars_unlock_rep(configured: int = RegularsReturnPolicy.UNLOCK_REP) -> int:
 	return RegularsReturnPolicy.unlock_rep(configured)
 
@@ -722,9 +734,9 @@ func regulars_queue_cap(configured: int = RegularsReturnPolicy.QUEUE_CAP) -> int
 	return RegularsReturnPolicy.queue_cap(configured)
 
 
-func note_regulars_listed_sale(reputation: int = -1) -> bool:
+func note_regulars_listed_sale(reputation: int = -1, sku_id: StringName = &"") -> bool:
 	var resolved := reputation if reputation >= 0 else GameState.current_reputation
-	return _regulars.note_listed_sale(resolved)
+	return _regulars.note_listed_sale(resolved, sku_id)
 
 
 func note_regulars_outcome(
