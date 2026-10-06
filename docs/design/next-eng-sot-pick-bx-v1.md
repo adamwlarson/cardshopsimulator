@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BX v1 — post BW1
 
-**Status:** **ENG APPROVE** 2026-10-05 ~9:02pm ET — BX1 [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `1046fd24` (bar `f817422e`). Soft CLOSED. Soft OK list-time Soft. No Art. Soft notes Soft (haggle wording vs AU1; Prism 10.0; empty-catalog existence skip test-only; Empress dual-pool). QA formal released; hold merge until PASS.
+**Status:** **ENG APPROVE + Soft OK** 2026-10-05 ~9:02pm ET — BX1 [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `1046fd24` (bar `f817422e`). Soft CLOSED. Soft OK list-time Soft. No Art. Design Soft OK on Soft notes. QA formal running; hold merge until PASS.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bw (BW1 Auction snipe SKU pool SHIPPED #105 @ `f2b1eb61`, reviewed `fb7b1e1c`; docs status `eaab995a`); Soft catalog CLOSED
@@ -99,3 +99,4 @@
 | 2026-10-05 ~8:51pm ET | **ADOPTED** BX1. Park BX2 STOP / BX3 Soft / BX4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
 | 2026-10-05 ~9:00pm ET | **Tip-frozen** [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `1046fd24` (branch `cursor/bx1-shady-trunk-sku-pool-26d3`). 3 files, no docs. Cloud agent bc-fd6dee9b archived. Eng review that SHA against bar `f817422e`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
 | 2026-10-05 ~9:02pm ET | **Eng APPROVE** [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `1046fd24` (SoT `f817422e`). Soft CLOSED. Soft OK list-time Soft. No Art. Soft notes Soft (haggle wording vs AU1; Prism 10.0; empty-catalog existence skip test-only; Empress dual-pool). QA formal released. Do not merge until PASS. |
+| 2026-10-05 ~9:02pm ET | **Design Soft OK** on BX1 Eng Soft notes (haggle wording vs AU1; Prism 10.0; empty-catalog existence skip test-only; Empress dual-pool) — Soft CLOSED, not a fail. Soft OK list-time Soft. QA formal still running on #106 @ `1046fd24`; hold merge until PASS. |
