@@ -1835,8 +1835,16 @@ func _make_shady_trunk(_seed: int, day: int) -> BuyOpportunity:
 
 
 func _make_auction_snipe(seed: int, day: int) -> BuyOpportunity:
-	var sku_id := AuctionSnipePolicy.DEFAULT_SKU_ID
 	if InventoryService.model == null:
+		return null
+	var catalog := InventoryService.model.catalog
+	var sku_id := AuctionSnipePolicy.pick_sku_id(
+		seed,
+		day,
+		AuctionSnipePolicy.pool_sku_ids(catalog),
+		catalog
+	)
+	if sku_id.is_empty():
 		return null
 	var sku := InventoryService.model.get_sku(sku_id)
 	if sku == null:
@@ -1855,7 +1863,7 @@ func _make_auction_snipe(seed: int, day: int) -> BuyOpportunity:
 	opportunity.offer_label = AuctionSnipePolicy.OFFER_LABEL
 	opportunity.channel = DemandSignalService.Channel.AUCTION
 	opportunity.unit_cost_cents = ask_cents
-	opportunity.quantity = 1
+	opportunity.quantity = AuctionSnipePolicy.quantity_for(sku)
 	opportunity.space_required = 1
 	return opportunity
 

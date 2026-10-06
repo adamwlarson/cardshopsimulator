@@ -218,6 +218,7 @@ func _initialize() -> void:
 	_test_better_marketplace_lead()
 	_test_daily_market_drift()
 	_test_auction_snipes()
+	_test_auction_snipe_sku_pool()
 	_test_auction_inspect_fog()
 	_test_shady_trunk()
 	_test_one_counter_haggle()
@@ -26819,7 +26820,7 @@ func _test_auction_snipe_same_seed_flag_and_event() -> void:
 	_expect_equal(on_snipe != null, true, "AS1: flag-on prep roll offers the snipe")
 	if on_snipe != null:
 		_expect_equal(on_snipe.channel, &"auction", "AS1: snipe uses the auction channel")
-		_expect_equal(on_snipe.sku_id, AuctionSnipePolicy.DEFAULT_SKU_ID, "AS1: SKU is visible")
+		_expect_equal(_bw1_is_legal_snipe_sku(on_snipe.sku_id), true, "AS1: SKU is visible")
 		_expect_equal(on_snipe.unit_cost_cents > 0, true, "AS1: ask is visible")
 		_expect_equal(on_snipe.confidence, &"medium", "AS1: confidence is Medium")
 		_expect_equal(
@@ -26891,8 +26892,8 @@ func _test_auction_snipe_bid_success_and_short_fails() -> void:
 	var ask := snipe.lot_total_cents
 	var att_before := int(_game_state.get("attention_remaining"))
 	var cash_before := int(_economy.get("balance_cents"))
-	var qty_before := _as1_stock_qty(sku)
-	var back_before := _as1_backstock_qty(sku)
+	var qty_before := _as1_owned_qty(sku)
+	var back_before := _as1_owned_backstock(sku)
 	_expect_equal(
 		bool(_demand_signals.call("bid_auction_snipe", snipe)),
 		true,
@@ -26909,12 +26910,12 @@ func _test_auction_snipe_bid_success_and_short_fails() -> void:
 		"AS1: a successful bid drops cash by the ask"
 	)
 	_expect_equal(
-		_as1_stock_qty(sku),
+		_as1_owned_qty(sku),
 		qty_before + 1,
 		"AS1: the lot is received"
 	)
 	_expect_equal(
-		_as1_backstock_qty(sku),
+		_as1_owned_backstock(sku),
 		back_before + 1,
 		"AS1: the lot lands in backstock"
 	)
@@ -27410,17 +27411,38 @@ func _as1_backstock_qty(sku_id: StringName) -> int:
 	return total
 
 
+func _as1_owned_qty(sku_id: StringName) -> int:
+	return int(_inventory_service.call("total_owned", sku_id))
+
+
+func _as1_owned_backstock(sku_id: StringName) -> int:
+	var total := _as1_backstock_qty(sku_id)
+	var model := _inventory_service.get("model") as InventoryModel
+	if model == null:
+		return total
+	for card: CardInstance in model.cards:
+		if (
+			card != null
+			and card.sku_id == sku_id
+			and card.location != null
+			and card.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			total += 1
+	return total
+
+
 func _as1_offer_snapshot(sku_id: StringName) -> Dictionary:
 	return {
+		"sku_id": sku_id,
 		"attention": int(_game_state.get("attention_remaining")),
 		"cash": int(_economy.get("balance_cents")),
-		"qty": _as1_stock_qty(sku_id),
-		"backstock": _as1_backstock_qty(sku_id),
+		"qty": _as1_owned_qty(sku_id),
+		"backstock": _as1_owned_backstock(sku_id),
 	}
 
 
 func _as1_expect_nothing_moved(before: Dictionary, label: String) -> void:
-	var sku := AuctionSnipePolicy.DEFAULT_SKU_ID
+	var sku := StringName(before.get("sku_id", AuctionSnipePolicy.DEFAULT_SKU_ID))
 	_expect_equal(
 		int(_game_state.get("attention_remaining")),
 		int(before.get("attention", -1)),
@@ -27432,12 +27454,12 @@ func _as1_expect_nothing_moved(before: Dictionary, label: String) -> void:
 		"%s leaves cash unchanged" % label
 	)
 	_expect_equal(
-		_as1_stock_qty(sku),
+		_as1_owned_qty(sku),
 		int(before.get("qty", -1)),
 		"%s leaves lots unchanged" % label
 	)
 	_expect_equal(
-		_as1_backstock_qty(sku),
+		_as1_owned_backstock(sku),
 		int(before.get("backstock", -1)),
 		"%s leaves backstock unchanged" % label
 	)
@@ -27452,6 +27474,394 @@ func _as1_hud_has_snipe_row(hud: Node) -> bool:
 		if row != null and row.text.begins_with("Auction"):
 			return true
 	return false
+
+
+func _test_auction_snipe_sku_pool() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bw1_named_gate_and_pool()
+	_test_bw1_cadence_and_identity()
+	_test_bw1_fallback_and_dustway()
+	_test_bw1_bid_decline_expire_save()
+	_test_bw1_confirm_no_truth()
+	_test_bw1_untouched_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bw1_named_gate_and_pool() -> void:
+	_expect_equal(AuctionSnipePolicy.QTY, 1, "BW1: qty stays 1")
+	_expect_equal(
+		AuctionSnipePolicy.DEFAULT_SKU_ID,
+		&"AA-DUST-ETB",
+		"BW1: Dustway remains the shipped DEFAULT"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST == 10
+		and is_equal_approx(AuctionSnipePolicy.COMP_WIDTH, 0.12),
+		true,
+		"BW1: AS1 Attention 10 and width 0.12 stay locked"
+	)
+	_game_state.call("start_new_game")
+	var catalog := (_inventory_service.get("model") as InventoryModel).catalog
+	var pool := AuctionSnipePolicy.pool_sku_ids(catalog)
+	_expect_equal(pool.size(), 8, "BW1: live catalog has eight SEALED / non-bulk SINGLE SKUs")
+	_expect_equal(
+		pool.has(&"AA-SKIE-ETB")
+		and pool.has(&"AA-SKIE-BLST")
+		and pool.has(&"AA-DUST-ETB")
+		and pool.has(&"AA-BASE-088")
+		and pool.has(&"AA-BASE-078")
+		and pool.has(&"AA-SKIE-047")
+		and pool.has(&"AA-SKIE-052")
+		and pool.has(&"AA-SKIE-058")
+		and not pool.has(&"AA-BASE-BULK")
+		and not pool.has(&"ACC-SLV-60")
+		and not pool.has(&"ACC-TOP-25"),
+		true,
+		"BW1: pool is live SEALED + non-bulk SINGLE and never bulk or accessory"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.is_snipe_sku(catalog.get(&"AA-DUST-ETB") as ProductSKU)
+		and AuctionSnipePolicy.is_snipe_sku(catalog.get(&"AA-SKIE-047") as ProductSKU),
+		true,
+		"BW1: Dustway and non-bulk singles stay legal draws"
+	)
+	_expect_equal(
+		not AuctionSnipePolicy.is_snipe_sku(catalog.get(&"ACC-SLV-60") as ProductSKU)
+		and not AuctionSnipePolicy.is_snipe_sku(catalog.get(&"AA-BASE-BULK") as ProductSKU),
+		true,
+		"BW1: accessories and bulk never enter the pool"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.should_offer(AuctionSnipePolicy.RUN_SEED, 1, true),
+		true,
+		"BW1: a live named event still forces the flag on"
+	)
+
+
+func _test_bw1_cadence_and_identity() -> void:
+	const SEED := 20261003
+	var seen: Dictionary = {}
+	var days := _as1_flag_days(SEED)
+	var on_day := int(days.get("on", 0))
+	var off_day := int(days.get("off", 0))
+	_expect_equal(on_day >= 1 and off_day >= 1, true, "BW1: same seed yields both flag days")
+	for day: int in range(1, 25):
+		_as1_reset_on(day)
+		var offer := bool(
+			_demand_signals.call("auction_snipe_should_offer", SEED, day, false)
+		)
+		var signals := _as1_snipe_signals()
+		if not offer:
+			_expect_equal(signals.is_empty(), true, "BW1: quiet flag-off day %d opens none" % day)
+			_expect_equal(
+				_demand_signals.call("open_auction_snipe") == null,
+				true,
+				"BW1: live prep stays shut on quiet day %d" % day
+			)
+			continue
+		_expect_equal(signals.size() <= 1, true, "BW1: day %d opens at most one snipe" % day)
+		_expect_equal(signals.size(), 1, "BW1: day %d with should_offer opens one snipe" % day)
+		if signals.is_empty():
+			continue
+		var dto := signals[0]
+		_expect_equal(_bw1_is_legal_snipe_sku(dto.sku_id), true, "BW1: day %d SKU stays legal" % day)
+		_expect_equal(dto.quantity, 1, "BW1: day %d qty stays 1" % day)
+		_expect_equal(AuctionSnipePolicy.is_snipe_id(dto.opportunity_id), true, "BW1: day %d uses a snipe id" % day)
+		_as1_reset_on(day)
+		var again: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+		_expect_equal(
+			again != null and again.sku_id == dto.sku_id,
+			true,
+			"BW1: same seed and day re-roll the same SKU"
+		)
+		seen[String(dto.sku_id)] = true
+	_as1_reset_on(off_day)
+	_demand_signals.call("start_pack_event", MarketEvent.KIND_HYPE)
+	_expect_equal(_demand_signals.call("active_event") != null, true, "BW1: named event is live")
+	var forced := _as1_snipe_signals()
+	_expect_equal(forced.size(), 1, "BW1: named-event days still force the flag on")
+	if not forced.is_empty():
+		_expect_equal(_bw1_is_legal_snipe_sku(forced[0].sku_id), true, "BW1: forced-event SKU stays legal")
+	_expect_equal(seen.size() >= 2, true, "BW1: a multi-day same-seed sim hits at least two SKUs")
+
+
+func _test_bw1_fallback_and_dustway() -> void:
+	const SEED := 20261003
+	_game_state.call("start_new_game")
+	var catalog := (_inventory_service.get("model") as InventoryModel).catalog
+	var pool := AuctionSnipePolicy.pool_sku_ids(catalog)
+	_expect_equal(pool.has(AuctionSnipePolicy.DEFAULT_SKU_ID), true, "BW1: Dustway stays in the live pool")
+	var dust_only: Array[StringName] = []
+	dust_only.append(AuctionSnipePolicy.DEFAULT_SKU_ID)
+	_expect_equal(
+		AuctionSnipePolicy.pick_sku_id(SEED, 1, dust_only, catalog),
+		AuctionSnipePolicy.DEFAULT_SKU_ID,
+		"BW1: Dustway is a legal draw when it qualifies"
+	)
+	var empty_pool: Array[StringName] = []
+	_expect_equal(
+		AuctionSnipePolicy.pick_sku_id(SEED, 1, empty_pool, catalog),
+		AuctionSnipePolicy.DEFAULT_SKU_ID,
+		"BW1: empty pool falls back to DEFAULT when live"
+	)
+	var missing: Array[StringName] = []
+	missing.append(&"NO-SUCH-SKU")
+	_expect_equal(
+		AuctionSnipePolicy.pick_sku_id(SEED, 2, missing, catalog),
+		AuctionSnipePolicy.DEFAULT_SKU_ID,
+		"BW1: a missing chosen SKU falls back to DEFAULT when live"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.pick_sku_id(SEED, 3, empty_pool, {}),
+		&"",
+		"BW1: empty pool with no live DEFAULT returns none"
+	)
+	var first := AuctionSnipePolicy.pick_sku_id(SEED, 4, pool, catalog)
+	var second := AuctionSnipePolicy.pick_sku_id(SEED, 4, pool, catalog)
+	_expect_equal(first, second, "BW1: pick is deterministic for the same seed and day")
+	_expect_equal(pool.has(first), true, "BW1: the live pick stays inside the pool")
+
+
+func _test_bw1_bid_decline_expire_save() -> void:
+	var on_day := int(_as1_flag_days(AuctionSnipePolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "BW1: bid path needs a flag-on day")
+	if on_day < 1:
+		return
+	_as1_reset_on(on_day)
+	var snipe: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BW1: bid needs the snipe")
+	if snipe == null:
+		return
+	var hidden := int(_demand_signals.call("market_cents_for", snipe.sku_id))
+	_expect_equal(hidden > 0, true, "BW1: ask still reads market_cents_for")
+	_expect_equal(
+		snipe.unit_cost_cents,
+		int(
+			_demand_signals.call(
+				"auction_snipe_ask_cents",
+				hidden,
+				AuctionSnipePolicy.RUN_SEED,
+				on_day
+			)
+		),
+		"BW1: ask still uses shipped steal/trap noise"
+	)
+	var sku := snipe.sku_id
+	var ask := snipe.lot_total_cents
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var qty_before := _as1_owned_qty(sku)
+	var back_before := _as1_owned_backstock(sku)
+	_expect_equal(bool(_demand_signals.call("bid_auction_snipe", snipe)), true, "BW1: bid spends Att + ask")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - AuctionSnipePolicy.ATTENTION_COST,
+		"BW1: bid costs Attention 10"
+	)
+	_expect_equal(int(_economy.get("balance_cents")), cash_before - ask, "BW1: bid pays the ask")
+	_expect_equal(_as1_owned_qty(sku), qty_before + 1, "BW1: bid receives qty 1")
+	_expect_equal(_as1_owned_backstock(sku), back_before + 1, "BW1: bid lands in BACKSTOCK")
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") == null,
+		true,
+		"BW1: a successful bid closes the day"
+	)
+
+	_as1_reset_on(on_day)
+	snipe = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BW1: short-Att path needs the snipe")
+	if snipe == null:
+		return
+	_game_state.set("attention_remaining", 9)
+	var short_att := _as1_offer_snapshot(snipe.sku_id)
+	_expect_equal(bool(_demand_signals.call("bid_auction_snipe", snipe)), false, "BW1: Att 9 fails")
+	_as1_expect_nothing_moved(short_att, "BW1 Attention 9")
+
+	_as1_reset_on(on_day)
+	snipe = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BW1: short-cash path needs the snipe")
+	if snipe == null:
+		return
+	_economy.set("balance_cents", maxi(0, snipe.lot_total_cents - 1))
+	var short_cash := _as1_offer_snapshot(snipe.sku_id)
+	_expect_equal(bool(_demand_signals.call("bid_auction_snipe", snipe)), false, "BW1: cash-short fails")
+	_as1_expect_nothing_moved(short_cash, "BW1 cash short")
+
+	_as1_reset_on(on_day)
+	snipe = _demand_signals.call("open_auction_snipe")
+	_expect_equal(
+		snipe != null and bool(_demand_signals.call("decline_auction_snipe", snipe)),
+		true,
+		"BW1: decline closes the day"
+	)
+	_expect_equal(_demand_signals.call("open_auction_snipe") == null, true, "BW1: declined snipe is gone")
+	var declined: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(declined, "BW1 declined snipe save")
+	_game_state.call("start_new_game")
+	_expect_equal(_game_state.call("restore_save", declined), true, "BW1: restore accepts a declined day")
+	_expect_equal(
+		_demand_signals.call("open_auction_snipe") == null,
+		true,
+		"BW1: restore keeps the declined day closed"
+	)
+
+	_as1_reset_on(on_day)
+	var open_first: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(open_first != null, true, "BW1: save/load open-state needs a snipe")
+	if open_first != null:
+		var open_sku := open_first.sku_id
+		var open_id := open_first.opportunity_id
+		var open_saved: Dictionary = _game_state.call("capture_save")
+		_game_state.call("start_new_game")
+		_expect_equal(_game_state.call("restore_save", open_saved), true, "BW1: restore accepts an open snipe")
+		var restored: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+		_expect_equal(restored != null, true, "BW1: restore re-derives the open snipe")
+		if restored != null:
+			_expect_equal(
+				restored.sku_id == open_sku and restored.opportunity_id == open_id,
+				true,
+				"BW1: same seed, day, and live pool restore the same SKU"
+			)
+
+	_as1_reset_on(on_day)
+	var leftover: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(leftover != null, true, "BW1: expire test needs an open snipe")
+	var leftover_id := leftover.opportunity_id if leftover != null else &""
+	_expect_equal(_game_state.call("start_floor"), true, "BW1: floor opens to settle")
+	_expect_equal(_game_state.call("start_settle"), true, "BW1: unbought snipes expire at close")
+	_expect_equal(_game_state.call("advance_day"), true, "BW1: next day follows settle")
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", leftover_id) == null,
+		true,
+		"BW1: yesterday's snipe does not carry over"
+	)
+
+
+func _test_bw1_confirm_no_truth() -> void:
+	var on_day := int(_as1_flag_days(AuctionSnipePolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "BW1: confirm scan needs a flag-on day")
+	if on_day < 1:
+		return
+	_as1_reset_on(on_day)
+	var snipe: BuyConfirmSignal = _demand_signals.call("open_auction_snipe")
+	_expect_equal(snipe != null, true, "BW1: confirm scan needs the snipe")
+	if snipe == null:
+		return
+	_expect_dto_has_no_truth_fields(snipe, "BW1 auction snipe")
+	var row := DemandSignalPresenter.opportunity_row(snipe)
+	var summary := DemandSignalPresenter.buy_summary(snipe)
+	var snapshot := DemandSignalPresenter.buy_confirm_snapshot(snipe)
+	for text: String in [row, summary, snapshot]:
+		_assert_text_has_no_truth(text, "BW1 auction snipe copy")
+		var lower := text.to_lower()
+		_expect_equal(lower.contains("true_market"), false, "BW1: confirm never shows true_market")
+		_expect_equal(lower.contains("p_buy"), false, "BW1: confirm never shows p_buy")
+		_expect_equal(
+			not lower.contains("steal") and not lower.contains("trap") and not lower.contains("ask_offset"),
+			true,
+			"BW1: confirm never shows the steal/trap bit"
+		)
+	_expect_equal(summary.contains("Medium"), true, "BW1: confirm still shows Medium confidence")
+	_expect_equal(HagglePolicy.can_haggle(&"auction"), false, "BW1: haggle stays out of snipes")
+
+
+func _test_bw1_untouched_and_parked() -> void:
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST == 10
+		and is_equal_approx(AuctionSnipePolicy.COMP_WIDTH, 0.12)
+		and is_equal_approx(AuctionSnipePolicy.ASK_OFFSET_MIN, 0.05)
+		and is_equal_approx(AuctionSnipePolicy.ASK_OFFSET_MAX, 0.16),
+		true,
+		"BW1: AS1 Attention / width / ask noise stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.DEFAULT_SKU_ID == &"AA-SKIE-052",
+		true,
+		"BW1: AT1 trunk stays as shipped"
+	)
+	_expect_equal(
+		PlayerTradePolicy.UNLOCK_REP == 50
+		and MarketplaceLotPolicy.FIRST_DAY == 4
+		and MarketplaceLotPolicy.MIN_PER_DAY == 1
+		and MarketplaceLotPolicy.MAX_PER_DAY == 3
+		and DistributorMenuPolicy.FIRST_DAY == 8,
+		true,
+		"BW1: BT1 / BU1 / BV1 stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BW1: BM1–BO1 stay as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	_expect_equal(
+		catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, 5).size() == 5,
+		true,
+		"BW1: buyer door spawn stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5)
+		and is_equal_approx(
+			catalog.weight_for(whale, 75, NORMAL_CONFIG),
+			catalog.weight_for(whale, 74, NORMAL_CONFIG) * 1.5
+		),
+		true,
+		"BW1: whale weight stays as shipped"
+	)
+	_as1_reset_on(1)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")), 1.0),
+		true,
+		"BW1: the snipe pool is not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string("res://scripts/autoload/demand_signals.gd")
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "auction")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "snipe")
+		and not _function_body_contains(demand_src, "func active_event_traffic_mult(", "snipe")
+		and not _function_body_contains(demand_src, "func active_event_whale_weight_mult(", "snipe"),
+		true,
+		"BW1: the pool stays off sell-through, door spawn, and whale weight"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/auction_snipe_policy.gd"
+	)
+	_expect_equal(
+		not policy_src.contains("event_tag")
+		and not policy_src.contains("archetype")
+		and not policy_src.contains("hype")
+		and not policy_src.contains("staple"),
+		true,
+		"BW1: the pool has no event-tag bias"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("auction_snipe_pool")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("listed_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"BW1: Soft catalog stays CLOSED"
+	)
+	_game_state.call("start_new_game")
+
+
+func _bw1_is_legal_snipe_sku(sku_id: StringName) -> bool:
+	var model := _inventory_service.get("model") as InventoryModel
+	if model == null:
+		return false
+	var sku := model.get_sku(sku_id)
+	return AuctionSnipePolicy.is_snipe_sku(sku)
 
 
 func _test_auction_inspect_fog() -> void:
@@ -27852,8 +28262,8 @@ func _test_bc1_seeded_reveal_and_bid() -> void:
 	var ask := snipe.lot_total_cents
 	var att_before := int(_game_state.get("attention_remaining"))
 	var cash_before := int(_economy.get("balance_cents"))
-	var qty_before := _as1_stock_qty(sku)
-	var back_before := _as1_backstock_qty(sku)
+	var qty_before := _as1_owned_qty(sku)
+	var back_before := _as1_owned_backstock(sku)
 	_expect_equal(
 		bool(_demand_signals.call("bid_auction_snipe", snipe)),
 		true,
@@ -27870,16 +28280,16 @@ func _test_bc1_seeded_reveal_and_bid() -> void:
 		"BC1: Bid without Inspect still pays the ask"
 	)
 	_expect_equal(
-		_as1_stock_qty(sku),
+		_as1_owned_qty(sku),
 		qty_before + 1,
 		"BC1: Bid without Inspect lands the lot"
 	)
 	_expect_equal(
-		_as1_backstock_qty(sku),
+		_as1_owned_backstock(sku),
 		back_before + 1,
 		"BC1: Bid without Inspect lands in backstock"
 	)
-	var acquired := _bc1_acquired_stock(sku)
+	var acquired := _bc1_acquired_item(sku)
 	_expect_equal(acquired != null, true, "BC1: Bid without Inspect stores a stock lot")
 	if acquired != null:
 		_expect_equal(
@@ -27916,7 +28326,7 @@ func _test_bc1_seeded_reveal_and_bid() -> void:
 	ask = snipe.lot_total_cents
 	att_before = int(_game_state.get("attention_remaining"))
 	cash_before = int(_economy.get("balance_cents"))
-	qty_before = _as1_stock_qty(sku)
+	qty_before = _as1_owned_qty(sku)
 	_expect_equal(
 		bool(_demand_signals.call("bid_auction_snipe", snipe)),
 		true,
@@ -27933,11 +28343,11 @@ func _test_bc1_seeded_reveal_and_bid() -> void:
 		"BC1: Bid after a wrong reveal still pays the ask"
 	)
 	_expect_equal(
-		_as1_stock_qty(sku),
+		_as1_owned_qty(sku),
 		qty_before + 1,
 		"BC1: Bid after a wrong reveal lands the lot"
 	)
-	acquired = _bc1_acquired_stock(sku)
+	acquired = _bc1_acquired_item(sku)
 	_expect_equal(acquired != null, true, "BC1: Bid after a wrong reveal stores a lot")
 	if acquired != null:
 		_expect_equal(
@@ -28201,6 +28611,11 @@ func _test_bc1_door_whale_fee_bb1_stay() -> void:
 
 
 func _bc1_acquired_stock(sku_id: StringName) -> StockLot:
+	var item := _bc1_acquired_item(sku_id)
+	return item as StockLot
+
+
+func _bc1_acquired_item(sku_id: StringName) -> Object:
 	var model := _inventory_service.get("model") as InventoryModel
 	if model == null:
 		return null
@@ -28213,7 +28628,17 @@ func _bc1_acquired_stock(sku_id: StringName) -> StockLot:
 		if lot.location == null or lot.location.type != InventoryLocation.Type.BACKSTOCK:
 			continue
 		found = lot
-	return found
+	if found != null:
+		return found
+	for card: CardInstance in model.cards:
+		if (
+			card != null
+			and card.sku_id == sku_id
+			and card.location != null
+			and card.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			return card
+	return null
 
 
 func _test_shady_trunk() -> void:

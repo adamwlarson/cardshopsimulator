@@ -4,6 +4,7 @@ extends RefCounted
 ## systems §3 auction snipes. Prep-only timed lot. Seeded flag can
 ## offer exactly one snipe. A live named settle event forces the
 ## flag on for that prep. Quiet days use the seeded flag alone.
+## BW1: SKU is a seeded draw from live SEALED / non-bulk SINGLE.
 const RUN_SEED := 20261003
 const ATTENTION_COST := 10
 const COMP_WIDTH := 0.12
@@ -14,6 +15,9 @@ const DEFAULT_SKU_ID := &"AA-DUST-ETB"
 const OFFER_LABEL := "Auction snipe"
 const CONDITION_CUE := "Photo only — inspect recommended"
 const CONFIDENCE := &"medium"
+const QTY := 1
+const BULK_TAG := &"bulk"
+const LANE_SKU := 3
 
 
 static func attention_cost(configured: int = 0) -> int:
@@ -48,6 +52,51 @@ static func should_offer(seed: int, day: int, named_event_live: bool) -> bool:
 	return flag_on(seed, day)
 
 
+static func is_snipe_sku(sku: ProductSKU) -> bool:
+	if sku == null:
+		return false
+	if sku.product_class == ProductSKU.ProductClass.SEALED:
+		return true
+	if sku.product_class != ProductSKU.ProductClass.SINGLE:
+		return false
+	return not sku.tags.has(BULK_TAG)
+
+
+static func pool_sku_ids(catalog: Dictionary) -> Array[StringName]:
+	var raw: Array[String] = []
+	for value: Variant in catalog.values():
+		var sku := value as ProductSKU
+		if is_snipe_sku(sku):
+			raw.append(String(sku.id))
+	raw.sort()
+	var ids: Array[StringName] = []
+	for item: String in raw:
+		ids.append(StringName(item))
+	return ids
+
+
+static func pick_sku_id(
+	seed: int,
+	day: int,
+	pool: Array[StringName],
+	catalog: Dictionary = {}
+) -> StringName:
+	var chosen := &""
+	if not pool.is_empty():
+		var shuffled := _shuffled(pool, seed, day)
+		if not shuffled.is_empty():
+			chosen = shuffled[0]
+	if not chosen.is_empty() and (catalog.is_empty() or _catalog_has(catalog, chosen)):
+		return chosen
+	if _catalog_has(catalog, DEFAULT_SKU_ID):
+		return DEFAULT_SKU_ID
+	return &""
+
+
+static func quantity_for(_sku: ProductSKU = null) -> int:
+	return QTY
+
+
 static func noisy_basis_cents(
 	basis_cents: int,
 	seed: int,
@@ -78,6 +127,26 @@ static func ask_cents(
 	var delta := rng.randf_range(ASK_OFFSET_MIN, ASK_OFFSET_MAX)
 	var factor := 1.0 + delta if over else 1.0 - delta
 	return maxi(1, roundi(float(noisy) * factor))
+
+
+static func _catalog_has(catalog: Dictionary, sku_id: StringName) -> bool:
+	if catalog.is_empty() or sku_id.is_empty():
+		return false
+	return catalog.has(sku_id)
+
+
+static func _shuffled(pool: Array[StringName], seed: int, day: int) -> Array[StringName]:
+	var ids: Array[StringName] = pool.duplicate()
+	if ids.size() <= 1:
+		return ids
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _mix(seed, day, LANE_SKU)
+	for index: int in range(ids.size() - 1, 0, -1):
+		var swap_at := rng.randi_range(0, index)
+		var held := ids[index]
+		ids[index] = ids[swap_at]
+		ids[swap_at] = held
+	return ids
 
 
 static func _mix(seed: int, day: int, lane: int) -> int:
