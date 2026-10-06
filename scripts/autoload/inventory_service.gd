@@ -603,13 +603,17 @@ func confirm_customer_sale(sku_id: StringName, sale_price_cents: int) -> bool:
 	GameState.clear_last_nm_mismatch()
 	var slab := _listed_slab_for(sku_id)
 	if slab != null:
-		return _resolve_slab_sale(slab, sale_price_cents)
+		if not _resolve_slab_sale(slab, sale_price_cents):
+			return false
+		_record_in_shop_sale(sku_id, sale_price_cents)
+		return true
 	var card := listed_card_for(sku_id)
 	if card != null:
 		if not model.remove_card(card):
 			return false
 		Economy.record_income(sale_price_cents, &"customer_sale", "Customer sale")
 		_apply_nm_mismatch_if_needed(card, sale_price_cents)
+		_record_in_shop_sale(sku_id, sale_price_cents)
 		EventBus.publish_inventory_changed(sku_id, _total_quantity(sku_id))
 		return true
 	for lot: StockLot in model.stock_lots:
@@ -626,6 +630,7 @@ func confirm_customer_sale(sku_id: StringName, sale_price_cents: int) -> bool:
 			if not remove_stock_from(sku_id, lot.location, 1):
 				return false
 			Economy.record_income(sale_price_cents, &"customer_sale", "Customer sale")
+			_record_in_shop_sale(sku_id, sale_price_cents)
 			return true
 	return false
 
@@ -846,6 +851,13 @@ func listed_card_for(sku_id: StringName) -> CardInstance:
 		):
 			return card
 	return null
+
+
+func _record_in_shop_sale(sku_id: StringName, sale_price_cents: int) -> void:
+	# BZ1: skip mismatch refunds. They do not create or delete an entry.
+	if GameState.last_nm_mismatch_sale:
+		return
+	GameState.note_completed_in_shop_sale(sku_id, sale_price_cents)
 
 
 func _apply_nm_mismatch_if_needed(card: CardInstance, sale_price_cents: int) -> void:

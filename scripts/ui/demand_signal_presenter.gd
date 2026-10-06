@@ -516,13 +516,53 @@ static func buy_confirm_snapshot(dto: BuyConfirmSignal) -> String:
 		lines.append("Bid · Att %d" % AuctionSnipePolicy.attention_cost())
 	if ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
 		lines.append("Trunk · Buy, Report, or Walk")
-	lines.append_array(PackedStringArray([
+	lines.append(
 		"%s–%s · %s · %s" % [
 			format_cents(dto.shown_comp_low_cents),
 			format_cents(dto.shown_comp_high_cents),
 			band_chip(dto.shown_demand_band),
 			String(dto.confidence).to_upper(),
-		],
-		condition_line(dto.condition_cue, dto.grader, dto.grade),
-	]))
+		]
+	)
+	var history_line := last_sold_in_shop_line(dto.sku_id)
+	if not history_line.is_empty():
+		lines.append(history_line)
+	lines.append(condition_line(dto.condition_cue, dto.grader, dto.grade))
 	return "\n".join(lines)
+
+
+static func last_sold_in_shop_line(sku_id: StringName) -> String:
+	var history := _sale_history()
+	if history == null or sku_id.is_empty():
+		return ""
+	var entry := history.lookup(sku_id)
+	if entry.is_empty():
+		return ""
+	return "Last sold in-shop: %s, %s" % [
+		format_cents(int(entry.get(SaleHistory.UNIT_PRICE_KEY, 0))),
+		SaleHistory.days_ago_label(
+			_sale_history_today(),
+			int(entry.get(SaleHistory.DAY_KEY, 0))
+		),
+	]
+
+
+static func _sale_history() -> SaleHistory:
+	var game_state := _game_state_node()
+	if game_state == null:
+		return null
+	return game_state.get("sale_history") as SaleHistory
+
+
+static func _sale_history_today() -> int:
+	var game_state := _game_state_node()
+	if game_state == null:
+		return 1
+	return int(game_state.get("current_day"))
+
+
+static func _game_state_node() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	return tree.root.get_node_or_null("GameState")

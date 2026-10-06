@@ -48,6 +48,8 @@ var last_nm_mismatch_refund_cents: int = 0
 var last_nm_mismatch_rep_delta: int = 0
 var last_fair_price_settle_rep_delta: int = 0
 var listed_sale_log := ListedSaleDayLog.new()
+## BZ1: most-recent completed in-shop sale per sku_id. Display only.
+var sale_history := SaleHistory.new()
 var last_buylist_drip_rep_delta: int = 0
 var buylist_drip_applied: bool = false
 var buylist_pcts := BuylistPctSettings.new()
@@ -108,6 +110,7 @@ func start_new_game() -> void:
 	clear_last_nm_mismatch()
 	last_fair_price_settle_rep_delta = 0
 	listed_sale_log.reset()
+	sale_history.reset()
 	last_buylist_drip_rep_delta = 0
 	buylist_drip_applied = false
 	buylist_pcts.reset()
@@ -534,6 +537,12 @@ func note_completed_listed_sale(
 	if suggested_cents <= 0:
 		suggested_cents = DemandSignals.suggested_for_listed_sale(sku_id, ask_cents)
 	listed_sale_log.note_completed_sale(ask_cents, suggested_cents, balance_config)
+
+
+func note_completed_in_shop_sale(sku_id: StringName, unit_price_cents: int) -> void:
+	# BZ1: completed in-shop sale only. Price is what the customer paid
+	# per unit. Online fills, refunds, and mismatch refunds stay out.
+	sale_history.record(sku_id, unit_price_cents, current_day)
 
 
 func apply_fair_price_settle_rep() -> int:
@@ -985,6 +994,7 @@ func capture_save() -> Dictionary:
 		DistributorMenuPolicy.SAVE_KEY: DemandSignals.closed_opportunity_ids_to_save(),
 		PlayerTradePolicy.SAVE_KEY: DemandSignals.player_trade_closed_day_to_save(),
 		RegularsReturnPolicy.SAVE_KEY: DemandSignals.regulars_return_to_save(),
+		SaleHistory.SAVE_KEY: sale_history.snapshot(),
 	}
 	var serialized := JSON.stringify(payload).to_utf8_buffer()
 	QaInstrumentation.record_save_pre_write(serialized)
@@ -1082,6 +1092,11 @@ func restore_save(data: Dictionary) -> bool:
 	DemandSignals.apply_regulars_return_save(
 		data.get(RegularsReturnPolicy.SAVE_KEY, {})
 	)
+	var saved_sale_history: Variant = data.get(SaleHistory.SAVE_KEY, {})
+	if saved_sale_history is Dictionary:
+		sale_history.apply_save(saved_sale_history as Dictionary)
+	else:
+		sale_history.reset()
 	var serialized := JSON.stringify(data).to_utf8_buffer()
 	QaInstrumentation.record_save_post_load(serialized)
 	EventBus.reputation_changed.emit(current_reputation)

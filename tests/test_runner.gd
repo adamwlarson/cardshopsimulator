@@ -215,6 +215,7 @@ func _initialize() -> void:
 	_test_recurring_player_trade_pool()
 	_test_regulars_return()
 	_test_regulars_relationship_stock()
+	_test_in_shop_sale_history()
 	_test_distributor_moq_worse()
 	_test_better_marketplace_lead()
 	_test_daily_market_drift()
@@ -25537,6 +25538,608 @@ func _by1_delist(sku_id: StringName) -> void:
 		if lot != null:
 			lot.listed_price_cents = 0
 			lot.qty = 0
+
+
+func _test_in_shop_sale_history() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bz1_named_gate()
+	_test_bz1_same_seed_history_line()
+	_test_bz1_out_paths_never_record()
+	_test_bz1_confirm_no_truth_byte_identical()
+	_test_bz1_save_load_and_untouched()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bz1_named_gate() -> void:
+	_expect_equal(
+		SaleHistory.SAVE_KEY,
+		"sale_history",
+		"BZ1: new save key is sale_history"
+	)
+	_expect_equal(
+		SaleHistory.UNIT_PRICE_KEY == "unit_price_cents"
+		and SaleHistory.DAY_KEY == "day",
+		true,
+		"BZ1: map values are {unit_price_cents, day}"
+	)
+	_expect_equal(
+		SaleHistory.days_ago_label(4, 4),
+		"today",
+		"BZ1: N=0 is today"
+	)
+	_expect_equal(
+		SaleHistory.days_ago_label(5, 4),
+		"1 day ago",
+		"BZ1: N=1 is 1 day ago"
+	)
+	_expect_equal(
+		SaleHistory.days_ago_label(7, 4),
+		"3 days ago",
+		"BZ1: N=3 is 3 days ago"
+	)
+	var history := SaleHistory.new()
+	_expect_equal(history.has(&"ACC-SLV-60"), false, "BZ1: empty store has no entry")
+	_expect_equal(
+		history.record(&"ACC-SLV-60", 4200, 2),
+		true,
+		"BZ1: record keeps the most recent in-shop sale"
+	)
+	var entry := history.lookup(&"ACC-SLV-60")
+	_expect_equal(
+		int(entry.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		4200,
+		"BZ1: lookup returns unit_price_cents"
+	)
+	_expect_equal(int(entry.get(SaleHistory.DAY_KEY, 0)), 2, "BZ1: lookup returns day")
+	_expect_equal(
+		history.record(&"ACC-SLV-60", 1999, 5),
+		true,
+		"BZ1: a second sale overwrites the same sku_id"
+	)
+	entry = history.lookup(&"ACC-SLV-60")
+	_expect_equal(
+		int(entry.get(SaleHistory.UNIT_PRICE_KEY, 0)) == 1999
+		and int(entry.get(SaleHistory.DAY_KEY, 0)) == 5,
+		true,
+		"BZ1: overwrite keeps only the latest sale"
+	)
+	_expect_equal(
+		history.lookup(&"AA-SKIE-052").is_empty(),
+		true,
+		"BZ1: no class/set fallback for a different sku_id"
+	)
+	_expect_equal(history.record(&"", 100, 1), false, "BZ1: empty sku_id is rejected")
+	_expect_equal(history.record(&"ACC-SLV-60", 0, 1), false, "BZ1: zero price is rejected")
+	_expect_equal(
+		history.lookup(&"ACC-SLV-60").get(SaleHistory.UNIT_PRICE_KEY, 0),
+		1999,
+		"BZ1: a rejected record does not change the map"
+	)
+
+
+func _test_bz1_same_seed_history_line() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	var lot: StockLot = _inventory_service.call("get_lot", SKU)
+	_expect_equal(lot != null, true, "BZ1: seeded sleeve lot exists")
+	if lot == null:
+		return
+	var first_price := lot.listed_price_cents
+	_expect_equal(first_price > 0, true, "BZ1: seeded sleeve lot is listed")
+	var sold := _ao1_sell_listed()
+	_expect_equal(sold != null, true, "BZ1: first in-shop sale completes")
+	if sold != null:
+		_expect_equal(sold.target_sku, SKU, "BZ1: first sale is SKU X")
+		_expect_equal(
+			sold.listed_price_cents,
+			first_price,
+			"BZ1: first sale pays the listed price"
+		)
+	var history: SaleHistory = _game_state.get("sale_history")
+	var entry := history.lookup(SKU)
+	_expect_equal(
+		int(entry.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		first_price,
+		"BZ1: store records the price the customer paid"
+	)
+	_expect_equal(
+		int(entry.get(SaleHistory.DAY_KEY, 0)),
+		1,
+		"BZ1: store records the sale day"
+	)
+	var today_line := _bz1_expected_line(first_price, "today")
+	_bz1_expect_line_on_channels(SKU, today_line, "same-day")
+	_game_state.set("current_day", 2)
+	_bz1_expect_line_on_channels(
+		SKU,
+		_bz1_expected_line(first_price, "1 day ago"),
+		"N=1"
+	)
+	_game_state.set("current_day", 4)
+	_bz1_expect_line_on_channels(
+		SKU,
+		_bz1_expected_line(first_price, "3 days ago"),
+		"N=3"
+	)
+	var second_price := 4200
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", SKU, second_price)),
+		true,
+		"BZ1: a second in-shop sale at $Q completes"
+	)
+	entry = history.lookup(SKU)
+	_expect_equal(
+		int(entry.get(SaleHistory.UNIT_PRICE_KEY, 0)) == second_price
+		and int(entry.get(SaleHistory.DAY_KEY, 0)) == 4,
+		true,
+		"BZ1: second sale overwrites to $Q / that day"
+	)
+	_bz1_expect_line_on_channels(
+		SKU,
+		_bz1_expected_line(second_price, "today"),
+		"overwrite"
+	)
+	var other := _bz1_buy_signal(&"AA-SKIE-052", DemandSignalService.Channel.DISTRIBUTOR)
+	_expect_equal(
+		DemandSignalPresenter.buy_confirm_snapshot(other).contains("Last sold in-shop"),
+		false,
+		"BZ1: a different primary sku_id hides the line"
+	)
+
+
+func _test_bz1_out_paths_never_record() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	var history: SaleHistory = _game_state.get("sale_history")
+	_expect_equal(history.has(SKU), false, "BZ1: never sold in-shop starts empty")
+	_bz1_expect_no_line_on_channels(SKU, "never sold")
+	var walk_queue := _ah1_hooked_queue()
+	var waiter := _ah1_waiting_buyer()
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(walk_queue.enqueue(waiter), true, "BZ1: walkout waiter enqueues")
+	walk_queue.tick_waiting(0.05)
+	_expect_equal(history.has(SKU), false, "BZ1: a walkout never creates an entry")
+	walk_queue.free()
+	var refuse_queue := CustomerQueue.new()
+	refuse_queue.configure(_inventory_service)
+	var refused := _ao1_listed_buyer()
+	_expect_equal(refuse_queue.enqueue(refused), true, "BZ1: refuse path enqueues")
+	_expect_equal(refuse_queue.refuse(), true, "BZ1: refuse resolves")
+	_expect_equal(history.has(SKU), false, "BZ1: a refuse never creates an entry")
+	refuse_queue.free()
+	var seller := CustomerProfile.new()
+	seller.trade_intent = CustomerProfile.TradeIntent.SELLING_TO_SHOP
+	seller.buylist_signal = BuyConfirmSignal.new()
+	seller.buylist_signal.sku_id = SKU
+	seller.buylist_signal.display_name = "Penny Sleeve Pack"
+	seller.buylist_signal.quantity = 1
+	seller.buylist_signal.unit_cost_cents = 240
+	seller.buylist_signal.lot_total_cents = 240
+	seller.buylist_signal.can_confirm = true
+	var buy_queue := CustomerQueue.new()
+	buy_queue.configure(_inventory_service)
+	_expect_equal(buy_queue.enqueue(seller), true, "BZ1: buylist seller enqueues")
+	_expect_equal(buy_queue.accept_buylist_offer(), true, "BZ1: buylist buy lands")
+	_expect_equal(history.has(SKU), false, "BZ1: a buylist buy never creates an entry")
+	buy_queue.free()
+	_game_state.call("start_new_game")
+	history = _game_state.get("sale_history")
+	var listed: Dictionary = _i1_list_unique_card(2500)
+	_expect_equal(bool(listed.get("ok", false)), true, "BZ1: online list holds a unique card")
+	var listing := listed.get("listing") as OnlineListing
+	_expect_equal(listing != null, true, "BZ1: online listing record exists")
+	var online_sku := listing.sku_id if listing != null else &""
+	var service: Object = _economy.get("online_listings")
+	service.call("tick_shipping")
+	service.call("tick_shipping")
+	_expect_equal(
+		listing != null and listing.status == OnlineListing.Status.FILLED,
+		true,
+		"BZ1: online fill completes"
+	)
+	_expect_equal(
+		history.has(online_sku),
+		false,
+		"BZ1: an online fill never creates an entry"
+	)
+	_game_state.call("note_completed_listed_sale", SKU, 599)
+	_expect_equal(
+		history.has(SKU),
+		false,
+		"BZ1: BK1 listed-sale settle does not write sale history"
+	)
+	_game_state.call("start_new_game")
+	history = _game_state.get("sale_history")
+	var sold := _ao1_sell_listed()
+	_expect_equal(sold != null, true, "BZ1: prior in-shop sale seeds history")
+	var kept := history.lookup(SKU)
+	_game_state.call("note_nm_mismatch", 300, -2)
+	_expect_equal(
+		int(history.lookup(SKU).get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		int(kept.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		"BZ1: a refund does not change an existing entry"
+	)
+	_bb1_reset()
+	history = _game_state.get("sale_history")
+	var fog := _bb1_acquire_fog_single(
+		&"bz1-mismatch",
+		&"AA-BASE-088",
+		&"marketplace",
+		4_000,
+		CardInstance.Condition.LP,
+		false
+	)
+	_expect_equal(fog != null, true, "BZ1: mismatch card lands")
+	if fog != null:
+		_bb1_stage_listed(fog, 10_000)
+		_expect_equal(
+			bool(_inventory_service.call("confirm_customer_sale", fog.sku_id, 10_000)),
+			true,
+			"BZ1: mismatch sale still resolves at the register"
+		)
+		_expect_equal(
+			bool(_game_state.get("last_nm_mismatch_sale")),
+			true,
+			"BZ1: mismatch refund fires"
+		)
+		_expect_equal(
+			history.has(fog.sku_id),
+			false,
+			"BZ1: a mismatch refund never creates an entry"
+		)
+	var trade_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/player_trade_service.gd"
+	)
+	_expect_equal(
+		not trade_src.contains("note_completed_in_shop_sale")
+		and not trade_src.contains("sale_history"),
+		true,
+		"BZ1: accepting a trade never writes sale history"
+	)
+	var online_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/online_listing_service.gd"
+	)
+	_expect_equal(
+		not online_src.contains("note_completed_in_shop_sale")
+		and not online_src.contains("sale_history"),
+		true,
+		"BZ1: online fill path never writes sale history"
+	)
+
+
+func _test_bz1_confirm_no_truth_byte_identical() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	var dto := _bz1_buy_signal(SKU, DemandSignalService.Channel.MARKETPLACE)
+	var without := DemandSignalPresenter.buy_confirm_snapshot(dto)
+	var price_location := InventoryLocation.new(InventoryLocation.Type.SHELF)
+	var price := DemandSignalPresenter.price_summary(
+		_demand_signals.call("price_signal", SKU, 599, price_location) as PriceConfirmSignal
+	)
+	var haggle_without: float = _demand_signals.call(
+		"haggle_accept_chance",
+		500,
+		dto.lot_total_cents,
+		int(_game_state.get("current_reputation")),
+		dto.channel
+	)
+	_expect_equal(
+		without.contains("Last sold in-shop"),
+		false,
+		"BZ1: no history keeps the line hidden"
+	)
+	_expect_equal(
+		without.contains("true_market")
+		or without.contains("p_buy")
+		or without.to_lower().contains("forecast")
+		or without.to_lower().contains("will sell"),
+		false,
+		"BZ1: buy-confirm without history never shows truth / forecast"
+	)
+	_expect_equal(
+		price.contains("Last sold in-shop"),
+		false,
+		"BZ1: price confirm never shows the history line"
+	)
+	_game_state.call("note_completed_in_shop_sale", SKU, 4200)
+	var with_history := DemandSignalPresenter.buy_confirm_snapshot(dto)
+	var expected := _bz1_expected_line(4200, "today")
+	_expect_equal(
+		with_history.contains(expected),
+		true,
+		"BZ1: history appends the factual line"
+	)
+	_expect_equal(
+		with_history.replace("\n" + expected, ""),
+		without,
+		"BZ1: comp / band / confidence / ask stay byte-identical with history"
+	)
+	_expect_equal(
+		with_history.contains("true_market")
+		or with_history.contains("p_buy")
+		or with_history.to_lower().contains("forecast")
+		or with_history.to_lower().contains("will sell"),
+		false,
+		"BZ1: buy-confirm with history never shows truth / forecast"
+	)
+	var haggle_with: float = _demand_signals.call(
+		"haggle_accept_chance",
+		500,
+		dto.lot_total_cents,
+		int(_game_state.get("current_reputation")),
+		dto.channel
+	)
+	_expect_equal(
+		is_equal_approx(haggle_with, haggle_without),
+		true,
+		"BZ1: haggle odds stay byte-identical with history"
+	)
+	var price_after := DemandSignalPresenter.price_summary(
+		_demand_signals.call("price_signal", SKU, 599, price_location) as PriceConfirmSignal
+	)
+	_expect_equal(
+		price_after,
+		price,
+		"BZ1: price confirm is unchanged when history exists"
+	)
+	_expect_equal(
+		price_after.contains("Last sold in-shop"),
+		false,
+		"BZ1: price confirm stays dark this pick"
+	)
+	_expect_dto_has_no_truth_fields(dto, "BZ1 buy confirm")
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BZ1: HUD loads for buy-confirm")
+	if hud != null:
+		_select_buy_on_hud(hud, dto)
+		Callable(hud, "_open_buy_confirm").call()
+		var confirm_summary := hud.get_node_or_null("%BuyConfirmSummary") as Label
+		_expect_equal(confirm_summary != null, true, "BZ1: buy-confirm panel is present")
+		if confirm_summary != null:
+			_expect_equal(
+				confirm_summary.text.contains(expected),
+				true,
+				"BZ1: HUD buy-confirm shows the last-sold line"
+			)
+			_assert_text_has_no_truth(confirm_summary.text, "BZ1 HUD buy confirm")
+		var price_summary := hud.get_node_or_null("%PriceConfirmSummary") as Label
+		if price_summary != null:
+			_expect_equal(
+				price_summary.text.contains("Last sold in-shop"),
+				false,
+				"BZ1: HUD price confirm never shows the history line"
+			)
+		hud.free()
+	for path: String in [
+		"res://scripts/economy/sale_history.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/ui/player_trade_presenter.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/autoload/inventory_service.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BZ1: %s never shows true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BZ1: %s never shows p_buy" % path
+		)
+
+
+func _test_bz1_save_load_and_untouched() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	_expect_equal(_ao1_sell_listed() != null, true, "BZ1: save needs an in-shop sale")
+	var history: SaleHistory = _game_state.get("sale_history")
+	var before := history.lookup(SKU)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(saved.has(SaleHistory.SAVE_KEY), true, "BZ1: capture_save writes sale_history")
+	var saved_map: Variant = saved.get(SaleHistory.SAVE_KEY, {})
+	_expect_equal(saved_map is Dictionary, true, "BZ1: sale_history save is a map")
+	if saved_map is Dictionary:
+		var sku_entry: Variant = (saved_map as Dictionary).get(String(SKU), {})
+		_expect_equal(sku_entry is Dictionary, true, "BZ1: per-SKU save row exists")
+		if sku_entry is Dictionary:
+			_expect_equal(
+				int((sku_entry as Dictionary).get(SaleHistory.UNIT_PRICE_KEY, 0)),
+				int(before.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+				"BZ1: save keeps unit_price_cents"
+			)
+			_expect_equal(
+				int((sku_entry as Dictionary).get(SaleHistory.DAY_KEY, 0)),
+				int(before.get(SaleHistory.DAY_KEY, 0)),
+				"BZ1: save keeps day"
+			)
+	_assert_payload_has_no_truth(saved, "BZ1 sale history save")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		(_game_state.get("sale_history") as SaleHistory).has(SKU),
+		false,
+		"BZ1: a new game clears sale history"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BZ1: restore_save accepts a history snapshot"
+	)
+	var restored := (_game_state.get("sale_history") as SaleHistory).lookup(SKU)
+	_expect_equal(
+		int(restored.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		int(before.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		"BZ1: restore puts unit_price_cents back"
+	)
+	_expect_equal(
+		int(restored.get(SaleHistory.DAY_KEY, 0)),
+		int(before.get(SaleHistory.DAY_KEY, 0)),
+		"BZ1: restore puts day back"
+	)
+	var old_save: Dictionary = saved.duplicate(true)
+	old_save.erase(SaleHistory.SAVE_KEY)
+	_expect_equal(
+		_game_state.call("restore_save", old_save),
+		true,
+		"BZ1: old saves without the key still load"
+	)
+	_expect_equal(
+		(_game_state.get("sale_history") as SaleHistory).has(SKU),
+		false,
+		"BZ1: old saves load clean with empty history"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	var at_49 := catalog.roll_spawn(SEED, 49, NORMAL_CONFIG, 5)
+	var at_50 := catalog.roll_spawn(SEED, 50, NORMAL_CONFIG, 5)
+	_expect_equal(at_49.size(), at_50.size(), "BZ1: door spawn count at Rep 50 matches Rep 49")
+	_expect_equal(
+		",".join(_aj1_ids(at_49)),
+		",".join(_aj1_ids(at_50)),
+		"BZ1: same-seed door roll at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 50, NORMAL_CONFIG),
+			catalog.weight_for(whale, 49, NORMAL_CONFIG)
+		),
+		true,
+		"BZ1: whale weight at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", SKU)), 1.0),
+		true,
+		"BZ1: last-sold history is not a sell weight"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BZ1: BM1–BO1 stay as shipped"
+	)
+	_expect_equal(
+		PlayerTradePolicy.UNLOCK_REP == 50
+		and MarketplaceLotPolicy.FIRST_DAY == 4
+		and MarketplaceLotPolicy.MIN_PER_DAY == 1
+		and MarketplaceLotPolicy.MAX_PER_DAY == 3
+		and DistributorMenuPolicy.FIRST_DAY == 8,
+		true,
+		"BZ1: BT1 / BU1 / BV1 stay as shipped"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST == 10
+		and is_equal_approx(AuctionSnipePolicy.COMP_WIDTH, 0.12)
+		and AuctionSnipePolicy.DEFAULT_SKU_ID == &"AA-DUST-ETB"
+		and AuctionSnipePolicy.QTY == 1,
+		true,
+		"BZ1: AS1 / BW1 stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.REPORT_REP_GAIN == 2
+		and is_equal_approx(ShadyTrunkPolicy.FAKE_SLAB_RATE, 0.08)
+		and is_equal_approx(ShadyTrunkPolicy.COMP_WIDTH, 0.22)
+		and ShadyTrunkPolicy.DEFAULT_SKU_ID == &"AA-SKIE-052"
+		and ShadyTrunkPolicy.QTY == 1,
+		true,
+		"BZ1: AT1 / BX1 stay as shipped"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.UNLOCK_REP == 50
+		and RegularsReturnPolicy.QUEUE_CAP == 1
+		and RegularsReturnPolicy.SAVE_KEY == "regulars_return",
+		true,
+		"BZ1: AO1 / BY1 Regulars stay as shipped"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("regulars_relationship")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("listed_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"BZ1: Soft catalog stays CLOSED"
+	)
+	_game_state.call("start_new_game")
+
+
+func _bz1_expected_line(unit_price_cents: int, when: String) -> String:
+	return "Last sold in-shop: %s, %s" % [
+		DemandSignalPresenter.format_cents(unit_price_cents),
+		when,
+	]
+
+
+func _bz1_buy_signal(
+	sku_id: StringName,
+	channel: DemandSignalService.Channel
+) -> BuyConfirmSignal:
+	return _demand_signals.call("buy_signal", sku_id, channel, 1_000, 1) as BuyConfirmSignal
+
+
+func _bz1_expect_line_on_channels(
+	sku_id: StringName,
+	expected: String,
+	label: String
+) -> void:
+	var channels: Array[DemandSignalService.Channel] = [
+		DemandSignalService.Channel.DISTRIBUTOR,
+		DemandSignalService.Channel.BUYLIST,
+		DemandSignalService.Channel.MARKETPLACE,
+		DemandSignalService.Channel.AUCTION,
+		DemandSignalService.Channel.SHADY,
+	]
+	for channel: DemandSignalService.Channel in channels:
+		var dto := _bz1_buy_signal(sku_id, channel)
+		var snapshot := DemandSignalPresenter.buy_confirm_snapshot(dto)
+		_expect_equal(
+			snapshot.contains(expected),
+			true,
+			"BZ1: %s %s buy-confirm shows %s" % [label, dto.channel, expected]
+		)
+		_assert_text_has_no_truth(snapshot, "BZ1 %s %s confirm" % [label, dto.channel])
+	var trade := PlayerTradeOffer.new()
+	trade.id = &"bz1-trade"
+	trade.give_sku_id = &"AA-DUST-ETB"
+	trade.give_display_name = "Dustway Chronicles Explorer Box"
+	trade.give_condition = "Sealed · NM"
+	trade.give_qty = 1
+	trade.receive_sku_id = sku_id
+	trade.receive_display_name = "Penny Sleeve Pack"
+	trade.receive_condition = "NM"
+	trade.receive_qty = 1
+	var trade_snapshot := PlayerTradePresenter.confirm_snapshot(trade)
+	_expect_equal(
+		trade_snapshot.contains(expected),
+		true,
+		"BZ1: %s trade buy-confirm shows %s" % [label, expected]
+	)
+
+
+func _bz1_expect_no_line_on_channels(sku_id: StringName, label: String) -> void:
+	for channel: DemandSignalService.Channel in [
+		DemandSignalService.Channel.DISTRIBUTOR,
+		DemandSignalService.Channel.BUYLIST,
+		DemandSignalService.Channel.MARKETPLACE,
+		DemandSignalService.Channel.AUCTION,
+		DemandSignalService.Channel.SHADY,
+	]:
+		var snapshot := DemandSignalPresenter.buy_confirm_snapshot(
+			_bz1_buy_signal(sku_id, channel)
+		)
+		_expect_equal(
+			snapshot.contains("Last sold in-shop"),
+			false,
+			"BZ1: %s %s buy-confirm hides the line" % [label, channel]
+		)
 
 
 func _test_distributor_moq_worse() -> void:
