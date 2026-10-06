@@ -383,6 +383,7 @@ func _update_phase(phase: int) -> void:
 			phase_button.text = "Open floor"
 			_maybe_show_distributor_menu_toast()
 			_maybe_show_marketplace_lots_toast(true)
+			_maybe_show_player_trade_toast(true)
 		GameState.DayPhase.FLOOR:
 			phase_chip.theme_type_variation = &"PhaseChipFloor"
 			phase_label.theme_type_variation = &"ChipLabelInverse"
@@ -503,6 +504,19 @@ func _maybe_show_distributor_menu_toast(append: bool = false) -> void:
 func _maybe_show_marketplace_lots_toast(append: bool = false) -> void:
 	var message := DemandSignalPresenter.marketplace_lots_toast(
 		DemandSignals.posted_marketplace_lot_count()
+	)
+	if message.is_empty():
+		return
+	if append and not beat_toast.text.is_empty():
+		beat_toast.text = "%s\n%s" % [beat_toast.text, message]
+	else:
+		beat_toast.text = message
+	beat_toast.show()
+
+
+func _maybe_show_player_trade_toast(append: bool = false) -> void:
+	var message := DemandSignalPresenter.player_trade_toast(
+		DemandSignals.open_player_trade() != null
 	)
 	if message.is_empty():
 		return

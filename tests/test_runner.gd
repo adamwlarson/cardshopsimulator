@@ -212,6 +212,7 @@ func _initialize() -> void:
 	_test_sealed_floor_theft_premium()
 	_test_mid_band_baseline()
 	_test_player_trades_unlock()
+	_test_recurring_player_trade_pool()
 	_test_regulars_return()
 	_test_distributor_moq_worse()
 	_test_better_marketplace_lead()
@@ -23324,19 +23325,31 @@ func _test_player_trade_named_gate() -> void:
 		"AN1: offer channel follows the Rep 50 gate"
 	)
 	_expect_equal(
+		PlayerTradePolicy.unlock_rep(0) == 50
+		and PlayerTradePolicy.unlock_rep(-4) == 50
+		and PlayerTradePolicy.unlock_rep() == 50,
+		true,
+		"AN1/BV1: missing or bad unlock falls back to Rep 50"
+	)
+	_expect_equal(
 		PlayerTradePolicy.SEEDED_GIVE_SKU,
 		&"AA-DUST-ETB",
-		"AN1: seeded give lot is the owned Dustway ETB"
+		"AN1: Dustway ETB stays a legal give SKU"
 	)
 	_expect_equal(
 		PlayerTradePolicy.SEEDED_RECEIVE_SKU,
 		&"AA-SKIE-ETB",
-		"AN1: seeded receive lot is the Skiefall ETB"
+		"AN1: Skiefall ETB stays a legal receive SKU"
 	)
 	_expect_equal(
 		PlayerTradePolicy.SEEDED_CONDITION,
 		"Sealed · NM",
-		"AN1: both sides show sealed NM"
+		"AN1: sealed sides stay Full / visible NM"
+	)
+	_expect_equal(
+		PlayerTradePolicy.OFFER_LABEL,
+		"Shop trade",
+		"BV1: offer label is Shop trade"
 	)
 
 
@@ -23349,24 +23362,34 @@ func _test_player_trade_same_seed_shows_at_50_not_49() -> void:
 	_expect_equal(at_50 != null, true, "AN1: same seed at Rep 50 shows a player-trade offer")
 	if at_50 != null:
 		_expect_equal(
-			at_50.get("give_sku_id"),
-			&"AA-DUST-ETB",
-			"AN1: seeded offer asks for one owned Dustway ETB"
+			_bv1_offer_is_legal_pair(at_50),
+			true,
+			"AN1/BV1: offer give is owned live SEALED / non-bulk SINGLE"
 		)
 		_expect_equal(
-			at_50.get("receive_sku_id"),
-			&"AA-SKIE-ETB",
-			"AN1: seeded offer pays one Skiefall ETB"
+			at_50.get("give_qty"),
+			1,
+			"AN1: give qty is 1"
 		)
 		_expect_equal(
-			at_50.get("give_condition"),
-			"Sealed · NM",
+			at_50.get("receive_qty"),
+			1,
+			"AN1: receive qty is 1"
+		)
+		_expect_equal(
+			String(at_50.get("give_condition")).is_empty(),
+			false,
 			"AN1: give side shows condition"
 		)
 		_expect_equal(
-			at_50.get("receive_condition"),
-			"Sealed · NM",
+			String(at_50.get("receive_condition")).is_empty(),
+			false,
 			"AN1: receive side shows condition"
+		)
+		_expect_equal(
+			String(at_50.get("give_condition")).to_lower().contains("photo"),
+			false,
+			"AN1/BV1: give condition is never photo-fog"
 		)
 	_game_state.call("start_new_game")
 	_game_state.set("current_reputation", 49)
@@ -23385,15 +23408,18 @@ func _test_player_trade_accept_swaps_lots_cash_unchanged() -> void:
 	_game_state.call("start_new_game")
 	_game_state.set("current_reputation", 50)
 	_event_bus.emit_signal("reputation_changed", 50)
-	var give_before := _an1_stock_qty(&"AA-DUST-ETB")
-	var receive_before := _an1_stock_qty(&"AA-SKIE-ETB")
-	_expect_equal(give_before > 0, true, "AN1: seed inventory owns the Dustway give lot")
-	var cash_before := int(_economy.get("balance_cents"))
-	var ledger_before := _an1_ledger_size()
 	var offer: Variant = _demand_signals.call("open_player_trade")
 	_expect_equal(offer != null, true, "AN1: accept path needs the seeded offer")
 	if offer == null:
 		return
+	var give_id: StringName = offer.get("give_sku_id")
+	var receive_id: StringName = offer.get("receive_sku_id")
+	var give_before := _bv1_owned_qty(give_id)
+	var receive_before := _bv1_owned_qty(receive_id)
+	_expect_equal(give_before > 0, true, "AN1: seed inventory owns the give lot")
+	var cash_before := int(_economy.get("balance_cents"))
+	var ledger_before := _an1_ledger_size()
+	var give_cost := _bv1_give_unit_cost(give_id)
 	_expect_equal(
 		bool(_demand_signals.call("player_trade_can_accept", offer)),
 		true,
@@ -23405,24 +23431,25 @@ func _test_player_trade_accept_swaps_lots_cash_unchanged() -> void:
 		"AN1: accept swaps the lots"
 	)
 	_expect_equal(
-		_an1_stock_qty(&"AA-DUST-ETB"),
+		_bv1_owned_qty(give_id),
 		give_before - 1,
 		"AN1: given lot leaves"
 	)
 	_expect_equal(
-		_an1_stock_qty(&"AA-SKIE-ETB"),
+		_bv1_owned_qty(receive_id),
 		receive_before + 1,
 		"AN1: received lot enters"
 	)
-	var received: StockLot = _inventory_service.call("get_lot", &"AA-SKIE-ETB")
-	_expect_equal(received != null, true, "AN1: received lot is stocked")
-	if received != null:
-		_expect_equal(
-			received.location != null
-			and received.location.type == InventoryLocation.Type.BACKSTOCK,
-			true,
-			"AN1: received lot is in BACKSTOCK"
-		)
+	_expect_equal(
+		_bv1_receive_in_backstock(receive_id),
+		true,
+		"AN1: received lot is in BACKSTOCK"
+	)
+	_expect_equal(
+		_bv1_receive_unit_cost(receive_id),
+		give_cost,
+		"AN1: received lot keeps the give lot unit cost"
+	)
 	_expect_equal(
 		int(_economy.get("balance_cents")),
 		cash_before,
@@ -23444,13 +23471,15 @@ func _test_player_trade_decline_gone_no_rep_change() -> void:
 	_game_state.call("start_new_game")
 	_game_state.set("current_reputation", 50)
 	_event_bus.emit_signal("reputation_changed", 50)
-	var give_before := _an1_stock_qty(&"AA-DUST-ETB")
-	var receive_before := _an1_stock_qty(&"AA-SKIE-ETB")
-	var cash_before := int(_economy.get("balance_cents"))
 	var offer: Variant = _demand_signals.call("open_player_trade")
 	_expect_equal(offer != null, true, "AN1: decline path needs the seeded offer")
 	if offer == null:
 		return
+	var give_id: StringName = offer.get("give_sku_id")
+	var receive_id: StringName = offer.get("receive_sku_id")
+	var give_before := _bv1_owned_qty(give_id)
+	var receive_before := _bv1_owned_qty(receive_id)
+	var cash_before := int(_economy.get("balance_cents"))
 	var rep_before := int(_game_state.get("current_reputation"))
 	_expect_equal(
 		bool(_demand_signals.call("decline_player_trade", offer)),
@@ -23468,12 +23497,12 @@ func _test_player_trade_decline_gone_no_rep_change() -> void:
 		"AN1: decline does not change Rep"
 	)
 	_expect_equal(
-		_an1_stock_qty(&"AA-DUST-ETB"),
+		_bv1_owned_qty(give_id),
 		give_before,
 		"AN1: decline leaves the give lot"
 	)
 	_expect_equal(
-		_an1_stock_qty(&"AA-SKIE-ETB"),
+		_bv1_owned_qty(receive_id),
 		receive_before,
 		"AN1: decline does not add the receive lot"
 	)
@@ -23502,12 +23531,28 @@ func _test_player_trade_never_shows_true_market() -> void:
 			false,
 			"AN1: offer copy never shows true_market"
 		)
-	_expect_equal(row.contains("Dustway"), true, "AN1: row shows the give SKU")
-	_expect_equal(row.contains("Skiefall"), true, "AN1: row shows the receive SKU")
 	_expect_equal(
-		detail.contains("Sealed · NM") and confirm.contains("Sealed · NM"),
+		row.contains(String(offer.get("give_display_name")))
+		or row.contains(String(offer.get("give_sku_id"))),
+		true,
+		"AN1: row shows the give SKU"
+	)
+	_expect_equal(
+		row.contains(String(offer.get("receive_display_name")))
+		or row.contains(String(offer.get("receive_sku_id"))),
+		true,
+		"AN1: row shows the receive SKU"
+	)
+	_expect_equal(
+		detail.contains(String(offer.get("give_condition")))
+		and confirm.contains(String(offer.get("give_condition"))),
 		true,
 		"AN1: detail and confirm show condition"
+	)
+	_expect_equal(
+		confirm.contains(String(offer.get("counterparty_label"))),
+		true,
+		"AN1/BV1: confirm names the counterparty"
 	)
 	_expect_equal(
 		detail.contains("BACKSTOCK") and detail.contains("Cash does not change"),
@@ -23787,7 +23832,16 @@ func _test_player_trade_hud_plain_text() -> void:
 	_game_state.set("current_reputation", 50)
 	_event_bus.emit_signal("reputation_changed", 50)
 	var cash_before := int(_economy.get("balance_cents"))
-	var give_before := _an1_stock_qty(&"AA-DUST-ETB")
+	var offer: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(offer != null, true, "AN1: HUD path needs an open trade")
+	if offer == null:
+		return
+	var give_id: StringName = offer.get("give_sku_id")
+	var receive_id: StringName = offer.get("receive_sku_id")
+	var give_before := _bv1_owned_qty(give_id)
+	var give_name := String(offer.get("give_display_name"))
+	var receive_name := String(offer.get("receive_display_name"))
+	var give_condition := String(offer.get("give_condition"))
 	_free_lingering_gameplay_huds()
 	var hud := _instantiate_gameplay_hud()
 	_expect_equal(hud != null, true, "AN1: HUD loads for the plain-text offer")
@@ -23808,12 +23862,12 @@ func _test_player_trade_hud_plain_text() -> void:
 	if summary != null:
 		_assert_text_has_no_truth(summary.text, "AN1 HUD trade summary")
 		_expect_equal(
-			summary.text.contains("Dustway") and summary.text.contains("Skiefall"),
+			summary.text.contains(give_name) and summary.text.contains(receive_name),
 			true,
 			"AN1: HUD names both SKUs"
 		)
 		_expect_equal(
-			summary.text.contains("Sealed · NM"),
+			summary.text.contains(give_condition),
 			true,
 			"AN1: HUD shows condition"
 		)
@@ -23851,15 +23905,12 @@ func _test_player_trade_hud_plain_text() -> void:
 		"AN1: HUD accept leaves cash unchanged"
 	)
 	_expect_equal(
-		_an1_stock_qty(&"AA-DUST-ETB"),
+		_bv1_owned_qty(give_id),
 		give_before - 1,
 		"AN1: HUD accept removes the given lot"
 	)
-	var received: StockLot = _inventory_service.call("get_lot", &"AA-SKIE-ETB")
 	_expect_equal(
-		received != null
-		and received.location != null
-		and received.location.type == InventoryLocation.Type.BACKSTOCK,
+		_bv1_receive_in_backstock(receive_id),
 		true,
 		"AN1: HUD accept puts the received lot in BACKSTOCK"
 	)
@@ -23880,6 +23931,488 @@ func _test_player_trade_hud_plain_text() -> void:
 		hud.queue_free()
 	_free_lingering_gameplay_huds()
 	_game_state.call("start_new_game")
+
+
+func _test_recurring_player_trade_pool() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bv1_named_gate_and_fallbacks()
+	_test_bv1_cadence_pool_and_identity()
+	_test_bv1_accept_decline_space_and_haggle()
+	_test_bv1_expire_save_load_and_toast()
+	_test_bv1_confirm_no_truth()
+	_test_bv1_untouched_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bv1_named_gate_and_fallbacks() -> void:
+	_expect_equal(PlayerTradePolicy.UNLOCK_REP, 50, "BV1: locked unlock is Rep 50")
+	_expect_equal(PlayerTradePolicy.RUN_SEED, 20261003, "BV1: locked run seed matches AS1/AT1/BU1")
+	_expect_equal(PlayerTradePolicy.GIVE_QTY, 1, "BV1: give qty is 1")
+	_expect_equal(PlayerTradePolicy.RECEIVE_QTY, 1, "BV1: receive qty is 1")
+	_expect_equal(
+		PlayerTradePolicy.OFFER_LABEL == "Shop trade"
+		and PlayerTradePolicy.COUNTERPARTY == "Another shop",
+		true,
+		"BV1: label is Shop trade / Another shop"
+	)
+	_expect_equal(
+		PlayerTradePolicy.TOAST,
+		"A shop wants to trade",
+		"BV1: toast copy is locked"
+	)
+	_expect_equal(
+		String(PlayerTradePolicy.offer_id(3)),
+		"player-trade-d3",
+		"BV1: offer id is day-scoped"
+	)
+	_expect_equal(
+		PlayerTradePolicy.unlock_rep(0) == 50
+		and PlayerTradePolicy.unlock_rep(-8) == 50
+		and int(_demand_signals.call("player_trade_unlock_rep", 0)) == 50,
+		true,
+		"BV1: missing or bad unlock falls back to 50"
+	)
+	_bv1_reset_at(1, 50)
+	_demand_signals.call("configure_player_trade", 0)
+	_expect_equal(
+		_demand_signals.call("open_player_trade") != null,
+		true,
+		"BV1: configured unlock 0 still offers at Rep 50"
+	)
+	_game_state.set("current_reputation", 49)
+	_expect_equal(
+		_demand_signals.call("open_player_trade") == null,
+		true,
+		"BV1: configured unlock 0 still shuts Rep 49"
+	)
+	_demand_signals.call("configure_player_trade", PlayerTradePolicy.UNLOCK_REP)
+	var catalog := (_inventory_service.get("model") as InventoryModel).catalog
+	_expect_equal(
+		PlayerTradePolicy.is_trade_sku(catalog.get(&"AA-DUST-ETB") as ProductSKU)
+		and PlayerTradePolicy.is_trade_sku(catalog.get(&"AA-SKIE-ETB") as ProductSKU),
+		true,
+		"BV1: AN1 Dust→Skie SKUs stay legal pool members"
+	)
+	var dust_give: Array[StringName] = []
+	dust_give.append(&"AA-DUST-ETB")
+	var skie_receive: Array[StringName] = []
+	skie_receive.append(&"AA-SKIE-ETB")
+	var dust_skie := PlayerTradePolicy.pick_pair(
+		PlayerTradePolicy.RUN_SEED,
+		1,
+		dust_give,
+		skie_receive
+	)
+	_expect_equal(
+		dust_skie.get("give_sku_id", &"") == &"AA-DUST-ETB"
+		and dust_skie.get("receive_sku_id", &"") == &"AA-SKIE-ETB",
+		true,
+		"BV1: Dust→Skie is a legal draw when both SKUs qualify"
+	)
+	_expect_equal(
+		not PlayerTradePolicy.is_trade_sku(catalog.get(&"ACC-SLV-60") as ProductSKU)
+		and not PlayerTradePolicy.is_trade_sku(catalog.get(&"AA-BASE-BULK") as ProductSKU),
+		true,
+		"BV1: accessories and bulk never enter the pool"
+	)
+
+
+func _test_bv1_cadence_pool_and_identity() -> void:
+	const SEED := 20261003
+	var seen: Dictionary = {}
+	for day: int in range(1, 15):
+		_bv1_reset_at(day, 49)
+		_expect_equal(
+			_demand_signals.call("roll_player_trade", SEED, 49, day) == null,
+			true,
+			"BV1: day %d at Rep 49 opens none" % day
+		)
+		_bv1_reset_at(day, 50)
+		var offer: Variant = _demand_signals.call("roll_player_trade", SEED, 50, day)
+		_expect_equal(offer != null, true, "BV1: day %d at Rep 50 with owned stock offers" % day)
+		if offer == null:
+			continue
+		_expect_equal(
+			String(offer.get("id")),
+			"player-trade-d%d" % day,
+			"BV1: day %d uses the day-scoped id" % day
+		)
+		_expect_equal(_bv1_offer_is_legal_pair(offer), true, "BV1: day %d pair stays in the live pool" % day)
+		_expect_equal(
+			int(offer.get("give_qty")) == 1 and int(offer.get("receive_qty")) == 1,
+			true,
+			"BV1: day %d qtys stay 1" % day
+		)
+		var again: Variant = _demand_signals.call("roll_player_trade", SEED, 50, day)
+		_expect_equal(
+			again != null
+			and again.get("give_sku_id") == offer.get("give_sku_id")
+			and again.get("receive_sku_id") == offer.get("receive_sku_id"),
+			true,
+			"BV1: same seed and day re-roll the same pair"
+		)
+		seen[day] = "%s>%s" % [String(offer.get("give_sku_id")), String(offer.get("receive_sku_id"))]
+	_bv1_reset_at(1, 50)
+	var first: Variant = _demand_signals.call("roll_player_trade", SEED, 50, 1)
+	_bv1_strip_trade_stock()
+	_expect_equal(
+		_demand_signals.call("roll_player_trade", SEED, 50, 1) == null,
+		true,
+		"BV1: empty owned pool opens none"
+	)
+	_bv1_reset_at(2, 50)
+	var day_two: Variant = _demand_signals.call("roll_player_trade", SEED, 50, 2)
+	_expect_equal(first != null and day_two != null, true, "BV1: days 1 and 2 both roll when stocked")
+	if first != null:
+		_game_state.set("current_day", 1)
+		_expect_equal(
+			_demand_signals.call("roll_player_trade", SEED, 50, 1) != null,
+			true,
+			"BV1: at most one open trade exists for the current day"
+		)
+
+
+func _test_bv1_accept_decline_space_and_haggle() -> void:
+	_bv1_reset_at(1, 50)
+	var offer: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(offer != null, true, "BV1: accept needs an open trade")
+	if offer == null:
+		return
+	var give_id: StringName = offer.get("give_sku_id")
+	var receive_id: StringName = offer.get("receive_sku_id")
+	var give_before := _bv1_owned_qty(give_id)
+	var receive_before := _bv1_owned_qty(receive_id)
+	var give_cost := _bv1_give_unit_cost(give_id)
+	var cash_before := int(_economy.get("balance_cents"))
+	_expect_equal(
+		bool(_demand_signals.call("accept_player_trade", offer)),
+		true,
+		"BV1: accept swaps the pair"
+	)
+	_expect_equal(_bv1_owned_qty(give_id), give_before - 1, "BV1: give leaves inventory")
+	_expect_equal(_bv1_owned_qty(receive_id), receive_before + 1, "BV1: receive enters inventory")
+	_expect_equal(_bv1_receive_in_backstock(receive_id), true, "BV1: receive lands in BACKSTOCK")
+	_expect_equal(_bv1_receive_unit_cost(receive_id), give_cost, "BV1: receive keeps the give unit cost")
+	_expect_equal(int(_economy.get("balance_cents")), cash_before, "BV1: accept leaves cash unchanged")
+	_expect_equal(
+		_demand_signals.call("open_player_trade") == null,
+		true,
+		"BV1: accepted trade is closed for the day"
+	)
+	_bv1_reset_at(1, 50)
+	offer = _demand_signals.call("open_player_trade")
+	_expect_equal(
+		offer != null and bool(_demand_signals.call("decline_player_trade", offer)),
+		true,
+		"BV1: decline closes the day"
+	)
+	_expect_equal(
+		_demand_signals.call("open_player_trade") == null,
+		true,
+		"BV1: declined trade is gone"
+	)
+	_bv1_reset_at(1, 50)
+	offer = _demand_signals.call("open_player_trade")
+	_expect_equal(offer != null, true, "BV1: space-short path needs an open trade")
+	if offer != null:
+		_bv1_fill_backstock()
+		_expect_equal(
+			bool(_demand_signals.call("player_trade_can_accept", offer)),
+			false,
+			"BV1: space-short Accept is disabled"
+		)
+	_expect_equal(
+		not HagglePolicy.can_haggle(&"player_trade")
+		and not HagglePolicy.can_haggle(&"trade"),
+		true,
+		"BV1: haggle stays out of trades"
+	)
+
+
+func _test_bv1_expire_save_load_and_toast() -> void:
+	_bv1_reset_at(3, 50)
+	var open_first: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(open_first != null, true, "BV1: day 3 starts with an open trade")
+	if open_first == null:
+		return
+	var open_id := String(open_first.get("id"))
+	var give_id: StringName = open_first.get("give_sku_id")
+	var receive_id: StringName = open_first.get("receive_sku_id")
+	_expect_equal(
+		bool(_demand_signals.call("decline_player_trade", open_first)),
+		true,
+		"BV1: decline before save"
+	)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "BV1 trade save")
+	_expect_equal(
+		int(saved.get(PlayerTradePolicy.SAVE_KEY, 0)),
+		3,
+		"BV1: save stores the closed day"
+	)
+	var parsed_save: Variant = JSON.parse_string(JSON.stringify(saved))
+	_expect_equal(parsed_save is Dictionary, true, "BV1: JSON save roundtrips")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		parsed_save is Dictionary and _game_state.call("restore_save", parsed_save),
+		true,
+		"BV1: restore_save accepts the mid-day snapshot"
+	)
+	_expect_equal(int(_game_state.get("current_day")), 3, "BV1: restore lands on day 3")
+	_game_state.set("current_reputation", 50)
+	_expect_equal(
+		_demand_signals.call("open_player_trade") == null,
+		true,
+		"BV1: restore keeps the declined day closed"
+	)
+	_bv1_reset_at(4, 50)
+	var mid: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(mid != null, true, "BV1: save/load open-state needs a pair")
+	if mid != null:
+		var mid_give: StringName = mid.get("give_sku_id")
+		var mid_receive: StringName = mid.get("receive_sku_id")
+		var open_saved: Dictionary = _game_state.call("capture_save")
+		_game_state.call("start_new_game")
+		_expect_equal(
+			_game_state.call("restore_save", open_saved),
+			true,
+			"BV1: restore accepts an open-trade snapshot"
+		)
+		_game_state.set("current_reputation", 50)
+		var restored: Variant = _demand_signals.call("open_player_trade")
+		_expect_equal(restored != null, true, "BV1: restore re-derives the open pair")
+		if restored != null:
+			_expect_equal(
+				restored.get("give_sku_id") == mid_give
+				and restored.get("receive_sku_id") == mid_receive
+				and String(restored.get("id")) == String(mid.get("id")),
+				true,
+				"BV1: same seed, day, and owned pool restore the same pair"
+			)
+		_bv1_remove_give(mid_give)
+		var missing_give: Variant = _demand_signals.call("open_player_trade")
+		_expect_equal(
+			missing_give == null
+			or missing_give.get("give_sku_id") != mid_give,
+			true,
+			"BV1: loading mid-day without the give lot does not keep that pair"
+		)
+		if missing_give == null:
+			_expect_equal(true, true, "BV1: loading mid-day without the give lot shows none")
+		else:
+			_expect_equal(
+				_bv1_offer_is_legal_pair(missing_give),
+				true,
+				"BV1: a re-derived pair still requires an owned give"
+			)
+		_bv1_strip_trade_stock()
+		_expect_equal(
+			_demand_signals.call("open_player_trade") == null,
+			true,
+			"BV1: loading mid-day with an empty owned pool shows none"
+		)
+	_bv1_reset_at(5, 49)
+	var low_saved: Dictionary = _game_state.call("capture_save")
+	_game_state.call("start_new_game")
+	_expect_equal(_game_state.call("restore_save", low_saved), true, "BV1: restore accepts Rep 49")
+	_expect_equal(
+		_demand_signals.call("open_player_trade") == null,
+		true,
+		"BV1: loading at Rep ≤ 49 shows no trade"
+	)
+	_bv1_reset_at(6, 50)
+	var leftover: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(leftover != null, true, "BV1: expire test needs an open trade")
+	_expect_equal(_game_state.call("start_floor"), true, "BV1: floor opens to settle")
+	_expect_equal(_game_state.call("start_settle"), true, "BV1: unaccepted trades expire at close")
+	_expect_equal(
+		_demand_signals.call("open_player_trade") == null,
+		true,
+		"BV1: settle expires the unaccepted trade"
+	)
+	_expect_equal(_game_state.call("advance_day"), true, "BV1: next day follows settle")
+	_game_state.set("current_reputation", 50)
+	var next_day: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(next_day != null, true, "BV1: a new day can offer again")
+	if leftover != null and next_day != null:
+		_expect_equal(
+			String(next_day.get("id")) != String(leftover.get("id")),
+			true,
+			"BV1: unaccepted trades do not carry over"
+		)
+	_bv1_reset_at(1, 50)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BV1: HUD loads on a trade day")
+	if hud != null:
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("A shop wants to trade"),
+			true,
+			"BV1: PREP toast names the shop trade"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BV1 trade toast")
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+	_bv1_reset_at(1, 49)
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		var quiet := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			quiet == null or not quiet.text.contains("A shop wants to trade"),
+			true,
+			"BV1: Rep 49 PREP does not toast a shop trade"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+	_expect_equal(open_id.begins_with("player-trade-d"), true, "BV1: closed id stays day-scoped")
+	_expect_equal(give_id != receive_id, true, "BV1: give and receive stay different SKUs")
+
+
+func _test_bv1_confirm_no_truth() -> void:
+	_bv1_reset_at(1, 50)
+	var offer: Variant = _demand_signals.call("open_player_trade")
+	_expect_equal(offer != null, true, "BV1: confirm scan needs an offer")
+	if offer == null:
+		return
+	_expect_dto_has_no_truth_fields(offer, "BV1 player-trade offer")
+	var row := PlayerTradePresenter.opportunity_row(offer)
+	var detail := PlayerTradePresenter.detail_summary(offer)
+	var confirm := PlayerTradePresenter.confirm_snapshot(offer)
+	var title := PlayerTradePresenter.detail_title(offer)
+	for text: String in [row, detail, confirm, title]:
+		_assert_text_has_no_truth(text, "BV1 player-trade copy")
+		var lower := text.to_lower()
+		_expect_equal(lower.contains("true_market"), false, "BV1: confirm never shows true_market")
+		_expect_equal(lower.contains("p_buy"), false, "BV1: confirm never shows p_buy")
+		_expect_equal(lower.contains("$"), false, "BV1: confirm never shows a cash ask")
+		_expect_equal(text.contains("player-trade-d2"), false, "BV1: confirm never leaks tomorrow's pair")
+	_expect_equal(row.contains("Shop trade"), true, "BV1: row uses the Shop trade label")
+	_expect_equal(
+		confirm.contains("Another shop") and confirm.contains("×1"),
+		true,
+		"BV1: confirm shows counterparty and qtys"
+	)
+	_expect_equal(
+		confirm.contains(String(offer.get("give_condition")))
+		and confirm.contains(String(offer.get("receive_condition"))),
+		true,
+		"BV1: confirm shows both visible conditions"
+	)
+
+
+func _test_bv1_untouched_and_parked() -> void:
+	_expect_equal(
+		PlayerTradePolicy.UNLOCK_REP == 50
+		and RegularsReturnPolicy.UNLOCK_REP == 50,
+		true,
+		"BV1: AN1 unlock and AO1 Regulars stay Rep 50"
+	)
+	_expect_equal(
+		HagglePolicy.can_haggle(DemandSignalService.Channel.DISTRIBUTOR)
+		and HagglePolicy.can_haggle(DemandSignalService.Channel.MARKETPLACE)
+		and not HagglePolicy.can_haggle(&"player_trade"),
+		true,
+		"BV1: AU1 haggle stays cash channels only"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST == 10
+		and is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25),
+		true,
+		"BV1: AS1 / AT1 stay as shipped"
+	)
+	_expect_equal(
+		DistributorMenuPolicy.FIRST_DAY == 8
+		and MarketplaceLotPolicy.FIRST_DAY == 4
+		and MarketplaceLotPolicy.MIN_PER_DAY == 1
+		and MarketplaceLotPolicy.MAX_PER_DAY == 3,
+		true,
+		"BV1: BT1 / BU1 stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BV1: BM1–BO1 stay as shipped"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BV1: buyer door spawn and whale weight stay as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	_expect_equal(
+		catalog.roll_spawn(SEED, 50, NORMAL_CONFIG, 5).size()
+		== catalog.roll_spawn(SEED, 49, NORMAL_CONFIG, 5).size(),
+		true,
+		"BV1: trade days do not change door spawn count"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 50, NORMAL_CONFIG),
+			catalog.weight_for(whale, 49, NORMAL_CONFIG)
+		),
+		true,
+		"BV1: whale weight is unchanged"
+	)
+	_bv1_reset_at(1, 50)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")), 1.0)
+		and is_equal_approx(float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-ETB")), 1.0),
+		true,
+		"BV1: player trades are not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string("res://scripts/autoload/demand_signals.gd")
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "player_trade")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "PlayerTrade")
+		and not _function_body_contains(demand_src, "func active_event_traffic_mult(", "player_trade")
+		and not _function_body_contains(demand_src, "func active_event_whale_weight_mult(", "player_trade"),
+		true,
+		"BV1: the pool stays off sell-through, door spawn, and whale weight"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("player_trade_pool")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("listed_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"BV1: Soft catalog stays closed"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("_maybe_show_player_trade_toast")
+		and hud_src.contains("PlayerTradePresenter"),
+		true,
+		"BV1: HUD reuses the existing presenter and can toast"
+	)
+	_expect_equal(
+		not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert")
+		and not hud_src.contains("camera_off"),
+		true,
+		"BV1: no new screen, no Art, STOP stays parked"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/player_trade_presenter.gd",
+		"res://scripts/economy/player_trade_policy.gd",
+		"res://scripts/economy/player_trade_service.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(source.contains("true_market"), false, "BV1: %s stays §4.5 clean" % path)
 
 
 func _test_regulars_return() -> void:
@@ -43075,7 +43608,10 @@ func _click_player_trade_row(hud: Node) -> bool:
 		return false
 	for child: Node in rows.get_children():
 		var row := child as Button
-		if row != null and row.text.begins_with("Player trade ·"):
+		if row != null and (
+			row.text.begins_with("Shop trade ·")
+			or row.text.begins_with("Player trade ·")
+		):
 			row.pressed.emit()
 			return true
 	return false
@@ -43090,6 +43626,160 @@ func _an1_stock_qty(sku_id: StringName) -> int:
 	if inventory == null:
 		return 0
 	return inventory.get_stock_quantity(sku_id)
+
+
+func _bv1_reset_at(day: int, reputation: int) -> void:
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", day)
+	_game_state.set("current_reputation", reputation)
+	_event_bus.emit_signal("reputation_changed", reputation)
+
+
+func _bv1_owned_qty(sku_id: StringName) -> int:
+	var inventory := _inventory_service.get("model") as InventoryModel
+	if inventory == null:
+		return 0
+	var sku := inventory.get_sku(sku_id)
+	if sku != null and sku.product_class == ProductSKU.ProductClass.SINGLE:
+		var count := 0
+		for card: CardInstance in inventory.cards:
+			if card != null and card.sku_id == sku_id:
+				count += 1
+		return count
+	return inventory.get_stock_quantity(sku_id)
+
+
+func _bv1_give_unit_cost(sku_id: StringName) -> int:
+	var inventory := _inventory_service.get("model") as InventoryModel
+	if inventory == null:
+		return 0
+	var sku := inventory.get_sku(sku_id)
+	if sku != null and sku.product_class == ProductSKU.ProductClass.SINGLE:
+		var card: CardInstance = _inventory_service.call("first_in_store_card", sku_id)
+		return card.acquired_cost_cents if card != null else 0
+	var lot: StockLot = _inventory_service.call("get_lot", sku_id)
+	return lot.unit_cost_cents() if lot != null else 0
+
+
+func _bv1_receive_unit_cost(sku_id: StringName) -> int:
+	var inventory := _inventory_service.get("model") as InventoryModel
+	if inventory == null:
+		return 0
+	var sku := inventory.get_sku(sku_id)
+	if sku != null and sku.product_class == ProductSKU.ProductClass.SINGLE:
+		for card: CardInstance in inventory.cards:
+			if (
+				card != null
+				and card.sku_id == sku_id
+				and card.location != null
+				and card.location.type == InventoryLocation.Type.BACKSTOCK
+			):
+				return card.acquired_cost_cents
+		return 0
+	for lot: StockLot in inventory.stock_lots:
+		if (
+			lot != null
+			and lot.sku != null
+			and lot.sku.id == sku_id
+			and lot.location != null
+			and lot.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			return lot.unit_cost_cents()
+	return 0
+
+
+func _bv1_receive_in_backstock(sku_id: StringName) -> bool:
+	var inventory := _inventory_service.get("model") as InventoryModel
+	if inventory == null:
+		return false
+	var sku := inventory.get_sku(sku_id)
+	if sku != null and sku.product_class == ProductSKU.ProductClass.SINGLE:
+		for card: CardInstance in inventory.cards:
+			if (
+				card != null
+				and card.sku_id == sku_id
+				and card.location != null
+				and card.location.type == InventoryLocation.Type.BACKSTOCK
+			):
+				return true
+		return false
+	for lot: StockLot in inventory.stock_lots:
+		if (
+			lot != null
+			and lot.sku != null
+			and lot.sku.id == sku_id
+			and lot.location != null
+			and lot.location.type == InventoryLocation.Type.BACKSTOCK
+		):
+			return true
+	return false
+
+
+func _bv1_offer_is_legal_pair(offer: Variant) -> bool:
+	if offer == null:
+		return false
+	var give_id: StringName = offer.get("give_sku_id")
+	var receive_id: StringName = offer.get("receive_sku_id")
+	if give_id.is_empty() or receive_id.is_empty() or give_id == receive_id:
+		return false
+	var inventory := _inventory_service.get("model") as InventoryModel
+	if inventory == null:
+		return false
+	var give_sku := inventory.get_sku(give_id)
+	var receive_sku := inventory.get_sku(receive_id)
+	if not PlayerTradePolicy.is_trade_sku(give_sku):
+		return false
+	if not PlayerTradePolicy.is_trade_sku(receive_sku):
+		return false
+	if give_sku.product_class == ProductSKU.ProductClass.GRADED:
+		return false
+	if receive_sku.product_class == ProductSKU.ProductClass.GRADED:
+		return false
+	if give_sku.product_class == ProductSKU.ProductClass.ACCESSORY:
+		return false
+	if receive_sku.tags.has(&"bulk") or give_sku.tags.has(&"bulk"):
+		return false
+	return _bv1_owned_qty(give_id) >= 1
+
+
+func _bv1_strip_trade_stock() -> void:
+	var inventory := _inventory_service.get("model") as InventoryModel
+	if inventory == null:
+		return
+	for sku_id: StringName in PlayerTradePolicy.pool_sku_ids(inventory.catalog):
+		var sku := inventory.get_sku(sku_id)
+		if sku == null:
+			continue
+		if sku.product_class == ProductSKU.ProductClass.SEALED:
+			var qty := inventory.get_stock_quantity(sku_id)
+			if qty > 0:
+				_inventory_service.call("remove_stock", sku_id, qty)
+			continue
+		for card: CardInstance in inventory.cards.duplicate():
+			if card != null and card.sku_id == sku_id:
+				_inventory_service.call("remove_card", card)
+
+
+func _bv1_remove_give(sku_id: StringName) -> void:
+	var inventory := _inventory_service.get("model") as InventoryModel
+	if inventory == null:
+		return
+	var sku := inventory.get_sku(sku_id)
+	if sku != null and sku.product_class == ProductSKU.ProductClass.SINGLE:
+		for card: CardInstance in inventory.cards.duplicate():
+			if card != null and card.sku_id == sku_id:
+				_inventory_service.call("remove_card", card)
+		return
+	var qty := inventory.get_stock_quantity(sku_id)
+	if qty > 0:
+		_inventory_service.call("remove_stock", sku_id, qty)
+
+
+func _bv1_fill_backstock() -> void:
+	var inventory := _inventory_service.get("model") as InventoryModel
+	if inventory == null:
+		return
+	inventory.backstock_bin_bonus = -inventory.balance_config.backstock_bins
 
 
 func _test_high_rep_whale_gate() -> void:

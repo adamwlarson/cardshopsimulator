@@ -660,9 +660,8 @@ func open_buy_signals() -> Array[BuyConfirmSignal]:
 	return result
 
 
-func player_trade_seed(day: int = -1) -> int:
-	var resolved_day := day if day >= 0 else GameState.current_day
-	return resolved_day * 7919
+func player_trade_seed(_day: int = -1) -> int:
+	return PlayerTradePolicy.RUN_SEED
 
 
 func open_player_trade() -> PlayerTradeOffer:
@@ -684,6 +683,27 @@ func accept_player_trade(offer: PlayerTradeOffer) -> bool:
 
 func decline_player_trade(offer: PlayerTradeOffer) -> bool:
 	return _player_trades.decline(offer, GameState.current_day)
+
+
+func expire_player_trade(day: int = -1) -> void:
+	var resolved_day := day if day >= 0 else GameState.current_day
+	_player_trades.expire_open(resolved_day)
+
+
+func configure_player_trade(unlock_rep: int) -> void:
+	_player_trades.configure(unlock_rep)
+
+
+func player_trade_unlock_rep(configured: int = PlayerTradePolicy.UNLOCK_REP) -> int:
+	return PlayerTradePolicy.unlock_rep(configured)
+
+
+func player_trade_closed_day_to_save() -> int:
+	return _player_trades.closed_for_day()
+
+
+func apply_player_trade_closed_day_save(value: Variant) -> void:
+	_player_trades.apply_closed_day_save(value)
 
 
 func configure_regulars_return(unlock_rep: int, queue_cap: int) -> void:

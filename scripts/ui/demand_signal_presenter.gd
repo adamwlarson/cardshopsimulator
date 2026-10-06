@@ -151,6 +151,10 @@ static func marketplace_lots_toast(count: int) -> String:
 	return MarketplaceLotPolicy.toast_for(count)
 
 
+static func player_trade_toast(has_offer: bool) -> String:
+	return PlayerTradePolicy.toast_for(has_offer)
+
+
 static func marketplace_lot_drive_label(attention_cost: int = 0) -> String:
 	if attention_cost <= 0:
 		return MarketplaceLotPolicy.drive_label()
