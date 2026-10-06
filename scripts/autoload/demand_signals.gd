@@ -1810,9 +1810,17 @@ func _prep_shady_trunk() -> BuyOpportunity:
 	return _make_shady_trunk(ShadyTrunkPolicy.RUN_SEED, day)
 
 
-func _make_shady_trunk(_seed: int, day: int) -> BuyOpportunity:
-	var sku_id := ShadyTrunkPolicy.DEFAULT_SKU_ID
+func _make_shady_trunk(seed: int, day: int) -> BuyOpportunity:
 	if InventoryService.model == null:
+		return null
+	var catalog := InventoryService.model.catalog
+	var sku_id := ShadyTrunkPolicy.pick_sku_id(
+		seed,
+		day,
+		ShadyTrunkPolicy.pool_sku_ids(catalog),
+		catalog
+	)
+	if sku_id.is_empty():
 		return null
 	var sku := InventoryService.model.get_sku(sku_id)
 	if sku == null:
@@ -1827,7 +1835,7 @@ func _make_shady_trunk(_seed: int, day: int) -> BuyOpportunity:
 	opportunity.offer_label = ShadyTrunkPolicy.OFFER_LABEL
 	opportunity.channel = DemandSignalService.Channel.SHADY
 	opportunity.unit_cost_cents = ask_cents
-	opportunity.quantity = 1
+	opportunity.quantity = ShadyTrunkPolicy.quantity_for(sku)
 	opportunity.space_required = ShadyTrunkPolicy.SPACE_REQUIRED
 	opportunity.grader = ShadyTrunkPolicy.DEFAULT_GRADER
 	opportunity.grade = ShadyTrunkPolicy.DEFAULT_GRADE

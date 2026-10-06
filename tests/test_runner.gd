@@ -221,6 +221,7 @@ func _initialize() -> void:
 	_test_auction_snipe_sku_pool()
 	_test_auction_inspect_fog()
 	_test_shady_trunk()
+	_test_shady_trunk_sku_pool()
 	_test_one_counter_haggle()
 	_test_sell_side_negotiate()
 	_test_buylist_buy_from_them()
@@ -28750,7 +28751,12 @@ func _test_shady_trunk_same_seed_flag() -> void:
 	_expect_equal(on_trunk != null, true, "AT1: flag-on prep roll offers the trunk")
 	if on_trunk != null:
 		_expect_equal(on_trunk.channel, &"shady", "AT1: trunk uses the shady channel")
-		_expect_equal(on_trunk.sku_id, ShadyTrunkPolicy.DEFAULT_SKU_ID, "AT1: SKU is visible")
+		_expect_equal(on_trunk.sku_id.is_empty(), false, "AT1: SKU is visible")
+		_expect_equal(
+			_bx1_is_legal_trunk_sku(on_trunk.sku_id),
+			true,
+			"AT1: trunk SKU stays a live non-bulk SINGLE"
+		)
 		_expect_equal(on_trunk.display_name.is_empty(), false, "AT1: SKU name is visible")
 		_expect_equal(on_trunk.unit_cost_cents > 0, true, "AT1: ask is visible")
 		_expect_equal(on_trunk.confidence, &"low", "AT1: confidence is Low")
@@ -29040,7 +29046,7 @@ func _test_shady_trunk_ask_fake_and_no_truth() -> void:
 		)
 		var fake_slab: SlabInstance = _inventory_service.call(
 			"get_slab",
-			ShadyTrunkPolicy.DEFAULT_SKU_ID
+			trunk.sku_id
 		)
 		_expect_equal(fake_slab != null, true, "AT1: graded roll creates a slab")
 		if fake_slab != null:
@@ -29071,7 +29077,7 @@ func _test_shady_trunk_ask_fake_and_no_truth() -> void:
 				"AT1: fail-on-sale still applies the shipped Rep bomb"
 			)
 			_expect_equal(
-				_inventory_service.call("get_slab", ShadyTrunkPolicy.DEFAULT_SKU_ID) == null,
+				_inventory_service.call("get_slab", trunk.sku_id) == null,
 				true,
 				"AT1: fail-on-sale still removes the slab"
 			)
@@ -29091,7 +29097,7 @@ func _test_shady_trunk_ask_fake_and_no_truth() -> void:
 		)
 		var valid_slab: SlabInstance = _inventory_service.call(
 			"get_slab",
-			ShadyTrunkPolicy.DEFAULT_SKU_ID
+			trunk.sku_id
 		)
 		_expect_equal(valid_slab != null, true, "AT1: 0% roll creates a slab")
 		if valid_slab != null:
@@ -29397,6 +29403,7 @@ func _at1_backstock_slabs(sku_id: StringName) -> int:
 
 func _at1_offer_snapshot(sku_id: StringName) -> Dictionary:
 	return {
+		"sku_id": sku_id,
 		"attention": int(_game_state.get("attention_remaining")),
 		"cash": int(_economy.get("balance_cents")),
 		"owned": int(_inventory_service.call("total_owned", sku_id)),
@@ -29405,7 +29412,7 @@ func _at1_offer_snapshot(sku_id: StringName) -> Dictionary:
 
 
 func _at1_expect_nothing_moved(before: Dictionary, label: String) -> void:
-	var sku := ShadyTrunkPolicy.DEFAULT_SKU_ID
+	var sku := StringName(before.get("sku_id", ShadyTrunkPolicy.DEFAULT_SKU_ID))
 	_expect_equal(
 		int(_game_state.get("attention_remaining")),
 		int(before.get("attention", -1)),
@@ -29437,6 +29444,400 @@ func _at1_hud_has_trunk_row(hud: Node) -> bool:
 		if row != null and row.text.begins_with("Shady"):
 			return true
 	return false
+
+
+func _test_shady_trunk_sku_pool() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bx1_named_gate_and_pool()
+	_test_bx1_cadence_and_identity()
+	_test_bx1_fallback_and_empress()
+	_test_bx1_buy_report_walk_save()
+	_test_bx1_confirm_no_truth()
+	_test_bx1_untouched_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bx1_named_gate_and_pool() -> void:
+	_expect_equal(ShadyTrunkPolicy.QTY, 1, "BX1: qty stays 1")
+	_expect_equal(
+		ShadyTrunkPolicy.DEFAULT_SKU_ID,
+		&"AA-SKIE-052",
+		"BX1: Empress remains the shipped DEFAULT"
+	)
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.REPORT_REP_GAIN == 2
+		and is_equal_approx(ShadyTrunkPolicy.FAKE_SLAB_RATE, 0.08)
+		and is_equal_approx(ShadyTrunkPolicy.COMP_WIDTH, 0.22),
+		true,
+		"BX1: AT1 ask 25% / Report +2 / fake 8% / width 0.22 stay locked"
+	)
+	_game_state.call("start_new_game")
+	var catalog := (_inventory_service.get("model") as InventoryModel).catalog
+	var pool := ShadyTrunkPolicy.pool_sku_ids(catalog)
+	_expect_equal(pool.size(), 5, "BX1: live catalog has five non-bulk SINGLE SKUs")
+	_expect_equal(
+		pool.has(&"AA-BASE-088")
+		and pool.has(&"AA-BASE-078")
+		and pool.has(&"AA-SKIE-047")
+		and pool.has(&"AA-SKIE-052")
+		and pool.has(&"AA-SKIE-058")
+		and not pool.has(&"AA-SKIE-ETB")
+		and not pool.has(&"AA-SKIE-BLST")
+		and not pool.has(&"AA-DUST-ETB")
+		and not pool.has(&"AA-BASE-BULK")
+		and not pool.has(&"ACC-SLV-60")
+		and not pool.has(&"ACC-TOP-25"),
+		true,
+		"BX1: pool is live non-bulk SINGLE and never sealed, accessory, or bulk"
+	)
+	_expect_equal(
+		ShadyTrunkPolicy.is_trunk_sku(catalog.get(&"AA-SKIE-052") as ProductSKU)
+		and ShadyTrunkPolicy.is_trunk_sku(catalog.get(&"AA-SKIE-047") as ProductSKU)
+		and ShadyTrunkPolicy.is_trunk_sku(catalog.get(&"AA-BASE-088") as ProductSKU),
+		true,
+		"BX1: Empress and other non-bulk singles stay legal draws"
+	)
+	_expect_equal(
+		not ShadyTrunkPolicy.is_trunk_sku(catalog.get(&"AA-DUST-ETB") as ProductSKU)
+		and not ShadyTrunkPolicy.is_trunk_sku(catalog.get(&"ACC-SLV-60") as ProductSKU)
+		and not ShadyTrunkPolicy.is_trunk_sku(catalog.get(&"AA-BASE-BULK") as ProductSKU),
+		true,
+		"BX1: sealed, accessories, and bulk never enter the pool"
+	)
+
+
+func _test_bx1_cadence_and_identity() -> void:
+	const SEED := 20261003
+	var seen: Dictionary = {}
+	var days := _at1_flag_days(SEED)
+	var on_day := int(days.get("on", 0))
+	var off_day := int(days.get("off", 0))
+	_expect_equal(on_day >= 1 and off_day >= 1, true, "BX1: same seed yields both flag nights")
+	for day: int in range(1, 25):
+		_at1_reset_on(day)
+		var offer := bool(_demand_signals.call("shady_trunk_should_offer", SEED, day))
+		var signals := _at1_trunk_signals()
+		if not offer:
+			_expect_equal(signals.is_empty(), true, "BX1: quiet flag-off night %d opens none" % day)
+			_expect_equal(
+				_demand_signals.call("open_shady_trunk") == null,
+				true,
+				"BX1: live prep stays shut on quiet night %d" % day
+			)
+			continue
+		_expect_equal(signals.size() <= 1, true, "BX1: night %d opens at most one trunk" % day)
+		_expect_equal(signals.size(), 1, "BX1: night %d with should_offer opens one trunk" % day)
+		if signals.is_empty():
+			continue
+		var dto := signals[0]
+		_expect_equal(_bx1_is_legal_trunk_sku(dto.sku_id), true, "BX1: night %d SKU stays legal" % day)
+		_expect_equal(dto.quantity, 1, "BX1: night %d qty stays 1" % day)
+		_expect_equal(ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id), true, "BX1: night %d uses a trunk id" % day)
+		_expect_equal(dto.grader, ShadyTrunkPolicy.DEFAULT_GRADER, "BX1: night %d ships grader" % day)
+		_expect_equal(is_equal_approx(dto.grade, ShadyTrunkPolicy.DEFAULT_GRADE), true, "BX1: night %d ships grade" % day)
+		_at1_reset_on(day)
+		var again: BuyConfirmSignal = _demand_signals.call("open_shady_trunk")
+		_expect_equal(
+			again != null and again.sku_id == dto.sku_id,
+			true,
+			"BX1: same seed and day re-roll the same SKU"
+		)
+		seen[String(dto.sku_id)] = true
+	_expect_equal(seen.size() >= 2, true, "BX1: a multi-night same-seed sim hits at least two SKUs")
+
+
+func _test_bx1_fallback_and_empress() -> void:
+	const SEED := 20261003
+	_game_state.call("start_new_game")
+	var catalog := (_inventory_service.get("model") as InventoryModel).catalog
+	var pool := ShadyTrunkPolicy.pool_sku_ids(catalog)
+	_expect_equal(pool.has(ShadyTrunkPolicy.DEFAULT_SKU_ID), true, "BX1: Empress stays in the live pool")
+	var empress_only: Array[StringName] = []
+	empress_only.append(ShadyTrunkPolicy.DEFAULT_SKU_ID)
+	_expect_equal(
+		ShadyTrunkPolicy.pick_sku_id(SEED, 1, empress_only, catalog),
+		ShadyTrunkPolicy.DEFAULT_SKU_ID,
+		"BX1: Empress is a legal draw when it qualifies"
+	)
+	var empty_pool: Array[StringName] = []
+	_expect_equal(
+		ShadyTrunkPolicy.pick_sku_id(SEED, 1, empty_pool, catalog),
+		ShadyTrunkPolicy.DEFAULT_SKU_ID,
+		"BX1: empty pool falls back to DEFAULT when live"
+	)
+	var missing: Array[StringName] = []
+	missing.append(&"NO-SUCH-SKU")
+	_expect_equal(
+		ShadyTrunkPolicy.pick_sku_id(SEED, 2, missing, catalog),
+		ShadyTrunkPolicy.DEFAULT_SKU_ID,
+		"BX1: a missing chosen SKU falls back to DEFAULT when live"
+	)
+	_expect_equal(
+		ShadyTrunkPolicy.pick_sku_id(SEED, 3, empty_pool, {}),
+		&"",
+		"BX1: empty pool with no live DEFAULT returns none"
+	)
+	var first := ShadyTrunkPolicy.pick_sku_id(SEED, 4, pool, catalog)
+	var second := ShadyTrunkPolicy.pick_sku_id(SEED, 4, pool, catalog)
+	_expect_equal(first, second, "BX1: pick is deterministic for the same seed and day")
+	_expect_equal(pool.has(first), true, "BX1: the live pick stays inside the pool")
+
+
+func _test_bx1_buy_report_walk_save() -> void:
+	var on_day := int(_at1_flag_days(ShadyTrunkPolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "BX1: buy path needs a flag-on night")
+	if on_day < 1:
+		return
+	_at1_reset_on(on_day)
+	var trunk: BuyConfirmSignal = _demand_signals.call("open_shady_trunk")
+	_expect_equal(trunk != null, true, "BX1: buy needs the trunk")
+	if trunk == null:
+		return
+	var hidden := int(_demand_signals.call("market_cents_for", trunk.sku_id))
+	_expect_equal(hidden > 0, true, "BX1: ask still reads today's marketplace basis")
+	_expect_equal(
+		trunk.unit_cost_cents,
+		int(_demand_signals.call("shady_trunk_ask_cents", hidden)),
+		"BX1: ask still is 25% of _marketplace_basis_cents"
+	)
+	var sku := trunk.sku_id
+	var ask := trunk.lot_total_cents
+	var att_before := int(_game_state.get("attention_remaining"))
+	var cash_before := int(_economy.get("balance_cents"))
+	var slabs_before := _at1_backstock_slabs(sku)
+	_expect_equal(bool(_demand_signals.call("buy_shady_trunk", trunk)), true, "BX1: buy spends cash")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BX1: buy has no Attention cost"
+	)
+	_expect_equal(int(_economy.get("balance_cents")), cash_before - ask, "BX1: buy pays the ask")
+	_expect_equal(_at1_backstock_slabs(sku), slabs_before + 1, "BX1: buy lands a graded slab in BACKSTOCK")
+	_expect_equal(
+		_demand_signals.call("open_shady_trunk") == null,
+		true,
+		"BX1: a successful buy closes the night"
+	)
+
+	_at1_reset_on(on_day)
+	trunk = _demand_signals.call("open_shady_trunk")
+	_expect_equal(trunk != null, true, "BX1: cash-short path needs the trunk")
+	if trunk == null:
+		return
+	_economy.set("balance_cents", maxi(0, trunk.lot_total_cents - 1))
+	var short_cash := _at1_offer_snapshot(trunk.sku_id)
+	_expect_equal(bool(_demand_signals.call("buy_shady_trunk", trunk)), false, "BX1: cash-short fails")
+	_at1_expect_nothing_moved(short_cash, "BX1 cash short")
+
+	_at1_reset_on(on_day)
+	trunk = _demand_signals.call("open_shady_trunk")
+	_expect_equal(trunk != null, true, "BX1: report needs the trunk")
+	if trunk == null:
+		return
+	var report_before := _at1_offer_snapshot(trunk.sku_id)
+	var rep_before := int(_game_state.get("current_reputation"))
+	_expect_equal(
+		trunk != null and bool(_demand_signals.call("report_shady_trunk", trunk)),
+		true,
+		"BX1: report closes the night"
+	)
+	_expect_equal(
+		int(_game_state.get("current_reputation")),
+		rep_before + 2,
+		"BX1: report still adds Rep +2 once"
+	)
+	_at1_expect_nothing_moved(report_before, "BX1 report")
+	_expect_equal(_demand_signals.call("open_shady_trunk") == null, true, "BX1: reported trunk is gone")
+	var reported: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(reported, "BX1 reported trunk save")
+	_game_state.call("start_new_game")
+	_expect_equal(_game_state.call("restore_save", reported), true, "BX1: restore accepts a reported night")
+	_expect_equal(
+		_demand_signals.call("open_shady_trunk") == null,
+		true,
+		"BX1: restore keeps the reported night closed"
+	)
+
+	_at1_reset_on(on_day)
+	trunk = _demand_signals.call("open_shady_trunk")
+	_expect_equal(trunk != null, true, "BX1: walk needs the trunk")
+	if trunk == null:
+		return
+	var walk_before := _at1_offer_snapshot(trunk.sku_id)
+	var walk_rep := int(_game_state.get("current_reputation"))
+	_expect_equal(bool(_demand_signals.call("walk_shady_trunk", trunk)), true, "BX1: walk closes the night")
+	_expect_equal(int(_game_state.get("current_reputation")), walk_rep, "BX1: walk leaves Rep unchanged")
+	_at1_expect_nothing_moved(walk_before, "BX1 walk")
+	_expect_equal(_demand_signals.call("open_shady_trunk") == null, true, "BX1: walked trunk is gone")
+
+	_at1_reset_on(on_day)
+	var open_first: BuyConfirmSignal = _demand_signals.call("open_shady_trunk")
+	_expect_equal(open_first != null, true, "BX1: save/load open-state needs a trunk")
+	if open_first != null:
+		var open_sku := open_first.sku_id
+		var open_id := open_first.opportunity_id
+		var open_saved: Dictionary = _game_state.call("capture_save")
+		_game_state.call("start_new_game")
+		_expect_equal(_game_state.call("restore_save", open_saved), true, "BX1: restore accepts an open trunk")
+		var restored: BuyConfirmSignal = _demand_signals.call("open_shady_trunk")
+		_expect_equal(restored != null, true, "BX1: restore re-derives the open trunk")
+		if restored != null:
+			_expect_equal(
+				restored.sku_id == open_sku and restored.opportunity_id == open_id,
+				true,
+				"BX1: same seed, day, and live pool restore the same SKU"
+			)
+
+	_at1_reset_on(on_day)
+	var leftover: BuyConfirmSignal = _demand_signals.call("open_shady_trunk")
+	_expect_equal(leftover != null, true, "BX1: expire test needs an open trunk")
+	var leftover_id := leftover.opportunity_id if leftover != null else &""
+	_expect_equal(_game_state.call("start_floor"), true, "BX1: floor opens to settle")
+	_expect_equal(_game_state.call("start_settle"), true, "BX1: unbought trunks expire at close")
+	_expect_equal(_game_state.call("advance_day"), true, "BX1: next day follows settle")
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", leftover_id) == null,
+		true,
+		"BX1: yesterday's trunk does not carry over"
+	)
+
+
+func _test_bx1_confirm_no_truth() -> void:
+	var on_day := int(_at1_flag_days(ShadyTrunkPolicy.RUN_SEED).get("on", 0))
+	_expect_equal(on_day >= 1, true, "BX1: confirm scan needs a flag-on night")
+	if on_day < 1:
+		return
+	_at1_reset_on(on_day)
+	var trunk: BuyConfirmSignal = _demand_signals.call("open_shady_trunk")
+	_expect_equal(trunk != null, true, "BX1: confirm scan needs the trunk")
+	if trunk == null:
+		return
+	_expect_dto_has_no_truth_fields(trunk, "BX1 shady trunk")
+	_expect_equal(
+		trunk.get("cert_valid") == null and trunk.get("true_market_cents") == null,
+		true,
+		"BX1: offer DTO has no cert_valid or true_market"
+	)
+	var row := DemandSignalPresenter.opportunity_row(trunk)
+	var summary := DemandSignalPresenter.buy_summary(trunk)
+	var snapshot := DemandSignalPresenter.buy_confirm_snapshot(trunk)
+	for text: String in [row, summary, snapshot]:
+		_assert_text_has_no_truth(text, "BX1 shady trunk copy")
+		var lower := text.to_lower()
+		_expect_equal(lower.contains("true_market"), false, "BX1: confirm never shows true_market")
+		_expect_equal(lower.contains("p_buy"), false, "BX1: confirm never shows p_buy")
+		_expect_equal(lower.contains("cert_valid"), false, "BX1: confirm never shows cert_valid")
+	_expect_equal(summary.contains("Low"), true, "BX1: confirm still shows Low confidence")
+	_expect_equal(summary.contains("Photo only"), true, "BX1: confirm still shows the photo cue")
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.FAKE_SLAB_RATE, 0.08)
+		and is_equal_approx(NORMAL_CONFIG.shady_fake_slab_rate, 0.08),
+		true,
+		"BX1: fake slab still 8% on graded"
+	)
+	_expect_equal(HagglePolicy.can_haggle(&"shady"), true, "BX1: AU1 haggle stays on the shady channel")
+
+
+func _test_bx1_untouched_and_parked() -> void:
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.REPORT_REP_GAIN == 2
+		and is_equal_approx(ShadyTrunkPolicy.FAKE_SLAB_RATE, 0.08)
+		and is_equal_approx(ShadyTrunkPolicy.COMP_WIDTH, 0.22),
+		true,
+		"BX1: AT1 ask / Report / fake / width stay as shipped"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST == 10
+		and is_equal_approx(AuctionSnipePolicy.COMP_WIDTH, 0.12)
+		and AuctionSnipePolicy.DEFAULT_SKU_ID == &"AA-DUST-ETB"
+		and AuctionSnipePolicy.QTY == 1,
+		true,
+		"BX1: AS1 / BW1 auction pool stay as shipped"
+	)
+	_expect_equal(
+		PlayerTradePolicy.UNLOCK_REP == 50
+		and MarketplaceLotPolicy.FIRST_DAY == 4
+		and MarketplaceLotPolicy.MIN_PER_DAY == 1
+		and MarketplaceLotPolicy.MAX_PER_DAY == 3
+		and DistributorMenuPolicy.FIRST_DAY == 8,
+		true,
+		"BX1: BT1 / BU1 / BV1 stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BX1: BM1–BO1 stay as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	_expect_equal(
+		catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, 5).size() == 5,
+		true,
+		"BX1: buyer door spawn stays as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5)
+		and is_equal_approx(
+			catalog.weight_for(whale, 75, NORMAL_CONFIG),
+			catalog.weight_for(whale, 74, NORMAL_CONFIG) * 1.5
+		),
+		true,
+		"BX1: whale weight stays as shipped"
+	)
+	_at1_reset_on(1)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")), 1.0),
+		true,
+		"BX1: the trunk pool is not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string("res://scripts/autoload/demand_signals.gd")
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "trunk")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "shady")
+		and not _function_body_contains(demand_src, "func active_event_traffic_mult(", "trunk")
+		and not _function_body_contains(demand_src, "func active_event_whale_weight_mult(", "trunk"),
+		true,
+		"BX1: the pool stays off sell-through, door spawn, and whale weight"
+	)
+	var policy_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/shady_trunk_policy.gd"
+	)
+	_expect_equal(
+		not policy_src.contains("event_tag")
+		and not policy_src.contains("archetype")
+		and not policy_src.contains("hype")
+		and not policy_src.contains("staple"),
+		true,
+		"BX1: the pool has no event-tag bias"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("shady_trunk_pool")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("listed_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"BX1: Soft catalog stays CLOSED"
+	)
+	_game_state.call("start_new_game")
+
+
+func _bx1_is_legal_trunk_sku(sku_id: StringName) -> bool:
+	var model := _inventory_service.get("model") as InventoryModel
+	if model == null:
+		return false
+	var sku := model.get_sku(sku_id)
+	return ShadyTrunkPolicy.is_trunk_sku(sku)
 
 
 func _test_one_counter_haggle() -> void:
