@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BZ v1 — post BY1
 
-**Status:** **TIP-FROZEN** 2026-10-05 ~9:43pm ET — BZ1 [#108](https://github.com/adamwlarson/cardshopsimulator/pull/108) @ `5f49149b` (branch `cursor/bz1-last-sold-in-shop-ab41`). Eng review vs bar `e21c83a3`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
+**Status:** TIP-FROZEN — PR #108 at `d1801c97` (branch `cursor/bz1-last-sold-in-shop-ab41`). Eng bar `e21c83a3`. Save key `sale_history`. NACK fix: fake-slab sale_fail never records. Soft CLOSED. Soft OK list-time Soft. No Art. Eng review that SHA only; QA held.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-by (BY1 Regulars relationship stock SHIPPED #107 @ `44cb48e4`, reviewed `da5b39d7`; QA PASS-with-notes harness 885/0/4 +6 Soft OK; save key `regulars_return` `{queued, sku_id}`; docs status `6079a61c`); Soft catalog CLOSED
