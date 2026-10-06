@@ -25309,6 +25309,8 @@ func _test_by1_delisted_fallback_and_cap() -> void:
 		0,
 		"BY1: a negotiated sale queues nothing"
 	)
+	_game_state.set("current_reputation", 50)
+	_event_bus.emit_signal("reputation_changed", 50)
 	var first := _ao1_sell_listed()
 	_expect_equal(first != null, true, "BY1: first listed sale still completes")
 	if first != null:
