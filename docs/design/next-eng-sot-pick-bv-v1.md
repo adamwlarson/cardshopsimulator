@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BV v1 — post BU1
 
-**Status:** **TIP-FROZEN** 2026-10-05 ~8:19pm ET — BV1 [#104](https://github.com/adamwlarson/cardshopsimulator/pull/104) @ `6f245024` (branch `cursor/bv1-recurring-player-trade-pool-8f22`). Eng review vs bar `e2745dbc`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
+**Status:** **SHIPPED** 2026-10-05 ~8:29pm ET — squash-merged [#104](https://github.com/adamwlarson/cardshopsimulator/pull/104) @ `c35ae518` (reviewed `6f245024`). QA PASS-with-notes harness 624/0/4 +5 Soft OK. Soft CLOSED. Soft OK list-time Soft. No Art. Next pick is BW.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bu (BU1 Recurring marketplace lots 1–3/day SHIPPED #103 @ `ef34b630`, reviewed `966445c5`; docs status `fb60287d`); Soft catalog CLOSED
@@ -13,7 +13,7 @@
 | Pack | Result |
 |------|--------|
 | A–BU1 | Full loop + fair/overprice settle + suggested day-clear + buylist drip / fewer-lots / high-% flood + daily utilities + calendar set release hype + Pro tour archetype spike + Rotation staples crash + Distributor weekly restock menu + Recurring marketplace lots 1–3/day |
-| Soft | Catalog CLOSED; AC1 through BU1 Soft OK MVP notes stay Soft (incl. BU1 toast overstate; cash gate on partial; haggle on fetch) |
+| Soft | Catalog CLOSED; AC1 through BV1 Soft OK MVP notes stay Soft (incl. BV1 mid-day pool swap give; unlock constant 50; receive NM from receive_card default; SEEDED_OFFER_ID unused alias; BU1 toast overstate; cash gate on partial; haggle on fetch) |
 
 **Gap:** With BT1 + BU1 every §3 **cadence** row is live (Distributor weekly, Marketplace 1–3/day, Auction seeded/event snipes, Shady night trunk, Buylist walk-ins). The remaining load-bearing §3 / §5.3 gap that is still thin (not Soft) is **Player trades**. AN1 unlocked the Rep ≥ 50 gate and ships a single hardcoded in-kind pair (`AA-DUST-ETB` give → `AA-SKIE-ETB` receive). Verified on main tip `fb60287d` / reviewed `966445c5`: `PlayerTradePolicy` exposes only `SEEDED_OFFER_ID` / those two SKUs; `PlayerTradeService.roll_open` returns that one offer or null when Dustway is missing. So band 50–74's named unlock (§5.3 "Regulars + player trades unlock", §3 "In-kind / Full / Opportunity cost of stock given") almost never fires after the player sells through seed Dustway, and never rotates. Soft OK list-time suggested stays Soft. Camera off-switch Soft hard-parked. STOP parked.
 
@@ -98,3 +98,4 @@
 | 2026-10-05 ~8:07pm ET | Drafted post BU1 SHIPPED #103 @ `ef34b630` (reviewed `966445c5`; docs status `fb60287d`). Lean **BV1 Recurring player-trade pool**. Verified on tip `966445c5` / status `fb60287d`: `PlayerTradePolicy` is a single Dust→Skie seeded pair behind the Rep ≥ 50 gate, so band 50–74's unlock dies once Dustway is gone. §3 cadence (BT1/BU1/AS1/AT1/buylist) is otherwise live. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. BU1 Soft notes stay Soft. No Art. BM1–BU1 stay as shipped. |
 | 2026-10-05 ~8:07pm ET | **ADOPTED** BV1. Park BV2 STOP / BV3 Soft / BV4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
 | 2026-10-05 ~8:19pm ET | **Tip-frozen** [#104](https://github.com/adamwlarson/cardshopsimulator/pull/104) @ `6f245024` (branch `cursor/bv1-recurring-player-trade-pool-8f22`). 9 files, no docs. Cloud agent bc-394e05e9 archived. Eng review that SHA against bar `e2745dbc`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
+| 2026-10-05 ~8:29pm ET | **SHIPPED** — squash-merged [#104](https://github.com/adamwlarson/cardshopsimulator/pull/104) @ `c35ae518` (reviewed `6f245024`). QA PASS-with-notes harness 624/0/4 +5 Soft OK. Soft OK list-time stays Soft. Soft CLOSED. No Art. Next pick is BW. |
