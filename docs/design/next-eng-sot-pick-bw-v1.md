@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BW v1 — post BV1
 
-**Status:** **TIP-FROZEN** 2026-10-05 ~8:40pm ET — BW1 [#105](https://github.com/adamwlarson/cardshopsimulator/pull/105) @ `fb7b1e1c` (branch `cursor/bw1-auction-snipe-sku-pool-0473`). Eng review vs bar `7a51c978`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
+**Status:** **SHIPPED** 2026-10-05 ~8:48pm ET — squash-merged [#105](https://github.com/adamwlarson/cardshopsimulator/pull/105) @ `f2b1eb61` (reviewed `fb7b1e1c`). QA PASS-with-notes harness 719/0/4 +5 Soft OK. Soft CLOSED. Soft OK list-time Soft. No Art. Next pick is BX.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bv (BV1 Recurring player-trade pool SHIPPED #104 @ `c35ae518`, reviewed `6f245024`; docs status `2321d5a5`); Soft catalog CLOSED
@@ -13,7 +13,7 @@
 | Pack | Result |
 |------|--------|
 | A–BV1 | Full loop + fair/overprice settle + suggested day-clear + buylist drip / fewer-lots / high-% flood + daily utilities + calendar set release hype + Pro tour archetype spike + Rotation staples crash + Distributor weekly restock menu + Recurring marketplace lots 1–3/day + Recurring player-trade pool |
-| Soft | Catalog CLOSED; AC1 through BV1 Soft OK MVP notes stay Soft (incl. BV1 mid-day give swap Soft; unlock constant 50 Soft; receive NM Soft; SEEDED_OFFER_ID unused alias Soft; Soft OK list-time Soft) |
+| Soft | Catalog CLOSED; AC1 through BW1 Soft OK MVP notes stay Soft (incl. BW1 empty-catalog pick Soft; AA-SKIE-052 also AT1 Soft; event-tag grep Soft; no graded fixture Soft; Soft OK list-time Soft) |
 
 **Gap:** With BT1 + BU1 + BV1 every §3 **cadence** row and the §5.3 player-trade unlock are live. The remaining load-bearing §3 gap that is still thin (not Soft) is **Auction snipes SKU pool**. AS1 shipped the event-tied / seeded flag, Attention 10 + ask race, Medium confidence w 0.12, and steal/trap ask noise — but verified on docs status `2321d5a5`: `AuctionSnipePolicy.DEFAULT_SKU_ID` is hardcoded `AA-DUST-ETB`, and `_make_auction_snipe` always uses that constant. So every snipe is Dustway ETB, including days when a named settle event (BQ1/BR1/BS1) force-opens the flag. §3 "Event-tied / Can be steal or trap" never rotates across the live catalog. Soft OK list-time suggested stays Soft. Camera off-switch Soft hard-parked. STOP parked. (AT1 trunk is the same thin-pool shape with `AA-SKIE-052` — park as Out this pick; rarer night cadence, graded/fake lane stays distinct.)
 
@@ -98,3 +98,4 @@
 | 2026-10-05 ~8:31pm ET | Drafted post BV1 SHIPPED #104 @ `c35ae518` (reviewed `6f245024`; docs status `2321d5a5`). Lean **BW1 Auction snipe SKU pool**. Verified on tip `2321d5a5`: `AuctionSnipePolicy.DEFAULT_SKU_ID` = `AA-DUST-ETB` and `_make_auction_snipe` always uses it, so every snipe (incl. event force-open) is Dustway. §3 cadence + player trades otherwise live. AT1 trunk still thin (`AA-SKIE-052`) — Out this pick. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. BV1 Soft notes stay Soft. No Art. BM1–BV1 stay as shipped. |
 | 2026-10-05 ~8:32pm ET | **ADOPTED** BW1. Park BW2 STOP / BW3 Soft / BW4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
 | 2026-10-05 ~8:40pm ET | **Tip-frozen** [#105](https://github.com/adamwlarson/cardshopsimulator/pull/105) @ `fb7b1e1c` (branch `cursor/bw1-auction-snipe-sku-pool-0473`). 3 files, no docs. Cloud agent bc-f5159730 archived. Eng review that SHA against bar `7a51c978`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
+| 2026-10-05 ~8:48pm ET | **SHIPPED** — squash-merged [#105](https://github.com/adamwlarson/cardshopsimulator/pull/105) @ `f2b1eb61` (reviewed `fb7b1e1c`). QA PASS-with-notes harness 719/0/4 +5 Soft OK. Soft OK list-time stays Soft. Soft CLOSED. No Art. Next pick is BX. |
