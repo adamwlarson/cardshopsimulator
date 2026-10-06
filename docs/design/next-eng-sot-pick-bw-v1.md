@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BW v1 — post BV1
 
-**Status:** **ADOPTED** 2026-10-05 ~8:32pm ET — BW1 Auction snipe SKU pool. Soft CLOSED. Soft OK list-time Soft. No Art. Eng bar locked; awaiting tip-freeze.
+**Status:** **TIP-FROZEN** 2026-10-05 ~8:40pm ET — BW1 [#105](https://github.com/adamwlarson/cardshopsimulator/pull/105) @ `fb7b1e1c` (branch `cursor/bw1-auction-snipe-sku-pool-0473`). Eng review vs bar `7a51c978`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bv (BV1 Recurring player-trade pool SHIPPED #104 @ `c35ae518`, reviewed `6f245024`; docs status `2321d5a5`); Soft catalog CLOSED
@@ -97,3 +97,4 @@
 |------|----------|
 | 2026-10-05 ~8:31pm ET | Drafted post BV1 SHIPPED #104 @ `c35ae518` (reviewed `6f245024`; docs status `2321d5a5`). Lean **BW1 Auction snipe SKU pool**. Verified on tip `2321d5a5`: `AuctionSnipePolicy.DEFAULT_SKU_ID` = `AA-DUST-ETB` and `_make_auction_snipe` always uses it, so every snipe (incl. event force-open) is Dustway. §3 cadence + player trades otherwise live. AT1 trunk still thin (`AA-SKIE-052`) — Out this pick. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. BV1 Soft notes stay Soft. No Art. BM1–BV1 stay as shipped. |
 | 2026-10-05 ~8:32pm ET | **ADOPTED** BW1. Park BW2 STOP / BW3 Soft / BW4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~8:40pm ET | **Tip-frozen** [#105](https://github.com/adamwlarson/cardshopsimulator/pull/105) @ `fb7b1e1c` (branch `cursor/bw1-auction-snipe-sku-pool-0473`). 3 files, no docs. Cloud agent bc-f5159730 archived. Eng review that SHA against bar `7a51c978`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
