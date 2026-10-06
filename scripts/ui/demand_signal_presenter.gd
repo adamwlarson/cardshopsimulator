@@ -486,6 +486,9 @@ static func price_summary(
 		)
 	elif not dto.display_context.strip_edges().is_empty():
 		lines.append(dto.display_context)
+	var history_line := last_sold_in_shop_line(dto.sku_id)
+	if not history_line.is_empty():
+		lines.append(history_line)
 	if not dto.condition_cue.strip_edges().is_empty():
 		lines.append(condition_line(dto.condition_cue, dto.grader, dto.grade))
 	return "\n".join(lines)
