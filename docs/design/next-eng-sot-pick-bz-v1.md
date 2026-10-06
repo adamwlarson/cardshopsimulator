@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BZ v1 — post BY1
 
-**Status:** **ADOPTED** 2026-10-05 ~9:33pm ET — BZ1 Buy-confirm "Last sold in-shop" history line. Soft CLOSED. Soft OK list-time Soft. No Art. Eng bar locked; awaiting tip-freeze.
+**Status:** **TIP-FROZEN** 2026-10-05 ~9:43pm ET — BZ1 [#108](https://github.com/adamwlarson/cardshopsimulator/pull/108) @ `5f49149b` (branch `cursor/bz1-last-sold-in-shop-ab41`). Eng review vs bar `e21c83a3`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-by (BY1 Regulars relationship stock SHIPPED #107 @ `44cb48e4`, reviewed `da5b39d7`; QA PASS-with-notes harness 885/0/4 +6 Soft OK; save key `regulars_return` `{queued, sku_id}`; docs status `6079a61c`); Soft catalog CLOSED
@@ -97,3 +97,4 @@ If PM judges BZ1 too thin to be load-bearing: §3 / §4–§9 systems rows are o
 |------|----------|
 | 2026-10-05 ~9:35pm ET | Drafted post BY1 SHIPPED #107 @ `44cb48e4` (reviewed `da5b39d7`; docs status `6079a61c`). Lean **BZ1 Buy-confirm "Last sold in-shop" history line** (§4.5 A optional line). Read-only code search for `"Last sold"` hits only `systems-design-v1.md` — no sale-history store or confirm line. §3 channels / §8 events / §4.3–§4.4 / §5.3 / §6.3 otherwise live. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. BY1 Soft notes stay Soft. No Art. BM1–BY1 stay as shipped. |
 | 2026-10-05 ~9:33pm ET | **ADOPTED** BZ1. Park BZ2 STOP / BZ3 Soft / BZ4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~9:43pm ET | **Tip-frozen** [#108](https://github.com/adamwlarson/cardshopsimulator/pull/108) @ `5f49149b` (branch `cursor/bz1-last-sold-in-shop-ab41`). 6 files, no docs. New save key `sale_history`. Cloud agent bc-8711d38b archived. Eng review that SHA against bar `e21c83a3`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
