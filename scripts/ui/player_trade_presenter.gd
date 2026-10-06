@@ -48,7 +48,7 @@ static func detail_summary(offer: PlayerTradeOffer) -> String:
 static func confirm_snapshot(offer: PlayerTradeOffer) -> String:
 	if offer == null:
 		return ""
-	return "\n".join([
+	var lines: PackedStringArray = [
 		"%s · %s" % [_offer_label(offer), offer.counterparty_label],
 		"Give: %s ×%d · %s" % [
 			_name_of(offer.give_display_name, offer.give_sku_id),
@@ -61,7 +61,13 @@ static func confirm_snapshot(offer: PlayerTradeOffer) -> String:
 			offer.receive_condition.strip_edges(),
 		],
 		"Cash does not change.",
-	])
+	]
+	var history_line := DemandSignalPresenter.last_sold_in_shop_line(
+		offer.receive_sku_id
+	)
+	if not history_line.is_empty():
+		lines.append(history_line)
+	return "\n".join(lines)
 
 
 static func _offer_label(offer: PlayerTradeOffer) -> String:
