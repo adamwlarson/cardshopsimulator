@@ -25548,6 +25548,7 @@ func _test_in_shop_sale_history() -> void:
 	_test_bz1_named_gate()
 	_test_bz1_same_seed_history_line()
 	_test_bz1_out_paths_never_record()
+	_test_bz1_fake_slab_sale_fail_never_records()
 	_test_bz1_confirm_no_truth_byte_identical()
 	_test_bz1_save_load_and_untouched()
 	_qa_autoload.call("set_force_enabled", false)
@@ -25811,6 +25812,78 @@ func _test_bz1_out_paths_never_record() -> void:
 		true,
 		"BZ1: online fill path never writes sale history"
 	)
+
+
+func _test_bz1_fake_slab_sale_fail_never_records() -> void:
+	const SKU := &"AA-SKIE-052"
+	const FAIL_PRICE := 12_000
+	_game_state.call("start_new_game")
+	var history: SaleHistory = _game_state.get("sale_history")
+	var fake := _bz1_seed_inspected_fake_slab(SKU, FAIL_PRICE)
+	_expect_equal(fake != null, true, "BZ1: inspected fake slab seeds")
+	if fake == null:
+		return
+	_expect_equal(fake.cert_valid, false, "BZ1: seeded slab is a fail-slab")
+	_expect_equal(fake.inspected, true, "BZ1: fake slab is inspected")
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", SKU, FAIL_PRICE)),
+		true,
+		"BZ1: inspected fake slab sale_fail still resolves"
+	)
+	_expect_equal(
+		history.has(SKU),
+		false,
+		"BZ1: inspected fake slab sale_fail leaves history.has(sku) false"
+	)
+	_game_state.call("start_new_game")
+	history = _game_state.get("sale_history")
+	_game_state.call("note_completed_in_shop_sale", SKU, 4_200)
+	var kept := history.lookup(SKU)
+	_expect_equal(
+		int(kept.get(SaleHistory.UNIT_PRICE_KEY, 0)) == 4_200
+		and int(kept.get(SaleHistory.DAY_KEY, 0)) == 1,
+		true,
+		"BZ1: existing in-shop history is seeded before sale_fail"
+	)
+	var later := _bz1_seed_inspected_fake_slab(SKU, FAIL_PRICE)
+	_expect_equal(later != null, true, "BZ1: second inspected fake slab seeds")
+	if later == null:
+		return
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", SKU, FAIL_PRICE)),
+		true,
+		"BZ1: inspected fake slab sale_fail still resolves over existing history"
+	)
+	var after := history.lookup(SKU)
+	_expect_equal(
+		int(after.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		int(kept.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		"BZ1: sale_fail does not change existing unit_price_cents"
+	)
+	_expect_equal(
+		int(after.get(SaleHistory.DAY_KEY, 0)),
+		int(kept.get(SaleHistory.DAY_KEY, 0)),
+		"BZ1: sale_fail does not change existing day"
+	)
+
+
+func _bz1_seed_inspected_fake_slab(sku_id: StringName, listed_price_cents: int) -> SlabInstance:
+	var inventory := _inventory_service.get("model") as InventoryModel
+	var sku: ProductSKU = inventory.get_sku(sku_id) if inventory != null else null
+	var fake: SlabInstance = _inventory_service.call(
+		"seed_fake_slab",
+		sku_id,
+		&"Prism",
+		10.0,
+		sku.base_market_cents if sku != null else 1_200,
+		InventoryLocation.new(InventoryLocation.Type.CASE),
+		&"shady"
+	)
+	if fake == null:
+		return null
+	fake.inspected = true
+	fake.listed_price_cents = listed_price_cents
+	return fake
 
 
 func _test_bz1_confirm_no_truth_byte_identical() -> void:

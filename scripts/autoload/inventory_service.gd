@@ -603,10 +603,7 @@ func confirm_customer_sale(sku_id: StringName, sale_price_cents: int) -> bool:
 	GameState.clear_last_nm_mismatch()
 	var slab := _listed_slab_for(sku_id)
 	if slab != null:
-		if not _resolve_slab_sale(slab, sale_price_cents):
-			return false
-		_record_in_shop_sale(sku_id, sale_price_cents)
-		return true
+		return _resolve_slab_sale(slab, sale_price_cents)
 	var card := listed_card_for(sku_id)
 	if card != null:
 		if not model.remove_card(card):
@@ -921,6 +918,7 @@ func _resolve_slab_sale(slab: SlabInstance, sale_price_cents: int) -> bool:
 		if not model.remove_slab(slab):
 			return false
 		Economy.record_income(sale_price_cents, &"customer_sale", "Customer sale")
+		_record_in_shop_sale(sku_id, sale_price_cents)
 		EventBus.publish_inventory_changed(sku_id, total_owned(sku_id))
 		return true
 	return _fail_fake_slab_sale(slab, sale_price_cents)
