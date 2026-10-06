@@ -25819,9 +25819,13 @@ func _test_bz1_confirm_no_truth_byte_identical() -> void:
 	var dto := _bz1_buy_signal(SKU, DemandSignalService.Channel.MARKETPLACE)
 	var without := DemandSignalPresenter.buy_confirm_snapshot(dto)
 	var price_location := InventoryLocation.new(InventoryLocation.Type.SHELF)
-	var price := DemandSignalPresenter.price_summary(
-		_demand_signals.call("price_signal", SKU, 599, price_location) as PriceConfirmSignal
+	var price_dto: PriceConfirmSignal = _demand_signals.call(
+		"price_signal",
+		SKU,
+		599,
+		price_location
 	)
+	var price := DemandSignalPresenter.price_summary(price_dto)
 	var haggle_without: float = _demand_signals.call(
 		"haggle_accept_chance",
 		500,
@@ -25880,13 +25884,11 @@ func _test_bz1_confirm_no_truth_byte_identical() -> void:
 		true,
 		"BZ1: haggle odds stay byte-identical with history"
 	)
-	var price_after := DemandSignalPresenter.price_summary(
-		_demand_signals.call("price_signal", SKU, 599, price_location) as PriceConfirmSignal
-	)
+	var price_after := DemandSignalPresenter.price_summary(price_dto)
 	_expect_equal(
 		price_after,
 		price,
-		"BZ1: price confirm is unchanged when history exists"
+		"BZ1: price confirm text is unchanged when history exists"
 	)
 	_expect_equal(
 		price_after.contains("Last sold in-shop"),
