@@ -1,6 +1,6 @@
 # Next Eng SoT Pick CB v1 — post CA1
 
-**Status:** ADOPTED — CB1 Walk-in seller Last sold in-shop line. Soft CLOSED. Soft OK list-time Soft. Camera hard-parked. STOP parked. No Art. Park CB2/CB3/CB4. Eng bar this commit.
+**Status:** TIP-FROZEN — PR #110 at `0f7110c1` (branch `cursor/cb1-walk-in-seller-last-sold-ab0f`). Eng bar `213977b8`. Reuses `sale_history` (no new save key). Soft CLOSED. Soft OK list-time Soft. No Art. Eng review pending; QA held. Harness EXIT 0. Docs tip-freeze this commit.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-ca (CA1 Price-confirm "Last sold in-shop" history line SHIPPED #109 @ `8b48d370`, reviewed `397524ad`; QA PASS-with-notes harness 1034/0/4 +4 Soft OK; reuses `sale_history` (no new save key); docs status `b171e1cf`); pick-bz (BZ1 Buy-confirm "Last sold in-shop" SHIPPED #108 @ `df1fd35a`; save key `sale_history`); Soft catalog CLOSED
@@ -84,10 +84,10 @@ If PM judges CB1 too thin to be load-bearing: after CB1 every §4.5 history surf
 
 ## PM checklist
 
-- [ ] Choose **CB1** (recommended)
-- [ ] If CB1: Eng vs §4.3 / §4.5 A buylist close. Reuse `SaleHistory` / `sale_history` via `last_sold_in_shop_line` inside `buylist_seller_summary` (no new save key, no new writers). Walk-in seller panel shows `Last sold in-shop: $X, N days ago` when the seller's SKU has history, else hidden; survives AX1 edit / AY1 Inspect re-render. Display only — no change to You offer / buylist % / accept odds / anger floor / comp / band / confidence / condition. Buy-confirm / price-confirm / trade confirm byte-identical to CA1. Leave Soft OK list-time Soft. No Art. BM1–CA1 / buyer door / whale / BN1–BO1 seller weight untouched
-- [ ] Sync this file to main before cloud agent
-- [ ] Soft catalog stays closed; STOP stays parked
+- [x] Choose **CB1** (recommended)
+- [x] If CB1: Eng vs §4.3 / §4.5 A buylist close. Reuse `SaleHistory` / `sale_history` via `last_sold_in_shop_line` inside `buylist_seller_summary` (no new save key, no new writers). Walk-in seller panel shows `Last sold in-shop: $X, N days ago` when the seller's SKU has history, else hidden; survives AX1 edit / AY1 Inspect re-render. Display only — no change to You offer / buylist % / accept odds / anger floor / comp / band / confidence / condition. Buy-confirm / price-confirm / trade confirm byte-identical to CA1. Leave Soft OK list-time Soft. No Art. BM1–CA1 / buyer door / whale / BN1–BO1 seller weight untouched
+- [x] Sync this file to main before cloud agent
+- [x] Soft catalog stays closed; STOP stays parked
 
 ---
 
@@ -96,3 +96,4 @@ If PM judges CB1 too thin to be load-bearing: after CB1 every §4.5 history surf
 | When | Decision |
 |------|----------|
 | 2026-10-05 ~11:20pm ET | Drafted post CA1 SHIPPED #109 @ `8b48d370` (reviewed `397524ad`; QA PASS-with-notes harness 1034/0/4 +4 Soft OK; reuses `sale_history`; docs status `b171e1cf`). Lean **CB1 Walk-in seller "Last sold in-shop" line** (§4.3 / §4.5 A buylist close). Verified read-only on main `b171e1cf`: `last_sold_in_shop_line` reaches buy-confirm / price-summary / trade only; `buylist_seller_summary` (live SELLER serve panel) has no line; `data/buy_opportunities.json` has no buylist-channel Prep opportunities, so BZ1 buylist coverage is synthetic-only. Reuses shipped store — no new key/writers. §3 channels / §8 events / §4.3–§4.4 / §5.3 / §6.3 / §4.5 A+B otherwise live. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. CA1 Soft keeps stay Soft. No Art. BM1–CA1 stay as shipped. |
+| 2026-10-05 ~11:30pm ET | TIP-FROZEN — PR #110 ready at `0f7110c1` (branch `cursor/cb1-walk-in-seller-last-sold-ab0f`). 2 files (`demand_signal_presenter.gd`, `test_runner.gd`), no docs. Reuses `sale_history` (no new save key). Cloud agent `bc-ed1bdf8c` archived. Eng review that SHA against bar `213977b8`. QA held until APPROVE; no merge until PASS. Soft CLOSED. Soft OK list-time Soft. No Art. Harness EXIT 0. |
