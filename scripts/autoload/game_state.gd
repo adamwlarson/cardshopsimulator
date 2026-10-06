@@ -984,6 +984,7 @@ func capture_save() -> Dictionary:
 		"market_event": DemandSignals.event_to_save(),
 		DistributorMenuPolicy.SAVE_KEY: DemandSignals.closed_opportunity_ids_to_save(),
 		PlayerTradePolicy.SAVE_KEY: DemandSignals.player_trade_closed_day_to_save(),
+		RegularsReturnPolicy.SAVE_KEY: DemandSignals.regulars_return_to_save(),
 	}
 	var serialized := JSON.stringify(payload).to_utf8_buffer()
 	QaInstrumentation.record_save_pre_write(serialized)
@@ -1077,6 +1078,9 @@ func restore_save(data: Dictionary) -> bool:
 	)
 	DemandSignals.apply_player_trade_closed_day_save(
 		data.get(PlayerTradePolicy.SAVE_KEY, -1)
+	)
+	DemandSignals.apply_regulars_return_save(
+		data.get(RegularsReturnPolicy.SAVE_KEY, {})
 	)
 	var serialized := JSON.stringify(data).to_utf8_buffer()
 	QaInstrumentation.record_save_post_load(serialized)

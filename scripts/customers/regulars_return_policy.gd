@@ -8,6 +8,12 @@ const UNLOCK_REP := 50
 const QUEUE_CAP := 1
 ## Existing Regular archetype. No new want table.
 const ARCHETYPE_ID := &"regular"
+## BY1: persist queued count + remembered relationship sku_id.
+const SAVE_KEY := "regulars_return"
+const QUEUED_SAVE_KEY := "queued"
+const SKU_ID_SAVE_KEY := "sku_id"
+## Budget used only to reuse the existing floor-offer lookup. Not a sell weight.
+const FLOOR_LISTED_BUDGET_CENTS := 100_000_000
 
 
 static func unlock_rep(configured: int = UNLOCK_REP) -> int:
@@ -36,3 +42,62 @@ static func can_queue(
 		is_unlocked(reputation, configured_unlock)
 		and queued < queue_cap(configured_cap)
 	)
+
+
+static func remembered_sku_from_customer(customer: CustomerProfile) -> StringName:
+	if customer == null:
+		return &""
+	if not customer.target_sku.is_empty():
+		return customer.target_sku
+	if customer.desired_skus.is_empty():
+		return &""
+	return StringName(customer.desired_skus[0])
+
+
+static func apply_relationship_stock(
+	customer: CustomerProfile,
+	sku_id: StringName
+) -> void:
+	if customer == null or sku_id.is_empty():
+		return
+	customer.wants_sku = sku_id
+	customer.desired_skus = [sku_id]
+
+
+static func is_live_catalog_sku(sku_id: StringName, catalog: Dictionary) -> bool:
+	if sku_id.is_empty():
+		return false
+	return catalog.get(sku_id) is ProductSKU
+
+
+static func can_apply_relationship_stock(
+	sku_id: StringName,
+	catalog: Dictionary,
+	floor_listed: bool
+) -> bool:
+	return is_live_catalog_sku(sku_id, catalog) and floor_listed
+
+
+static func to_save(queued: int, sku_id: StringName) -> Dictionary:
+	var count := maxi(0, queued)
+	var sku := "" if count <= 0 else String(sku_id)
+	return {
+		QUEUED_SAVE_KEY: count,
+		SKU_ID_SAVE_KEY: sku,
+	}
+
+
+static func queued_from_save(value: Variant) -> int:
+	if value is Dictionary:
+		return maxi(0, int((value as Dictionary).get(QUEUED_SAVE_KEY, 0)))
+	if value is int or value is float:
+		return maxi(0, int(value))
+	return 0
+
+
+static func sku_id_from_save(value: Variant) -> StringName:
+	if queued_from_save(value) <= 0:
+		return &""
+	if value is Dictionary:
+		return StringName(String((value as Dictionary).get(SKU_ID_SAVE_KEY, "")))
+	return &""

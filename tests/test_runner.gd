@@ -214,6 +214,7 @@ func _initialize() -> void:
 	_test_player_trades_unlock()
 	_test_recurring_player_trade_pool()
 	_test_regulars_return()
+	_test_regulars_relationship_stock()
 	_test_distributor_moq_worse()
 	_test_better_marketplace_lead()
 	_test_daily_market_drift()
@@ -25062,6 +25063,480 @@ func _ao1_regular_catalog_tags() -> Array[StringName]:
 			tags.append(StringName(tag))
 		return tags
 	return tags
+
+
+func _test_regulars_relationship_stock() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_by1_named_gate()
+	_test_by1_same_seed_wants_sku_at_50_not_49()
+	_test_by1_delisted_fallback_and_cap()
+	_test_by1_confirm_floor_ui_no_truth_door_whale()
+	_test_by1_save_load_and_bm1_bx1_stay()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_by1_named_gate() -> void:
+	_expect_equal(
+		RegularsReturnPolicy.UNLOCK_REP == 50
+		and RegularsReturnPolicy.QUEUE_CAP == 1
+		and RegularsReturnPolicy.ARCHETYPE_ID == &"regular",
+		true,
+		"BY1: AO1 unlock Rep 50 / cap 1 / Regular archetype stay locked"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.SAVE_KEY,
+		"regulars_return",
+		"BY1: new save key is regulars_return"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.QUEUED_SAVE_KEY == "queued"
+		and RegularsReturnPolicy.SKU_ID_SAVE_KEY == "sku_id",
+		true,
+		"BY1: save payload stores queued + sku_id"
+	)
+	var customer := CustomerProfile.new()
+	customer.desired_skus = [&"ACC-TOP-25"]
+	_expect_equal(
+		RegularsReturnPolicy.remembered_sku_from_customer(customer),
+		&"ACC-TOP-25",
+		"BY1: empty target_sku falls back to the first desired SKU"
+	)
+	customer.target_sku = &"ACC-SLV-60"
+	_expect_equal(
+		RegularsReturnPolicy.remembered_sku_from_customer(customer),
+		&"ACC-SLV-60",
+		"BY1: target_sku wins over desired_skus"
+	)
+	var catalog := (_inventory_service.get("model") as InventoryModel).catalog
+	_expect_equal(
+		RegularsReturnPolicy.is_live_catalog_sku(&"ACC-SLV-60", catalog)
+		and not RegularsReturnPolicy.is_live_catalog_sku(&"NO-SUCH-SKU", catalog),
+		true,
+		"BY1: live catalog check uses the seeded product catalog"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.can_apply_relationship_stock(&"ACC-SLV-60", catalog, true)
+		and not RegularsReturnPolicy.can_apply_relationship_stock(
+			&"ACC-SLV-60",
+			catalog,
+			false
+		)
+		and not RegularsReturnPolicy.can_apply_relationship_stock(
+			&"NO-SUCH-SKU",
+			catalog,
+			true
+		),
+		true,
+		"BY1: relationship stock needs a live catalog SKU that is floor-listed"
+	)
+	var saved := RegularsReturnPolicy.to_save(1, &"ACC-SLV-60")
+	_expect_equal(
+		int(saved.get(RegularsReturnPolicy.QUEUED_SAVE_KEY, 0)),
+		1,
+		"BY1: to_save keeps queued count"
+	)
+	_expect_equal(
+		String(saved.get(RegularsReturnPolicy.SKU_ID_SAVE_KEY, "")),
+		"ACC-SLV-60",
+		"BY1: to_save keeps remembered sku_id"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.sku_id_from_save(
+			RegularsReturnPolicy.to_save(0, &"ACC-SLV-60")
+		),
+		&"",
+		"BY1: queue 0 clears remembered sku_id"
+	)
+
+
+func _test_by1_same_seed_wants_sku_at_50_not_49() -> void:
+	const SKU := &"ACC-SLV-60"
+	_ao1_reset_at(50)
+	_expect_equal(_game_state.call("start_floor"), true, "BY1: day-1 floor opens at Rep 50")
+	var sold_50 := _ao1_sell_listed()
+	_expect_equal(sold_50 != null, true, "BY1: listed sale at Rep 50 completes")
+	if sold_50 != null:
+		_expect_equal(sold_50.target_sku, SKU, "BY1: listed sale is SKU X")
+		_event_bus.emit_signal("customer_resolved", sold_50, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"BY1: listed sale at Rep 50 queues one Regular"
+	)
+	_expect_equal(
+		_demand_signals.call("regulars_remembered_sku"),
+		SKU,
+		"BY1: the queued Regular remembers sold SKU X"
+	)
+	_expect_equal(
+		_by1_is_floor_listed(SKU),
+		true,
+		"BY1: SKU X is still floor-listed after the sale"
+	)
+	_expect_equal(_game_state.call("start_settle"), true, "BY1: day-1 settle at Rep 50")
+	_expect_equal(_game_state.call("advance_day"), true, "BY1: day-1 advances at Rep 50")
+	_game_state.set("current_reputation", 50)
+	_captured_scripted_customer = null
+	_expect_equal(_game_state.call("start_floor"), true, "BY1: next floor opens at Rep 50")
+	var returning := _captured_scripted_customer
+	_expect_equal(returning != null, true, "BY1: next floor tags the queued Regular")
+	if returning != null:
+		_expect_equal(returning.archetype_id, &"regular", "BY1: return is tagged Regular")
+		_expect_equal(returning.is_regular_return, true, "BY1: return flag is set")
+		_expect_equal(returning.wants_sku, SKU, "BY1: next-floor wants_sku is X")
+		_expect_equal(
+			returning.desired_skus.size() == 1 and returning.desired_skus[0] == SKU,
+			true,
+			"BY1: next-floor desired_skus is [X]"
+		)
+	_ao1_reset_at(49)
+	_expect_equal(_game_state.call("start_floor"), true, "BY1: day-1 floor opens at Rep 49")
+	var sold_49 := _ao1_sell_listed()
+	_expect_equal(sold_49 != null, true, "BY1: same listed sale at Rep 49 completes")
+	if sold_49 != null:
+		_event_bus.emit_signal("customer_resolved", sold_49, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"BY1: same listed sale at Rep 49 queues nothing"
+	)
+	_expect_equal(
+		_demand_signals.call("regulars_remembered_sku"),
+		&"",
+		"BY1: Rep 49 remembers no relationship SKU"
+	)
+	_expect_equal(_game_state.call("start_settle"), true, "BY1: day-1 settle at Rep 49")
+	_expect_equal(_game_state.call("advance_day"), true, "BY1: day-1 advances at Rep 49")
+	_captured_scripted_customer = null
+	_expect_equal(_game_state.call("start_floor"), true, "BY1: next floor opens at Rep 49")
+	_expect_equal(
+		_captured_scripted_customer == null,
+		true,
+		"BY1: next floor stays empty after the Rep 49 sale"
+	)
+
+
+func _test_by1_delisted_fallback_and_cap() -> void:
+	const SKU := &"ACC-SLV-60"
+	_ao1_reset_at(50)
+	_expect_equal(_game_state.call("start_floor"), true, "BY1: delist day opens")
+	var sold := _ao1_sell_listed()
+	_expect_equal(sold != null, true, "BY1: listed sale queues before delist")
+	if sold != null:
+		_event_bus.emit_signal("customer_resolved", sold, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"BY1: delist path starts with one queued Regular"
+	)
+	_by1_delist(SKU)
+	_expect_equal(_by1_is_floor_listed(SKU), false, "BY1: SKU X is delisted at release")
+	var delisted: CustomerProfile = _demand_signals.call("take_regular_return")
+	_expect_equal(delisted != null, true, "BY1: a delisted SKU still releases a Regular")
+	if delisted != null:
+		_expect_equal(delisted.is_regular_return, true, "BY1: delisted fallback is still AO1")
+		_expect_equal(delisted.wants_sku, &"", "BY1: delisted fallback clears wants_sku")
+		_expect_equal(
+			delisted.desired_skus.is_empty(),
+			true,
+			"BY1: delisted fallback has no desired_skus"
+		)
+		_expect_equal(
+			",".join(_ao1_tag_ids(delisted.interest_tags)),
+			",".join(_ao1_tag_ids(_ao1_regular_catalog_tags())),
+			"BY1: delisted fallback keeps shipped Regular interest_tags"
+		)
+	_demand_signals.call(
+		"apply_regulars_return_save",
+		{
+			RegularsReturnPolicy.QUEUED_SAVE_KEY: 1,
+			RegularsReturnPolicy.SKU_ID_SAVE_KEY: "NO-SUCH-SKU",
+		}
+	)
+	var missing: CustomerProfile = _demand_signals.call("take_regular_return")
+	_expect_equal(missing != null, true, "BY1: a missing SKU still releases a Regular")
+	if missing != null:
+		_expect_equal(missing.wants_sku, &"", "BY1: missing SKU uses AO1 wants")
+		_expect_equal(
+			missing.desired_skus.is_empty(),
+			true,
+			"BY1: missing SKU uses AO1 desired_skus"
+		)
+		_expect_equal(
+			",".join(_ao1_tag_ids(missing.interest_tags)),
+			",".join(_ao1_tag_ids(_ao1_regular_catalog_tags())),
+			"BY1: missing SKU keeps shipped Regular interest_tags"
+		)
+	_ao1_reset_at(50)
+	_expect_equal(_game_state.call("start_floor"), true, "BY1: walkout/refuse day opens")
+	var walk_queue := _ah1_hooked_queue()
+	var waiter := _ah1_waiting_buyer()
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(walk_queue.enqueue(waiter), true, "BY1: waiter enqueues for walkout")
+	walk_queue.tick_waiting(0.05)
+	_event_bus.emit_signal("customer_resolved", waiter, &"walkout")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"BY1: a walkout queues nothing"
+	)
+	walk_queue.free()
+	var refuse_queue := CustomerQueue.new()
+	refuse_queue.configure(_inventory_service)
+	var refused := _ao1_listed_buyer()
+	_expect_equal(refuse_queue.enqueue(refused), true, "BY1: refuse path enqueues")
+	_expect_equal(refuse_queue.refuse(), true, "BY1: refuse resolves")
+	_event_bus.emit_signal("customer_resolved", refused, &"refused")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"BY1: a refuse queues nothing"
+	)
+	refuse_queue.free()
+	var negotiated := _ao1_listed_buyer()
+	negotiated.listed_price_cents = 599
+	negotiated.target_sku = SKU
+	negotiated.has_negotiated = true
+	_event_bus.emit_signal("customer_resolved", negotiated, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"BY1: a negotiated sale queues nothing"
+	)
+	_game_state.set("current_reputation", 50)
+	_event_bus.emit_signal("reputation_changed", 50)
+	var first := _ao1_sell_listed()
+	_expect_equal(first != null, true, "BY1: first listed sale still completes")
+	if first != null:
+		_event_bus.emit_signal("customer_resolved", first, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"BY1: first listed sale queues one Regular"
+	)
+	var first_sku: StringName = _demand_signals.call("regulars_remembered_sku")
+	var second := _ao1_sell_listed()
+	_expect_equal(second != null, true, "BY1: second listed sale still completes")
+	if second != null:
+		_event_bus.emit_signal("customer_resolved", second, &"sold")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"BY1: cap stays 1"
+	)
+	_expect_equal(
+		_demand_signals.call("regulars_remembered_sku"),
+		first_sku,
+		"BY1: a second listed sale does not replace the remembered SKU"
+	)
+
+
+func _test_by1_confirm_floor_ui_no_truth_door_whale() -> void:
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/customers/regulars_return_policy.gd",
+		"res://scripts/customers/regulars_return_service.gd",
+		"res://scripts/customers/customer_profile.gd",
+		"res://scripts/customers/customer_queue.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(
+			source.contains("true_market"),
+			false,
+			"BY1: %s never shows true_market" % path
+		)
+		_expect_equal(
+			source.contains("p_buy"),
+			false,
+			"BY1: %s never shows p_buy" % path
+		)
+		_expect_equal(
+			source.contains("guaranteed sell")
+			or source.contains("guaranteed_sell"),
+			false,
+			"BY1: %s has no guaranteed-sell cue" % path
+		)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("Wants: %s")
+		and hud_src.contains("func _customer_wants_label"),
+		true,
+		"BY1: floor UI may show the existing wants label"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	var at_49 := catalog.roll_spawn(SEED, 49, NORMAL_CONFIG, 5)
+	var at_50 := catalog.roll_spawn(SEED, 50, NORMAL_CONFIG, 5)
+	_expect_equal(at_49.size(), at_50.size(), "BY1: door spawn count at Rep 50 matches Rep 49")
+	_expect_equal(
+		",".join(_aj1_ids(at_49)),
+		",".join(_aj1_ids(at_50)),
+		"BY1: same-seed door roll at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 50, NORMAL_CONFIG),
+			catalog.weight_for(whale, 49, NORMAL_CONFIG)
+		),
+		true,
+		"BY1: whale weight at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")), 1.0),
+		true,
+		"BY1: relationship stock is not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string(
+		"res://scripts/autoload/demand_signals.gd"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "regulars")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "relationship"),
+		true,
+		"BY1: Regulars stay off sell_through_mult_for"
+	)
+
+
+func _test_by1_save_load_and_bm1_bx1_stay() -> void:
+	const SKU := &"ACC-SLV-60"
+	_ao1_reset_at(50)
+	_expect_equal(_game_state.call("start_floor"), true, "BY1: save-load day opens")
+	var sold := _ao1_sell_listed()
+	_expect_equal(sold != null, true, "BY1: mid-queue save needs a listed sale")
+	if sold != null:
+		_event_bus.emit_signal("customer_resolved", sold, &"sold")
+	var saved: Dictionary = _game_state.call("capture_save")
+	var regulars_saved: Variant = saved.get(RegularsReturnPolicy.SAVE_KEY, {})
+	_expect_equal(regulars_saved is Dictionary, true, "BY1: capture_save writes regulars_return")
+	if regulars_saved is Dictionary:
+		_expect_equal(
+			int((regulars_saved as Dictionary).get(RegularsReturnPolicy.QUEUED_SAVE_KEY, 0)),
+			1,
+			"BY1: mid-queue save restores queued count"
+		)
+		_expect_equal(
+			String((regulars_saved as Dictionary).get(RegularsReturnPolicy.SKU_ID_SAVE_KEY, "")),
+			String(SKU),
+			"BY1: mid-queue save restores remembered SKU"
+		)
+	_assert_payload_has_no_truth(saved, "BY1 mid-queue save")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"BY1: a new game clears the Regulars queue"
+	)
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"BY1: restore_save accepts a mid-queue snapshot"
+	)
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		1,
+		"BY1: restore puts the queued Regular back"
+	)
+	_expect_equal(
+		_demand_signals.call("regulars_remembered_sku"),
+		SKU,
+		"BY1: restore puts the remembered SKU back"
+	)
+	var restored: CustomerProfile = _demand_signals.call("take_regular_return")
+	_expect_equal(restored != null, true, "BY1: restored queue still releases a Regular")
+	if restored != null:
+		_expect_equal(restored.wants_sku, SKU, "BY1: restored live floor-listed SKU stays wanted")
+		_expect_equal(
+			restored.desired_skus.size() == 1 and restored.desired_skus[0] == SKU,
+			true,
+			"BY1: restored live floor-listed SKU stays in desired_skus"
+		)
+	_demand_signals.call(
+		"apply_regulars_return_save",
+		{
+			RegularsReturnPolicy.QUEUED_SAVE_KEY: 0,
+			RegularsReturnPolicy.SKU_ID_SAVE_KEY: "ACC-SLV-60",
+		}
+	)
+	_expect_equal(
+		int(_demand_signals.call("regulars_queued_count")),
+		0,
+		"BY1: loading queue 0 stays empty"
+	)
+	_expect_equal(
+		_demand_signals.call("regulars_remembered_sku"),
+		&"",
+		"BY1: loading queue 0 clears remembered SKU"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BY1: BM1–BO1 stay as shipped"
+	)
+	_expect_equal(
+		PlayerTradePolicy.UNLOCK_REP == 50
+		and MarketplaceLotPolicy.FIRST_DAY == 4
+		and MarketplaceLotPolicy.MIN_PER_DAY == 1
+		and MarketplaceLotPolicy.MAX_PER_DAY == 3
+		and DistributorMenuPolicy.FIRST_DAY == 8,
+		true,
+		"BY1: BT1 / BU1 / BV1 stay as shipped"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST == 10
+		and is_equal_approx(AuctionSnipePolicy.COMP_WIDTH, 0.12)
+		and AuctionSnipePolicy.DEFAULT_SKU_ID == &"AA-DUST-ETB"
+		and AuctionSnipePolicy.QTY == 1,
+		true,
+		"BY1: AS1 / BW1 stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.REPORT_REP_GAIN == 2
+		and is_equal_approx(ShadyTrunkPolicy.FAKE_SLAB_RATE, 0.08)
+		and is_equal_approx(ShadyTrunkPolicy.COMP_WIDTH, 0.22)
+		and ShadyTrunkPolicy.DEFAULT_SKU_ID == &"AA-SKIE-052"
+		and ShadyTrunkPolicy.QTY == 1,
+		true,
+		"BY1: AT1 / BX1 stay as shipped"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("regulars_relationship")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("listed_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"BY1: Soft catalog stays CLOSED"
+	)
+	_game_state.call("start_new_game")
+
+
+func _by1_is_floor_listed(sku_id: StringName) -> bool:
+	var offer: Dictionary = _inventory_service.call(
+		"find_listed_sku_offer",
+		sku_id,
+		RegularsReturnPolicy.FLOOR_LISTED_BUDGET_CENTS
+	)
+	return not offer.is_empty()
+
+
+func _by1_delist(sku_id: StringName) -> void:
+	for lot_value: Variant in _inventory_service.call("get_lots", sku_id):
+		var lot := lot_value as StockLot
+		if lot != null:
+			lot.listed_price_cents = 0
+			lot.qty = 0
 
 
 func _test_distributor_moq_worse() -> void:
