@@ -176,6 +176,7 @@ func start_settle() -> bool:
 		return false
 	current_phase = DayPhase.SETTLE
 	Economy.settle_day(current_day)
+	DemandSignals.expire_player_trade(current_day)
 	EventBus.day_phase_changed.emit(current_phase)
 	evaluate_campaign_win()
 	evaluate_campaign_lose()
@@ -982,6 +983,7 @@ func capture_save() -> Dictionary:
 		"inventory": inventory,
 		"market_event": DemandSignals.event_to_save(),
 		DistributorMenuPolicy.SAVE_KEY: DemandSignals.closed_opportunity_ids_to_save(),
+		PlayerTradePolicy.SAVE_KEY: DemandSignals.player_trade_closed_day_to_save(),
 	}
 	var serialized := JSON.stringify(payload).to_utf8_buffer()
 	QaInstrumentation.record_save_pre_write(serialized)
@@ -1072,6 +1074,9 @@ func restore_save(data: Dictionary) -> bool:
 		DemandSignals.apply_event_save({})
 	DemandSignals.apply_closed_opportunity_ids_save(
 		data.get(DistributorMenuPolicy.SAVE_KEY, [])
+	)
+	DemandSignals.apply_player_trade_closed_day_save(
+		data.get(PlayerTradePolicy.SAVE_KEY, -1)
 	)
 	var serialized := JSON.stringify(data).to_utf8_buffer()
 	QaInstrumentation.record_save_post_load(serialized)

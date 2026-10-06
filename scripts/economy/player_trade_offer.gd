@@ -2,6 +2,7 @@ class_name PlayerTradeOffer
 extends Resource
 
 var id: StringName
+var offer_label: String = "Shop trade"
 var give_sku_id: StringName
 var give_display_name: String
 var give_condition: String
