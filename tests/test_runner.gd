@@ -25551,6 +25551,10 @@ func _test_in_shop_sale_history() -> void:
 	_test_bz1_fake_slab_sale_fail_never_records()
 	_test_bz1_confirm_no_truth_byte_identical()
 	_test_bz1_save_load_and_untouched()
+	_test_ca1_same_seed_price_confirm_line()
+	_test_ca1_never_sold_and_non_writers()
+	_test_ca1_no_truth_byte_identical()
+	_test_ca1_save_load_and_untouched()
 	_qa_autoload.call("set_force_enabled", false)
 	_qa.set_force_enabled(false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
@@ -25922,7 +25926,7 @@ func _test_bz1_confirm_no_truth_byte_identical() -> void:
 	_expect_equal(
 		price.contains("Last sold in-shop"),
 		false,
-		"BZ1: price confirm never shows the history line"
+		"CA1: price confirm hides Last sold in-shop when no entry exists"
 	)
 	_game_state.call("note_completed_in_shop_sale", SKU, 4200)
 	var with_history := DemandSignalPresenter.buy_confirm_snapshot(dto)
@@ -25959,14 +25963,19 @@ func _test_bz1_confirm_no_truth_byte_identical() -> void:
 	)
 	var price_after := DemandSignalPresenter.price_summary(price_dto)
 	_expect_equal(
-		price_after,
-		price,
-		"BZ1: price confirm text is unchanged when history exists"
+		price_after.contains(expected),
+		true,
+		"CA1: price confirm shows Last sold in-shop when history exists"
 	)
 	_expect_equal(
-		price_after.contains("Last sold in-shop"),
-		false,
-		"BZ1: price confirm stays dark this pick"
+		price_after.replace("\n" + expected, ""),
+		price,
+		"CA1: suggested / vs-sug / position / band / move feel / display context stay byte-identical with history"
+	)
+	_expect_equal(
+		DemandSignalPresenter.price_summary(price_dto, false).contains(expected),
+		true,
+		"CA1: HUD / reprice price_summary(false) also shows the line"
 	)
 	_expect_dto_has_no_truth_fields(dto, "BZ1 buy confirm")
 	var hud := _instantiate_gameplay_hud()
@@ -25983,13 +25992,16 @@ func _test_bz1_confirm_no_truth_byte_identical() -> void:
 				"BZ1: HUD buy-confirm shows the last-sold line"
 			)
 			_assert_text_has_no_truth(confirm_summary.text, "BZ1 HUD buy confirm")
-		var price_summary := hud.get_node_or_null("%PriceConfirmSummary") as Label
+		var price_summary := hud.get_node_or_null("%PriceSummary") as Label
+		Callable(hud, "_select_price_stock").call(price_dto)
+		_expect_equal(price_summary != null, true, "CA1: HUD PriceSummary is present")
 		if price_summary != null:
 			_expect_equal(
-				price_summary.text.contains("Last sold in-shop"),
-				false,
-				"BZ1: HUD price confirm never shows the history line"
+				price_summary.text.contains(expected),
+				true,
+				"CA1: HUD price confirm shows Last sold in-shop when history exists"
 			)
+			_assert_text_has_no_truth(price_summary.text, "CA1 HUD price confirm")
 		hud.free()
 	for path: String in [
 		"res://scripts/economy/sale_history.gd",
@@ -26215,6 +26227,332 @@ func _bz1_expect_no_line_on_channels(sku_id: StringName, label: String) -> void:
 			false,
 			"BZ1: %s %s buy-confirm hides the line" % [label, channel]
 		)
+
+
+func _ca1_price_signal(sku_id: StringName, listed_price_cents: int = 599) -> PriceConfirmSignal:
+	return _demand_signals.call(
+		"price_signal",
+		sku_id,
+		listed_price_cents,
+		_inventory_service.call("location_for", sku_id)
+	) as PriceConfirmSignal
+
+
+func _ca1_price_core(text: String) -> String:
+	var lines := text.split("\n")
+	var kept: PackedStringArray = []
+	for line: String in lines:
+		if line.begins_with("Last sold in-shop:"):
+			continue
+		kept.append(line)
+	return "\n".join(kept)
+
+
+func _test_ca1_same_seed_price_confirm_line() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	var lot: StockLot = _inventory_service.call("get_lot", SKU)
+	_expect_equal(lot != null, true, "CA1: seeded sleeve lot exists")
+	if lot == null:
+		return
+	var first_price := lot.listed_price_cents
+	_expect_equal(first_price > 0, true, "CA1: seeded sleeve lot is listed")
+	var sold := _ao1_sell_listed()
+	_expect_equal(sold != null, true, "CA1: first in-shop sale completes")
+	if sold != null:
+		_expect_equal(sold.target_sku, SKU, "CA1: first sale is SKU X")
+		_expect_equal(
+			sold.listed_price_cents,
+			first_price,
+			"CA1: first sale pays the listed price"
+		)
+	var list_dto := _ca1_price_signal(SKU, first_price)
+	var today_line := _bz1_expected_line(first_price, "today")
+	_expect_equal(
+		DemandSignalPresenter.price_summary(list_dto).contains(today_line),
+		true,
+		"CA1: same-day list price-confirm shows %s" % today_line
+	)
+	_expect_equal(
+		DemandSignalPresenter.price_summary(list_dto, false).contains(today_line),
+		true,
+		"CA1: same-day list PriceConfirmSummary shows %s" % today_line
+	)
+	_bz1_expect_line_on_channels(SKU, today_line, "CA1 same-day buy")
+	_game_state.set("current_day", 2)
+	var day_one := _bz1_expected_line(first_price, "1 day ago")
+	var reprice_base := _ca1_price_signal(SKU, first_price)
+	var reprice: PriceConfirmSignal = _demand_signals.call(
+		"refresh_price_signal",
+		reprice_base,
+		first_price + 100
+	)
+	_expect_equal(reprice != null, true, "CA1: reprice refresh binds")
+	if reprice != null:
+		_expect_equal(
+			DemandSignalPresenter.price_summary(reprice).contains(day_one),
+			true,
+			"CA1: day d+1 reprice price-confirm shows %s" % day_one
+		)
+		_expect_equal(
+			DemandSignalPresenter.price_summary(reprice, false).contains(day_one),
+			true,
+			"CA1: day d+1 reprice PriceConfirmSummary shows %s" % day_one
+		)
+	_bz1_expect_line_on_channels(SKU, day_one, "CA1 N=1 buy")
+	_game_state.set("current_day", 4)
+	var day_three := _bz1_expected_line(first_price, "3 days ago")
+	_expect_equal(
+		DemandSignalPresenter.price_summary(_ca1_price_signal(SKU, first_price)).contains(day_three),
+		true,
+		"CA1: day d+3 price-confirm shows %s" % day_three
+	)
+	var second_price := 4200
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", SKU, second_price)),
+		true,
+		"CA1: a second in-shop sale at $Q completes"
+	)
+	var overwrite := _bz1_expected_line(second_price, "today")
+	_expect_equal(
+		DemandSignalPresenter.price_summary(_ca1_price_signal(SKU, second_price)).contains(overwrite),
+		true,
+		"CA1: second sale overwrites price-confirm to %s" % overwrite
+	)
+	_bz1_expect_line_on_channels(SKU, overwrite, "CA1 overwrite buy")
+	var other := _ca1_price_signal(&"AA-SKIE-052", 1200)
+	_expect_equal(
+		DemandSignalPresenter.price_summary(other).contains("Last sold in-shop"),
+		false,
+		"CA1: a different sku_id hides the price-confirm line"
+	)
+
+
+func _test_ca1_never_sold_and_non_writers() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	var history: SaleHistory = _game_state.get("sale_history")
+	_expect_equal(history.has(SKU), false, "CA1: never sold in-shop starts empty")
+	_expect_equal(
+		DemandSignalPresenter.price_summary(_ca1_price_signal(SKU)).contains("Last sold in-shop"),
+		false,
+		"CA1: never sold hides the price-confirm line"
+	)
+	_bz1_expect_no_line_on_channels(SKU, "CA1 never sold")
+	var walk_queue := _ah1_hooked_queue()
+	var waiter := _ah1_waiting_buyer()
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(walk_queue.enqueue(waiter), true, "CA1: walkout waiter enqueues")
+	walk_queue.tick_waiting(0.05)
+	_expect_equal(history.has(SKU), false, "CA1: a walkout never creates an entry")
+	walk_queue.free()
+	var refuse_queue := CustomerQueue.new()
+	refuse_queue.configure(_inventory_service)
+	var refused := _ao1_listed_buyer()
+	_expect_equal(refuse_queue.enqueue(refused), true, "CA1: refuse path enqueues")
+	_expect_equal(refuse_queue.refuse(), true, "CA1: refuse resolves")
+	_expect_equal(history.has(SKU), false, "CA1: a refuse never creates an entry")
+	refuse_queue.free()
+	_game_state.call("note_completed_listed_sale", SKU, 599)
+	_expect_equal(
+		history.has(SKU),
+		false,
+		"CA1: BK1 listed-sale settle does not write sale history"
+	)
+	_expect_equal(
+		DemandSignalPresenter.price_summary(_ca1_price_signal(SKU)).contains("Last sold in-shop"),
+		false,
+		"CA1: non-writers leave price-confirm dark"
+	)
+	var trade_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/player_trade_service.gd"
+	)
+	var online_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/online_listing_service.gd"
+	)
+	var presenter_src := FileAccess.get_file_as_string(
+		"res://scripts/ui/demand_signal_presenter.gd"
+	)
+	_expect_equal(
+		not trade_src.contains("note_completed_in_shop_sale")
+		and not online_src.contains("note_completed_in_shop_sale"),
+		true,
+		"CA1: trade / online stay non-writers"
+	)
+	_expect_equal(
+		presenter_src.contains("last_sold_in_shop_line(dto.sku_id)"),
+		true,
+		"CA1: price_summary only READs last_sold_in_shop_line"
+	)
+	_expect_equal(
+		not presenter_src.contains("note_completed_in_shop_sale")
+		and not presenter_src.contains(".record("),
+		true,
+		"CA1: presenter adds no writers"
+	)
+
+
+func _test_ca1_no_truth_byte_identical() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	var price_dto := _ca1_price_signal(SKU, 599)
+	var buy_dto := _bz1_buy_signal(SKU, DemandSignalService.Channel.MARKETPLACE)
+	var price_without := DemandSignalPresenter.price_summary(price_dto)
+	var price_without_hud := DemandSignalPresenter.price_summary(price_dto, false)
+	var buy_without := DemandSignalPresenter.buy_confirm_snapshot(buy_dto)
+	var suggested := price_dto.suggested_price_cents
+	var delta := price_dto.price_delta_cents
+	var position := price_dto.position
+	var band := price_dto.shown_demand_band
+	var feel := price_dto.move_feel
+	var context := price_dto.display_context
+	_expect_equal(
+		price_without.contains("Last sold in-shop"),
+		false,
+		"CA1: no entry keeps price-confirm dark"
+	)
+	_expect_equal(
+		price_without.contains("true_market")
+		or price_without.contains("p_buy")
+		or price_without.to_lower().contains("forecast")
+		or price_without.to_lower().contains("will sell"),
+		false,
+		"CA1: price-confirm without history never shows truth / forecast"
+	)
+	_game_state.call("note_completed_in_shop_sale", SKU, 4200)
+	var price_with := DemandSignalPresenter.price_summary(price_dto)
+	var price_with_hud := DemandSignalPresenter.price_summary(price_dto, false)
+	var buy_with := DemandSignalPresenter.buy_confirm_snapshot(buy_dto)
+	var expected := _bz1_expected_line(4200, "today")
+	_expect_equal(price_with.contains(expected), true, "CA1: history appends the factual line")
+	_expect_equal(
+		_ca1_price_core(price_with),
+		price_without,
+		"CA1: suggested / vs-sug / position / band / move feel / display context stay byte-identical"
+	)
+	_expect_equal(
+		_ca1_price_core(price_with_hud),
+		price_without_hud,
+		"CA1: HUD price-confirm core stays byte-identical with history"
+	)
+	_expect_equal(
+		price_dto.suggested_price_cents == suggested
+		and price_dto.price_delta_cents == delta
+		and price_dto.position == position
+		and price_dto.shown_demand_band == band
+		and price_dto.move_feel == feel
+		and price_dto.display_context == context,
+		true,
+		"CA1: price DTO chips stay byte-identical with history"
+	)
+	_expect_equal(
+		buy_with.replace("\n" + expected, ""),
+		buy_without,
+		"CA1: buy-confirm snapshot stays byte-identical to BZ1"
+	)
+	_expect_equal(
+		buy_with.contains(expected),
+		true,
+		"CA1: buy-confirm still shows the BZ1 line"
+	)
+	_expect_equal(
+		price_with.contains("true_market")
+		or price_with.contains("p_buy")
+		or price_with.to_lower().contains("forecast")
+		or price_with.to_lower().contains("will sell"),
+		false,
+		"CA1: price-confirm with history never shows truth / forecast"
+	)
+	_expect_dto_has_no_truth_fields(price_dto, "CA1 price confirm")
+	_expect_dto_has_no_truth_fields(buy_dto, "CA1 buy confirm")
+	_assert_text_has_no_truth(price_with, "CA1 price summary")
+	_assert_text_has_no_truth(buy_with, "CA1 buy snapshot")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", SKU)), 1.0),
+		true,
+		"CA1: last-sold history is not a sell weight"
+	)
+
+
+func _test_ca1_save_load_and_untouched() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	_expect_equal(_ao1_sell_listed() != null, true, "CA1: save needs an in-shop sale")
+	var history: SaleHistory = _game_state.get("sale_history")
+	var before := history.lookup(SKU)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(saved.has(SaleHistory.SAVE_KEY), true, "CA1: capture_save still writes sale_history")
+	_expect_equal(
+		SaleHistory.SAVE_KEY,
+		"sale_history",
+		"CA1: no new save key; reuses sale_history"
+	)
+	_expect_equal(
+		saved.has("price_confirm_history") or saved.has("last_sold_in_shop"),
+		false,
+		"CA1: no new last-sold save key"
+	)
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"CA1: restore_save accepts the shipped history snapshot"
+	)
+	var restored := (_game_state.get("sale_history") as SaleHistory).lookup(SKU)
+	_expect_equal(
+		int(restored.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		int(before.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		"CA1: restore puts unit_price_cents back"
+	)
+	_expect_equal(
+		int(restored.get(SaleHistory.DAY_KEY, 0)),
+		int(before.get(SaleHistory.DAY_KEY, 0)),
+		"CA1: restore puts day back"
+	)
+	var expected := _bz1_expected_line(
+		int(restored.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		"today"
+	)
+	_expect_equal(
+		DemandSignalPresenter.price_summary(_ca1_price_signal(SKU)).contains(expected),
+		true,
+		"CA1: restored history shows on price-confirm"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	var at_49 := catalog.roll_spawn(SEED, 49, NORMAL_CONFIG, 5)
+	var at_50 := catalog.roll_spawn(SEED, 50, NORMAL_CONFIG, 5)
+	_expect_equal(at_49.size(), at_50.size(), "CA1: door spawn count at Rep 50 matches Rep 49")
+	_expect_equal(
+		",".join(_aj1_ids(at_49)),
+		",".join(_aj1_ids(at_50)),
+		"CA1: same-seed door roll at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 50, NORMAL_CONFIG),
+			catalog.weight_for(whale, 49, NORMAL_CONFIG)
+		),
+		true,
+		"CA1: whale weight at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.UNLOCK_REP == 50
+		and RegularsReturnPolicy.QUEUE_CAP == 1
+		and RegularsReturnPolicy.SAVE_KEY == "regulars_return",
+		true,
+		"CA1: AO1 / BY1 Regulars stay as shipped"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("regulars_relationship")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("listed_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"CA1: Soft catalog stays CLOSED"
+	)
+	_game_state.call("start_new_game")
 
 
 func _test_distributor_moq_worse() -> void:
