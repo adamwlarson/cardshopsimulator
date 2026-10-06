@@ -25555,6 +25555,10 @@ func _test_in_shop_sale_history() -> void:
 	_test_ca1_never_sold_and_non_writers()
 	_test_ca1_no_truth_byte_identical()
 	_test_ca1_save_load_and_untouched()
+	_test_cb1_same_seed_seller_summary_line()
+	_test_cb1_never_sold_and_non_writers()
+	_test_cb1_no_truth_byte_identical()
+	_test_cb1_save_load_and_untouched()
 	_qa_autoload.call("set_force_enabled", false)
 	_qa.set_force_enabled(false)
 	_game_state.call("set_balance_config", NORMAL_CONFIG)
@@ -26551,6 +26555,513 @@ func _test_ca1_save_load_and_untouched() -> void:
 		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
 		false,
 		"CA1: Soft catalog stays CLOSED"
+	)
+	_game_state.call("start_new_game")
+
+
+func _cb1_seller_core(text: String) -> String:
+	var lines := text.split("\n")
+	var kept: PackedStringArray = []
+	for line: String in lines:
+		if line.begins_with("Last sold in-shop:"):
+			continue
+		kept.append(line)
+	return "\n".join(kept)
+
+
+func _cb1_expect_history_after_demand(
+	text: String,
+	expected: String,
+	label: String
+) -> void:
+	_expect_equal(text.contains(expected), true, "%s shows %s" % [label, expected])
+	var lines := text.split("\n")
+	var demand_idx := -1
+	var history_idx := -1
+	var condition_idx := -1
+	for i: int in lines.size():
+		if lines[i].begins_with("Demand:") and lines[i].contains("Confidence:"):
+			demand_idx = i
+		if lines[i] == expected:
+			history_idx = i
+		if lines[i].begins_with("Condition:") or lines[i].begins_with("Slab:"):
+			condition_idx = i
+	_expect_equal(
+		demand_idx >= 0 and history_idx == demand_idx + 1 and condition_idx == history_idx + 1,
+		true,
+		"%s places Last sold after Demand · Confidence and before Condition / Slab" % label
+	)
+
+
+func _cb1_hud_seller_summary(seller: CustomerProfile) -> String:
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	if hud == null or seller == null:
+		if hud != null:
+			hud.free()
+		return ""
+	Callable(hud, "_on_customer_head_changed").call(seller)
+	Callable(hud, "_on_customer_desk_ready").call(seller, true)
+	var summary := hud.get_node_or_null("%CustomerSummary") as Label
+	var text := summary.text if summary != null else ""
+	hud.free()
+	return text
+
+
+func _cb1_trade_snapshot(sku_id: StringName) -> String:
+	var trade := PlayerTradeOffer.new()
+	trade.id = &"cb1-trade"
+	trade.give_sku_id = &"AA-DUST-ETB"
+	trade.give_display_name = "Dustway Chronicles Explorer Box"
+	trade.give_condition = "Sealed · NM"
+	trade.give_qty = 1
+	trade.receive_sku_id = sku_id
+	trade.receive_display_name = "Penny Sleeve Pack"
+	trade.receive_condition = "NM"
+	trade.receive_qty = 1
+	return PlayerTradePresenter.confirm_snapshot(trade)
+
+
+func _cb1_list_summary(sku_id: StringName, listed_price_cents: int) -> String:
+	var dto: OnlineListConfirmSignal = _demand_signals.call(
+		"list_confirm_signal",
+		sku_id,
+		listed_price_cents,
+		_inventory_service.call("location_for", sku_id)
+	)
+	if dto == null:
+		return ""
+	return DemandSignalPresenter.list_confirm_summary(dto)
+
+
+func _test_cb1_same_seed_seller_summary_line() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	var lot: StockLot = _inventory_service.call("get_lot", SKU)
+	_expect_equal(lot != null, true, "CB1: seeded sleeve lot exists")
+	if lot == null:
+		return
+	var first_price := lot.listed_price_cents
+	_expect_equal(first_price > 0, true, "CB1: seeded sleeve lot is listed")
+	var sold := _ao1_sell_listed()
+	_expect_equal(sold != null, true, "CB1: first in-shop sale completes")
+	if sold != null:
+		_expect_equal(sold.target_sku, SKU, "CB1: first sale is SKU X")
+		_expect_equal(
+			sold.listed_price_cents,
+			first_price,
+			"CB1: first sale pays the listed price"
+		)
+	var today_line := _bz1_expected_line(first_price, "today")
+	var dto := _aw1_signal(SKU)
+	_expect_equal(dto != null, true, "CB1: walk-in seller offering X binds")
+	if dto == null:
+		return
+	var seller_text := DemandSignalPresenter.buylist_seller_summary(dto)
+	_cb1_expect_history_after_demand(
+		seller_text,
+		today_line,
+		"CB1: same-day buylist_seller_summary"
+	)
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "CB1 same-day")
+	_expect_equal(seller != null, true, "CB1: walk-in seller enqueues")
+	var hud_text := _cb1_hud_seller_summary(seller)
+	_cb1_expect_history_after_demand(
+		hud_text,
+		today_line,
+		"CB1: same-day HUD SELLER customer_summary"
+	)
+	_game_state.set("current_day", 2)
+	var day_one := _bz1_expected_line(first_price, "1 day ago")
+	_cb1_expect_history_after_demand(
+		DemandSignalPresenter.buylist_seller_summary(dto),
+		day_one,
+		"CB1: day d+1 buylist_seller_summary"
+	)
+	_cb1_expect_history_after_demand(
+		_cb1_hud_seller_summary(seller),
+		day_one,
+		"CB1: day d+1 HUD SELLER customer_summary"
+	)
+	_game_state.set("current_day", 4)
+	var day_three := _bz1_expected_line(first_price, "3 days ago")
+	_cb1_expect_history_after_demand(
+		DemandSignalPresenter.buylist_seller_summary(dto),
+		day_three,
+		"CB1: day d+3 buylist_seller_summary"
+	)
+	var second_price := 4200
+	_expect_equal(
+		bool(_inventory_service.call("confirm_customer_sale", SKU, second_price)),
+		true,
+		"CB1: a second in-shop sale at $Q completes"
+	)
+	var overwrite := _bz1_expected_line(second_price, "today")
+	_cb1_expect_history_after_demand(
+		DemandSignalPresenter.buylist_seller_summary(dto),
+		overwrite,
+		"CB1: second sale overwrites buylist_seller_summary"
+	)
+	_cb1_expect_history_after_demand(
+		_cb1_hud_seller_summary(seller),
+		overwrite,
+		"CB1: second sale overwrites HUD SELLER customer_summary"
+	)
+	var other := _aw1_signal(&"AA-SKIE-052")
+	_expect_equal(other != null, true, "CB1: a different sku walk-in binds")
+	if other != null:
+		_expect_equal(
+			DemandSignalPresenter.buylist_seller_summary(other).contains("Last sold in-shop"),
+			false,
+			"CB1: a different sku_id hides the seller line"
+		)
+	var edited := maxi(1, dto.unit_cost_cents / 2)
+	_expect_equal(queue.change_buylist_offer(edited), true, "CB1: AX1 You-offer edit lands")
+	_expect_equal(dto.unit_cost_cents, edited, "CB1: AX1 edit changes You offer")
+	var after_edit := DemandSignalPresenter.buylist_seller_summary(dto)
+	_cb1_expect_history_after_demand(
+		after_edit,
+		overwrite,
+		"CB1: line survives AX1 You-offer edit"
+	)
+	_expect_equal(
+		after_edit.contains(DemandSignalPresenter.format_cents(edited)),
+		true,
+		"CB1: AX1 edited You offer still renders"
+	)
+	_cb1_expect_history_after_demand(
+		_cb1_hud_seller_summary(seller),
+		overwrite,
+		"CB1: HUD line survives AX1 You-offer edit"
+	)
+	_expect_equal(queue.inspect_buylist(), true, "CB1: AY1 Inspect re-renders the serve")
+	var after_inspect := DemandSignalPresenter.buylist_seller_summary(dto)
+	_cb1_expect_history_after_demand(
+		after_inspect,
+		overwrite,
+		"CB1: line survives AY1 Inspect re-render"
+	)
+	_cb1_expect_history_after_demand(
+		_cb1_hud_seller_summary(seller),
+		overwrite,
+		"CB1: HUD line survives AY1 Inspect re-render"
+	)
+	queue.free()
+
+
+func _test_cb1_never_sold_and_non_writers() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	var history: SaleHistory = _game_state.get("sale_history")
+	_expect_equal(history.has(SKU), false, "CB1: never sold in-shop starts empty")
+	var dto := _aw1_signal(SKU)
+	_expect_equal(dto != null, true, "CB1: never-sold walk-in seller binds")
+	if dto != null:
+		_expect_equal(
+			DemandSignalPresenter.buylist_seller_summary(dto).contains("Last sold in-shop"),
+			false,
+			"CB1: never sold hides the seller line"
+		)
+	var other := _aw1_signal(&"AA-SKIE-052")
+	if other != null:
+		_expect_equal(
+			DemandSignalPresenter.buylist_seller_summary(other).contains("Last sold in-shop"),
+			false,
+			"CB1: a different never-sold sku_id hides the seller line"
+		)
+	var walk_queue := _ah1_hooked_queue()
+	var waiter := _ah1_waiting_buyer()
+	_game_state.set("attention_remaining", 0)
+	_expect_equal(walk_queue.enqueue(waiter), true, "CB1: walkout waiter enqueues")
+	walk_queue.tick_waiting(0.05)
+	_expect_equal(history.has(SKU), false, "CB1: a walkout never creates an entry")
+	walk_queue.free()
+	var refuse_queue := CustomerQueue.new()
+	refuse_queue.configure(_inventory_service)
+	var refused := _ao1_listed_buyer()
+	_expect_equal(refuse_queue.enqueue(refused), true, "CB1: refuse path enqueues")
+	_expect_equal(refuse_queue.refuse(), true, "CB1: refuse resolves")
+	_expect_equal(history.has(SKU), false, "CB1: a refuse never creates an entry")
+	refuse_queue.free()
+	if dto != null:
+		var buy_queue := _aw1_queue()
+		var seller := _aw1_enqueue_seller(buy_queue, dto, "CB1 accept")
+		_expect_equal(seller != null, true, "CB1: buylist seller enqueues")
+		_expect_equal(buy_queue.accept_buylist_offer(), true, "CB1: buylist accept lands")
+		_expect_equal(history.has(SKU), false, "CB1: accepting a seller never writes history")
+		buy_queue.free()
+	_game_state.call("start_new_game")
+	history = _game_state.get("sale_history")
+	dto = _aw1_signal(SKU)
+	if dto != null:
+		var walk_seller_queue := _aw1_queue()
+		_expect_equal(
+			_aw1_enqueue_seller(walk_seller_queue, dto, "CB1 seller walk") != null,
+			true,
+			"CB1: seller walk-out enqueues"
+		)
+		_expect_equal(walk_seller_queue.walk_buylist(), true, "CB1: seller walk-out resolves")
+		_expect_equal(history.has(SKU), false, "CB1: a seller walk-out never writes history")
+		walk_seller_queue.free()
+	var presenter_src := FileAccess.get_file_as_string(
+		"res://scripts/ui/demand_signal_presenter.gd"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		presenter_src.contains("last_sold_in_shop_line(dto.sku_id)"),
+		true,
+		"CB1: buylist_seller_summary only READs last_sold_in_shop_line"
+	)
+	_expect_equal(
+		not presenter_src.contains("note_completed_in_shop_sale")
+		and not presenter_src.contains(".record("),
+		true,
+		"CB1: presenter adds no writers"
+	)
+	_expect_equal(
+		hud_src.contains("DemandSignalPresenter.buylist_seller_summary"),
+		true,
+		"CB1: HUD SELLER customer_summary still uses the presenter"
+	)
+	_expect_equal(
+		not hud_src.contains("last_sold_in_shop_line")
+		and not hud_src.contains("note_completed_in_shop_sale"),
+		true,
+		"CB1: HUD adds no history writers or new last-sold logic"
+	)
+
+
+func _test_cb1_no_truth_byte_identical() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	var dto := _aw1_signal(SKU)
+	_expect_equal(dto != null, true, "CB1: byte-identical seller DTO binds")
+	if dto == null:
+		return
+	var seller_without := DemandSignalPresenter.buylist_seller_summary(dto)
+	var offer := dto.unit_cost_cents
+	var lot_total := dto.lot_total_cents
+	var listed := BuylistPolicy.listed_comp_cents(dto)
+	var anger := BuylistPolicy.anger_floor()
+	var stingy := BuylistPolicy.is_stingy(offer, listed)
+	var can_confirm := dto.can_confirm
+	var buy_dto := _bz1_buy_signal(SKU, DemandSignalService.Channel.MARKETPLACE)
+	var price_dto := _ca1_price_signal(SKU, 599)
+	var list_dto: OnlineListConfirmSignal = _demand_signals.call(
+		"list_confirm_signal",
+		SKU,
+		599,
+		_inventory_service.call("location_for", SKU)
+	)
+	_expect_equal(list_dto != null, true, "CB1: list-confirm DTO binds for CA1 compare")
+	var buy_without := DemandSignalPresenter.buy_confirm_snapshot(buy_dto)
+	var price_without := DemandSignalPresenter.price_summary(price_dto)
+	var list_without := (
+		DemandSignalPresenter.list_confirm_summary(list_dto) if list_dto != null else ""
+	)
+	var trade_without := _cb1_trade_snapshot(SKU)
+	_expect_equal(
+		seller_without.contains("Last sold in-shop"),
+		false,
+		"CB1: no entry keeps the seller line hidden"
+	)
+	_assert_text_has_no_truth(seller_without, "CB1 seller summary without history")
+	_game_state.call("note_completed_in_shop_sale", SKU, 4200)
+	var expected := _bz1_expected_line(4200, "today")
+	var seller_with := DemandSignalPresenter.buylist_seller_summary(dto)
+	_cb1_expect_history_after_demand(
+		seller_with,
+		expected,
+		"CB1: history appends the factual seller line"
+	)
+	_expect_equal(
+		_cb1_seller_core(seller_with),
+		seller_without,
+		"CB1: other buylist_seller_summary lines stay byte-identical with history"
+	)
+	_expect_equal(
+		dto.unit_cost_cents == offer
+		and dto.lot_total_cents == lot_total
+		and BuylistPolicy.listed_comp_cents(dto) == listed
+		and is_equal_approx(BuylistPolicy.anger_floor(), anger)
+		and BuylistPolicy.is_stingy(dto.unit_cost_cents, listed) == stingy
+		and dto.can_confirm == can_confirm,
+		true,
+		"CB1: You offer / listed comp / anger / accept stay byte-identical with history"
+	)
+	var buy_with := DemandSignalPresenter.buy_confirm_snapshot(buy_dto)
+	var price_with := DemandSignalPresenter.price_summary(price_dto)
+	var list_with := (
+		DemandSignalPresenter.list_confirm_summary(list_dto) if list_dto != null else ""
+	)
+	var trade_with := _cb1_trade_snapshot(SKU)
+	_expect_equal(
+		buy_with.replace("\n" + expected, ""),
+		buy_without,
+		"CB1: buy_confirm_snapshot stays byte-identical to CA1"
+	)
+	_expect_equal(
+		_ca1_price_core(price_with),
+		price_without,
+		"CB1: price_summary stays byte-identical to CA1"
+	)
+	_expect_equal(
+		_ca1_price_core(list_with) if list_with.contains("Last sold in-shop") else list_with,
+		list_without,
+		"CB1: list-confirm stays byte-identical to CA1"
+	)
+	_expect_equal(
+		trade_with.replace("\n" + expected, ""),
+		trade_without,
+		"CB1: trade confirm stays byte-identical to CA1"
+	)
+	_expect_equal(buy_with.contains(expected), true, "CB1: buy-confirm still shows the CA1 line")
+	_expect_equal(price_with.contains(expected), true, "CB1: price-confirm still shows the CA1 line")
+	_expect_equal(
+		list_with.contains(expected),
+		true,
+		"CB1: list-confirm still shows the CA1 line"
+	)
+	_expect_equal(trade_with.contains(expected), true, "CB1: trade confirm still shows the CA1 line")
+	_assert_text_has_no_truth(seller_with, "CB1 seller summary with history")
+	_assert_text_has_no_truth(buy_with, "CB1 buy snapshot")
+	_assert_text_has_no_truth(price_with, "CB1 price summary")
+	_assert_text_has_no_truth(list_with, "CB1 list confirm")
+	_assert_text_has_no_truth(trade_with, "CB1 trade confirm")
+	_expect_dto_has_no_truth_fields(dto, "CB1 buylist seller")
+	_expect_dto_has_no_truth_fields(buy_dto, "CB1 buy confirm")
+	_expect_dto_has_no_truth_fields(price_dto, "CB1 price confirm")
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", SKU)), 1.0),
+		true,
+		"CB1: last-sold history is not a sell weight"
+	)
+	var queue := _aw1_queue()
+	var seller := _aw1_enqueue_seller(queue, dto, "CB1 accept same seed")
+	_expect_equal(seller != null, true, "CB1: accept-outcome seller enqueues")
+	var cash_before := int(_economy.get("balance_cents"))
+	_expect_equal(queue.accept_buylist_offer(), true, "CB1: accept outcome still lands")
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - dto.lot_total_cents,
+		"CB1: accept still pays the same You offer"
+	)
+	queue.free()
+
+
+func _test_cb1_save_load_and_untouched() -> void:
+	const SKU := &"ACC-SLV-60"
+	_game_state.call("start_new_game")
+	_expect_equal(_ao1_sell_listed() != null, true, "CB1: save needs an in-shop sale")
+	var history: SaleHistory = _game_state.get("sale_history")
+	var before := history.lookup(SKU)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_expect_equal(saved.has(SaleHistory.SAVE_KEY), true, "CB1: capture_save still writes sale_history")
+	_expect_equal(
+		SaleHistory.SAVE_KEY,
+		"sale_history",
+		"CB1: no new save key; reuses sale_history"
+	)
+	_expect_equal(
+		saved.has("price_confirm_history")
+		or saved.has("last_sold_in_shop")
+		or saved.has("buylist_seller_history"),
+		false,
+		"CB1: no new last-sold save key"
+	)
+	_assert_payload_has_no_truth(saved, "CB1 sale history save")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_game_state.call("restore_save", saved),
+		true,
+		"CB1: restore_save accepts the shipped history snapshot"
+	)
+	var restored := (_game_state.get("sale_history") as SaleHistory).lookup(SKU)
+	_expect_equal(
+		int(restored.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		int(before.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		"CB1: restore puts unit_price_cents back"
+	)
+	_expect_equal(
+		int(restored.get(SaleHistory.DAY_KEY, 0)),
+		int(before.get(SaleHistory.DAY_KEY, 0)),
+		"CB1: restore puts day back"
+	)
+	var expected := _bz1_expected_line(
+		int(restored.get(SaleHistory.UNIT_PRICE_KEY, 0)),
+		"today"
+	)
+	var dto := _aw1_signal(SKU)
+	_expect_equal(dto != null, true, "CB1: restored seller DTO binds")
+	if dto != null:
+		_cb1_expect_history_after_demand(
+			DemandSignalPresenter.buylist_seller_summary(dto),
+			expected,
+			"CB1: restored history shows on buylist_seller_summary"
+		)
+	var settings: BuylistPctSettings = _game_state.get("buylist_pcts")
+	_expect_equal(
+		is_equal_approx(
+			BuylistFewerLotsPolicy.seller_weight_mult(settings, NORMAL_CONFIG),
+			1.0
+		)
+		and is_equal_approx(
+			BuylistFloodPolicy.seller_weight_mult(settings, NORMAL_CONFIG),
+			1.0
+		)
+		and is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50)
+		and is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40),
+		true,
+		"CB1: BN1/BO1 seller weight and BM1 drip stay as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	var at_49 := catalog.roll_spawn(SEED, 49, NORMAL_CONFIG, 5)
+	var at_50 := catalog.roll_spawn(SEED, 50, NORMAL_CONFIG, 5)
+	_expect_equal(at_49.size(), at_50.size(), "CB1: door spawn count at Rep 50 matches Rep 49")
+	_expect_equal(
+		",".join(_aj1_ids(at_49)),
+		",".join(_aj1_ids(at_50)),
+		"CB1: same-seed door roll at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		is_equal_approx(
+			catalog.weight_for(whale, 50, NORMAL_CONFIG),
+			catalog.weight_for(whale, 49, NORMAL_CONFIG)
+		),
+		true,
+		"CB1: whale weight at Rep 50 matches Rep 49"
+	)
+	_expect_equal(
+		RegularsReturnPolicy.UNLOCK_REP == 50
+		and RegularsReturnPolicy.QUEUE_CAP == 1
+		and RegularsReturnPolicy.SAVE_KEY == "regulars_return",
+		true,
+		"CB1: AO1 / BY1 Regulars stay as shipped"
+	)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", SKU)), 1.0),
+		true,
+		"CB1: last-sold history is not a sell weight"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("regulars_relationship")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("listed_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"CB1: Soft catalog stays CLOSED"
+	)
+	var shop_src := FileAccess.get_file_as_string("res://scripts/shop/shop_state.gd")
+	_expect_equal(
+		shop_src.contains("func has_active_cameras()")
+		and not shop_src.contains("disable_cameras")
+		and not shop_src.contains("sell_cameras"),
+		true,
+		"CB1: cameras stay owned≡active (no off-switch)"
 	)
 	_game_state.call("start_new_game")
 
