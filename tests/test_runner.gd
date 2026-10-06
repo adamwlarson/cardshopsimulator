@@ -239,6 +239,7 @@ func _initialize() -> void:
 	_test_buylist_flood()
 	_test_daily_utilities_settle()
 	_test_distributor_weekly_menu()
+	_test_recurring_marketplace_lots()
 
 	if _failures == 0:
 		print("All foundation tests passed.")
@@ -41602,6 +41603,1051 @@ func _bt1_prep_menu_row_count(hud: Node) -> int:
 		if row.text.contains("min ×"):
 			count += 1
 	return count
+
+
+func _test_recurring_marketplace_lots() -> void:
+	_qa.set_force_enabled(false)
+	_qa_autoload.call("set_force_enabled", false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_test_bu1_named_gate_and_fallbacks()
+	_test_bu1_cadence_pool_and_identity()
+	_test_bu1_ask_qty_and_seed()
+	_test_bu1_fetch_buy_and_blockers()
+	_test_bu1_expire_save_load_and_toast()
+	_test_bu1_confirm_no_truth()
+	_test_bu1_untouched_and_parked()
+	_qa_autoload.call("set_force_enabled", false)
+	_qa.set_force_enabled(false)
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+
+
+func _test_bu1_named_gate_and_fallbacks() -> void:
+	_expect_equal(MarketplaceLotPolicy.FIRST_DAY, 4, "BU1: locked first lot day is 4")
+	_expect_equal(MarketplaceLotPolicy.MIN_PER_DAY, 1, "BU1: locked min lots is 1")
+	_expect_equal(MarketplaceLotPolicy.MAX_PER_DAY, 3, "BU1: locked max lots is 3")
+	_expect_equal(MarketplaceLotPolicy.QTY_SEALED, 2, "BU1: locked sealed qty is 2")
+	_expect_equal(MarketplaceLotPolicy.QTY_SINGLE, 1, "BU1: locked single qty is 1")
+	_expect_equal(
+		is_equal_approx(MarketplaceLotPolicy.ASK_MIN, 0.40)
+		and is_equal_approx(MarketplaceLotPolicy.ASK_MAX, 0.70),
+		true,
+		"BU1: locked ask band is 40–70%"
+	)
+	_expect_equal(
+		MarketplaceLotPolicy.OFFER_LABEL,
+		"Marketplace lot",
+		"BU1: offer label is Marketplace lot"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.marketplace_lots_first_day == 4
+		and NORMAL_CONFIG.marketplace_lots_min_per_day == 1
+		and NORMAL_CONFIG.marketplace_lots_max_per_day == 3
+		and is_equal_approx(NORMAL_CONFIG.marketplace_lot_ask_min, 0.40)
+		and is_equal_approx(NORMAL_CONFIG.marketplace_lot_ask_max, 0.70),
+		true,
+		"BU1: Normal config matches locked cadence and ask band"
+	)
+	_expect_equal(
+		EASY_CONFIG.marketplace_lots_first_day == 4
+		and HARD_CONFIG.marketplace_lots_first_day == 4
+		and EASY_CONFIG.marketplace_lots_min_per_day == 1
+		and HARD_CONFIG.marketplace_lots_max_per_day == 3,
+		true,
+		"BU1: Easy/Hard inherit first 4 / 1–3 lots"
+	)
+	_expect_equal(
+		MarketplaceLotPolicy.first_day(0) == 4
+		and MarketplaceLotPolicy.first_day(-2) == 4
+		and MarketplaceLotPolicy.min_per_day(0, 3) == 1
+		and MarketplaceLotPolicy.max_per_day(1, 0) == 3
+		and MarketplaceLotPolicy.min_per_day(-1, -3) == 1
+		and MarketplaceLotPolicy.max_per_day(4, 2) == 3,
+		true,
+		"BU1: missing / ≤0 / inverted count knobs fall back to 1–3"
+	)
+	_expect_equal(
+		is_equal_approx(MarketplaceLotPolicy.ask_min(0.0, 0.70), 0.40)
+		and is_equal_approx(MarketplaceLotPolicy.ask_max(0.40, 0.0), 0.70)
+		and is_equal_approx(MarketplaceLotPolicy.ask_min(0.80, 0.50), 0.40)
+		and is_equal_approx(MarketplaceLotPolicy.ask_max(0.20, 1.20), 0.70),
+		true,
+		"BU1: missing / inverted / >1 ask knobs fall back to 0.40–0.70"
+	)
+	var missing := BalanceConfig.new()
+	missing.marketplace_lots_first_day = 0
+	missing.marketplace_lots_min_per_day = 0
+	missing.marketplace_lots_max_per_day = 0
+	missing.marketplace_lot_ask_min = 0.0
+	missing.marketplace_lot_ask_max = 0.0
+	_expect_equal(
+		MarketplaceLotPolicy.first_day_for(missing) == 4
+		and MarketplaceLotPolicy.min_per_day_for(missing) == 1
+		and MarketplaceLotPolicy.max_per_day_for(missing) == 3
+		and is_equal_approx(MarketplaceLotPolicy.ask_min_for(missing), 0.40)
+		and is_equal_approx(MarketplaceLotPolicy.ask_max_for(missing), 0.70),
+		true,
+		"BU1: zero config falls back to day 4 / 1–3 / 0.40–0.70"
+	)
+	_expect_equal(
+		MarketplaceLotPolicy.first_day_for(null) == 4
+		and MarketplaceLotPolicy.is_lot_day(4)
+		and not MarketplaceLotPolicy.is_lot_day(3)
+		and not MarketplaceLotPolicy.is_lot_day(1),
+		true,
+		"BU1: defaults open on day ≥ 4 and stay closed on days 1–3"
+	)
+	_expect_equal(
+		int(_demand_signals.call("marketplace_lots_first_day", 0)) == 4
+		and int(_demand_signals.call("marketplace_lots_min_per_day", 0, 0)) == 1
+		and int(_demand_signals.call("marketplace_lots_max_per_day", 0, 0)) == 3
+		and bool(_demand_signals.call("is_marketplace_lot_day", 4))
+		and not bool(_demand_signals.call("is_marketplace_lot_day", 3)),
+		true,
+		"BU1: DemandSignals 0-config fallbacks match locked cadence"
+	)
+	_expect_equal(
+		String(MarketplaceLotPolicy.offer_id(4, 1)),
+		"marketplace-lot-d4-1",
+		"BU1: ids are marketplace-lot-d{day}-{n}"
+	)
+	_expect_equal(
+		MarketplaceLotPolicy.is_lot_id(&"marketplace-lot-d4-1")
+		and not MarketplaceLotPolicy.is_lot_id(&"dustway-marketplace-day-1")
+		and not MarketplaceLotPolicy.is_lot_id(&"marketplace-outing-steal")
+		and not MarketplaceLotPolicy.is_lot_id(&"high-rep-marketplace-lead"),
+		true,
+		"BU1: lot ids do not collide with day-1, §10 #3, or AQ1"
+	)
+
+
+func _test_bu1_cadence_pool_and_identity() -> void:
+	var expected := _bu1_live_lot_skus()
+	_expect_equal(expected.size(), 8, "BU1: live catalog has eight SEALED / non-bulk SINGLE SKUs")
+	_expect_equal(
+		expected.has(&"AA-SKIE-ETB")
+		and expected.has(&"AA-SKIE-BLST")
+		and expected.has(&"AA-DUST-ETB")
+		and expected.has(&"AA-BASE-088")
+		and expected.has(&"AA-BASE-078")
+		and expected.has(&"AA-SKIE-047")
+		and expected.has(&"AA-SKIE-052")
+		and expected.has(&"AA-SKIE-058")
+		and not expected.has(&"AA-BASE-BULK")
+		and not expected.has(&"ACC-SLV-60")
+		and not expected.has(&"ACC-TOP-25"),
+		true,
+		"BU1: pool is live SEALED + non-bulk SINGLE and never bulk or accessory"
+	)
+	var seen_counts: Dictionary = {1: 0, 2: 0, 3: 0}
+	for day: int in range(4, 34):
+		_bu1_reset_at(day, 40)
+		var lots := _bu1_lot_signals()
+		_expect_equal(
+			lots.size() >= 1 and lots.size() <= 3,
+			true,
+			"BU1: day %d opens 1–3 lots" % day
+		)
+		if seen_counts.has(lots.size()):
+			seen_counts[lots.size()] = int(seen_counts[lots.size()]) + 1
+		var seen: Dictionary = {}
+		for dto: BuyConfirmSignal in lots:
+			_expect_equal(
+				MarketplaceLotPolicy.is_lot_id(dto.opportunity_id),
+				true,
+				"BU1: day %d line uses a lot id" % day
+			)
+			_expect_equal(dto.offer_label, "Marketplace lot", "BU1: day %d label is Marketplace lot" % day)
+			_expect_equal(dto.channel, &"marketplace", "BU1: day %d stays on marketplace" % day)
+			_expect_equal(
+				expected.has(dto.sku_id),
+				true,
+				"BU1: day %d SKU %s is live SEALED / non-bulk SINGLE" % [day, dto.sku_id]
+			)
+			_expect_equal(seen.has(dto.sku_id), false, "BU1: day %d has no duplicate SKU" % day)
+			seen[dto.sku_id] = true
+			var sku: ProductSKU = _inventory_service.get("model").get_sku(dto.sku_id)
+			_expect_equal(
+				sku != null and MarketplaceLotPolicy.is_lot_sku(sku),
+				true,
+				"BU1: day %d never lists graded, accessory, or bulk" % day
+			)
+	_expect_equal(
+		int(seen_counts[1]) > 0 and int(seen_counts[2]) > 0 and int(seen_counts[3]) > 0,
+		true,
+		"BU1: a 30-day sim hits each of 1, 2, and 3 lots at least once"
+	)
+	for day: int in [1, 2, 3]:
+		_bu1_reset_at(day, 40)
+		_expect_equal(
+			_bu1_lot_signals().is_empty(),
+			true,
+			"BU1: day %d opens no recurring lots" % day
+		)
+	_bu1_reset_at(1, 40)
+	var day1: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		&"dustway-marketplace-day-1"
+	)
+	_expect_equal(day1 != null, true, "BU1: day-1 scripted lot stays")
+	if day1 != null:
+		_expect_equal(day1.sku_id, &"AA-DUST-ETB", "BU1: day-1 lot SKU stays Dustway ETB")
+		_expect_equal(day1.quantity, 2, "BU1: day-1 lot qty stays 2")
+		_expect_equal(day1.unit_cost_cents, 2400, "BU1: day-1 lot ask stays 2400")
+	_bu1_reset_at(3, 40)
+	_expect_equal(
+		_bu1_lot_signals().is_empty(),
+		true,
+		"BU1: day 3 does not pre-roll a BU1 lot for the outing steal to grab"
+	)
+	_bu1_reset_at(4, 75)
+	var extra: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		MarketplaceLeadPolicy.EXTRA_LEAD_ID
+	)
+	_expect_equal(extra != null, true, "BU1: AQ1 extra lead still opens at Rep 75")
+	if extra != null:
+		_expect_equal(
+			extra.sku_id,
+			MarketplaceLeadPolicy.DEFAULT_SKU_ID,
+			"BU1: AQ1 template on day 4 still uses the default SKU, not a BU1 lot"
+		)
+		_expect_equal(extra.quantity, 1, "BU1: AQ1 extra lead qty stays the default template")
+		_expect_equal(
+			MarketplaceLotPolicy.is_lot_id(extra.opportunity_id),
+			false,
+			"BU1: AQ1 extra lead id is unchanged"
+		)
+	var catalog := FileAccess.get_file_as_string("res://data/buy_opportunities.json")
+	_expect_equal(
+		catalog.contains("dustway-marketplace-day-1")
+		and catalog.contains("\"last_day\": 2"),
+		true,
+		"BU1: day-1 scripted marketplace lot stays last_day 2"
+	)
+	_expect_equal(
+		not catalog.contains("marketplace-lot-d"),
+		true,
+		"BU1: recurring lots are not a JSON catalog rewrite"
+	)
+
+
+func _test_bu1_ask_qty_and_seed() -> void:
+	_bu1_reset_at(4, 40)
+	var first := _bu1_lot_fingerprints()
+	_expect_equal(first.is_empty(), false, "BU1: day 4 opens lots to fingerprint")
+	for dto: BuyConfirmSignal in _bu1_lot_signals():
+		var sku: ProductSKU = _inventory_service.get("model").get_sku(dto.sku_id)
+		var basis := int(_demand_signals.call("market_cents_for", dto.sku_id))
+		_expect_equal(basis > 0, true, "BU1: ask uses today's live market basis")
+		var ratio := float(dto.unit_cost_cents) / float(basis)
+		_expect_equal(
+			ratio >= 0.40 - 0.0001 and ratio <= 0.70 + 0.0001,
+			true,
+			"BU1: unit ask / basis stays in [0.40, 0.70]"
+		)
+		if sku != null and sku.product_class == ProductSKU.ProductClass.SEALED:
+			_expect_equal(dto.quantity, 2, "BU1: sealed lots are qty 2")
+		else:
+			_expect_equal(dto.quantity, 1, "BU1: singles lots are qty 1")
+		_expect_equal(dto.space_required, 1, "BU1: space_required stays 1")
+	_bu1_reset_at(4, 40)
+	_expect_equal(
+		_bu1_lot_fingerprints(),
+		first,
+		"BU1: the same seed and day reproduce the identical lots"
+	)
+	_bu1_reset_at(5, 40)
+	_expect_equal(
+		_bu1_lot_fingerprints() != first,
+		true,
+		"BU1: a later day draws a new seeded set"
+	)
+	_bu1_reset_at(4, 40)
+	_demand_signals.call(
+		"start_pack_event",
+		MarketEvent.KIND_SUPPLY_GLUT,
+		{"duration_days": 3, "remaining_days": 3}
+	)
+	var glut_lots := _bu1_lot_signals()
+	_expect_equal(glut_lots.is_empty(), false, "BU1: glut still offers recurring lots")
+	_bu1_reset_at(4, 40)
+	var quiet := _bu1_lot_fingerprints()
+	_expect_equal(quiet, first, "BU1: glut does not invent a new ask formula")
+
+
+func _test_bu1_fetch_buy_and_blockers() -> void:
+	_bu1_reset_at(4, 40)
+	var lots := _bu1_lot_signals()
+	_expect_equal(lots.size() >= 1, true, "BU1: fetch tests need at least one lot")
+	if lots.is_empty():
+		return
+	var drive_dto := lots[0]
+	var cash_before := int(_economy.get("balance_cents"))
+	var att_before := int(_game_state.get("attention_remaining"))
+	var skip_before := float(_game_state.get("pending_floor_skip_seconds"))
+	var owned_before := int(_inventory_service.call("total_owned", drive_dto.sku_id))
+	_expect_equal(
+		_demand_signals.call("confirm_buy", drive_dto),
+		false,
+		"BU1: a buy without a fetch pick is refused"
+	)
+	_expect_equal(int(_economy.get("balance_cents")), cash_before, "BU1: no-fetch buy does not move cash")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BU1: no-fetch buy does not spend Attention"
+	)
+	_expect_equal(
+		is_equal_approx(float(_game_state.get("pending_floor_skip_seconds")), skip_before),
+		true,
+		"BU1: no-fetch buy does not queue a floor skip"
+	)
+	_expect_equal(
+		_demand_signals.call("confirm_buy", drive_dto, -1, MarketplaceLotPolicy.FETCH_DRIVE),
+		true,
+		"BU1: Drive out buy succeeds"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - drive_dto.lot_total_cents,
+		"BU1: Drive out debits the lot total only"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before - NORMAL_CONFIG.marketplace_outing_attention,
+		"BU1: Drive out debits 25 Attention"
+	)
+	_expect_equal(
+		is_equal_approx(
+			float(_game_state.get("pending_floor_skip_seconds")),
+			skip_before + NORMAL_CONFIG.marketplace_outing_floor_skip_seconds
+		),
+		true,
+		"BU1: Drive out queues 34 s floor skip"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", drive_dto.sku_id)),
+		owned_before + drive_dto.quantity,
+		"BU1: Drive out adds the lot to stock"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", drive_dto.opportunity_id) == null,
+		true,
+		"BU1: buying a lot closes only that lot"
+	)
+	_expect_equal(
+		_demand_signals.call(
+			"confirm_buy",
+			drive_dto,
+			-1,
+			MarketplaceLotPolicy.FETCH_DRIVE
+		),
+		false,
+		"BU1: a closed lot does not charge fetch again"
+	)
+	_bu1_reset_at(4, 40)
+	lots = _bu1_lot_signals()
+	if lots.size() < 1:
+		return
+	var courier_dto := lots[0]
+	if lots.size() > 1:
+		courier_dto = lots[1]
+	cash_before = int(_economy.get("balance_cents"))
+	att_before = int(_game_state.get("attention_remaining"))
+	skip_before = float(_game_state.get("pending_floor_skip_seconds"))
+	owned_before = int(_inventory_service.call("total_owned", courier_dto.sku_id))
+	var courier_before := _bu1_courier_cents()
+	_expect_equal(
+		_demand_signals.call("confirm_buy", courier_dto, -1, MarketplaceLotPolicy.FETCH_COURIER),
+		true,
+		"BU1: Courier buy succeeds"
+	)
+	_expect_equal(
+		int(_economy.get("balance_cents")),
+		cash_before - courier_dto.lot_total_cents - NORMAL_CONFIG.marketplace_courier_fee_cents,
+		"BU1: Courier debits lot total plus $35"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BU1: Courier does not spend Attention"
+	)
+	_expect_equal(
+		is_equal_approx(float(_game_state.get("pending_floor_skip_seconds")), skip_before),
+		true,
+		"BU1: Courier does not queue a floor skip"
+	)
+	_expect_equal(
+		_bu1_courier_cents(),
+		courier_before + NORMAL_CONFIG.marketplace_courier_fee_cents,
+		"BU1: Courier records the marketplace courier fee"
+	)
+	_expect_equal(
+		int(_inventory_service.call("total_owned", courier_dto.sku_id)),
+		owned_before + courier_dto.quantity,
+		"BU1: Courier adds the lot to stock"
+	)
+	_bu1_reset_at(4, 40)
+	lots = _bu1_lot_signals()
+	var decline_dto := lots[0]
+	cash_before = int(_economy.get("balance_cents"))
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		_demand_signals.call("decline_haggle_offer", decline_dto),
+		true,
+		"BU1: Decline closes the lot"
+	)
+	_expect_equal(int(_economy.get("balance_cents")), cash_before, "BU1: Decline charges no courier")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BU1: Decline charges no Attention"
+	)
+	_expect_equal(
+		is_equal_approx(float(_game_state.get("pending_floor_skip_seconds")), 0.0),
+		true,
+		"BU1: Decline queues no floor skip"
+	)
+	_bu1_reset_at(4, 40)
+	lots = _bu1_lot_signals()
+	var miss_dto := lots[0]
+	var miss_ask := miss_dto.lot_total_cents
+	var miss_seed := int(_demand_signals.call("haggle_roll_seed", miss_dto.opportunity_id))
+	var miss_offer := 1
+	_expect_equal(
+		HagglePolicy.roll_accept(
+			miss_seed,
+			miss_offer,
+			miss_ask,
+			int(_game_state.get("current_reputation")),
+			miss_dto.channel
+		),
+		false,
+		"BU1: a 1¢ Counter vs the ask misses"
+	)
+	cash_before = int(_economy.get("balance_cents"))
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		StringName(_demand_signals.call(
+			"counter_buy",
+			miss_dto,
+			miss_offer,
+			MarketplaceLotPolicy.FETCH_DRIVE
+		)),
+		HagglePolicy.RESULT_MISSED,
+		"BU1: a failed haggle misses"
+	)
+	_expect_equal(int(_economy.get("balance_cents")), cash_before, "BU1: a failed haggle charges no fetch")
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BU1: a failed haggle spends no Attention"
+	)
+	_bu1_reset_at(4, 40)
+	lots = _bu1_lot_signals()
+	var hit_dto := lots[0]
+	var hit_ask := hit_dto.lot_total_cents
+	var hit_seed := int(_demand_signals.call("haggle_roll_seed", hit_dto.opportunity_id))
+	var hit_offer := hit_ask - 1
+	if HagglePolicy.roll_accept(
+		hit_seed,
+		hit_offer,
+		hit_ask,
+		int(_game_state.get("current_reputation")),
+		hit_dto.channel
+	):
+		cash_before = int(_economy.get("balance_cents"))
+		_expect_equal(
+			StringName(_demand_signals.call(
+				"counter_buy",
+				hit_dto,
+				hit_offer,
+				MarketplaceLotPolicy.FETCH_COURIER
+			)),
+			HagglePolicy.RESULT_ACCEPTED,
+			"BU1: a successful haggle still charges fetch once"
+		)
+		_expect_equal(
+			int(_economy.get("balance_cents")),
+			cash_before - hit_offer - NORMAL_CONFIG.marketplace_courier_fee_cents,
+			"BU1: a haggled Courier buy debits offer plus $35"
+		)
+	_bu1_reset_at(4, 40)
+	lots = _bu1_lot_signals()
+	var cash_dto := lots[0]
+	_economy.set("balance_cents", cash_dto.lot_total_cents - 1)
+	var broke: BuyConfirmSignal = _demand_signals.call("buy_signal_for_id", cash_dto.opportunity_id)
+	_expect_equal(broke != null and not broke.can_confirm, true, "BU1: over-cash is blocked as shipped")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		_demand_signals.call("confirm_buy", broke, -1, MarketplaceLotPolicy.FETCH_DRIVE),
+		false,
+		"BU1: over-cash confirm is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BU1: over-cash charges no Drive out"
+	)
+	_bu1_reset_at(4, 40)
+	lots = _bu1_lot_signals()
+	var fee_dto := lots[0]
+	_economy.set("balance_cents", fee_dto.lot_total_cents)
+	var short_courier: BuyConfirmSignal = _demand_signals.call(
+		"buy_signal_for_id",
+		fee_dto.opportunity_id
+	)
+	_expect_equal(
+		short_courier != null
+		and not bool(_demand_signals.call("marketplace_lot_can_courier", short_courier)),
+		true,
+		"BU1: cash < lot + courier disables Courier"
+	)
+	_expect_equal(
+		_demand_signals.call("confirm_buy", short_courier, -1, MarketplaceLotPolicy.FETCH_COURIER),
+		false,
+		"BU1: uncovered Courier does not buy"
+	)
+	_bu1_reset_at(4, 40)
+	lots = _bu1_lot_signals()
+	var att_dto := lots[0]
+	_game_state.set("attention_remaining", NORMAL_CONFIG.marketplace_outing_attention - 1)
+	var tired: BuyConfirmSignal = _demand_signals.call("buy_signal_for_id", att_dto.opportunity_id)
+	_expect_equal(
+		tired != null and not bool(_demand_signals.call("marketplace_lot_can_drive", tired)),
+		true,
+		"BU1: Att < 25 disables Drive out"
+	)
+	cash_before = int(_economy.get("balance_cents"))
+	_expect_equal(
+		_demand_signals.call("confirm_buy", tired, -1, MarketplaceLotPolicy.FETCH_DRIVE),
+		false,
+		"BU1: uncovered Drive out does not buy"
+	)
+	_expect_equal(int(_economy.get("balance_cents")), cash_before, "BU1: uncovered Drive out charges no cash")
+	_bu1_reset_at(4, 40)
+	lots = _bu1_lot_signals()
+	var space_dto := lots[0]
+	var model: InventoryModel = _inventory_service.get("model")
+	model.backstock_bin_bonus = -model.balance_config.backstock_bins
+	var packed: BuyConfirmSignal = _demand_signals.call("buy_signal_for_id", space_dto.opportunity_id)
+	_expect_equal(packed != null and not packed.can_confirm, true, "BU1: over-space is blocked as shipped")
+	att_before = int(_game_state.get("attention_remaining"))
+	_expect_equal(
+		_demand_signals.call("confirm_buy", packed, -1, MarketplaceLotPolicy.FETCH_COURIER),
+		false,
+		"BU1: over-space confirm is refused"
+	)
+	_expect_equal(
+		int(_game_state.get("attention_remaining")),
+		att_before,
+		"BU1: over-space charges no fetch"
+	)
+
+
+func _test_bu1_expire_save_load_and_toast() -> void:
+	_bu1_reset_at(4, 40)
+	var open_first := _bu1_lot_signals()
+	_expect_equal(open_first.is_empty(), false, "BU1: day 4 starts with open lots")
+	var buy_id := open_first[0].opportunity_id
+	var fingerprints := _bu1_lot_fingerprints()
+	_expect_equal(
+		_demand_signals.call("confirm_buy", open_first[0], -1, MarketplaceLotPolicy.FETCH_DRIVE),
+		true,
+		"BU1: buy one lot before save"
+	)
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", buy_id) == null,
+		true,
+		"BU1: bought lot is closed that day"
+	)
+	var saved: Dictionary = _game_state.call("capture_save")
+	_assert_payload_has_no_truth(saved, "BU1 lot save")
+	var closed_saved: Variant = saved.get(DistributorMenuPolicy.SAVE_KEY, [])
+	_expect_equal(closed_saved is Array, true, "BU1: save stores closed opportunity ids")
+	if closed_saved is Array:
+		_expect_equal(
+			(closed_saved as Array).has(String(buy_id)),
+			true,
+			"BU1: save records the bought lot id"
+		)
+	_expect_equal(
+		is_equal_approx(
+			float(saved.get("pending_floor_skip_seconds", 0.0)),
+			NORMAL_CONFIG.marketplace_outing_floor_skip_seconds
+		),
+		true,
+		"BU1: pending drive-out floor skip persists through the shipped field"
+	)
+	var parsed_save: Variant = JSON.parse_string(JSON.stringify(saved))
+	_expect_equal(parsed_save is Dictionary, true, "BU1: JSON save roundtrips")
+	_game_state.call("start_new_game")
+	_expect_equal(
+		_bu1_lot_signals().is_empty(),
+		true,
+		"BU1: a fresh session on day 1 has no recurring lots"
+	)
+	_expect_equal(
+		parsed_save is Dictionary and _game_state.call("restore_save", parsed_save),
+		true,
+		"BU1: restore_save accepts the mid-lot-day snapshot"
+	)
+	_expect_equal(int(_game_state.get("current_day")), 4, "BU1: restore lands on the lot day")
+	_expect_equal(
+		_demand_signals.call("buy_signal_for_id", buy_id) == null,
+		true,
+		"BU1: restore does not re-offer the bought lot"
+	)
+	var restored := _bu1_lot_fingerprints()
+	for print_line: String in fingerprints:
+		if print_line.begins_with("%s|" % String(buy_id)):
+			_expect_equal(restored.has(print_line), false, "BU1: restored open lines are not the bought id")
+		else:
+			_expect_equal(restored.has(print_line), true, "BU1: restore rebuilds the same unbought lots")
+	_expect_equal(
+		is_equal_approx(
+			float(_game_state.get("pending_floor_skip_seconds")),
+			NORMAL_CONFIG.marketplace_outing_floor_skip_seconds
+		),
+		true,
+		"BU1: restore keeps the pending drive-out skip"
+	)
+	_game_state.set("current_day", 5)
+	_expect_equal(
+		_bu1_open_ids().has(buy_id),
+		false,
+		"BU1: yesterday's bought id is not re-offered"
+	)
+	_bu1_reset_at(4, 40)
+	var leftover := _bu1_lot_signals()
+	_expect_equal(leftover.is_empty(), false, "BU1: expire test needs open lots")
+	_game_state.set("current_day", 5)
+	var next_ids := _bu1_open_ids()
+	for dto: BuyConfirmSignal in leftover:
+		_expect_equal(next_ids.has(dto.opportunity_id), false, "BU1: unbought lots are gone the next day")
+	for day: int in [1, 2, 3]:
+		_bu1_reset_at(day, 40)
+		var saved_early: Dictionary = _game_state.call("capture_save")
+		_game_state.call("start_new_game")
+		_expect_equal(
+			_game_state.call("restore_save", saved_early),
+			true,
+			"BU1: restore accepts a day %d snapshot" % day
+		)
+		_expect_equal(
+			_bu1_lot_signals().is_empty(),
+			true,
+			"BU1: loading on day %d shows no BU1 lots" % day
+		)
+	_bu1_reset_at(4, 40)
+	var posted := int(_demand_signals.call("posted_marketplace_lot_count"))
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BU1: HUD loads on a lot day")
+	if hud != null:
+		var toast := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			toast != null and toast.text.contains("%d marketplace lots posted" % posted),
+			true,
+			"BU1: PREP toast names the posted lot count"
+		)
+		_assert_text_has_no_truth(toast.text if toast != null else "", "BU1 lot toast")
+		var open_buy := hud.get_node_or_null("%OpenBuyButton") as Button
+		if open_buy != null:
+			open_buy.pressed.emit()
+		_expect_equal(_bu1_prep_lot_row_count(hud), posted, "BU1: Prep list shows one row per lot")
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+	_bu1_reset_at(2, 40)
+	hud = _instantiate_gameplay_hud()
+	if hud != null:
+		var quiet := hud.get_node_or_null("%BeatToast") as Label
+		_expect_equal(
+			quiet == null or not quiet.text.contains("marketplace lots posted"),
+			true,
+			"BU1: days 1–3 PREP do not toast recurring lots"
+		)
+		hud.queue_free()
+	_free_lingering_gameplay_huds()
+
+
+func _test_bu1_confirm_no_truth() -> void:
+	_bu1_reset_at(4, 40)
+	var lots := _bu1_lot_signals()
+	_expect_equal(lots.is_empty(), false, "BU1: confirm scan needs a lot")
+	if lots.is_empty():
+		return
+	var dto := lots[0]
+	_expect_equal(dto.confidence, &"low", "BU1: buy-confirm is Low confidence")
+	_expect_equal(
+		dto.condition_cue,
+		"Photo only — inspect recommended",
+		"BU1: condition stays photo-only fog"
+	)
+	_expect_equal(dto.inspected, false, "BU1: lots start uninspected")
+	_expect_dto_has_no_truth_fields(dto, "BU1 marketplace lot")
+	var row := DemandSignalPresenter.opportunity_row(dto)
+	var summary := DemandSignalPresenter.buy_summary(dto)
+	var snapshot := DemandSignalPresenter.buy_confirm_snapshot(dto)
+	_expect_equal(summary.contains("Low"), true, "BU1: detail shows Low confidence")
+	_expect_equal(snapshot.contains("LOW"), true, "BU1: confirm snapshot shows LOW confidence")
+	_expect_equal(summary.contains("Photo only"), true, "BU1: detail shows the photo-only cue")
+	var service_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/demand_signal_service.gd"
+	)
+	_expect_equal(
+		service_src.contains("Channel.MARKETPLACE:") and service_src.contains("return 0.15"),
+		true,
+		"BU1: marketplace comps stay w 0.15"
+	)
+	_assert_text_has_no_truth(row, "BU1 lot row")
+	_assert_text_has_no_truth(summary, "BU1 lot summary")
+	_assert_text_has_no_truth(snapshot, "BU1 lot snapshot")
+	for text: String in [row, summary, snapshot, dto.condition_cue]:
+		var lower := text.to_lower()
+		_expect_equal(lower.contains("true_market"), false, "BU1: confirm never shows true_market")
+		_expect_equal(lower.contains("p_buy"), false, "BU1: confirm never shows p_buy")
+		_expect_equal(lower.contains("ask rate"), false, "BU1: confirm never shows the ask rate")
+		_expect_equal(lower.contains("40%"), false, "BU1: confirm never shows the rolled ask band")
+		_expect_equal(text.contains("day 5"), false, "BU1: confirm never leaks a future lot day")
+		_expect_equal(text.contains("d5-"), false, "BU1: confirm never leaks future lot ids")
+	_expect_equal(
+		int(_demand_signals.call("inspect_attention_cost_for", dto)),
+		NORMAL_CONFIG.inspect_attention,
+		"BU1: BA1 Owner Inspect stays 5 Att"
+	)
+	_expect_equal(
+		NmMismatchPolicy.REP_HIT == 2
+		and NORMAL_CONFIG.uninspected_nm_mismatch_rep_hit == 2,
+		true,
+		"BU1: BB1/BD1 mismatch stays as shipped"
+	)
+	_free_lingering_gameplay_huds()
+	var hud := _instantiate_gameplay_hud()
+	_expect_equal(hud != null, true, "BU1: HUD loads for buy-confirm")
+	if hud != null:
+		var fresh: BuyConfirmSignal = _demand_signals.call("buy_signal_for_id", dto.opportunity_id)
+		if fresh == null:
+			fresh = _bu1_lot_signals()[0] if not _bu1_lot_signals().is_empty() else dto
+		_select_buy_on_hud(hud, fresh)
+		var title := hud.get_node_or_null("%BuyOpportunityTitle") as Label
+		var hud_summary := hud.get_node_or_null("%BuySummary") as Label
+		if title != null:
+			_expect_equal(title.text.contains("Marketplace lot"), true, "BU1: HUD title shows Marketplace lot")
+			_assert_text_has_no_truth(title.text, "BU1 HUD buy title")
+		if hud_summary != null:
+			_expect_equal(hud_summary.text.contains("Low"), true, "BU1: HUD summary shows Low")
+			_expect_equal(hud_summary.text.contains("Photo only"), true, "BU1: HUD summary shows photo-only")
+			_assert_text_has_no_truth(hud_summary.text, "BU1 HUD buy summary")
+		Callable(hud, "_open_buy_confirm").call()
+		var confirm_button := hud.get_node_or_null("%BuyConfirmButton") as Button
+		var drive := hud.get_node_or_null("BuyConfirm/Content/Actions/MarketplaceLotDriveButton") as Button
+		var courier := hud.get_node_or_null("BuyConfirm/Content/Actions/MarketplaceLotCourierButton") as Button
+		if drive == null:
+			drive = _bu1_named_button(hud, "MarketplaceLotDriveButton")
+		if courier == null:
+			courier = _bu1_named_button(hud, "MarketplaceLotCourierButton")
+		_expect_equal(
+			confirm_button == null or not confirm_button.visible,
+			true,
+			"BU1: fetch picks replace the single Buy on confirm"
+		)
+		_expect_equal(drive != null and drive.visible, true, "BU1: Drive out pick is on confirm")
+		_expect_equal(courier != null and courier.visible, true, "BU1: Courier pick is on confirm")
+		if drive != null:
+			_expect_equal(
+				drive.text.contains("Drive out") and drive.text.contains("25"),
+				true,
+				"BU1: Drive out shows Attention 25 and missed FLOOR hours"
+			)
+			_assert_text_has_no_truth(drive.text, "BU1 Drive out pick")
+		if courier != null:
+			_expect_equal(
+				courier.text.contains("Courier") and courier.text.contains("$35.00"),
+				true,
+				"BU1: Courier shows $35"
+			)
+			_assert_text_has_no_truth(courier.text, "BU1 Courier pick")
+		hud.free()
+	_free_lingering_gameplay_huds()
+	_expect_equal(
+		_demand_signals.call("inspect_buy", dto),
+		true,
+		"BU1: BA1 Inspect works on a recurring lot"
+	)
+	_expect_equal(dto.inspected, true, "BU1: Inspect marks the lot inspected")
+	_expect_equal(
+		is_equal_approx(HagglePolicy.CHANNEL_WEIGHT_MARKETPLACE, 1.00),
+		true,
+		"BU1: marketplace haggle odds stay as shipped"
+	)
+
+
+func _test_bu1_untouched_and_parked() -> void:
+	_expect_equal(
+		is_equal_approx(BuylistDripPolicy.DRIP_FLOOR, 0.40)
+		and BuylistDripPolicy.REP_HIT == 1,
+		true,
+		"BU1: BM1 drip stays 0.40 / −1"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFewerLotsPolicy.FEWER_LOTS_MULT, 0.50),
+		true,
+		"BU1: BN1 fewer-lots stays ×0.50"
+	)
+	_expect_equal(
+		is_equal_approx(BuylistFloodPolicy.FLOOD_CEILING, 0.70)
+		and is_equal_approx(BuylistFloodPolicy.FLOOD_LOTS_MULT, 1.50),
+		true,
+		"BU1: BO1 flood stays 0.70 / ×1.50"
+	)
+	_expect_equal(
+		UtilitiesPolicy.SMALL_DAILY_CENTS == 4_000
+		and UtilitiesPolicy.MEDIUM_DAILY_CENTS == 7_000
+		and UtilitiesPolicy.LARGE_DAILY_CENTS == 11_000,
+		true,
+		"BU1: BP1 utilities stay $40 / $70 / $110"
+	)
+	_expect_equal(
+		SetReleaseHypePolicy.TELEGRAPH_DAYS == 3
+		and SetReleaseHypePolicy.DURATION_DAYS == 5
+		and is_equal_approx(SetReleaseHypePolicy.HYPE_NEW_MULT, 1.40)
+		and is_equal_approx(SetReleaseHypePolicy.HYPE_OLD_MULT, 0.70),
+		true,
+		"BU1: BQ1 set release stays telegraph 3 / duration 5 / ×1.40 / ×0.70"
+	)
+	_expect_equal(
+		ProTourSpikePolicy.TELEGRAPH_DAYS == 1
+		and ProTourSpikePolicy.DURATION_DAYS == 2
+		and is_equal_approx(ProTourSpikePolicy.MULT_MIN, 1.30)
+		and is_equal_approx(ProTourSpikePolicy.MULT_MAX, 1.80),
+		true,
+		"BU1: BR1 Pro tour stays telegraph 1 / duration 2 / ×1.30–1.80"
+	)
+	_expect_equal(
+		RotationCrashPolicy.DURATION_DAYS == 5
+		and is_equal_approx(RotationCrashPolicy.MULT_MIN, 0.45)
+		and is_equal_approx(RotationCrashPolicy.MULT_MAX, 0.70)
+		and is_equal_approx(RotationCrashPolicy.MILD_MULT, 0.90),
+		true,
+		"BU1: BS1 rotation crash stays duration 5 / ×0.45–0.70 / mild ×0.90"
+	)
+	_expect_equal(
+		DistributorMenuPolicy.FIRST_DAY == 8
+		and DistributorMenuPolicy.INTERVAL_DAYS == 7
+		and DistributorMenuPolicy.MOQ_SEALED == 6
+		and DistributorMenuPolicy.MOQ_ACCESSORY == 10,
+		true,
+		"BU1: BT1 weekly menu stays day 8 / interval 7 / mins 6 and 10"
+	)
+	_expect_equal(
+		MarketplaceLeadPolicy.HIGH_REP_MIN_REP == 75
+		and MarketplaceLeadPolicy.EXTRA_LEAD_COUNT == 1,
+		true,
+		"BU1: AQ1 extra marketplace lead stays Rep 75 / +1"
+	)
+	_expect_equal(
+		AuctionSnipePolicy.ATTENTION_COST == 10
+		and is_equal_approx(AuctionSnipePolicy.COMP_WIDTH, 0.12),
+		true,
+		"BU1: AS1 snipe stays Att 10 / width 0.12"
+	)
+	_expect_equal(
+		is_equal_approx(ShadyTrunkPolicy.ASK_RATE, 0.25)
+		and ShadyTrunkPolicy.REPORT_REP_GAIN == 2,
+		true,
+		"BU1: AT1 trunk stays 25% ask / Rep +2"
+	)
+	_expect_equal(
+		NORMAL_CONFIG.inspect_attention == 5
+		and NORMAL_CONFIG.inspect_attention_specialist == 2,
+		true,
+		"BU1: BA1 Inspect costs stay Owner 5 / Specialist 2"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.BASELINE_SPAWN_COUNT == 1,
+		true,
+		"BU1: buyer door spawn stays one customer per live roll"
+	)
+	_expect_equal(
+		CustomerSpawnPolicy.spawn_count(75, 5),
+		CustomerSpawnPolicy.spawn_count(40, 5),
+		"BU1: door spawn_count stays today's count"
+	)
+	_expect_equal(
+		is_equal_approx(NORMAL_CONFIG.customer_spawn_mult, 1.0)
+		and is_equal_approx(NORMAL_CONFIG.whale_weight_mult, 1.0)
+		and is_equal_approx(CustomerSpawnPolicy.HIGH_REP_WHALE_WEIGHT_MULT, 1.5),
+		true,
+		"BU1: whale weight stays as shipped"
+	)
+	var catalog := CustomerArchetypeCatalog.new()
+	var whale := _aj1_whale_archetype(catalog)
+	const SEED := 20261003
+	const BASELINE := 5
+	var at_40 := catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, BASELINE)
+	_expect_equal(at_40.size(), catalog.roll_spawn(SEED, 40, NORMAL_CONFIG, BASELINE).size(), "BU1: lot day does not change door spawn count")
+	_expect_equal(
+		is_equal_approx(catalog.weight_for(whale, 40, NORMAL_CONFIG), catalog.weight_for(whale, 40, NORMAL_CONFIG)),
+		true,
+		"BU1: whale weight is unchanged"
+	)
+	_bu1_reset_at(4, 40)
+	_expect_equal(
+		is_equal_approx(float(_demand_signals.call("sell_through_mult_for", &"ACC-SLV-60")), 1.0)
+		and is_equal_approx(float(_demand_signals.call("sell_through_mult_for", &"AA-SKIE-ETB")), 1.0),
+		true,
+		"BU1: recurring lots are not a sell weight"
+	)
+	var demand_src := FileAccess.get_file_as_string("res://scripts/autoload/demand_signals.gd")
+	var open_body_start := demand_src.find("func _open_opportunities")
+	var aq1_at := demand_src.find("_high_rep_marketplace_leads", open_body_start)
+	var bu1_at := demand_src.find("_prep_marketplace_lots", open_body_start)
+	_expect_equal(
+		open_body_start >= 0 and aq1_at > open_body_start and bu1_at > aq1_at,
+		true,
+		"BU1: lot generation appends after AQ1 on the existing PREP open path"
+	)
+	_expect_equal(
+		not _function_body_contains(demand_src, "func sell_through_mult_for(", "marketplace_lot")
+		and not _function_body_contains(demand_src, "func sell_through_mult_for(", "MarketplaceLotPolicy")
+		and not _function_body_contains(demand_src, "func active_event_traffic_mult(", "marketplace_lot")
+		and not _function_body_contains(demand_src, "func active_event_whale_weight_mult(", "marketplace_lot"),
+		true,
+		"BU1: recurring lots stay off sell-through, door spawn, and whale weight"
+	)
+	var policy_src := FileAccess.get_file_as_string("res://scripts/customers/customer_spawn_policy.gd")
+	var spawn_src := FileAccess.get_file_as_string("res://scripts/customers/customer_spawner.gd")
+	_expect_equal(
+		not policy_src.contains("MarketplaceLotPolicy")
+		and not spawn_src.contains("MarketplaceLotPolicy"),
+		true,
+		"BU1: door spawn path does not read recurring lots"
+	)
+	_expect_equal(
+		FileAccess.get_file_as_string("res://data/events.json").contains("marketplace_lot")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("camera_off")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("listed_band")
+		or FileAccess.get_file_as_string("res://data/events.json").contains("stop_day"),
+		false,
+		"BU1: Soft catalog stays closed"
+	)
+	var hud_src := FileAccess.get_file_as_string("res://scripts/ui/hud.gd")
+	_expect_equal(
+		hud_src.contains("_maybe_show_marketplace_lots_toast")
+		and hud_src.contains("_confirm_marketplace_lot_fetch"),
+		true,
+		"BU1: HUD can toast lots and show fetch picks"
+	)
+	_expect_equal(
+		not hud_src.contains("func _stop")
+		and not hud_src.contains("win_assert")
+		and not hud_src.contains("camera_off")
+		and not hud_src.contains("AA-SKIE-ETB"),
+		true,
+		"BU1: no new screen, no Art, no hardcoded SKU, STOP stays parked"
+	)
+	for path: String in [
+		"res://scripts/ui/hud.gd",
+		"res://scripts/ui/demand_signal_presenter.gd",
+		"res://scripts/economy/marketplace_lot_policy.gd",
+		"res://scripts/autoload/demand_signals.gd",
+		"res://scripts/autoload/game_state.gd",
+		"res://scripts/core/balance_config.gd",
+	]:
+		var source := FileAccess.get_file_as_string(path)
+		_expect_equal(source.contains("true_market"), false, "BU1: %s stays §4.5 clean" % path)
+		_expect_equal(source.contains("p_buy"), false, "BU1: %s never shows p_buy" % path)
+	var save_src := FileAccess.get_file_as_string(
+		"res://scripts/economy/online_listing_save_policy.gd"
+	)
+	_expect_equal(
+		not save_src.contains("suggested_at_list"),
+		true,
+		"BU1: Soft OK list-time suggested persistence stays Soft"
+	)
+	_game_state.call("start_new_game")
+
+
+func _bu1_reset_at(day: int, reputation: int) -> void:
+	_game_state.call("set_balance_config", NORMAL_CONFIG)
+	_game_state.call("start_new_game")
+	_game_state.set("current_day", day)
+	_game_state.set("current_reputation", reputation)
+	_event_bus.emit_signal("reputation_changed", reputation)
+
+
+func _bu1_live_lot_skus() -> Dictionary:
+	var expected: Dictionary = {}
+	var inventory: InventoryModel = _inventory_service.get("model")
+	if inventory == null:
+		return expected
+	for sku_id: StringName in MarketplaceLotPolicy.pool_sku_ids(inventory.catalog):
+		expected[sku_id] = true
+	return expected
+
+
+func _bu1_lot_signals() -> Array[BuyConfirmSignal]:
+	var result: Array[BuyConfirmSignal] = []
+	for dto: BuyConfirmSignal in _demand_signals.call("open_buy_signals"):
+		if dto != null and MarketplaceLotPolicy.is_lot_id(dto.opportunity_id):
+			result.append(dto)
+	return result
+
+
+func _bu1_lot_fingerprints() -> PackedStringArray:
+	var fingerprints: PackedStringArray = []
+	for dto: BuyConfirmSignal in _bu1_lot_signals():
+		fingerprints.append(
+			"%s|%s|%d|%d" % [
+				String(dto.opportunity_id),
+				String(dto.sku_id),
+				dto.quantity,
+				dto.unit_cost_cents,
+			]
+		)
+	return fingerprints
+
+
+func _bu1_open_ids() -> Dictionary:
+	var ids: Dictionary = {}
+	for dto: BuyConfirmSignal in _bu1_lot_signals():
+		ids[dto.opportunity_id] = true
+	return ids
+
+
+func _bu1_courier_cents() -> int:
+	var total := 0
+	for entry: LedgerEntry in _economy.call("get_ledger"):
+		if entry.category == &"courier":
+			total += entry.amount_cents
+	return total
+
+
+func _bu1_prep_lot_row_count(hud: Node) -> int:
+	var rows := hud.get_node_or_null("%BuyOpportunityRows") as VBoxContainer
+	if rows == null:
+		return 0
+	var count := 0
+	for child: Node in rows.get_children():
+		var row := child as Button
+		if row != null and row.text.begins_with("Marketplace ·"):
+			count += 1
+	return count
+
+
+func _bu1_named_button(root: Node, node_name: String) -> Button:
+	if root == null:
+		return null
+	if root.name == node_name:
+		return root as Button
+	for child: Node in root.get_children():
+		var found := _bu1_named_button(child, node_name)
+		if found != null:
+			return found
+	return null
 
 
 func _bp1_reset_for_settle() -> void:

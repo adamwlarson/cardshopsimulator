@@ -127,6 +127,9 @@ var _trade_decline_button: Button
 var _trunk_report_button: Button
 var _counter_button: Button
 var _counter_input: LineEdit
+var _drive_out_button: Button
+var _courier_button: Button
+var _pending_lot_haggle_cents: int = 0
 var _price_signal: PriceConfirmSignal
 var _online_signal: OnlineListConfirmSignal
 var _online_target: Dictionary = {}
@@ -196,6 +199,7 @@ func _ready() -> void:
 	_ensure_counter_controls()
 	%BuyBackButton.pressed.connect(_back_to_buy_detail)
 	%BuyConfirmButton.pressed.connect(_confirm_buy)
+	_ensure_marketplace_lot_fetch_buttons()
 	%OpenPriceButton.pressed.connect(_open_price_list)
 	%PriceListCancelButton.pressed.connect(_close_price)
 	%PriceCancelButton.pressed.connect(_cancel_price)
@@ -378,6 +382,7 @@ func _update_phase(phase: int) -> void:
 			phase_label.theme_type_variation = &"ChipLabel"
 			phase_button.text = "Open floor"
 			_maybe_show_distributor_menu_toast()
+			_maybe_show_marketplace_lots_toast(true)
 		GameState.DayPhase.FLOOR:
 			phase_chip.theme_type_variation = &"PhaseChipFloor"
 			phase_label.theme_type_variation = &"ChipLabelInverse"
@@ -495,6 +500,19 @@ func _maybe_show_distributor_menu_toast(append: bool = false) -> void:
 	beat_toast.show()
 
 
+func _maybe_show_marketplace_lots_toast(append: bool = false) -> void:
+	var message := DemandSignalPresenter.marketplace_lots_toast(
+		DemandSignals.posted_marketplace_lot_count()
+	)
+	if message.is_empty():
+		return
+	if append and not beat_toast.text.is_empty():
+		beat_toast.text = "%s\n%s" % [beat_toast.text, message]
+	else:
+		beat_toast.text = message
+	beat_toast.show()
+
+
 func _update_attention(remaining: int) -> void:
 	attention_label.text = "Att %d/%d" % [
 		remaining,
@@ -569,6 +587,7 @@ func _select_buy_opportunity(dto: BuyConfirmSignal) -> void:
 	_sync_offer_actions()
 	_sync_buy_confirm_gate()
 	_sync_inspect_button()
+	_sync_marketplace_lot_fetch_actions()
 	buy_list_panel.hide()
 	buy_panel.show()
 	buy_confirm_panel.hide()
@@ -590,12 +609,18 @@ func _select_player_trade(offer: PlayerTradeOffer) -> void:
 
 
 func _open_buy_confirm() -> void:
+	_pending_lot_haggle_cents = 0
+	_show_buy_confirm()
+
+
+func _show_buy_confirm() -> void:
 	if _trade_offer != null:
 		if not DemandSignals.player_trade_can_accept(_trade_offer):
 			return
 		buy_confirm_summary.text = PlayerTradePresenter.confirm_snapshot(_trade_offer)
 		buy_panel.hide()
 		buy_confirm_panel.show()
+		_sync_marketplace_lot_fetch_actions()
 		_sync_modal_veil()
 		return
 	if _buy_signal == null:
@@ -605,10 +630,13 @@ func _open_buy_confirm() -> void:
 	)
 	buy_panel.hide()
 	buy_confirm_panel.show()
+	_sync_marketplace_lot_fetch_actions()
 	_sync_modal_veil()
 
 
 func _confirm_buy() -> void:
+	if _is_marketplace_lot():
+		return
 	if _trade_offer != null:
 		if not DemandSignals.player_trade_can_accept(_trade_offer):
 			return
@@ -628,6 +656,36 @@ func _confirm_buy() -> void:
 	if not _spend_for_floor(8):
 		return
 	if DemandSignals.confirm_buy(_buy_signal):
+		_close_buy()
+
+
+func _confirm_marketplace_lot_fetch(fetch_mode: StringName) -> void:
+	if not _is_marketplace_lot():
+		return
+	var lot_total := (
+		_pending_lot_haggle_cents
+		if _pending_lot_haggle_cents > 0
+		else _buy_signal.lot_total_cents
+	)
+	if fetch_mode == MarketplaceLotPolicy.FETCH_DRIVE:
+		if not DemandSignals.marketplace_lot_can_drive(_buy_signal, lot_total):
+			return
+	elif fetch_mode == MarketplaceLotPolicy.FETCH_COURIER:
+		if not DemandSignals.marketplace_lot_can_courier(_buy_signal, lot_total):
+			return
+	else:
+		return
+	if _pending_lot_haggle_cents > 0:
+		var result := DemandSignals.counter_buy(
+			_buy_signal,
+			_pending_lot_haggle_cents,
+			fetch_mode
+		)
+		if result == HagglePolicy.RESULT_REFUSED:
+			return
+		_close_buy()
+		return
+	if DemandSignals.confirm_buy(_buy_signal, -1, fetch_mode):
 		_close_buy()
 
 
@@ -732,8 +790,10 @@ func _buy_inspect_attention_cost() -> int:
 
 
 func _back_to_buy_detail() -> void:
+	_pending_lot_haggle_cents = 0
 	buy_confirm_panel.hide()
 	buy_panel.show()
+	_sync_marketplace_lot_fetch_actions()
 	_sync_modal_veil()
 
 
@@ -743,8 +803,10 @@ func _close_buy() -> void:
 	buy_confirm_panel.hide()
 	_buy_signal = null
 	_trade_offer = null
+	_pending_lot_haggle_cents = 0
 	_sync_offer_actions()
 	_sync_inspect_button()
+	_sync_marketplace_lot_fetch_actions()
 	_sync_modal_veil()
 
 
@@ -866,6 +928,81 @@ func _is_shady_trunk() -> bool:
 	)
 
 
+func _is_marketplace_lot() -> bool:
+	return (
+		_buy_signal != null
+		and MarketplaceLotPolicy.is_lot_id(_buy_signal.opportunity_id)
+	)
+
+
+func _ensure_marketplace_lot_fetch_buttons() -> void:
+	if _drive_out_button != null and _courier_button != null:
+		return
+	var confirm_button := get_node_or_null("%BuyConfirmButton") as Button
+	if confirm_button == null:
+		return
+	var actions := confirm_button.get_parent() as HBoxContainer
+	if actions == null:
+		return
+	if _drive_out_button == null:
+		_drive_out_button = Button.new()
+		_drive_out_button.name = "MarketplaceLotDriveButton"
+		_drive_out_button.visible = false
+		_drive_out_button.custom_minimum_size = Vector2(0.0, 40.0)
+		_drive_out_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_drive_out_button.theme_type_variation = &"PrimaryButton"
+		_drive_out_button.pressed.connect(
+			_confirm_marketplace_lot_fetch.bind(MarketplaceLotPolicy.FETCH_DRIVE)
+		)
+		actions.add_child(_drive_out_button)
+	if _courier_button == null:
+		_courier_button = Button.new()
+		_courier_button.name = "MarketplaceLotCourierButton"
+		_courier_button.visible = false
+		_courier_button.custom_minimum_size = Vector2(0.0, 40.0)
+		_courier_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_courier_button.theme_type_variation = &"PrimaryButton"
+		_courier_button.pressed.connect(
+			_confirm_marketplace_lot_fetch.bind(MarketplaceLotPolicy.FETCH_COURIER)
+		)
+		actions.add_child(_courier_button)
+
+
+func _sync_marketplace_lot_fetch_actions() -> void:
+	_ensure_marketplace_lot_fetch_buttons()
+	var confirm_button := get_node_or_null("%BuyConfirmButton") as Button
+	var is_lot := _is_marketplace_lot()
+	if confirm_button != null:
+		confirm_button.visible = not is_lot
+	if _drive_out_button != null:
+		_drive_out_button.visible = is_lot
+		_drive_out_button.text = DemandSignalPresenter.marketplace_lot_drive_label(
+			MarketplaceLotPolicy.drive_attention_for(GameState.balance_config)
+		)
+	if _courier_button != null:
+		_courier_button.visible = is_lot
+		_courier_button.text = DemandSignalPresenter.marketplace_lot_courier_label(
+			MarketplaceLotPolicy.courier_fee_for(GameState.balance_config)
+		)
+	if not is_lot:
+		return
+	var lot_total := (
+		_pending_lot_haggle_cents
+		if _pending_lot_haggle_cents > 0
+		else _buy_signal.lot_total_cents
+	)
+	if _drive_out_button != null:
+		_drive_out_button.disabled = not DemandSignals.marketplace_lot_can_drive(
+			_buy_signal,
+			lot_total
+		)
+	if _courier_button != null:
+		_courier_button.disabled = not DemandSignals.marketplace_lot_can_courier(
+			_buy_signal,
+			lot_total
+		)
+
+
 func _report_shady_trunk() -> void:
 	if not _is_shady_trunk():
 		return
@@ -883,6 +1020,12 @@ func _counter_selected_offer() -> void:
 	var offer_cents := 0
 	if _counter_input != null:
 		offer_cents = DemandSignalPresenter.parse_cents(_counter_input.text)
+	if _is_marketplace_lot():
+		if not HagglePolicy.is_valid_counter(offer_cents, _buy_signal.lot_total_cents):
+			return
+		_pending_lot_haggle_cents = offer_cents
+		_show_buy_confirm()
+		return
 	var result := DemandSignals.counter_buy(_buy_signal, offer_cents)
 	if result == HagglePolicy.RESULT_REFUSED:
 		return

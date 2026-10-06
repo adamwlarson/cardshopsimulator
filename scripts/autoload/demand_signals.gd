@@ -760,6 +760,59 @@ func is_distributor_menu_day(day: int = -1, config: BalanceConfig = null) -> boo
 	return DistributorMenuPolicy.is_menu_day(resolved_day, resolved_config)
 
 
+func marketplace_lots_first_day(configured: int = 0) -> int:
+	return MarketplaceLotPolicy.first_day(configured)
+
+
+func marketplace_lots_min_per_day(configured_min: int = 0, configured_max: int = 0) -> int:
+	return MarketplaceLotPolicy.min_per_day(configured_min, configured_max)
+
+
+func marketplace_lots_max_per_day(configured_min: int = 0, configured_max: int = 0) -> int:
+	return MarketplaceLotPolicy.max_per_day(configured_min, configured_max)
+
+
+func marketplace_lot_ask_min(configured_min: float = 0.0, configured_max: float = 0.0) -> float:
+	return MarketplaceLotPolicy.ask_min(configured_min, configured_max)
+
+
+func marketplace_lot_ask_max(configured_min: float = 0.0, configured_max: float = 0.0) -> float:
+	return MarketplaceLotPolicy.ask_max(configured_min, configured_max)
+
+
+func is_marketplace_lot_day(day: int = -1, config: BalanceConfig = null) -> bool:
+	var resolved_day := day if day >= 0 else GameState.current_day
+	var resolved_config := config if config != null else GameState.balance_config
+	return MarketplaceLotPolicy.is_lot_day(resolved_day, resolved_config)
+
+
+func posted_marketplace_lot_count() -> int:
+	if InventoryService.model == null:
+		return 0
+	return MarketplaceLotPolicy.lot_count(
+		MarketplaceLotPolicy.RUN_SEED,
+		GameState.current_day,
+		MarketplaceLotPolicy.pool_sku_ids(InventoryService.model.catalog).size(),
+		GameState.balance_config
+	)
+
+
+func marketplace_lot_can_drive(dto: BuyConfirmSignal, lot_total_cents: int = -1) -> bool:
+	return _marketplace_lot_fetch_ready(
+		dto,
+		MarketplaceLotPolicy.FETCH_DRIVE,
+		_marketplace_lot_cash_needed(dto, lot_total_cents)
+	)
+
+
+func marketplace_lot_can_courier(dto: BuyConfirmSignal, lot_total_cents: int = -1) -> bool:
+	return _marketplace_lot_fetch_ready(
+		dto,
+		MarketplaceLotPolicy.FETCH_COURIER,
+		_marketplace_lot_cash_needed(dto, lot_total_cents)
+	)
+
+
 func closed_opportunity_ids_to_save() -> Array:
 	return DistributorMenuPolicy.closed_ids_to_save(_closed_opportunity_ids)
 
@@ -1065,7 +1118,11 @@ func decline_haggle_offer(dto: BuyConfirmSignal) -> bool:
 	return dismiss_buy_opportunity(dto.opportunity_id)
 
 
-func counter_buy(dto: BuyConfirmSignal, offer_cents: int) -> StringName:
+func counter_buy(
+	dto: BuyConfirmSignal,
+	offer_cents: int,
+	fetch_mode: StringName = &""
+) -> StringName:
 	if not can_haggle_offer(dto):
 		return HagglePolicy.RESULT_REFUSED
 	var opportunity := _existing_opportunity(dto.opportunity_id)
@@ -1079,6 +1136,13 @@ func counter_buy(dto: BuyConfirmSignal, offer_cents: int) -> StringName:
 	if not Economy.can_afford(offer_cents):
 		return HagglePolicy.RESULT_REFUSED
 	if dto.space_required > dto.space_free:
+		return HagglePolicy.RESULT_REFUSED
+	var needs_lot_fetch := MarketplaceLotPolicy.is_lot_id(dto.opportunity_id)
+	if needs_lot_fetch and not _marketplace_lot_fetch_ready(
+		dto,
+		fetch_mode,
+		offer_cents
+	):
 		return HagglePolicy.RESULT_REFUSED
 	var reputation := GameState.current_reputation
 	var seed := haggle_roll_seed(dto.opportunity_id)
@@ -1097,6 +1161,8 @@ func counter_buy(dto: BuyConfirmSignal, offer_cents: int) -> StringName:
 		_haggle_spent_ids.erase(dto.opportunity_id)
 		return HagglePolicy.RESULT_REFUSED
 	_closed_opportunity_ids[opportunity.id] = true
+	if needs_lot_fetch:
+		_charge_marketplace_lot_fetch(fetch_mode)
 	return HagglePolicy.RESULT_ACCEPTED
 
 
@@ -1146,7 +1212,11 @@ func _on_customer_resolved_regulars(
 	_regulars.note_outcome(customer, outcome, GameState.current_reputation)
 
 
-func confirm_buy(dto: BuyConfirmSignal, requested_count: int = -1) -> bool:
+func confirm_buy(
+	dto: BuyConfirmSignal,
+	requested_count: int = -1,
+	fetch_mode: StringName = &""
+) -> bool:
 	if dto != null and AuctionSnipePolicy.is_snipe_id(dto.opportunity_id):
 		return bid_auction_snipe(dto)
 	if dto != null and ShadyTrunkPolicy.is_trunk_id(dto.opportunity_id):
@@ -1154,6 +1224,15 @@ func confirm_buy(dto: BuyConfirmSignal, requested_count: int = -1) -> bool:
 	if dto == null or not dto.can_confirm:
 		return false
 	if is_inspect_mandatory(dto) and not dto.inspected:
+		return false
+	var needs_lot_fetch := (
+		dto != null and MarketplaceLotPolicy.is_lot_id(dto.opportunity_id)
+	)
+	if needs_lot_fetch and not _marketplace_lot_fetch_ready(
+		dto,
+		fetch_mode,
+		_marketplace_lot_cash_needed(dto, -1)
+	):
 		return false
 	for opportunity: BuyOpportunity in _open_opportunities():
 		if opportunity.id != dto.opportunity_id:
@@ -1178,6 +1257,8 @@ func confirm_buy(dto: BuyConfirmSignal, requested_count: int = -1) -> bool:
 			)
 		if purchased:
 			_closed_opportunity_ids[opportunity.id] = true
+			if needs_lot_fetch:
+				_charge_marketplace_lot_fetch(fetch_mode)
 		return purchased
 	return false
 
@@ -1567,6 +1648,9 @@ func _open_opportunities() -> Array[BuyOpportunity]:
 	# AQ1: read live Rep when today's marketplace list is prepared.
 	# Rep ≥ 75 appends one extra lead. Rep ≤ 74 keeps today's list.
 	opportunities.append_array(_high_rep_marketplace_leads(opportunities))
+	# BU1: recurring lots from day 4. Append after AQ1 so the extra-lead
+	# template still reads today's list only. Days 1–3 stay dark.
+	opportunities.append_array(_prep_marketplace_lots())
 	# AS1: prep roll lives here. Seeded auction flag offers one snipe.
 	# A live named settle event forces the flag on for this prep.
 	var snipe := _prep_auction_snipe()
@@ -1626,6 +1710,66 @@ func _make_distributor_menu_lot(
 	opportunity.unit_cost_cents = wholesale
 	opportunity.quantity = moq
 	opportunity.space_required = DistributorMenuPolicy.SPACE_REQUIRED
+	if not opportunity.is_valid():
+		return null
+	return opportunity
+
+
+func _prep_marketplace_lots() -> Array[BuyOpportunity]:
+	var lots: Array[BuyOpportunity] = []
+	var config := GameState.balance_config
+	var day := GameState.current_day
+	if not MarketplaceLotPolicy.is_lot_day(day, config):
+		return lots
+	if InventoryService.model == null:
+		return lots
+	var pool := MarketplaceLotPolicy.pool_sku_ids(InventoryService.model.catalog)
+	var count := MarketplaceLotPolicy.lot_count(
+		MarketplaceLotPolicy.RUN_SEED,
+		day,
+		pool.size(),
+		config
+	)
+	var sku_ids := MarketplaceLotPolicy.pick_sku_ids(
+		MarketplaceLotPolicy.RUN_SEED,
+		day,
+		pool,
+		count
+	)
+	for index: int in sku_ids.size():
+		var lot := _make_marketplace_lot(day, index + 1, sku_ids[index], config)
+		if lot != null:
+			lots.append(lot)
+	return lots
+
+
+func _make_marketplace_lot(
+	day: int,
+	lot_index: int,
+	sku_id: StringName,
+	config: BalanceConfig
+) -> BuyOpportunity:
+	var sku := InventoryService.model.get_sku(sku_id)
+	if sku == null or not MarketplaceLotPolicy.is_lot_sku(sku):
+		return null
+	var ask_cents := MarketplaceLotPolicy.ask_cents(
+		_marketplace_basis_cents(sku_id),
+		MarketplaceLotPolicy.RUN_SEED,
+		day,
+		lot_index,
+		config
+	)
+	if ask_cents <= 0:
+		return null
+	var opportunity := BuyOpportunity.new()
+	opportunity.id = MarketplaceLotPolicy.offer_id(day, lot_index)
+	opportunity.sku_id = sku_id
+	opportunity.display_name = sku.display_name
+	opportunity.offer_label = MarketplaceLotPolicy.OFFER_LABEL
+	opportunity.channel = DemandSignalService.Channel.MARKETPLACE
+	opportunity.unit_cost_cents = ask_cents
+	opportunity.quantity = MarketplaceLotPolicy.quantity_for(sku)
+	opportunity.space_required = MarketplaceLotPolicy.SPACE_REQUIRED
 	if not opportunity.is_valid():
 		return null
 	return opportunity
@@ -1782,6 +1926,58 @@ func _marketplace_basis_cents(sku_id: StringName) -> int:
 	if sku == null:
 		return 0
 	return sku.base_market_cents
+
+
+func _marketplace_lot_cash_needed(dto: BuyConfirmSignal, lot_total_cents: int) -> int:
+	if lot_total_cents > 0:
+		return lot_total_cents
+	if dto == null:
+		return 0
+	return maxi(dto.lot_total_cents, dto.unit_cost_cents * maxi(1, dto.quantity))
+
+
+func _marketplace_lot_fetch_ready(
+	dto: BuyConfirmSignal,
+	fetch_mode: StringName,
+	lot_total_cents: int
+) -> bool:
+	if dto == null or not MarketplaceLotPolicy.is_lot_id(dto.opportunity_id):
+		return false
+	if not MarketplaceLotPolicy.is_fetch(fetch_mode):
+		return false
+	if lot_total_cents <= 0:
+		return false
+	if dto.space_required > dto.space_free:
+		return false
+	var config := GameState.balance_config
+	if fetch_mode == MarketplaceLotPolicy.FETCH_DRIVE:
+		if not Economy.can_afford(lot_total_cents):
+			return false
+		return MarketplaceLotPolicy.can_cover_drive(
+			GameState.attention_remaining,
+			config
+		)
+	return MarketplaceLotPolicy.can_cover_courier(
+		Economy.balance_cents,
+		lot_total_cents,
+		config
+	)
+
+
+func _charge_marketplace_lot_fetch(fetch_mode: StringName) -> bool:
+	var config := GameState.balance_config
+	if fetch_mode == MarketplaceLotPolicy.FETCH_DRIVE:
+		if not GameState.consume_attention(MarketplaceLotPolicy.drive_attention_for(config)):
+			return false
+		GameState.queue_floor_skip(MarketplaceLotPolicy.drive_skip_seconds_for(config))
+		return true
+	if fetch_mode == MarketplaceLotPolicy.FETCH_COURIER:
+		return Economy.record_expense(
+			MarketplaceLotPolicy.courier_fee_for(config),
+			&"courier",
+			MarketplaceLotPolicy.COURIER_MEMO
+		)
+	return false
 
 
 func _signal_for_opportunity(opportunity: BuyOpportunity) -> BuyConfirmSignal:
