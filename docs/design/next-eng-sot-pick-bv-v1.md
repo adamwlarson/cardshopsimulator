@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BV v1 — post BU1
 
-**Status:** **ADOPTED** 2026-10-05 ~8:07pm ET — BV1 Recurring player-trade pool. Eng bar = this file on main after sync. Soft CLOSED. Soft OK list-time Soft. No Art. Park BV2 STOP / BV3 Soft / BV4 Soft. Camera hard-parked.
+**Status:** **TIP-FROZEN** 2026-10-05 ~8:19pm ET — BV1 [#104](https://github.com/adamwlarson/cardshopsimulator/pull/104) @ `6f245024` (branch `cursor/bv1-recurring-player-trade-pool-8f22`). Eng review vs bar `e2745dbc`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bu (BU1 Recurring marketplace lots 1–3/day SHIPPED #103 @ `ef34b630`, reviewed `966445c5`; docs status `fb60287d`); Soft catalog CLOSED
@@ -97,3 +97,4 @@
 |------|----------|
 | 2026-10-05 ~8:07pm ET | Drafted post BU1 SHIPPED #103 @ `ef34b630` (reviewed `966445c5`; docs status `fb60287d`). Lean **BV1 Recurring player-trade pool**. Verified on tip `966445c5` / status `fb60287d`: `PlayerTradePolicy` is a single Dust→Skie seeded pair behind the Rep ≥ 50 gate, so band 50–74's unlock dies once Dustway is gone. §3 cadence (BT1/BU1/AS1/AT1/buylist) is otherwise live. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. BU1 Soft notes stay Soft. No Art. BM1–BU1 stay as shipped. |
 | 2026-10-05 ~8:07pm ET | **ADOPTED** BV1. Park BV2 STOP / BV3 Soft / BV4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~8:19pm ET | **Tip-frozen** [#104](https://github.com/adamwlarson/cardshopsimulator/pull/104) @ `6f245024` (branch `cursor/bv1-recurring-player-trade-pool-8f22`). 9 files, no docs. Cloud agent bc-394e05e9 archived. Eng review that SHA against bar `e2745dbc`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
