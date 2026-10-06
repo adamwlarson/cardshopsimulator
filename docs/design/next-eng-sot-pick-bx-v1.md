@@ -1,6 +1,6 @@
 # Next Eng SoT Pick BX v1 — post BW1
 
-**Status:** **ADOPTED** 2026-10-05 ~8:51pm ET — BX1 Shady trunk SKU pool. Soft CLOSED. Soft OK list-time Soft. No Art. Eng bar locked; awaiting tip-freeze.
+**Status:** **TIP-FROZEN** 2026-10-05 ~9:00pm ET — BX1 [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `1046fd24` (branch `cursor/bx1-shady-trunk-sku-pool-26d3`). Eng review vs bar `f817422e`. Soft CLOSED. Soft OK list-time Soft. No Art. QA held until APPROVE; no merge until PASS.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bw (BW1 Auction snipe SKU pool SHIPPED #105 @ `f2b1eb61`, reviewed `fb7b1e1c`; docs status `eaab995a`); Soft catalog CLOSED
@@ -97,3 +97,4 @@
 |------|----------|
 | 2026-10-05 ~8:50pm ET | Drafted post BW1 SHIPPED #105 @ `f2b1eb61` (reviewed `fb7b1e1c`; docs status `eaab995a`). Lean **BX1 Shady trunk SKU pool**. Verified on BW1 tip `fb7b1e1c`: `ShadyTrunkPolicy.DEFAULT_SKU_ID` = `AA-SKIE-052` and `_make_shady_trunk` always uses it (always graded with shipped grader / grade), so every trunk night is Empress. §3 cadence + auction pool + player trades otherwise live. STOP / Soft reopeners parked. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. BW1 Soft notes stay Soft. No Art. BM1–BW1 stay as shipped. |
 | 2026-10-05 ~8:51pm ET | **ADOPTED** BX1. Park BX2 STOP / BX3 Soft / BX4 Soft. Camera off-switch hard-parked. Soft CLOSED. Soft OK list-time stays Soft. No Art. Eng bar locked; awaiting tip-freeze. |
+| 2026-10-05 ~9:00pm ET | **Tip-frozen** [#106](https://github.com/adamwlarson/cardshopsimulator/pull/106) @ `1046fd24` (branch `cursor/bx1-shady-trunk-sku-pool-26d3`). 3 files, no docs. Cloud agent bc-fd6dee9b archived. Eng review that SHA against bar `f817422e`. QA held until APPROVE; no merge until PASS. Soft catalog CLOSED. |
