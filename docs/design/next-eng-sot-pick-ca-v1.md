@@ -1,6 +1,6 @@
 # Next Eng SoT Pick CA v1 — post BZ1
 
-**Status:** ADOPTED — CA1 Price-confirm Last sold in-shop history line. Soft CLOSED. Soft OK list-time Soft. Camera hard-parked. STOP parked. No Art. Park CA2/CA3/CA4. Eng bar this commit.
+**Status:** TIP-FROZEN — PR #109 at `397524ad` (branch `cursor/ca1-price-confirm-last-sold-5aee`). Eng bar `a6d96f99`. Reuses `sale_history` (no new save key). Soft CLOSED. Soft OK list-time Soft. No Art. Eng review pending; QA held.
 **Author:** CSS Designer
 **Date:** 2026-10-05
 **Depends on:** pick-bz (BZ1 Buy-confirm "Last sold in-shop" history line SHIPPED #108 @ `df1fd35a`, reviewed `d1801c97`; QA PASS-with-notes harness 991/0/4 +4 Soft OK; save key `sale_history`; docs status `099ca43d`); Soft catalog CLOSED
